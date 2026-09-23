@@ -83,6 +83,9 @@ Verwendung
 
 Seite „Darstellung“: Vorlagen, Titel, Dateiname, Logo-Breite, Hoch- oder
 Querformat, Kopfzeile, Fußzeile mit Textbausteinen und Zyklus-Regeln.
+Die Fußzeile ist mit einem Standardtext vorbelegt; „Standard wiederherstellen“
+setzt ihn zurück. Änderungen an Kopf- und Fußzeile werden automatisch
+gespeichert und bleiben mit allen Zeilenumbrüchen erhalten.
 
 Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
 (Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen,
@@ -148,7 +151,7 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Push auf windows-latest

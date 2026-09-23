@@ -278,6 +278,310 @@ def test_long_status_is_elided_and_keeps_hints(app) -> None:
     assert status.label.cget("text") == "Bereit" and status._tooltip.text == ""
 
 
+# --- Standard-Fußzeile und Speicherung ------------------------------------------------------
+
+FUSS_EIGEN = "Eigener kundenspezifischer Text\nZeile 2\n\nZeile 4"
+
+
+def _neustart(app):
+    """App schließen (speichert wie beim Beenden) und mit derselben Konfiguration neu starten."""
+    import gc
+
+    import vertragdesk
+
+    app._on_close()
+    gc.collect()
+    neu = vertragdesk.App()
+    neu.ctx.anim.enabled = False
+    pump(neu, 0.3)
+    return neu
+
+
+def _schliessen(app) -> None:
+    import gc
+
+    try:
+        app._on_close()
+    except Exception:
+        pass
+    gc.collect()
+
+
+def test_footer_default_on_first_start(app) -> None:
+    from appstate import DEFAULT_FOOTER
+
+    # Test 1: frische Konfiguration – die Standard-Fußzeile steht vollständig im Feld
+    assert app.ui.txt_fuss.get() == DEFAULT_FOOTER
+    assert app.footer_text() == DEFAULT_FOOTER
+
+
+def test_footer_survives_restart_and_default_can_be_restored(app, config_file: Path) -> None:
+    from appstate import DEFAULT_FOOTER
+
+    # Test 2: eigene Fußzeile speichern, schließen, neu starten
+    app.ui.txt_fuss.set(FUSS_EIGEN)
+    app.save_footer()
+    assert app.ui.fuss_info.severity == "success"
+    gespeichert = json.loads(config_file.read_text(encoding="utf-8"))
+    assert gespeichert["fusszeile"] == FUSS_EIGEN and gespeichert["fusszeile_explizit"] is True
+    zweite = _neustart(app)
+    try:
+        assert zweite.ui.txt_fuss.get() == FUSS_EIGEN
+        # Test 3: Standard wiederherstellen, schließen, neu starten
+        zweite.restore_default_footer()
+        assert zweite.ui.txt_fuss.get() == DEFAULT_FOOTER
+        assert zweite.ui.fuss_info.message == "Standard-Fußzeile wiederhergestellt."
+        dritte = _neustart(zweite)
+        try:
+            assert dritte.ui.txt_fuss.get() == DEFAULT_FOOTER
+        finally:
+            _schliessen(dritte)
+    finally:
+        _schliessen(zweite)
+
+
+def test_footer_restore_is_undoable(app) -> None:
+    from appstate import DEFAULT_FOOTER
+
+    app.ui.txt_fuss.set(FUSS_EIGEN)
+    app.restore_default_footer()
+    assert app.footer_text() == DEFAULT_FOOTER
+    # »Rückgängig« in der Hinweisleiste
+    aktion = app.ui.fuss_info._actions.winfo_children()[0]
+    aktion.invoke()
+    assert app.footer_text() == FUSS_EIGEN
+    # und Strg+Z im Textfeld
+    app.restore_default_footer()
+    app.ui.txt_fuss.text.edit_undo()
+    assert app.footer_text() == FUSS_EIGEN
+
+
+def test_footer_with_templates(app) -> None:
+    from appstate import DEFAULT_FOOTER
+
+    # Test 4: Vorlage mit eigener Fußzeile
+    app.var_vorlage.set("Mit Fußzeile")
+    app.ui.txt_fuss.set(FUSS_EIGEN)
+    app.save_vorlage()
+    assert app.state.find_vorlage("Mit Fußzeile")["fusszeile"] == FUSS_EIGEN
+    app.ui.txt_fuss.set("Etwas anderes")
+    app.on_vorlage_pick("Mit Fußzeile")
+    assert app.footer_text() == FUSS_EIGEN
+    # Vorlagen älterer Versionen ohne Wert, mit leerem Wert oder null: Standard
+    app.state.vorlagen += [{"name": "Alt ohne"}, {"name": "Alt leer", "fusszeile": ""}, {"name": "Alt null", "fusszeile": None}]
+    for name in ("Alt ohne", "Alt leer", "Alt null"):
+        app.ui.txt_fuss.set("x")
+        app.on_vorlage_pick(name)
+        assert app.footer_text() == DEFAULT_FOOTER, name
+
+
+@pytest.mark.parametrize(
+    "alt,erwartet",
+    [
+        ({"fusszeile": ""}, "STANDARD"),  # Test 5: alter Bug-Zustand
+        ({"fusszeile": None}, "STANDARD"),
+        ({}, "STANDARD"),
+        ({"fusszeile": "Individuell\n\nAlt"}, "Individuell\n\nAlt"),  # keine Datenverluste
+    ],
+)
+def test_footer_migration_of_old_config(config_file: Path, monkeypatch, alt: dict, erwartet: str) -> None:
+    from appstate import DEFAULT_FOOTER
+    from ui import dialogs
+
+    import vertragdesk
+
+    erwartet = DEFAULT_FOOTER if erwartet == "STANDARD" else erwartet
+    config_file.write_text(json.dumps({"gesehen": "2.1.0", "theme": "light", **alt}), encoding="utf-8")
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
+    app = vertragdesk.App()
+    try:
+        pump(app, 0.3)
+        assert app.ui.txt_fuss.get() == erwartet
+        app._on_close()
+        gespeichert = json.loads(config_file.read_text(encoding="utf-8"))
+        assert gespeichert["fusszeile"] == erwartet and gespeichert["fusszeile_explizit"] is True
+    finally:
+        _schliessen(app)
+
+
+def test_customer_history_keeps_footer_unless_it_has_its_own(app) -> None:
+    app.ui.txt_fuss.set(FUSS_EIGEN)
+    app.state.kunden = [
+        {"firmenname": "Alt AG", "kundennummer": "1", "fusszeile": "", "kopfzeile": ""},
+        {"firmenname": "Neu AG", "kundennummer": "2", "fusszeile": "Kunde B\n\nGruß"},
+    ]
+    app.reload_recent()
+    labels = {eintrag["firmenname"]: label for label, eintrag in app._recent_by_label.items()}
+    app.on_recent_pick(labels["Alt AG"])
+    assert app.footer_text() == FUSS_EIGEN
+    app.on_recent_pick(labels["Neu AG"])
+    assert app.footer_text() == "Kunde B\n\nGruß"
+
+
+def test_footer_autosave_is_debounced(app, config_file: Path) -> None:
+    calls = []
+    original = app.persist
+    app.persist = lambda: (calls.append(1), original())[1]
+    pump(app, 1.0)  # Start abgeschlossen, ausstehende Speicherungen erledigt
+    calls.clear()
+    for zeichen in "Nachtrag":
+        app.ui.txt_fuss.text.insert("end", zeichen)
+        pump(app, 0.05)
+    assert calls == []  # nicht bei jedem Tastendruck
+    pump(app, 1.2)
+    assert len(calls) == 1
+    gespeichert = json.loads(config_file.read_text(encoding="utf-8"))
+    assert gespeichert["fusszeile"].endswith("Nachtrag")
+
+
+def test_pdf_uses_visible_footer(app, excel_file: Path, tmp_path: Path) -> None:
+    pypdf = pytest.importorskip("pypdf")
+    app.var_ziel.set(str(tmp_path))
+    app.var_open.set(False)
+    app.var_excel.set(str(excel_file))
+    app.var_kd.set("10042")
+    app.ui.txt_fuss.set(FUSS_EIGEN)
+    app.start_pdf()
+    assert wait_until(app, lambda: not app.busy, 90)
+    assert app.ui.pdf_info.severity == "success", app.ui.pdf_info.message
+    text = pypdf.PdfReader(str(tmp_path / "Vertragsuebersicht_Kd10042.pdf")).pages[0].extract_text()
+    for zeile in ("Eigener kundenspezifischer Text", "Zeile 2", "Zeile 4"):
+        assert zeile in text
+
+
+# --- Aufbau, Seitenwechsel und Resize ohne sichtbare Zwischenzustände ---------------------------
+
+
+def test_all_pages_prepared_at_startup(app) -> None:
+    from ui.navigation import PARK_X
+
+    assert set(app.nav.pages) == {"create", "layout", "settings"}
+    assert app.ctx.ready and not app.ctx.anim.is_resizing
+    host_w = app.nav.host.winfo_width()
+    for key, page in app.nav.pages.items():
+        # jede Seite ist vollständig angeordnet – auch die nicht sichtbaren
+        assert page.winfo_width() == host_w and page.winfo_ismapped(), key
+        if key != app.nav.current:
+            assert int(page.place_info()["x"]) == PARK_X, key
+            assert app.ctx.focus_blocked(str(page))
+
+
+def test_navigation_shows_finished_page_without_rebuild(app) -> None:
+    created = {}
+    import tkinter as tk
+
+    original = tk.Widget.__init__
+
+    def counting(self, *args, **kwargs):
+        created["n"] = created.get("n", 0) + 1
+        return original(self, *args, **kwargs)
+
+    tk.Widget.__init__ = counting
+    try:
+        for key in ("layout", "settings", "create", "settings"):
+            app.nav.navigate(key)
+            page = app.nav.pages[key]
+            # direkt nach dem Wechsel: Seite liegt vorn und ist fertig angeordnet
+            assert int(page.place_info()["x"]) == 0
+            assert page.winfo_width() == app.nav.host.winfo_width()
+            pump(app, 0.3)
+    finally:
+        tk.Widget.__init__ = original
+    assert created.get("n", 0) == 0  # kein Widget neu erzeugt
+
+
+def test_resize_applies_breakpoints_immediately_without_animation(app) -> None:
+    from ui.context import MODE_COMPACT, MODE_MEDIUM, MODE_WIDE
+    from ui.theme import px
+
+    app.ctx.anim.enabled = True
+    for width, mode, columns in ((px(1100), MODE_WIDE, 2), (px(900), MODE_MEDIUM, 2), (px(780), MODE_COMPACT, 1), (px(1100), MODE_WIDE, 2)):
+        app.geometry(f"{width}x{px(700)}")
+        app.update()
+        assert app.ctx.anim.is_resizing
+        assert app.nav.mode == mode
+        assert app.ctx.layout.columns == columns
+        assert not app.ctx.anim.running(f"pane:{app.nav}")  # keine Animation während des Resize
+        assert app.nav.pane.expanded_amount in (0.0, 1.0)
+    assert wait_until(app, lambda: not app.ctx.anim.is_resizing, 3)
+
+
+def test_breakpoint_hysteresis(app) -> None:
+    from ui.navigation import BREAKPOINT_HYSTERESIS, WIDE_FROM
+    from ui.theme import px
+
+    nav = app.nav
+    nav.apply_layout(px(WIDE_FROM) + 2)
+    assert nav.mode == "wide"
+    nav.apply_layout(px(WIDE_FROM) - 2)  # knapp darunter: bleibt breit (Hysterese)
+    assert nav.mode == "wide"
+    nav.apply_layout(px(WIDE_FROM) - px(BREAKPOINT_HYSTERESIS) - 2)
+    assert nav.mode == "medium"
+    nav.apply_layout(px(WIDE_FROM) - 2)  # zurück: erst ab dem Breakpoint wieder breit
+    assert nav.mode == "medium"
+
+
+def test_moves_do_not_redraw_canvas_controls(app) -> None:
+    button = app.ui.btn_pdf
+    calls = []
+    original = button.redraw
+    button.redraw = lambda animate=True: (calls.append(animate), original(animate))[1]
+    width, height = button.winfo_width(), button.winfo_height()
+    button.event_generate("<Configure>", x=5, y=5, width=width, height=height)
+    assert calls == []  # nur verschoben: nichts neu zu zeichnen
+    button.event_generate("<Configure>", x=5, y=5, width=width + 30, height=height)
+    assert calls == [False]
+
+
+def test_width_change_renders_no_new_images(app) -> None:
+    field = app.ui.field_firma
+    images = app.ctx.images
+    before = len(images._items)
+    for width in range(300, 420, 7):
+        field.event_generate("<Configure>", width=width, height=field.winfo_height())
+    assert len(images._items) == before  # 3-Slice: nur Elemente verschoben
+
+
+def test_scrollregion_only_set_when_changed(app) -> None:
+    area = app.nav.pages["create"].scroll
+    calls = []
+    original = area.canvas.configure
+
+    def counting(*args, **kwargs):
+        if "scrollregion" in kwargs:
+            calls.append(kwargs["scrollregion"])
+        return original(*args, **kwargs)
+
+    area.canvas.configure = counting
+    for _ in range(5):
+        area._sync()
+    assert calls == []
+
+
+def test_theme_changes_are_coalesced(app) -> None:
+    calls = []
+    app.theme.subscribe(lambda: calls.append(1))
+    app.theme.set(mode="dark")
+    app.theme.set(accent="#C42B1E")
+    app.theme.set(mode="light")
+    assert calls == []  # noch nichts gezeichnet
+    app.update()
+    assert calls == [1]  # genau ein Neuzeichnen
+
+
+def test_tab_skips_parked_pages_and_collapsed_areas(app) -> None:
+    app.nav.navigate("create", animate=False)
+    pump(app, 0.2)
+    widget = app.ui.field_firma.entry
+    visited = []
+    for _ in range(40):
+        widget = app.nametowidget(app.tk.call("tk_focusNext", str(widget)))
+        visited.append(str(widget))
+    for key in ("layout", "settings"):
+        assert not any(path.startswith(str(app.nav.pages[key])) for path in visited), key
+    assert not any(path.startswith(str(app.ui.mail_area.content)) for path in visited)
+
+
 def _descendants(widget):
     for child in widget.winfo_children():
         yield child

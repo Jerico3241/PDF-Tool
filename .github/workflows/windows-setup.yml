@@ -32,7 +32,7 @@ jobs:
           architecture: x64
 
       - name: Build- und Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf
 
       - name: Tests (Kernlogik)
         run: python -m pytest windows-app/tests/test_core.py -q

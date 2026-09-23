@@ -41,7 +41,7 @@ Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) bau
 Tests der Windows-App:
 
 ```powershell
-py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd
+py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf
 py -3.13 -m pytest windows-app\tests
 ```
 

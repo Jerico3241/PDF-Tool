@@ -57,6 +57,7 @@ NEUERUNGEN = (
     "Neue Status- und Hinweisleisten statt Meldungsfenstern, mit Fortschrittsring bei der PDF-Erstellung.",
     "Moderne Dialoge für Bestätigungen, Kurzanleitung und Info.",
     "Animationen lassen sich abschalten und folgen der Windows-Einstellung.",
+    "Die Fußzeile ist mit einem Standardtext vorbelegt, lässt sich wiederherstellen und wird automatisch gespeichert.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
@@ -64,6 +65,20 @@ DEFAULT_DATEINAME = "Vertragsuebersicht_Kd{kd}.pdf"
 DEFAULT_TITEL = "Vertragsübersicht"
 DEFAULT_UNTERTITEL = "Wartungs- und Nutzungsverträge"
 DEFAULT_LOGO_BREITE = "62"
+
+# Standard-Fußzeile der App – die einzige Stelle, an der dieser Text steht.
+DEFAULT_FOOTER = (
+    "Die oben aufgeführte Auflistung gibt den aktuellen Stand Ihrer Verträge sowie "
+    "die derzeit geltenden Vertragspreise wieder.\n"
+    "Alle genannten Preise verstehen sich zuzüglich der jeweils geltenden "
+    "gesetzlichen Mehrwertsteuer.\n\n"
+    "Die Angaben erfolgen gemäß Ihren abgeschlossenen Verträgen sowie den jeweils "
+    "geltenden Vertragsbedingungen und berücksichtigen gegebenenfalls bereits "
+    "erfolgte Preisanpassungen."
+)
+# Markiert eine bewusst gespeicherte Fußzeile (ab 2.1.0). Fehlt die Markierung, stammt
+# der Wert aus einer älteren Version, in der eine leere Fußzeile der Normalfall war.
+FOOTER_EXPLICIT = "fusszeile_explizit"
 
 MAX_KUNDEN = 12
 MAX_PDFS = 8
@@ -89,6 +104,40 @@ def filename_of(path: str) -> str:
         return "Keine Datei gewählt"
     name = Path(path).name
     return name or path
+
+
+# --- Fußzeile ------------------------------------------------------------------
+
+
+def footer_from(entry: dict | None, fallback: str = DEFAULT_FOOTER) -> str:
+    """Fußzeile aus der Konfiguration oder einer Vorlage – mit Übernahme alter Stände.
+
+    * bewusst gespeicherte Fußzeile (``fusszeile_explizit``): exakt übernehmen, auch leer
+    * ältere Stände mit eigenem Text: exakt übernehmen (keine Datenverluste)
+    * Wert fehlt, ist ``null``/ungültig oder leer aus älteren Versionen: Standard
+    """
+    if not isinstance(entry, dict):
+        return fallback
+    value = entry.get("fusszeile")
+    if not isinstance(value, str):
+        return fallback
+    if entry.get(FOOTER_EXPLICIT) is True:
+        return value
+    return value if value.strip() else fallback
+
+
+def customer_footer(entry: dict | None) -> str | None:
+    """Fußzeile einer Kundenakte oder ``None``, wenn sie keine sinnvolle eigene Fußzeile hat.
+
+    Die Kundenakte merkt sich die Fußzeile automatisch. Ein leerer Wert aus älteren
+    Versionen darf die aktuell gültige Fußzeile deshalb nicht ersetzen.
+    """
+    if not isinstance(entry, dict):
+        return None
+    value = entry.get("fusszeile")
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
 
 
 # --- Konfiguration --------------------------------------------------------------
