@@ -1,4 +1,8 @@
-"""Startet die Oberfläche und zeigt Fehler in einem Windows-Dialog."""
+"""Startet die Oberfläche und zeigt Fehler in einem Windows-Dialog.
+
+Aufruf durch die Verknüpfungen: runtime\\pythonw.exe -s -OO app\\start.py
+(pythonw.exe öffnet kein Konsolenfenster).
+"""
 
 from __future__ import annotations
 
@@ -22,9 +26,16 @@ def _message(title: str, text: str, error: bool = True) -> None:
         pass
 
 
+def _log_path() -> Path:
+    base = os.environ.get("APPDATA")
+    folder = Path(base) / "Uebersichten-Ersteller" if base else INSTALL_DIR
+    return folder / "fehler.log"
+
+
 def fail(text: str) -> None:
-    log = INSTALL_DIR / "fehler.log"
+    log = _log_path()
     try:
+        log.parent.mkdir(parents=True, exist_ok=True)
         log.write_text(text, encoding="utf-8")
     except OSError:
         pass

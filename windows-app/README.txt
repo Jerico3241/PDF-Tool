@@ -2,33 +2,155 @@
 Entwickler und Inhaber: Jerico
 =================================
 
-Version 2.0.5
+Version 2.1.0
+
+Erstellt Vertragsübersichten aus Excel-Listen und speichert sie als PDF.
+
 
 Was Sie herunterladen
 ---------------------
-Uebersichten-Ersteller-Setup.exe
+Uebersichten-Ersteller-Setup-2.1.0.exe
 
-Einrichtung
------------
-1. Die Datei doppelklicken.
+Die Datei enthält die komplette App einschließlich Python und aller Pakete.
+Eine eigene Python-Installation ist nicht nötig.
+
+
+Voraussetzungen
+---------------
+- Windows 10 oder Windows 11 (64 Bit)
+- keine Administratorrechte
+- rund 250 MB freier Speicher
+
+
+Installation
+------------
+1. Die Setup-Datei doppelklicken.
 2. Falls Windows SmartScreen erscheint:
    „Weitere Informationen“ → „Trotzdem ausführen“.
-3. Mit „Ja“ die Einrichtung bestätigen.
-4. Die App öffnet sich. Startmenü- und Desktop-Verknüpfung: Übersichten-Ersteller.
+3. Dem Assistenten folgen: Zielordner bestätigen, optional
+   „Verknüpfung auf dem Desktop erstellen“ an- oder abwählen.
+4. Am Ende „Übersichten-Ersteller starten“ angehakt lassen und
+   „Fertigstellen“ wählen.
 
-Keine Administratorrechte.
-Python und alle Pakete sind enthalten.
+Programmdateien:  %LOCALAPPDATA%\Uebersichten-Ersteller
+Ihre Daten:       %APPDATA%\Uebersichten-Ersteller
+                  (Einstellungen, Kundenverlauf, Vorlagen, Textbausteine,
+                  Kopf- und Fußzeile, Zyklus-Regeln, Design, Akzentfarbe)
 
-Falls die App nicht startet, erscheint ein Fehlerfenster.
-Die Datei fehler.log liegt im Ordner Uebersichten-Ersteller unter Ihrem Benutzerkonto.
+Die App erscheint im Startmenü unter „Übersichten-Ersteller“ und unter
+Einstellungen → Apps → Installierte Apps.
+
+
+Aktualisieren
+-------------
+Einfach das neue Setup ausführen. Die vorhandene Installation wird ersetzt,
+es entsteht keine zweite Installation. Ihre Daten bleiben erhalten.
+
+Update von 2.0.5 oder älter: Das Setup erkennt die alte Installation,
+übernimmt deren Ordner und die gespeicherten Einstellungen
+(gui-config.json wandert in den Datenordner), entfernt die alten Programm-
+dateien, Verknüpfungen und den alten Eintrag in „Installierte Apps“.
+
+Läuft die App während des Updates, meldet das Setup dies und wartet, bis
+sie geschlossen ist. Dasselbe Setup erneut ausführen repariert die
+Installation.
+
+
+Stille Installation (Skripte, Softwareverteilung)
+-------------------------------------------------
+   Uebersichten-Ersteller-Setup-2.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   Uebersichten-Ersteller-Setup-2.1.0.exe /SILENT          (mit Fortschritt)
+
+Weitere Parameter:
+   /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
+   /DIR="C:\Pfad\Ordner"         anderer Zielordner
+   /TASKS=""                     keine Desktop-Verknüpfung
+   /MERGETASKS="!desktopicon"    dito, übrige Aufgaben unverändert
+
+Stille Deinstallation:
+   "%LOCALAPPDATA%\Uebersichten-Ersteller\unins000.exe" /VERYSILENT
+   (Ihre Daten bleiben dabei erhalten.)
+
 
 Verwendung
 ----------
-1. Firmenname und Kundennummer eintragen.
-2. Excel-Wartungsvertragsliste wählen.
-3. Optional Logo, Zielordner und Fußzeile setzen.
-4. „PDF erstellen“ klicken.
+1. Seite „Erstellen“: Firmenname und Kundennummer eintragen oder unter
+   „Zuletzt verwendet“ einen Kunden wählen.
+2. Excel-Liste wählen (Strg+O) oder die Datei in das Fenster ziehen.
+   Die Prüfung zeigt aktive Verträge, Kundennummer und Rechnungsempfänger.
+3. Optional Logo und Zielordner ändern.
+4. „PDF erstellen“ klicken oder Strg+Enter drücken.
+
+Seite „Darstellung“: Vorlagen, Titel, Dateiname, Logo-Breite, Hoch- oder
+Querformat, Kopfzeile, Fußzeile mit Textbausteinen und Zyklus-Regeln.
+
+Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
+(Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen,
+Verhalten nach dem Erstellen und Informationen zur App.
+
+Tastatur: Strg+Enter PDF erstellen · Strg+O Excel öffnen · F1 Kurzanleitung ·
+Strg+1/2/3 Seiten wechseln · Tab/Umschalt+Tab zwischen Feldern wechseln ·
+Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Listen.
+
+
+Windows-11-Design
+-----------------
+Die Oberfläche folgt dem Fluent Design von Windows 11: Navigation links,
+Karten mit runden Ecken, Segoe-UI-Variable-Schrift und Fluent-Symbole.
+Unter Windows 11 erhalten Titelleiste und Navigation das Mica-Material,
+unter Windows 10 eine passende einfarbige Fläche. Animationen richten sich
+nach der Windows-Einstellung „Animationseffekte“ und lassen sich in der App
+abschalten.
+
+
+Wenn etwas nicht klappt
+-----------------------
+Falls die App nicht startet, erscheint ein Fehlerfenster. Die Datei
+fehler.log liegt im Datenordner %APPDATA%\Uebersichten-Ersteller.
+Das Setup schreibt ein Protokoll nach %TEMP% („Setup Log <Datum>.txt“)
+oder an den mit /LOG angegebenen Ort.
+
 
 Deinstallation
 --------------
-Über die Windows-Einstellungen unter Apps, oder im Installationsordner Deinstallieren.bat.
+Einstellungen → Apps → Installierte Apps → „Übersichten-Ersteller“ →
+Deinstallieren.
+
+Entfernt werden Programmdateien, Verknüpfungen und der Eintrag in den
+Windows-Einstellungen. Anschließend fragt die Deinstallation, ob auch Ihre
+gespeicherten Einstellungen gelöscht werden sollen (Standard: Nein).
+Erstellte PDF-Dateien bleiben in jedem Fall erhalten.
+
+
+Für Entwickler: Setup bauen
+---------------------------
+Voraussetzungen (Windows 10/11, 64 Bit):
+- Python 3.13 (64 Bit) von python.org mit pip und Pillow
+  (py -3.13 -m pip install pillow)
+- Inno Setup 6.6 oder neuer: https://jrsoftware.org/isdl.php
+- Internetzugang (lädt die eingebettete Python-Laufzeit von python.org und
+  die Pakete aus runtime-requirements.txt, jeweils mit Prüfsummen)
+
+Bauen (im Repository-Ordner):
+   py -3.13 windows-app\build.py
+
+Ergebnis:
+   windows-app\dist\Uebersichten-Ersteller-Setup-<Version>.exe
+   windows-app\dist\Uebersichten-Ersteller-Setup-<Version>.exe.sha256
+
+Die Version steht nur in windows-app\VERSION. App, Setup und Dateiname
+übernehmen sie von dort. ISCC.exe wird automatisch gesucht (PATH,
+Umgebungsvariable ISCC, Standard-Installationsordner von Inno Setup 6).
+
+Signieren: Sobald ein Code-Signing-Zertifikat vorhanden ist, die
+Umgebungsvariable SIGN_COMMAND setzen, z. B.
+   signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /a "{file}"
+Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
+Start ist dann normal).
+
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd
+       py -3.13 -m pytest windows-app\tests
+
+GitHub Actions baut das Setup bei jedem Push auf windows-latest
+(.github/workflows/windows-setup.yml) und stellt es als Artefakt bereit;
+bei einem veröffentlichten Release wird es zusätzlich angehängt.

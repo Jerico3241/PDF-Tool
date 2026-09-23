@@ -20,7 +20,12 @@ __pycache__/
 
 # Windows build artifacts
 windows-app/dist/
+windows-app/build/
+windows-app/.cache/
 windows-app/installer/payload.zip
+*.sha256
+*.log
+.pytest_cache/
 public/downloads/*.exe
 public/downloads/*.zip
 *.exe
