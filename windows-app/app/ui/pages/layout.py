@@ -83,9 +83,12 @@ def build(app: "App", host) -> Page:
     kopf = Card(page.content, "Kopfzeile", icons.ALIGN_LEFT, "Optional. Erscheint oben auf jeder Seite. Leer lassen, wenn keine Kopfzeile gewünscht ist.")
     page.add_section(kopf, pady=(px(12), 0))
     body = kopf.body
-    ui.txt_kopf = TextArea(body, lines=3)
-    ui.txt_kopf.pack(fill="x")
-    ui.txt_kopf.set(app.header_text())
+    txt_kopf = TextArea(body, lines=3, on_change=app.schedule_text_save)
+    txt_kopf.pack(fill="x")
+    # Mit dem geladenen Wert füllen, *bevor* das Feld unter app.ui bekannt ist: header_text()
+    # liefert sonst bereits den (noch leeren) Inhalt des neuen Felds.
+    txt_kopf.set(app.header_text())
+    ui.txt_kopf = txt_kopf
     row = FlowRow(body)
     row.pack(fill="x", pady=(px(10), 0))
     row.add(Button(row, "Kopfzeile speichern", app.save_header, icon=icons.SAVE, kind="accent"))
@@ -108,12 +111,14 @@ def build(app: "App", host) -> Page:
     cols.add(left)
     cols.add(right)
     field_label(body, "Text")
-    ui.txt_fuss = TextArea(body, lines=5)
-    ui.txt_fuss.pack(fill="x")
-    ui.txt_fuss.set(app.footer_text())
+    txt_fuss = TextArea(body, lines=5, on_change=app.schedule_text_save)
+    txt_fuss.pack(fill="x")
+    txt_fuss.set(app.footer_text())  # geladene bzw. Standard-Fußzeile (siehe Kopfzeile)
+    ui.txt_fuss = txt_fuss
     row = FlowRow(body)
     row.pack(fill="x", pady=(px(10), 0))
     row.add(Button(row, "Fußzeile speichern", app.save_footer, icon=icons.SAVE, kind="accent"))
+    row.add(Button(row, "Standard wiederherstellen", app.restore_default_footer, icon=icons.UNDO, tooltip="Setzt die Fußzeile auf den Standardtext der App zurück"))
     row.add(Button(row, "Textbaustein löschen", app.delete_baustein, icon=icons.DELETE))
     row.add(Text(row, PLACEHOLDERS, style="caption", color="text2"))
     ui.fuss_info = InfoBar(body)

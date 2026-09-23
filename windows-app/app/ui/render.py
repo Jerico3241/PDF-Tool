@@ -3,6 +3,11 @@
 Der Tk-Canvas zeichnet unter Windows ohne Kantenglättung. Runde Ecken,
 Kreise und der Fortschrittsring werden deshalb mit Pillow in vierfacher
 Auflösung gerendert, verkleinert und als PhotoImage zwischengespeichert.
+
+Flächen mit veränderlicher Breite (Schaltflächen, Eingabefelder) werden als
+»3-Slice« gezeichnet: zwei gerenderte Eckstücke und dazwischen einfarbige
+Canvas-Rechtecke. Eine Breitenänderung verschiebt dann nur noch Elemente,
+ohne ein neues Bild zu rendern.
 """
 
 from __future__ import annotations
@@ -155,6 +160,40 @@ def corner(radius: int, which: str, outside: str, fill: str, stroke: str | None)
     return big.crop(boxes[which])
 
 
+def _slices(img: Image.Image, cap: int) -> tuple[Image.Image, Image.Image, list[tuple[int, int, str]]]:
+    """Zerlegt ein Bild in linkes/rechtes Eckstück und farbige Zeilenstreifen der Mitte."""
+    width, height = img.size
+    left = img.crop((0, 0, cap, height))
+    right = img.crop((width - cap, 0, width, height))
+    column = img.crop((cap, 0, cap + 1, height)).convert("RGBA")
+    runs: list[list] = []
+    for y in range(height):
+        red, green, blue, alpha = column.getpixel((0, y))
+        color = f"#{red:02X}{green:02X}{blue:02X}" if alpha >= 128 else None
+        if runs and runs[-1][2] == color and runs[-1][1] == y:
+            runs[-1][1] = y + 1
+        else:
+            runs.append([y, y + 1, color])
+    return left, right, [(y0, y1, color) for y0, y1, color in runs if color is not None]
+
+
+def slice_cap(radius: float) -> int:
+    """Breite eines Eckstücks: Radius plus Kantenglättung und Rahmen."""
+    return int(math.ceil(radius)) + 2
+
+
+def box_slices(height: int, radius: float, fill: str | None, stroke: str | None = None, edge: str | None = None, edge_side: str = "bottom", stroke_width: float = 1, background: str | None = None, edge_width: float | None = None):
+    cap = slice_cap(radius)
+    img = rounded_box(2 * cap + 1, height, radius, fill, stroke, edge, edge_side, stroke_width, background, edge_width)
+    return _slices(img, cap)
+
+
+def ring_slices(height: int, radius: float, outer: str, inner: str, thickness: float = 2, background: str | None = None):
+    cap = slice_cap(radius)
+    img = focus_ring(2 * cap + 1, height, radius, outer, inner, thickness, background)
+    return _slices(img, cap)
+
+
 def to_photo(master: tk.Misc, img: Image.Image) -> tk.PhotoImage:
     buffer = io.BytesIO()
     img.save(buffer, format="PNG", compress_level=1)
@@ -183,6 +222,27 @@ class ImageCache:
         if len(self._items) > self.limit:
             self._items.popitem(last=False)
         return photo
+
+    def slices(self, key: tuple, factory: Callable[[], tuple]) -> tuple:
+        """(linkes Eckbild, rechtes Eckbild, Streifen, Eckbreite) – einmal gerendert, beliebig breit."""
+        found = self._items.get(key)
+        if found is not None:
+            self._items.move_to_end(key)
+            return found
+        left, right, runs = factory()
+        value = (to_photo(self.master, left), to_photo(self.master, right), tuple(runs), left.size[0])
+        self._items[key] = value
+        if len(self._items) > self.limit:
+            self._items.popitem(last=False)
+        return value
+
+    def box_slices(self, height, radius, fill, stroke=None, edge=None, edge_side="bottom", background=None, stroke_width=1, edge_width=None) -> tuple:
+        key = ("box-slices", height, radius, fill, stroke, edge, edge_side, background, stroke_width, edge_width)
+        return self.slices(key, lambda: box_slices(height, radius, fill, stroke, edge, edge_side, stroke_width, background, edge_width))
+
+    def ring_slices(self, height, radius, outer, inner, background=None, thickness=2) -> tuple:
+        key = ("ring-slices", height, radius, outer, inner, background, thickness)
+        return self.slices(key, lambda: ring_slices(height, radius, outer, inner, thickness, background))
 
     def box(self, width, height, radius, fill, stroke=None, edge=None, edge_side="bottom", background=None, stroke_width=1, edge_width=None, alpha=1.0) -> tk.PhotoImage:
         key = ("box", width, height, radius, fill, stroke, edge, edge_side, background, stroke_width, edge_width, alpha)

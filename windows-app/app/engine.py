@@ -245,6 +245,16 @@ class PdfAuftrag:
     status: Callable[[str], None] | None = None
 
 
+def _mehrzeilig(text: str | None) -> str:
+    """Mehrzeiligen Text (Fußzeile) unverändert übernehmen – Absätze bleiben erhalten.
+
+    Vereinheitlicht werden nur die Zeilenenden; entfernt werden lediglich Leerraum und
+    Zeilenumbrüche ganz am Ende. Text nur aus Leerzeichen gilt als leer.
+    """
+    text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    return text.rstrip() if text.strip() else ""
+
+
 def _zelltext(value) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
@@ -483,7 +493,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
 
         seitenmass = landscape(A4) if quer else A4
         nutzbreite = 269 * mm if quer else 182 * mm
-        fuss_text = (auftrag.fusszeile or "").strip()
+        fuss_text = _mehrzeilig(auftrag.fusszeile)
         kopf_text = (auftrag.kopfzeile or "").strip()
         try:
             if fuss_text:
@@ -520,7 +530,14 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         if kopf_text:
             kopf_para = Paragraph(kopf_html, kopf_style)
             _w, kopf_h = kopf_para.wrap(nutzbreite, 24 * mm)
-        unten = 24 * mm if fuss_text else 14 * mm
+        fuss_h = 0
+        fuss_para = None
+        if fuss_text:
+            fuss_para = Paragraph(fuss_html, fuss_style)
+            _w, fuss_h = fuss_para.wrap(nutzbreite, 60 * mm)
+        # Der untere Rand richtet sich nach der tatsächlichen Höhe der Fußzeile:
+        # Auch mehrzeilige Fußzeilen überdecken nie die Tabelle.
+        unten = max(24 * mm, 10 * mm + fuss_h + 2.2 * mm + 4 * mm) if fuss_text else 14 * mm
         oben = 12 * mm + (kopf_h + 4 * mm if kopf_text else 0)
         doc = SimpleDocTemplate(
             str(ausgabe_pdf),
@@ -632,16 +649,14 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
                 canvas.setLineWidth(0.4)
                 canvas.line(_doc.leftMargin, y - 1.4 * mm, _doc.leftMargin + _doc.width, y - 1.4 * mm)
                 canvas.restoreState()
-            if not fuss_text:
+            if fuss_para is None:
                 return
             canvas.saveState()
-            para = Paragraph(fuss_html, fuss_style)
-            _w, h = para.wrap(_doc.width, 16 * mm)
             y = 10 * mm
             canvas.setStrokeColor(PRIMARY)
             canvas.setLineWidth(0.5)
-            canvas.line(_doc.leftMargin, y + h + 2.2 * mm, _doc.leftMargin + _doc.width, y + h + 2.2 * mm)
-            para.drawOn(canvas, _doc.leftMargin, y)
+            canvas.line(_doc.leftMargin, y + fuss_h + 2.2 * mm, _doc.leftMargin + _doc.width, y + fuss_h + 2.2 * mm)
+            fuss_para.drawOn(canvas, _doc.leftMargin, y)
             canvas.restoreState()
 
         doc.build(story, onFirstPage=_seite, onLaterPages=_seite, canvasmaker=_NummernCanvas)

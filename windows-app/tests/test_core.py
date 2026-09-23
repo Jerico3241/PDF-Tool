@@ -66,6 +66,99 @@ def test_erstelle_pdf_requires_customer_number(excel_file: Path, tmp_path: Path)
         engine.erstelle_pdf(engine.PdfAuftrag(excel=excel_file, logo=appstate.DEFAULT_LOGO, kundennummer="", zielordner=tmp_path))
 
 
+# --- Standard-Fußzeile -----------------------------------------------------------------------
+
+ERWARTETE_FUSSZEILE = (
+    "Die oben aufgeführte Auflistung gibt den aktuellen Stand Ihrer Verträge sowie die derzeit geltenden Vertragspreise wieder.\n"
+    "Alle genannten Preise verstehen sich zuzüglich der jeweils geltenden gesetzlichen Mehrwertsteuer.\n"
+    "\n"
+    "Die Angaben erfolgen gemäß Ihren abgeschlossenen Verträgen sowie den jeweils geltenden Vertragsbedingungen und berücksichtigen gegebenenfalls bereits erfolgte Preisanpassungen."
+)
+
+
+def test_default_footer_is_exact() -> None:
+    assert appstate.DEFAULT_FOOTER == ERWARTETE_FUSSZEILE
+
+
+def test_default_footer_has_single_source() -> None:
+    root = Path(__file__).resolve().parents[1] / "app"
+    fundstellen = [p.relative_to(root).as_posix() for p in root.rglob("*.py") if "Mehrwertsteuer" in p.read_text(encoding="utf-8")]
+    assert fundstellen == ["appstate.py"]
+
+
+@pytest.mark.parametrize(
+    "eintrag,erwartet",
+    [
+        ({}, ERWARTETE_FUSSZEILE),  # Schlüssel fehlt (erster Start, alte Vorlage)
+        ({"fusszeile": None}, ERWARTETE_FUSSZEILE),  # null
+        ({"fusszeile": ""}, ERWARTETE_FUSSZEILE),  # leerer Standardwert älterer Versionen
+        ({"fusszeile": "  \n "}, ERWARTETE_FUSSZEILE),
+        ({"fusszeile": 42}, ERWARTETE_FUSSZEILE),  # ungültiger Wert
+        ({"fusszeile": "Eigener Text\nZeile 2\n\nZeile 4"}, "Eigener Text\nZeile 2\n\nZeile 4"),  # alte eigene Fußzeile bleibt
+        ({"fusszeile": "  Einzug\n\n", "fusszeile_explizit": True}, "  Einzug\n\n"),  # exakt, keine Kürzung
+        ({"fusszeile": "", "fusszeile_explizit": True}, ""),  # bewusst leer gespeichert
+    ],
+)
+def test_footer_migration_rules(eintrag: dict, erwartet: str) -> None:
+    assert appstate.footer_from(eintrag) == erwartet
+
+
+def test_customer_footer_keeps_current_for_empty_values() -> None:
+    assert appstate.customer_footer({"fusszeile": ""}) is None
+    assert appstate.customer_footer({"fusszeile": None}) is None
+    assert appstate.customer_footer({}) is None
+    assert appstate.customer_footer({"fusszeile": "Kunde A\n\nGruß"}) == "Kunde A\n\nGruß"
+
+
+def _textzeilen(page) -> list[tuple[float, str]]:
+    """Textzeilen einer PDF-Seite mit absoluter y-Position (pt, von unten)."""
+    zeilen: list[tuple[float, str]] = []
+
+    def visit(text, cm, tm, _font, _size):
+        if text.strip():
+            zeilen.append((round(tm[5] * cm[3] + cm[5], 1), " ".join(text.split())))
+
+    page.extract_text(visitor_text=visit)
+    return zeilen
+
+
+@pytest.mark.parametrize("seitenformat", ["hoch", "quer"])
+def test_pdf_contains_default_footer_with_paragraph(excel_file: Path, tmp_path: Path, seitenformat: str) -> None:
+    pypdf = pytest.importorskip("pypdf")
+    pfad = engine.erstelle_pdf(
+        engine.PdfAuftrag(excel=excel_file, logo=appstate.DEFAULT_LOGO, kundennummer="10042", zielordner=tmp_path, seitenformat=seitenformat, fusszeile=appstate.DEFAULT_FOOTER)
+    )
+    seite = pypdf.PdfReader(str(pfad)).pages[0]
+    text = " ".join(seite.extract_text().split())
+    for absatz in ERWARTETE_FUSSZEILE.split("\n"):
+        if absatz:
+            assert absatz in text
+    zeilen = _textzeilen(seite)
+
+    def y_von(anfang: str) -> float:
+        return next(y for y, t in zeilen if t.startswith(anfang))
+
+    y1 = y_von("Die oben aufgeführte Auflistung")
+    y2 = y_von("Alle genannten Preise")
+    y3 = y_von("Die Angaben erfolgen")
+    # Zeilenabstand 10 pt, zwischen zweitem und drittem Block eine Leerzeile (20 pt)
+    assert y1 - y2 == pytest.approx(10, abs=0.6)
+    assert y2 - y3 == pytest.approx(20, abs=0.6)
+    # Die Tabelle endet oberhalb der Fußzeile (keine Überdeckung)
+    tabelle_unten = min(y for y, t in zeilen if t in ("V-1001", "V-1002", "V-1003"))
+    assert tabelle_unten > y1 + 8
+
+
+def test_pdf_footer_keeps_user_formatting(excel_file: Path, tmp_path: Path) -> None:
+    pypdf = pytest.importorskip("pypdf")
+    eigene = "Eigener kundenspezifischer Text\nZeile 2\n\nZeile 4\n"
+    pfad = engine.erstelle_pdf(engine.PdfAuftrag(excel=excel_file, logo=appstate.DEFAULT_LOGO, kundennummer="10042", zielordner=tmp_path, fusszeile=eigene))
+    zeilen = _textzeilen(pypdf.PdfReader(str(pfad)).pages[0])
+    y = {t: y for y, t in zeilen if t in ("Eigener kundenspezifischer Text", "Zeile 2", "Zeile 4")}
+    assert y["Eigener kundenspezifischer Text"] - y["Zeile 2"] == pytest.approx(10, abs=0.6)
+    assert y["Zeile 2"] - y["Zeile 4"] == pytest.approx(20, abs=0.6)
+
+
 # --- Einstellungen (kompatibel zu 2.0.5) ---------------------------------------------------
 
 

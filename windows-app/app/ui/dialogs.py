@@ -13,7 +13,7 @@ from typing import Callable
 
 from . import animations as motion
 from . import windows
-from .context import ctx
+from .context import ctx, reveal, settle
 from .theme import px
 from .widgets import Button, Surface, Text, frame
 
@@ -67,9 +67,11 @@ class ContentDialog:
         spacer.pack(side="top")
         inner = frame(body)
         inner.pack(fill="both", expand=True, padx=px(24), pady=(px(22), px(24)))
-        Text(inner, title, style="subtitle", wrap=True).pack(anchor="w", fill="x")
+        # Umbruchbreite gleich der Inhaltsbreite: Die Höhe steht schon vor dem Anzeigen fest.
+        text_w = (width or self.WIDTH) - 48
+        Text(inner, title, style="subtitle", wrap=True, wrap_width=text_w).pack(anchor="w", fill="x")
         if message:
-            Text(inner, message, style="body", wrap=True).pack(anchor="w", fill="x", pady=(px(12), 0))
+            Text(inner, message, style="body", wrap=True, wrap_width=text_w).pack(anchor="w", fill="x", pady=(px(12), 0))
         if build:
             holder = frame(inner)
             holder.pack(fill="both", expand=True, pady=(px(12), 0))
@@ -98,13 +100,15 @@ class ContentDialog:
         win.bind("<Escape>", lambda _e: self._finish(CLOSE if close or not primary else PRIMARY))
         win.bind("<Return>", self._return_key)
         win.bind("<KP_Enter>", self._return_key)
-        win.update_idletasks()
+        # Verborgen fertig anordnen (auch Textumbrüche), dann Position aus der endgültigen Höhe.
+        settle(win)
         height = win.winfo_reqheight()
         rx, ry = root.winfo_rootx(), root.winfo_rooty()
         rw, rh = root.winfo_width(), root.winfo_height()
         x = rx + max(0, (rw - dialog_w) // 2)
         y = ry + max(0, (rh - height) // 3)
         win.geometry(f"+{x}+{y}")
+        self._position = (x, y)
 
     def _return_key(self, event):
         focused = self.win.focus_get()
@@ -128,7 +132,7 @@ class ContentDialog:
             except tk.TclError:
                 pass
 
-        if c.anim.enabled:
+        if c.anim.allowed():
             try:
                 win.attributes("-alpha", 1.0)
                 c.anim.run(f"dlgout:{win}", 90, lambda t: win.attributes("-alpha", 1.0 - t), close, easing=motion.ACCELERATE, widget=win)
@@ -144,14 +148,17 @@ class ContentDialog:
             return answer
         c = self.c
         win = self.win
-        if c.anim.enabled:
+        pal = c.pal
+        # Titelleiste vor dem Anzeigen einfärben: kein kurz heller Rahmen im dunklen Design.
+        windows.apply_window_chrome(windows.frame_hwnd(win), pal.dark, caption=pal.dialog, text=pal.text, mica=False)
+        fade = c.anim.allowed()
+        if fade:
             try:
                 win.attributes("-alpha", 0.0)
             except tk.TclError:
-                pass
-        win.deiconify()
-        pal = c.pal
-        windows.apply_window_chrome(windows.frame_hwnd(win), pal.dark, caption=pal.dialog, text=pal.text, mica=False)
+                fade = False
+        # Erst vollständig gezeichnet sichtbar machen, danach (optional) einblenden.
+        reveal(win, position=self._position, prepare=False)
         win.lift()
         try:
             win.grab_set()
@@ -162,7 +169,7 @@ class ContentDialog:
             target.focus_set()
         else:
             win.focus_set()
-        if c.anim.enabled:
+        if fade:
             c.anim.run(f"dlgin:{win}", motion.SLOW, lambda t: win.attributes("-alpha", t), easing=motion.DECELERATE, widget=win)
         win.wait_window()
         return self.result

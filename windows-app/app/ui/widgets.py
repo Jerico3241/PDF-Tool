@@ -17,6 +17,7 @@ from .context import ctx, surface_color, surface_of
 from .theme import mix, px
 
 FOCUS_PAD = 3  # Abstand für den Fokusrahmen außerhalb des Steuerelements (WinUI: FocusVisualMargin)
+WRAP_STEP = 32  # Mindeständerung (effektive Pixel), ab der Text während eines Resize neu umbricht
 CONTROL_RADIUS = 4  # ControlCornerRadius
 OVERLAY_RADIUS = 8  # OverlayCornerRadius (Karten, Dialoge, Aufklappmenüs)
 
@@ -87,8 +88,24 @@ class Text(tk.Label):
 
     def _rewrap(self, event) -> None:
         width = max(40, event.width)
-        if abs(int(self.cget("wraplength") or 0) - width) > 2:
-            self.configure(wraplength=width)
+        current = int(self.cget("wraplength") or 0)
+        if abs(current - width) <= 2:
+            return
+        c = ctx()
+        if width > current and c.anim.is_resizing and width - current < px(WRAP_STEP):
+            # Breiter geworden: während des Ziehens nur in groben Schritten neu umbrechen,
+            # genau erst am Ende. Schmaler wird sofort umbrochen, sonst würde Text abgeschnitten.
+            c.after_resize(f"wrap:{self}", self._rewrap_now)
+            return
+        self.configure(wraplength=width)
+
+    def _rewrap_now(self) -> None:
+        try:
+            width = self.winfo_width()
+        except tk.TclError:
+            return
+        if width > 1 and abs(int(self.cget("wraplength") or 0) - max(40, width)) > 2:
+            self.configure(wraplength=max(40, width))
 
     def set_color(self, role: str) -> None:
         self._color = role
@@ -207,7 +224,69 @@ class Card(RoundedFrame):
 # ---------------------------------------------------------------------------
 
 
+class StretchBox:
+    """Abgerundete Fläche auf einem Canvas als 3-Slice (zwei Eckbilder, Mittelstreifen).
+
+    Ändert sich nur die Breite, werden vorhandene Canvas-Elemente per ``coords``
+    verschoben – es wird kein Bild neu gerendert und nichts gelöscht.
+    """
+
+    def __init__(self, canvas: tk.Canvas, bands: int = 4) -> None:
+        self.canvas = canvas
+        self._left = canvas.create_image(0, 0, anchor="nw", state="hidden")
+        self._right = canvas.create_image(0, 0, anchor="nw", state="hidden")
+        self._bands: list[int] = [canvas.create_rectangle(0, 0, 0, 0, outline="", width=0, state="hidden") for _ in range(bands)]
+        self._slices: tuple | None = None
+        self._geometry: tuple | None = None
+        self._shown = False
+
+    def show(self, slices: tuple, x: float, y: float, width: int) -> None:
+        canvas = self.canvas
+        left, right, runs, cap = slices
+        if slices is not self._slices:
+            self._slices = slices
+            canvas.itemconfigure(self._left, image=left)
+            canvas.itemconfigure(self._right, image=right)
+            for index, (_y0, _y1, color) in enumerate(runs):
+                if index >= len(self._bands):
+                    band = canvas.create_rectangle(0, 0, 0, 0, outline="", width=0)
+                    canvas.tag_raise(band, self._left)  # direkt über dem eigenen Eckbild, unter Text
+                    self._bands.append(band)
+                canvas.itemconfigure(self._bands[index], fill=color)
+            self._geometry = None
+        geometry = (x, y, width)
+        if geometry == self._geometry and self._shown:
+            return
+        self._geometry = geometry
+        self._shown = True
+        canvas.coords(self._left, x, y)
+        canvas.coords(self._right, x + max(cap, width - cap), y)
+        canvas.itemconfigure(self._left, state="normal")
+        canvas.itemconfigure(self._right, state="normal")
+        middle = width - 2 * cap
+        for index, band in enumerate(self._bands):
+            if index < len(runs) and middle > 0:
+                y0, y1, _color = runs[index]
+                canvas.coords(band, x + cap, y + y0, x + width - cap, y + y1)
+                canvas.itemconfigure(band, state="normal")
+            else:
+                canvas.itemconfigure(band, state="hidden")
+
+    def hide(self) -> None:
+        if not self._shown:
+            return
+        self._shown = False
+        for item in (self._left, self._right, *self._bands):
+            self.canvas.itemconfigure(item, state="hidden")
+
+
 class CanvasControl(tk.Canvas):
+    """Basis für selbst gezeichnete Steuerelemente.
+
+    Neu gezeichnet wird nur bei echten Änderungen (Größe, Zustand, Design) –
+    reine Verschiebungen durch das Layout lösen kein Neuzeichnen aus.
+    """
+
     def __init__(self, master, width: int, height: int, focusable: bool = True, cursor: str = "") -> None:
         super().__init__(master, width=width, height=height, highlightthickness=0, bd=0, takefocus=1 if focusable else 0, cursor=cursor)
         self.c = ctx()
@@ -217,6 +296,7 @@ class CanvasControl(tk.Canvas):
         self._focused = False
         self._enabled = True
         self._tooltip: Tooltip | None = None
+        self._last_size = (int(width), int(height))
         self.configure(bg=self.surface())
         self.c.theme.subscribe(self._theme_changed, owner=self)
         self.c.on_focus_mode(self, self.redraw)
@@ -226,7 +306,17 @@ class CanvasControl(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._on_release, add="+")
         self.bind("<FocusIn>", self._on_focus_in, add="+")
         self.bind("<FocusOut>", self._on_focus_out, add="+")
-        self.bind("<Configure>", lambda _e: self.redraw(), add="+")
+        self.bind("<Configure>", self._on_configure, add="+")
+
+    def _on_configure(self, event) -> None:
+        size = (event.width, event.height)
+        if size == self._last_size:
+            return
+        self._last_size = size
+        self.size_changed()
+
+    def size_changed(self) -> None:
+        self.redraw(animate=False)
 
     # Hilfen ------------------------------------------------------------------
     @property
@@ -240,11 +330,9 @@ class CanvasControl(tk.Canvas):
         return self._focused and self.c.keyboard_mode and self._enabled
 
     def _theme_changed(self) -> None:
+        # Designwechsel ohne Überblendung: alle Flächen wechseln gleichzeitig.
         self.configure(bg=self.surface())
-        self.redraw(animate=False) if self._accepts_animate() else self.redraw()
-
-    def _accepts_animate(self) -> bool:
-        return False
+        self.redraw(animate=False)
 
     def set_tooltip(self, text: str | None) -> None:
         if text:
@@ -489,8 +577,8 @@ class Button(CanvasControl):
         self._current: dict[str, str] | None = None
         width = self._natural_width()
         super().__init__(master, width, self._h + 2 * self._fp, cursor="")
-        self._bg_item = self.create_image(self._fp, self._fp, anchor="nw")
-        self._ring_item = self.create_image(0, 0, anchor="nw", state="hidden")
+        self._bg = StretchBox(self)
+        self._ring = StretchBox(self)
         self._icon_item = self.create_text(0, 0, text="", anchor="center")
         self._text_item = self.create_text(0, 0, text="", anchor="center")
         self._spinner = RingSpinner(self, px(16))
@@ -668,20 +756,14 @@ class Button(CanvasControl):
         surface = self.surface()
         radius = px(CONTROL_RADIUS)
         if self._kind == "subtle" and colors["fill"] == surface:
-            self.itemconfigure(self._bg_item, state="hidden")
+            self._bg.hide()
         else:
-            img = c.images.box(visual_w, height, radius, colors["fill"], colors["stroke"], colors["edge"], colors["edge_side"], background=surface)
-            self._image("bg", img)
-            self.itemconfigure(self._bg_item, image=img, state="normal")
-            self.coords(self._bg_item, fp, fp)
+            slices = c.images.box_slices(height, radius, colors["fill"], colors["stroke"], colors["edge"], colors["edge_side"], background=surface)
+            self._bg.show(slices, fp, fp, visual_w)
         if self.show_focus():
-            ring = c.images.ring(width, height + 2 * fp, radius + fp, pal.focus_outer, pal.focus_inner, background=None)
-            self._image("ring", ring)
-            self.itemconfigure(self._ring_item, image=ring, state="normal")
-            self.coords(self._ring_item, 0, 0)
-            self.tag_raise(self._ring_item)
+            self._ring.show(c.images.ring_slices(height + 2 * fp, radius + fp, pal.focus_outer, pal.focus_inner), 0, 0, width)
         else:
-            self.itemconfigure(self._ring_item, state="hidden")
+            self._ring.hide()
         cy = fp + height / 2
         label = self._busy_text if self._busy else self._text
         fg = colors["fg"]
@@ -1113,7 +1195,8 @@ class InfoBar(tk.Frame):
         if closable:
             self._close = IconButton(inner, icons.CANCEL, self._close_clicked, tooltip="Schließen", size=32)
             self._close.pack(side="right", anchor="n")
-        texts.bind("<Configure>", self._relayout, add="+")
+        self._texts_width = 0
+        texts.bind("<Configure>", self._texts_configured, add="+")
         c.theme.subscribe(self._repaint, owner=self)
         self._repaint()
 
@@ -1121,6 +1204,11 @@ class InfoBar(tk.Frame):
         self.hide()
         if self._on_close:
             self._on_close()
+
+    def _texts_configured(self, event) -> None:
+        if event.width != self._texts_width:
+            self._texts_width = event.width
+            self._relayout()
 
     def _relayout(self, _event=None) -> None:
         width = self._texts.winfo_width()
@@ -1134,15 +1222,18 @@ class InfoBar(tk.Frame):
         mode = ("inline" if inline else "stacked", has_title)
         if mode != self._mode:
             self._mode = mode
-            self._title.pack_forget()
-            self._message.pack_forget()
+            # pack_configure ändert nur die Anordnung – die Beschriftungen bleiben abgebildet.
+            if has_title:
+                title = {"side": "left", "anchor": "n"} if inline else {"side": "top", "anchor": "w"}
+                if self._message.winfo_manager():
+                    title["before"] = self._message
+                self._title.pack_configure(**title)
+            elif self._title.winfo_manager():
+                self._title.pack_forget()
             if inline:
-                if has_title:
-                    self._title.pack(side="left", anchor="n")
-                self._message.pack(side="left", anchor="n", fill="x", expand=True, padx=(gap if has_title else 0, 0))
+                self._message.pack_configure(side="left", anchor="n", fill="x", expand=True, padx=(gap if has_title else 0, 0))
             else:
-                self._title.pack(side="top", anchor="w")
-                self._message.pack(side="top", anchor="w", fill="x")
+                self._message.pack_configure(side="top", anchor="w", fill="x", expand=False, padx=0)
         wrap = width - (title_w + gap if (inline and has_title) else 0)
         if int(self._message.cget("wraplength") or 0) != max(40, wrap):
             self._message.configure(wraplength=max(40, wrap))
@@ -1231,68 +1322,75 @@ class InfoBar(tk.Frame):
 
 
 class Collapsible(tk.Frame):
-    """Container, dessen Inhalt mit einer Höhenanimation ein- und ausklappt."""
+    """Container, dessen Inhalt mit einer Höhenanimation ein- und ausklappt.
+
+    Der Inhalt bleibt dauerhaft abgebildet (per ``place``); verändert wird nur die
+    sichtbare Höhe. So wird beim Ein- und Ausklappen nichts ab- und wieder
+    eingeblendet – kein Neuaufbau des Inhalts, kein Nachzeichnen.
+    """
 
     def __init__(self, master, expanded: bool = False) -> None:
         super().__init__(master, bd=0, highlightthickness=0, height=1)
         self.surface_role = surface_of(master)
-        ctx().theme.style(self, bg=self.surface_role)
+        c = ctx()
+        c.theme.style(self, bg=self.surface_role)
         self.content = tk.Frame(self, bd=0, highlightthickness=0)
         self.content.surface_role = self.surface_role  # type: ignore[attr-defined]
-        ctx().theme.style(self.content, bg=self.surface_role)
+        c.theme.style(self.content, bg=self.surface_role)
+        self.pack_propagate(False)
+        self.grid_propagate(False)
         self.expanded = expanded
-        if expanded:
-            self.content.pack(fill="x")
-        else:
-            self.configure(height=1)
-            self.pack_propagate(False)
-            self.grid_propagate(False)
+        self._key = f"collapse:{self}"
+        # Eingeklappt liegt der Inhalt knapp unterhalb der 1-px-Fläche und ist unsichtbar.
+        self.content.place(x=0, y=0 if expanded else 1, relwidth=1)
+        self.content.bind("<Configure>", self._content_configured, add="+")
+        c.block_focus(self.content, not expanded)
 
     def _natural_height(self) -> int:
         self.content.update_idletasks()
         return max(1, self.content.winfo_reqheight())
 
+    def _content_configured(self, event) -> None:
+        # Der Inhalt hat eine neue natürliche Höhe (z. B. längerer Text): Höhe nachführen.
+        if self.expanded and not ctx().anim.running(self._key):
+            height = max(1, event.height)
+            if int(self.cget("height")) != height:
+                self.configure(height=height)
+
     def expand(self, animate: bool = True) -> None:
         c = ctx()
-        key = f"collapse:{self}"
-        if self.expanded and not c.anim.running(key):
+        if self.expanded and not c.anim.running(self._key):
             return
         self.expanded = True
+        c.block_focus(self.content, False)
         start = max(1, self.winfo_height()) if self.winfo_ismapped() else 1
-        self.pack_propagate(False)
-        self.content.pack_forget()
-        self.content.place(x=0, y=0, relwidth=1)
+        self.content.place_configure(y=0)
         target = self._natural_height()
 
         def step(t: float) -> None:
             self.configure(height=max(1, int(start + (target - start) * t)))
 
         def done() -> None:
-            self.content.place_forget()
-            self.content.pack(fill="x")
-            self.pack_propagate(True)
+            self.configure(height=self._natural_height())
 
-        c.anim.run(key, motion.NORMAL if animate else 0, step, done, easing=motion.DECELERATE, widget=self)
+        c.anim.run(self._key, motion.NORMAL if animate else 0, step, done, easing=motion.DECELERATE, widget=self)
 
     def collapse(self, animate: bool = True) -> None:
         c = ctx()
-        key = f"collapse:{self}"
-        if not self.expanded and not c.anim.running(key):
+        if not self.expanded and not c.anim.running(self._key):
             return
         self.expanded = False
+        c.block_focus(self.content, True)
         start = self.winfo_height() if self.winfo_ismapped() else 1
-        self.pack_propagate(False)
-        self.content.pack_forget()
-        self.content.place(x=0, y=0, relwidth=1)
 
         def step(t: float) -> None:
             self.configure(height=max(1, int(start * (1 - t))))
 
         def done() -> None:
-            self.content.place_forget()
             self.configure(height=1)
+            self.content.place_configure(y=1)
 
-        c.anim.run(key, motion.NORMAL if animate else 0, step, done, easing=motion.ACCELERATE if animate else motion.linear, widget=self)
+        c.anim.run(self._key, motion.NORMAL if animate else 0, step, done, easing=motion.ACCELERATE if animate else motion.linear, widget=self)
 
 
 # ---------------------------------------------------------------------------
@@ -1365,20 +1463,25 @@ class Tooltip:
             y = self.widget.winfo_rooty() - height - px(6)
         x = max(px(4), min(x, screen_w - width - px(4)))
         win.geometry(f"+{x}+{y}")
-        win.deiconify()
+        # Ecken und Transparenz vor dem Anzeigen setzen: kein kurz eckiges oder deckendes Fenster.
         try:
             rounded = windows.round_popup(windows.frame_hwnd(win), small=True, border=pal.flyout_stroke)
         except Exception:
             rounded = False
         if rounded:
             label.pack_configure(padx=0, pady=0)
-        self._window = win
-        if c.anim.enabled:
+        fade = c.anim.allowed()
+        if fade:
             try:
                 win.attributes("-alpha", 0.0)
-                c.anim.run(f"tip:{win}", 120, lambda t: win.attributes("-alpha", t), widget=win)
             except tk.TclError:
-                pass
+                fade = False
+        from .context import reveal
+
+        reveal(win, position=(x, y), prepare=False)
+        self._window = win
+        if fade:
+            c.anim.run(f"tip:{win}", 120, lambda t: win.attributes("-alpha", t), widget=win)
 
     def hide(self, _event=None) -> None:
         self._cancel()
@@ -1406,13 +1509,37 @@ class FlowRow(tk.Frame):
         self._row_gap = px(row_gap)
         self._items: list[tuple[tk.Widget, str]] = []
         self._last = None
-        self.bind("<Configure>", lambda _e: self._layout(), add="+")
+        self._width = 0
+        self._sizes: dict[str, tuple[int, int]] = {}
+        self._pending = False
+        self.bind("<Configure>", self._configured, add="+")
+
+    def _configured(self, event) -> None:
+        if event.width != self._width:
+            self._width = event.width
+            self._layout()
 
     def add(self, widget: tk.Widget, align: str = "left") -> tk.Widget:
         self._items.append((widget, align))
-        widget.bind("<Configure>", lambda _e: self.after_idle(self._layout), add="+")
-        self.after_idle(self._layout)
+        widget.bind("<Configure>", lambda event, w=widget: self._child_configured(w, event), add="+")
+        self._schedule()
         return widget
+
+    def _child_configured(self, widget: tk.Widget, event) -> None:
+        # Nur Größenänderungen eines Elements erfordern eine neue Anordnung, keine Verschiebungen.
+        size = (event.width, event.height)
+        if self._sizes.get(str(widget)) != size:
+            self._sizes[str(widget)] = size
+            self._schedule()
+
+    def _schedule(self) -> None:
+        if not self._pending:
+            self._pending = True
+            self.after_idle(self._run_layout)
+
+    def _run_layout(self) -> None:
+        self._pending = False
+        self._layout()
 
     def _layout(self) -> None:
         try:

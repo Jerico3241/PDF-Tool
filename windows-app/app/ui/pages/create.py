@@ -19,7 +19,8 @@ def build(app: "App", host) -> Page:
     ui = app.ui
     page = Page(host, "Vertragsübersicht", "Vertragsübersichten aus Excel erstellen")
 
-    columns = ResponsiveColumns(page.content)
+    # Zwei Karten nebeneinander oder untereinander – entschieden zentral an den Fenster-Breakpoints.
+    columns = ResponsiveColumns(page.content, central=True)
     page.add_section(columns)
 
     # Kundendaten ----------------------------------------------------------------

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import traceback
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,20 +21,22 @@ if str(APP_DIR) not in sys.path:
 
 from appstate import (  # noqa: E402
     APP_NAME,
-    CONFIG_FILE,
     DEFAULT_DATEINAME,
     DEFAULT_LOGO,
     DEFAULT_LOGO_BREITE,
     DEFAULT_TITEL,
+    DEFAULT_FOOTER,
     DEFAULT_UNTERTITEL,
     DEVELOPER,
     ERROR_LOG,
+    FOOTER_EXPLICIT,
     ICON_FILE,
-    INSTALL_DIR,
     NEUERUNGEN,
     VERSION,
     State,
+    customer_footer,
     desktop_dir,
+    footer_from,
     load_config,
     major_minor,
     save_config,
@@ -47,7 +50,7 @@ from ui.pages import layout as page_layout  # noqa: E402
 from ui.pages import settings as page_settings  # noqa: E402
 from ui.scroll import install_wheel_router  # noqa: E402
 from ui.tasks import Worker  # noqa: E402
-from ui.theme import ACCENTS, SYSTEM_ACCENT, THEME_DARK, THEME_LIGHT, THEME_SYSTEM, ThemeManager, px, rgb  # noqa: E402
+from ui.theme import SYSTEM_ACCENT, THEME_DARK, THEME_LIGHT, THEME_SYSTEM, ThemeManager, px, rgb  # noqa: E402
 from ui.widgets import Text, frame  # noqa: E402
 
 __all__ = ["App", "main", "VERSION", "APP_NAME"]
@@ -79,6 +82,9 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__(className="Uebersichten-Ersteller")
         self.withdraw()
+        # Rahmenfenster jetzt anlegen (noch unsichtbar und leer): Titelleiste und Mica
+        # lassen sich so vor dem ersten Anzeigen einstellen.
+        self.update_idletasks()
         self.title(APP_NAME)
         cfg = load_config()
         self.cfg = cfg
@@ -86,10 +92,13 @@ class App(tk.Tk):
 
         theme_mode = cfg.get("theme") if cfg.get("theme") in (THEME_SYSTEM, THEME_LIGHT, THEME_DARK) else THEME_SYSTEM
         accent = _valid_accent(cfg.get("accent", SYSTEM_ACCENT))
+        # Design, Akzentfarbe und Schriften stehen fest, bevor das erste Widget entsteht.
         self.theme = ThemeManager(self, theme_mode, accent)
         self._anim_pref = cfg.get("animationen") if isinstance(cfg.get("animationen"), bool) else None
         animations = self._animations_wanted()
-        self.ctx = ui_context.init(self, self.theme, animations)
+        self.ctx = ui_context.init(self, self.theme, animations, reduce_motion=not windows.client_area_animations())
+        # Während des unsichtbaren Aufbaus läuft keine Animation (kein gestaffeltes Einblenden).
+        self.ctx.anim.suspend()
         if ICON_FILE.is_file():
             try:
                 self.iconbitmap(default=str(ICON_FILE))
@@ -115,7 +124,8 @@ class App(tk.Tk):
         self.var_regel_zyk = tk.StringVar(self, "")
         self.var_mica = tk.BooleanVar(self, bool(cfg.get("mica", True)))
         self.var_anim = tk.BooleanVar(self, animations)
-        self._fuss_start = str(cfg.get("fusszeile", "") or "")
+        # Ohne bewusst gespeicherte Fußzeile gilt die Standard-Fußzeile (auch nach Update).
+        self._fuss_start = footer_from(cfg)
         self._kopf_start = str(cfg.get("kopfzeile", "") or "")
         self._excel_mails: list[str] = []
         self._recent_by_label: dict[str, dict] = {}
@@ -130,9 +140,15 @@ class App(tk.Tk):
         self._active = True
         self._hook: windows.WindowHook | None = None
         self._closing = False
+        self._start_zoomed = False
+        self._start_position: tuple[int, int] | None = None
+        self._initial_check = False
+        # Das Mica-Material (Desktophintergrund) lädt parallel zum Aufbau der Oberfläche.
+        self._mica_thread = self._start_mica_load()
 
         self.configure(bg=self.theme.palette.mica)
         install_wheel_router(self)
+        # Alle Seiten werden jetzt aufgebaut – das Fenster ist noch verborgen.
         self.nav = NavigationView(
             self,
             list(PAGES),
@@ -144,6 +160,7 @@ class App(tk.Tk):
             on_change=self._page_changed,
             compact=bool(cfg.get("nav_kompakt", False)),
             status_hint="Strg+Enter  PDF erstellen   ·   Strg+O  Excel öffnen",
+            on_layout=self._layout_changed,
         )
         self.nav.pack(fill="both", expand=True)
         self.theme.subscribe(self._theme_changed)
@@ -159,27 +176,59 @@ class App(tk.Tk):
             self.bind_all(f"<Control-Key-{number}>", lambda _e, k=key: self.nav.navigate(k))
         self.bind("<Activate>", self._on_activate, add="+")
         self.bind("<Deactivate>", self._on_deactivate, add="+")
-        self.ctx.window_hooks.append(lambda _e: self.ctx.anim.later("backdrop", 180, self._update_backdrop))
+        self.ctx.window_hooks.append(lambda _e: self._schedule_backdrop())
 
         self._restore_geometry()
-        self.update_idletasks()
-        self.deiconify()
-        self._apply_chrome()
+        # Eine gespeicherte Excel-Liste wird im Hintergrund geprüft; der Hinweis
+        # »Excel wird geprüft …« gehört damit schon zum ersten sichtbaren Bild.
+        excel = self.var_excel.get().strip()
+        if excel and Path(excel).is_file():
+            self._initial_check = True
+            self.inspect_excel(excel)
+        self._show_when_ready()
         self.after_idle(self._after_show)
 
     # ------------------------------------------------------------------
     # Start
     # ------------------------------------------------------------------
-    def _after_show(self) -> None:
-        self._hook = windows.WindowHook(windows.frame_hwnd(self), lambda func: self.after(0, func), on_drop=self._on_drop, on_settings=self._on_system_settings)
+    def _show_when_ready(self) -> None:
+        """Hauptfenster erst zeigen, wenn die Oberfläche vollständig aufgebaut ist.
+
+        1. Titelleiste (DWM), Mica und Drag & Drop einrichten, solange nichts sichtbar ist
+        2. Alle Seiten bei der endgültigen Fenstergröße abbilden, anordnen und zeichnen –
+           unsichtbar (DWM-Cloaking bzw. außerhalb des Bildschirms), dann in einem Zug zeigen
+        3. Nicht sichtbare Seiten aus dem Layout nehmen
+        """
+        if self._mica_thread is not None:
+            self._mica_thread.join(0.4)
         self._apply_chrome()
-        if self._mica_wanted():
-            self.worker.run(self.mica.load, lambda _ok: self._update_backdrop())
-        excel = self.var_excel.get().strip()
-        if excel and Path(excel).is_file():
-            self.inspect_excel(excel)
+        self._hook = windows.WindowHook(windows.frame_hwnd(self), lambda func: self.after(0, func), on_drop=self._on_drop, on_settings=self._on_system_settings)
+        ui_context.reveal(self, self.state_zoomed if self._start_zoomed else self.deiconify, position=self._start_position, prepare=False)
+        self.nav.park_hidden_pages()
+        self._schedule_backdrop()
+        self.ctx.ready = True
+        self.ctx.anim.resume()
+
+    def _after_show(self) -> None:
+        if self._mica_thread is not None and self._mica_thread.is_alive():
+            self._wait_for_mica()
         if major_minor(self.state.gesehen) != major_minor(VERSION):
             self.after(500, self._zeige_neuerungen)
+
+    def _start_mica_load(self) -> threading.Thread | None:
+        if not self._mica_wanted():
+            return None
+        thread = threading.Thread(target=self.mica.load, name="mica", daemon=True)
+        thread.start()
+        return thread
+
+    def _wait_for_mica(self) -> None:
+        if self._closing:
+            return
+        if self._mica_thread is not None and self._mica_thread.is_alive():
+            self.after(80, self._wait_for_mica)
+            return
+        self._update_backdrop()
 
     def _animations_wanted(self) -> bool:
         if os.environ.get("UE_NO_ANIMATIONS"):
@@ -190,7 +239,8 @@ class App(tk.Tk):
 
     def _restore_geometry(self) -> None:
         screen_w, screen_h = self.winfo_screenwidth(), self.winfo_screenheight()
-        min_w, min_h = min(px(720), screen_w), min(px(520), screen_h)
+        # Unterhalb dieser Größe lässt sich das Layout nicht sinnvoll anordnen.
+        min_w, min_h = min(px(760), screen_w), min(px(540), screen_h)
         self.minsize(min_w, min_h)
         saved = self.cfg.get("fenster") if isinstance(self.cfg.get("fenster"), dict) else {}
         width = int(saved.get("w", 0) or 0)
@@ -204,17 +254,19 @@ class App(tk.Tk):
             x = max(0, (screen_w - width) // 2)
             y = max(0, (screen_h - height) // 3)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        if saved.get("max"):
-            try:
-                self.state_zoomed()
-            except tk.TclError:
-                pass
+        self._start_position = (x, y)
+        # Maximiert wird erst beim Anzeigen – »zoomed« würde das Fenster sofort sichtbar machen.
+        self._start_zoomed = bool(saved.get("max"))
 
     def state_zoomed(self) -> None:
-        if sys.platform == "win32":
-            self.wm_state("zoomed")
-        else:
-            self.attributes("-zoomed", True)
+        try:
+            if sys.platform == "win32":
+                self.wm_state("zoomed")
+            else:
+                self.deiconify()
+                self.attributes("-zoomed", True)
+        except tk.TclError:
+            self.deiconify()
 
     def _geometry_config(self) -> dict:
         try:
@@ -253,18 +305,27 @@ class App(tk.Tk):
         self._chrome = windows.apply_window_chrome(windows.frame_hwnd(self), pal.dark, caption=pal.mica, text=pal.text, mica=self._mica_wanted())
         self._update_backdrop()
 
+    def _schedule_backdrop(self) -> None:
+        if self._chrome == "mica":
+            self.ctx.anim.later("backdrop", 180, self._update_backdrop)
+
+    def _layout_changed(self) -> None:
+        # Die Inhaltsebene hat sich verschoben: runde Ecke mit passendem Mica-Ausschnitt nachziehen.
+        if getattr(self, "nav", None) is not None:
+            self._schedule_backdrop()
+
     def _update_backdrop(self) -> None:
         if self._closing:
             return
         use = self._chrome == "mica" and self.mica.available and self._active and self._mica_wanted()
         pane = self.nav.pane
         if not use:
-            pane.set_backdrop(None)
+            self.nav.set_backdrop(None)
             self.nav.layer.set_mica_corner(None)
             return
         rects = windows.monitor_rects(windows.frame_hwnd(self))
         if not rects:
-            pane.set_backdrop(None)
+            self.nav.set_backdrop(None)
             return
         monitor = rects[0]
         dark = self.theme.palette.dark
@@ -272,7 +333,7 @@ class App(tk.Tk):
         width = px(240)
         height = max(pane.winfo_height(), self.winfo_screenheight() // 2)
         image = self.mica.region((x0, y0, x0 + width, y0 + height), (width, height), monitor, dark)
-        pane.set_backdrop(image)
+        self.nav.set_backdrop(image)
         layer = self.nav.layer
         lx, ly = layer.winfo_rootx(), layer.winfo_rooty()
         r = px(8)
@@ -312,7 +373,7 @@ class App(tk.Tk):
 
     def apply_animation_setting(self) -> None:
         self._anim_pref = bool(self.var_anim.get())
-        self.ctx.anim.enabled = self._anim_pref
+        self.ctx.anim.animations_enabled = self._anim_pref
         page_settings.refresh(self)
         self.persist()
 
@@ -321,8 +382,9 @@ class App(tk.Tk):
         self.ctx.anim.later("syschange", 300, self._reload_system_settings)
 
     def _reload_system_settings(self) -> None:
+        self.ctx.anim.reduce_motion = not windows.client_area_animations()
         if self._anim_pref is None:
-            self.ctx.anim.enabled = self._animations_wanted()
+            self.ctx.anim.animations_enabled = self._animations_wanted()
             self.var_anim.set(self.ctx.anim.enabled)
         self.theme.set(force=True)
         if self._mica_wanted():
@@ -345,13 +407,13 @@ class App(tk.Tk):
         except tk.TclError:
             pass
 
-    def notify(self, area: str, severity: str, message: str, title: str = "", actions=(), status: bool = True, auto_hide: int | None = None) -> None:
+    def notify(self, area: str, severity: str, message: str, title: str = "", actions=(), status: bool = True, auto_hide: int | None = None, animate: bool = True) -> None:
         bar = getattr(self.ui, area, None)
         if bar is not None:
             try:
                 if bar.winfo_exists():
                     self.ctx.anim.cancel_later(f"hide:{area}")
-                    bar.show(severity, message, title, actions)
+                    bar.show(severity, message, title, actions, animate=animate)
                     if auto_hide:
                         self.ctx.anim.later(f"hide:{area}", auto_hide, bar.hide)
             except tk.TclError:
@@ -459,20 +521,23 @@ class App(tk.Tk):
     def _show_check(self, path: str, result: dict) -> None:
         if self.var_excel.get().strip() != path:
             return
+        # Das Ergebnis der Prüfung beim Start erscheint ohne Ein-/Ausklapp-Animation.
+        animate = not self._initial_check
+        self._initial_check = False
         text = str(result.get("text", ""))
         if not result.get("ok"):
-            self.notify("info_excel", "error", text or "Die Datei konnte nicht gelesen werden.", title="Excel-Prüfung fehlgeschlagen")
-            self._set_mails([])
+            self.notify("info_excel", "error", text or "Die Datei konnte nicht gelesen werden.", title="Excel-Prüfung fehlgeschlagen", animate=animate)
+            self._set_mails([], animate=animate)
             return
-        self.notify("info_excel", "success", text, status=False)
+        self.notify("info_excel", "success", text, status=False, animate=animate)
         self.set_status(f"Excel erfolgreich geprüft: {text}", "success")
-        self._set_mails([str(mail) for mail in result.get("mails") or []])
+        self._set_mails([str(mail) for mail in result.get("mails") or []], animate=animate)
         if not self.var_kd.get().strip() and len(result.get("kunden") or []) == 1:
             self.var_kd.set(result["kunden"][0])
         if not self.var_firma.get().strip() and len(result.get("firmen") or []) == 1:
             self.var_firma.set(result["firmen"][0])
 
-    def _set_mails(self, mails: list[str]) -> None:
+    def _set_mails(self, mails: list[str], animate: bool = True) -> None:
         self._excel_mails = mails
         combo = getattr(self.ui, "mail_combo", None)
         area = getattr(self.ui, "mail_area", None)
@@ -480,10 +545,10 @@ class App(tk.Tk):
             return
         if len(mails) > 1:
             combo.set_values(mails, keep=True)
-            area.expand()
+            area.expand(animate=animate)
         else:
             combo.set_values([], keep=False)
-            area.collapse()
+            area.collapse(animate=animate)
 
     # ------------------------------------------------------------------
     # Kundenakte
@@ -517,8 +582,11 @@ class App(tk.Tk):
         if logo and Path(logo).is_file():
             self.var_logo.set(logo)
             self.refresh_files()
-        if "fusszeile" in eintrag:
-            self._set_long_text("txt_fuss", "_fuss_start", str(eintrag.get("fusszeile") or ""))
+        # Nur eine sinnvolle eigene Fußzeile der Kundenakte übernehmen – ein leerer Wert
+        # aus älteren Versionen lässt die aktuell gültige Fußzeile stehen.
+        fusszeile = customer_footer(eintrag)
+        if fusszeile is not None:
+            self._set_long_text("txt_fuss", "_fuss_start", fusszeile)
         if "kopfzeile" in eintrag:
             self._set_long_text("txt_kopf", "_kopf_start", str(eintrag.get("kopfzeile") or ""))
         pdf = str(eintrag.get("pdf") or "").strip()
@@ -617,10 +685,14 @@ class App(tk.Tk):
         return widget.get().strip()
 
     def footer_text(self) -> str:
+        """Aktuelle Fußzeile: immer der Inhalt des Textfelds, exakt mit allen Zeilenumbrüchen.
+
+        Nur bevor das Textfeld existiert, gilt der geladene Startwert.
+        """
         widget = getattr(self.ui, "txt_fuss", None)
         if widget is None:
             return self._fuss_start
-        return widget.get().strip()
+        return widget.get()
 
     def _set_long_text(self, widget_name: str, start_name: str, text: str) -> None:
         setattr(self, start_name, text)
@@ -638,16 +710,49 @@ class App(tk.Tk):
 
     def save_footer(self) -> None:
         name = self.var_baustein.get().strip()
-        text = self.footer_text()
+        text = self.footer_text()  # aktueller Inhalt des Textfelds
         self._fuss_start = text
         if name:
             self.state.save_baustein(name, text)
         self.persist()
         self.reload_bausteine()
         if name:
-            self.notify("fuss_info", "success", f"Der Textbaustein „{name}“ wurde gespeichert.", auto_hide=5000)
+            self.notify("fuss_info", "success", f"Die Fußzeile und der Textbaustein „{name}“ wurden gespeichert.", auto_hide=5000)
         else:
             self.notify("fuss_info", "success", "Die Fußzeile wurde gespeichert.", auto_hide=5000)
+
+    def restore_default_footer(self) -> None:
+        """Standard-Fußzeile wiederherstellen (rückgängig machbar, daher ohne Rückfrage)."""
+        previous = self.footer_text()
+        widget = getattr(self.ui, "txt_fuss", None)
+        if widget is not None:
+            widget.replace(DEFAULT_FOOTER)
+        self._fuss_start = DEFAULT_FOOTER
+        self.persist()
+        actions = ()
+        if previous != DEFAULT_FOOTER:
+            actions = (("Rückgängig", lambda: self._undo_footer(previous)),)
+        self.notify("fuss_info", "success", "Standard-Fußzeile wiederhergestellt.", actions=actions, auto_hide=8000)
+
+    def _undo_footer(self, previous: str) -> None:
+        widget = getattr(self.ui, "txt_fuss", None)
+        if widget is not None:
+            widget.replace(previous)
+        self._fuss_start = previous
+        self.persist()
+        self.hide_notice("fuss_info")
+        self.set_status("Vorherige Fußzeile wiederhergestellt.", "success")
+
+    def schedule_text_save(self) -> None:
+        """Änderungen an Kopf- und Fußzeile verzögert speichern (nicht bei jedem Tastendruck)."""
+        self.ctx.anim.later("autosave:texte", 800, self._save_texts)
+
+    def _save_texts(self) -> None:
+        if self._closing:
+            return
+        self._fuss_start = self.footer_text()
+        self._kopf_start = self.header_text()
+        self.persist()
 
     def reload_bausteine(self) -> None:
         combo = getattr(self.ui, "baustein_combo", None)
@@ -720,7 +825,8 @@ class App(tk.Tk):
         if eintrag.get("untertitel"):
             self.var_untertitel.set(str(eintrag.get("untertitel")))
         self._set_long_text("txt_kopf", "_kopf_start", str(eintrag.get("kopfzeile") or ""))
-        self._set_long_text("txt_fuss", "_fuss_start", str(eintrag.get("fusszeile") or ""))
+        # Vorlage mit eigener Fußzeile: diese; alte Vorlage ohne (gültigen) Wert: Standard.
+        self._set_long_text("txt_fuss", "_fuss_start", footer_from(eintrag))
         from appstate import normalize_regeln
 
         self.state.regeln = normalize_regeln(eintrag.get("regeln") or [])
@@ -753,6 +859,7 @@ class App(tk.Tk):
                 "untertitel": self.var_untertitel.get().strip(),
                 "kopfzeile": self.header_text(),
                 "fusszeile": self.footer_text(),
+                FOOTER_EXPLICIT: True,
                 "regeln": [dict(regel) for regel in self.state.regeln],
             }
         )
@@ -1047,6 +1154,7 @@ class App(tk.Tk):
                 "titel": self.var_titel.get().strip(),
                 "untertitel": self.var_untertitel.get().strip(),
                 "fusszeile": self.footer_text(),
+                FOOTER_EXPLICIT: True,
                 "kopfzeile": self.header_text(),
                 "baustein_name": self.var_baustein.get().strip(),
                 "bausteine": self.state.bausteine,
@@ -1079,6 +1187,7 @@ class App(tk.Tk):
         if self._closing:
             return
         self._closing = True
+        self.ctx.anim.cancel_later("autosave:texte")
         try:
             self._remember_customer()
             self.persist()

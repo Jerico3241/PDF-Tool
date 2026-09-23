@@ -22,6 +22,8 @@ class FluentScrollbar(tk.Canvas):
         self._expand = 0.0  # 0 = dünn, 1 = breit
         self._drag: tuple[int, float] | None = None
         self._images: dict = {}
+        self._height = 0
+        self._drawn: tuple | None = None
         self._track = self.create_image(0, 0, anchor="nw")
         self._thumb = self.create_image(0, 0, anchor="nw")
         self.bind("<Enter>", lambda _e: self._animate(1.0), add="+")
@@ -29,11 +31,25 @@ class FluentScrollbar(tk.Canvas):
         self.bind("<ButtonPress-1>", self._press, add="+")
         self.bind("<B1-Motion>", self._motion, add="+")
         self.bind("<ButtonRelease-1>", self._release, add="+")
-        self.bind("<Configure>", lambda _e: self.redraw(), add="+")
-        self.c.theme.subscribe(self.redraw, owner=self)
+        self.bind("<Configure>", self._configured, add="+")
+        self.c.theme.subscribe(self._theme_changed, owner=self)
+        self.configure(bg=surface_color(self.master))
+
+    def _configured(self, event) -> None:
+        if event.height != self._height:
+            self._height = event.height
+            self.redraw()
+
+    def _theme_changed(self) -> None:
+        self.configure(bg=surface_color(self.master))
+        self._drawn = None
+        self.redraw()
 
     def set(self, first, last) -> None:
-        self._first, self._last = float(first), float(last)
+        first, last = float(first), float(last)
+        if (first, last) == (self._first, self._last):
+            return
+        self._first, self._last = first, last
         self.redraw()
 
     def needed(self) -> bool:
@@ -61,13 +77,18 @@ class FluentScrollbar(tk.Canvas):
     def redraw(self) -> None:
         pal = self.c.pal
         surface = surface_color(self.master)
-        self.configure(bg=surface)
         width = px(self.WIDTH)
         if not self.needed():
-            self.itemconfigure(self._thumb, state="hidden")
-            self.itemconfigure(self._track, state="hidden")
+            if self._drawn != ("hidden",):
+                self._drawn = ("hidden",)
+                self.itemconfigure(self._thumb, state="hidden")
+                self.itemconfigure(self._track, state="hidden")
             return
         y, thumb_h, _track = self._geometry()
+        state = (round(y, 1), round(thumb_h, 1), round(self._expand, 3), self.winfo_height(), surface)
+        if state == self._drawn:
+            return
+        self._drawn = state
         thick = px(2) + (px(6) - px(2)) * self._expand
         thick = max(1, int(round(thick)))
         if self._expand > 0.05:
@@ -118,9 +139,13 @@ def mix_track(pal, surface: str, amount: float) -> str:
 
 
 class ScrollArea(tk.Frame):
-    """Vertikal scrollbarer Bereich. Inhalte kommen in ``self.body``."""
+    """Vertikal scrollbarer Bereich. Inhalte kommen in ``self.body``.
 
-    def __init__(self, master) -> None:
+    ``max_width`` begrenzt die Breite des Inhalts (effektive Pixel). Breite und
+    Scrollbereich werden nur gesetzt, wenn sie sich tatsächlich ändern.
+    """
+
+    def __init__(self, master, max_width: int | None = None) -> None:
         super().__init__(master, bd=0, highlightthickness=0)
         self.surface_role = surface_of(master)
         c = ctx()
@@ -140,21 +165,33 @@ class ScrollArea(tk.Frame):
         self.canvas.bind("<Configure>", self._on_canvas, add="+")
         self._target: float | None = None
         self.offset_x = 0
+        self._max_width = px(max_width) if max_width else None
+        self._body_width: int | None = None
+        self._region: tuple | None = None
+        self._scrollbar_raised = False
 
     def _on_scroll(self, first, last) -> None:
         self.scrollbar.set(first, last)
-        if self.scrollbar.needed():
+        needed = self.scrollbar.needed()
+        if needed and not self._scrollbar_raised:
             tk.Misc.lift(self.scrollbar)
+        self._scrollbar_raised = needed
 
     def _on_canvas(self, event) -> None:
-        self.canvas.itemconfigure(self._window, width=event.width)
+        width = event.width if self._max_width is None else min(event.width, self._max_width)
+        if width != self._body_width:
+            self._body_width = width
+            self.canvas.itemconfigure(self._window, width=width)
         self._sync()
 
     def _sync(self, _event=None) -> None:
         height = self.body.winfo_reqheight()
-        width = max(1, self.canvas.winfo_width())
-        self.canvas.configure(scrollregion=(0, 0, width, max(height, self.canvas.winfo_height())))
-        if height <= self.canvas.winfo_height():
+        view_h = self.canvas.winfo_height()
+        region = (0, 0, max(1, self.canvas.winfo_width()), max(height, view_h))
+        if region != self._region:
+            self._region = region
+            self.canvas.configure(scrollregion=region)
+        if height <= view_h and self.canvas.canvasy(0) != 0:
             self.canvas.yview_moveto(0)
 
     def set_offset(self, x: int) -> None:

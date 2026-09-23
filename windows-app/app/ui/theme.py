@@ -491,7 +491,12 @@ THEME_DARK = "dark"
 
 
 class ThemeManager:
-    """Hält das aktive Design und benachrichtigt registrierte Widgets bei Änderungen."""
+    """Hält das aktive Design und benachrichtigt registrierte Widgets bei Änderungen.
+
+    Änderungen werden zusammengefasst: Mehrere ``set()``-Aufrufe hintereinander
+    (Design, Akzentfarbe, Systemeinstellung) führen zu genau einem Neuzeichnen
+    aller Widgets beim nächsten Leerlauf – nie zu sichtbaren Zwischenständen.
+    """
 
     def __init__(self, root: tk.Tk, mode: str = THEME_SYSTEM, accent: str = SYSTEM_ACCENT) -> None:
         self.root = root
@@ -500,6 +505,7 @@ class ThemeManager:
         self._listeners: dict[int, Callable[[], None]] = {}
         self._plain: dict[str, tuple[tk.Misc, dict[str, str]]] = {}
         self._next = 0
+        self._pending: str | None = None
         self.palette = build_palette(self.is_dark(), resolve_accent(self.accent_choice))
 
     # Zustand -------------------------------------------------------------
@@ -519,8 +525,30 @@ class ThemeManager:
         if palette == self.palette and not force:
             return False
         self.palette = palette
-        self._notify()
+        self._request_notify()
         return True
+
+    def _request_notify(self) -> None:
+        if self._pending is not None:
+            return
+        try:
+            self._pending = self.root.after_idle(self._flush)
+        except tk.TclError:
+            self._pending = None
+            self._notify()
+
+    def _flush(self) -> None:
+        self._pending = None
+        self._notify()
+
+    def flush(self) -> None:
+        """Ausstehende Designänderung sofort anwenden."""
+        if self._pending is not None:
+            try:
+                self.root.after_cancel(self._pending)
+            except tk.TclError:
+                pass
+            self._flush()
 
     # Registrierung -----------------------------------------------------------
     def subscribe(self, callback: Callable[[], None], owner: tk.Misc | None = None) -> int:

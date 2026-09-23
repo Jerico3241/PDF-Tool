@@ -8,9 +8,9 @@ from typing import Callable, Sequence
 from . import animations as motion
 from . import icons
 from . import windows
-from .context import ctx, surface_color, surface_of
+from .context import ctx, reveal, surface_color
 from .theme import px
-from .widgets import CONTROL_RADIUS, FOCUS_PAD, OVERLAY_RADIUS, CanvasControl
+from .widgets import CONTROL_RADIUS, FOCUS_PAD, CanvasControl, StretchBox
 
 
 def _pointer_inside(widget: tk.Misc) -> bool:
@@ -37,9 +37,26 @@ class _FieldBase(tk.Canvas):
         self._enabled = True
         self._error = False
         self._images: dict[str, tk.PhotoImage] = {}
-        self._bg = self.create_image(self._fp, self._fp, anchor="nw")
-        self.c.theme.subscribe(self.redraw, owner=self)
-        self.bind("<Configure>", lambda _e: self.redraw(), add="+")
+        self._field_size = (width + 2 * self._fp, height + 2 * self._fp)
+        self._bg = StretchBox(self)
+        self.configure(bg=self.surface())
+        self.c.theme.subscribe(self._theme_changed, owner=self)
+        self.bind("<Configure>", self._on_configure, add="+")
+
+    def _on_configure(self, event) -> None:
+        size = (event.width, event.height)
+        if size == self._field_size:
+            return  # nur verschoben: nichts neu zu zeichnen
+        self._field_size = size
+        self.redraw()
+        self._layout()
+
+    def _layout(self) -> None:
+        pass
+
+    def _theme_changed(self) -> None:
+        self.configure(bg=self.surface())
+        self.redraw()
 
     def _bind_hover(self, *widgets: tk.Misc) -> None:
         for widget in (self, *widgets):
@@ -76,7 +93,6 @@ class _FieldBase(tk.Canvas):
     def redraw(self) -> None:
         pal = self.c.pal
         surface = self.surface()
-        self.configure(bg=surface)
         try:
             width = self.winfo_width()
             if width <= 1:
@@ -95,9 +111,8 @@ class _FieldBase(tk.Canvas):
             stroke, edge, edge_w = pal.control_stroke, pal.accent, 2
         else:
             stroke, edge, edge_w = pal.control_stroke, pal.input_edge, 1
-        img = self.c.images.box(w, h, px(CONTROL_RADIUS), fill, stroke, edge, "bottom", background=surface, edge_width=px(edge_w) if edge_w > 1 else 1)
-        self._images["bg"] = img
-        self.itemconfigure(self._bg, image=img)
+        slices = self.c.images.box_slices(h, px(CONTROL_RADIUS), fill, stroke, edge, "bottom", background=surface, edge_width=px(edge_w) if edge_w > 1 else 1)
+        self._bg.show(slices, fp, fp, w)
         self._restyle_inner(fill)
 
     def _restyle_inner(self, fill: str) -> None:
@@ -127,9 +142,9 @@ class TextField(_FieldBase):
         self._bind_hover(self.entry, self.placeholder)
         self._trace = self.var.trace_add("write", lambda *_a: self._changed())
         self.bind("<Destroy>", self._untrace, add="+")
-        self.bind("<Configure>", self._layout, add="+")
         self._changed()
         self.redraw()
+        self._layout()
 
     def _untrace(self, event) -> None:
         if event.widget is self:
@@ -138,10 +153,9 @@ class TextField(_FieldBase):
             except (tk.TclError, ValueError):
                 pass
 
-    def _layout(self, _event=None) -> None:
+    def _layout(self) -> None:
         fp = self._fp
-        width = self.winfo_width()
-        inner = max(20, width - 2 * fp - px(22))
+        inner = max(20, self._field_size[0] - 2 * fp - px(22))
         self.itemconfigure(self._entry_item, width=inner)
         self.itemconfigure(self._ph_item, width=inner)
 
@@ -200,9 +214,13 @@ class TextField(_FieldBase):
 
 
 class TextArea(_FieldBase):
-    """Mehrzeiliges Textfeld mit Rückgängig-Funktion."""
+    """Mehrzeiliges Textfeld mit Rückgängig-Funktion.
 
-    def __init__(self, master, lines: int = 4, width: int = 320) -> None:
+    ``on_change`` wird bei jeder inhaltlichen Änderung aufgerufen (für verzögertes Speichern).
+    ``get()`` liefert den Inhalt exakt – nur der technische Schlusszeilenumbruch von Tk fehlt.
+    """
+
+    def __init__(self, master, lines: int = 4, width: int = 320, on_change: Callable[[], None] | None = None) -> None:
         c = ctx()
         line_h = c.fonts.body.metrics("linespace")
         height = lines * line_h + px(14)
@@ -216,8 +234,19 @@ class TextArea(_FieldBase):
         self.text.bind("<Shift-Tab>", self._shift_tab, add="+")
         self.bind("<Button-1>", lambda _e: self.text.focus_set(), add="+")
         self._bind_hover(self.text)
-        self.bind("<Configure>", self._layout, add="+")
+        self._on_change = on_change
+        self.text.bind("<<Modified>>", self._modified, add="+")
         self.redraw()
+        self._layout()
+
+    def _modified(self, _event=None) -> None:
+        # Tk meldet <<Modified>> nur beim Wechsel des Änderungskennzeichens: zurücksetzen,
+        # damit auch die nächste Änderung gemeldet wird.
+        if not self.text.edit_modified():
+            return
+        self.text.edit_modified(False)
+        if self._on_change is not None:
+            self._on_change()
 
     def _tab(self, _event=None):
         self.text.tk_focusNext().focus_set()
@@ -227,10 +256,10 @@ class TextArea(_FieldBase):
         self.text.tk_focusPrev().focus_set()
         return "break"
 
-    def _layout(self, _event=None) -> None:
+    def _layout(self) -> None:
         fp = self._fp
-        width = max(20, self.winfo_width() - 2 * fp - px(22))
-        height = max(20, self.winfo_height() - 2 * fp - px(14))
+        width = max(20, self._field_size[0] - 2 * fp - px(22))
+        height = max(20, self._field_size[1] - 2 * fp - px(14))
         self.itemconfigure(self._item, width=width, height=height)
 
     def _set_focus(self, focused: bool) -> None:
@@ -249,6 +278,19 @@ class TextArea(_FieldBase):
         if value:
             self.text.insert("1.0", value)
         self.text.edit_reset()
+
+    def replace(self, value: str) -> None:
+        """Inhalt ersetzen – mit Strg+Z in einem Schritt rückgängig zu machen."""
+        auto = self.text.cget("autoseparators")
+        self.text.configure(autoseparators=False)
+        try:
+            self.text.edit_separator()
+            self.text.delete("1.0", "end")
+            if value:
+                self.text.insert("1.0", value)
+            self.text.edit_separator()
+        finally:
+            self.text.configure(autoseparators=auto)
 
 
 # ---------------------------------------------------------------------------
@@ -273,8 +315,8 @@ class ComboBox(CanvasControl):
         self._h = px(32)
         self._popup: _ComboPopup | None = None
         super().__init__(master, px(width) + 2 * self._fp, self._h + 2 * self._fp)
-        self._bg = self.create_image(self._fp, self._fp, anchor="nw")
-        self._ring = self.create_image(0, 0, anchor="nw", state="hidden")
+        self._bg = StretchBox(self)
+        self._ring = StretchBox(self)
         self._label = self.create_text(0, 0, anchor="w", font=c.fonts.body)
         self._chevron = self.create_text(0, 0, anchor="center", text=icons.CHEVRON_DOWN if c.icons_available else "▾", font=c.fonts.icon_small or c.fonts.caption)
         for key, handler in (
@@ -424,16 +466,11 @@ class ComboBox(CanvasControl):
         else:
             fill, edge, fg = pal.control, pal.control_edge, pal.text
         side = "bottom" if not pal.dark else "top"
-        img = c.images.box(width - 2 * fp, h, px(CONTROL_RADIUS), fill, pal.control_stroke, edge, side, background=surface)
-        self._image("bg", img)
-        self.itemconfigure(self._bg, image=img)
+        self._bg.show(c.images.box_slices(h, px(CONTROL_RADIUS), fill, pal.control_stroke, edge, side, background=surface), fp, fp, width - 2 * fp)
         if self.show_focus():
-            ring = c.images.ring(width, h + 2 * fp, px(CONTROL_RADIUS) + fp, pal.focus_outer, pal.focus_inner)
-            self._image("ring", ring)
-            self.itemconfigure(self._ring, image=ring, state="normal")
-            self.tag_raise(self._ring)
+            self._ring.show(c.images.ring_slices(h + 2 * fp, px(CONTROL_RADIUS) + fp, pal.focus_outer, pal.focus_inner), 0, 0, width)
         else:
-            self.itemconfigure(self._ring, state="hidden")
+            self._ring.hide()
         value = self.get()
         text = value or self._placeholder
         color = fg if value else (pal.text2 if self._enabled else pal.text_disabled)
@@ -524,21 +561,25 @@ class _ComboPopup:
         if y + self.height > screen_h - px(40):
             y = combo.winfo_rooty() + fp - self.height - px(4)
         self.x, self.y = x, y
-        self.win.geometry(f"{self.width}x{self.height}+{x}+{y}")
-        self.win.deiconify()
+        fade = c.anim.allowed()
+        start_y = (y - px(8) if y > combo.winfo_rooty() else y + px(8)) if fade else y
+        self.win.geometry(f"{self.width}x{self.height}+{x}+{start_y}")
+        # Fensterstil, runde Ecken und Transparenz vor dem Anzeigen setzen (kein Aufblitzen).
+        self.win.update_idletasks()
         hwnd = windows.frame_hwnd(self.win)
         windows.set_no_activate(hwnd)
         if windows.round_popup(hwnd, border=pal.flyout_stroke):
             self.border.configure(bg=pal.flyout)
-        c.press_hooks.append(self._global_press)
-        c.window_hooks.append(self._window_moved)
-        if c.anim.enabled:
+        if fade:
             try:
                 self.win.attributes("-alpha", 0.0)
             except tk.TclError:
-                pass
-            start_y = y - px(8) if y > combo.winfo_rooty() else y + px(8)
-
+                fade = False
+        # Vollständig gezeichnet sichtbar machen, danach einblenden und hineingleiten lassen.
+        reveal(self.win, position=(x, start_y), prepare=False)
+        c.press_hooks.append(self._global_press)
+        c.window_hooks.append(self._window_moved)
+        if fade:
             def step(t: float) -> None:
                 self.win.attributes("-alpha", t)
                 yy = int(start_y + (y - start_y) * t)

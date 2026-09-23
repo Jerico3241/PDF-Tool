@@ -14,12 +14,14 @@ from typing import Callable
 IS_WINDOWS = sys.platform == "win32"
 
 # --- Windows-Builds -------------------------------------------------------
+BUILD_WIN8 = 9200  # erstes Windows mit DWM-Cloaking (DWMWA_CLOAK)
 BUILD_WIN10_1809 = 17763  # erstes Build mit DWMWA_USE_IMMERSIVE_DARK_MODE (Attribut 19)
 BUILD_WIN10_20H1 = 19041  # Dark-Mode-Attribut hat die offizielle Nummer 20
 BUILD_WIN11 = 22000  # Windows 11 21H2: runde Ecken, Titelleistenfarben, Mica (inoffiziell)
 BUILD_WIN11_22H2 = 22621  # Windows 11 22H2: DWMWA_SYSTEMBACKDROP_TYPE
 
 # --- DWM-Fensterattribute (dwmapi.h, DWMWINDOWATTRIBUTE) -------------------
+DWMWA_CLOAK = 13  # Fenster verbergen, obwohl es gezeichnet wird (ab Windows 8)
 DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20  # dunkle Titelleiste
 DWMWA_WINDOW_CORNER_PREFERENCE = 33  # Eckenradius (nur Windows 11)
@@ -320,6 +322,25 @@ def apply_window_chrome(
                 _set_attribute(hwnd, DWMWA_TEXT_COLOR, _colorref(text))
     refresh_frame(hwnd)
     return result
+
+
+def can_cloak() -> bool:
+    """DWM-Cloaking verfügbar? (Windows 8 und neuer; Wine meldet es nur zum Schein.)"""
+    return IS_WINDOWS and windows_build() >= BUILD_WIN8 and not is_wine()
+
+
+@_safe(False)
+def set_cloak(hwnd: int, cloaked: bool) -> bool:
+    """Fenster über DWM verbergen bzw. wieder zeigen.
+
+    Ein verborgenes (»cloaked«) Fenster ist sichtbar im Sinne von Windows: Es
+    erhält WM_PAINT und zeichnet seinen Inhalt, DWM stellt es aber nicht dar.
+    So erscheint die fertig gezeichnete Oberfläche in einem Zug – ohne weißes
+    oder halb aufgebautes Fenster. Rückgabe: True, wenn DWM den Aufruf annahm.
+    """
+    if not hwnd:
+        return False
+    return _set_attribute(hwnd, DWMWA_CLOAK, 1 if cloaked else 0)
 
 
 def round_popup(hwnd: int, small: bool = False, border: str | None = None) -> bool:

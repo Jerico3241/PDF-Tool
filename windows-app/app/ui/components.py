@@ -39,7 +39,6 @@ class SettingsCard(RoundedFrame):
         self.control.pack(side="right", padx=(px(16), 0))
         self.extra = frame(self)
         self.lift_corners()
-        self.bind("<Configure>", lambda _e: self.lift_corners(), add="+")
 
     def set_description(self, text: str) -> None:
         if self.description is not None:
@@ -64,10 +63,13 @@ class FileRow(tk.Frame):
         texts = frame(self)
         texts.pack(side="left", fill="x", expand=True)
         Text(texts, title, style="body").pack(anchor="w")
-        self.value = Text(texts, "", style="caption", color="text2")
+        # width=1: Der Dateiname bestimmt nicht die Breite der Zeile. Sonst würde jede
+        # Kürzung das Layout ändern und damit eine neue Kürzung auslösen.
+        self.value = Text(texts, "", style="caption", color="text2", width=1)
         self.value.pack(anchor="w", fill="x")
         self._full = ""
-        self.value.bind("<Configure>", lambda _e: self._render(), add="+")
+        self._value_width = 0
+        self.value.bind("<Configure>", self._value_configured, add="+")
         self.buttons = frame(self)
         self.buttons.pack(side="right", anchor="center", padx=(px(8), 0))
         self._tip = None
@@ -81,6 +83,11 @@ class FileRow(tk.Frame):
             if self._tip is None:
                 self._tip = Tooltip(self.value, full)
             self._tip.text = full
+
+    def _value_configured(self, event) -> None:
+        if event.width != self._value_width:
+            self._value_width = event.width
+            self._render()
 
     def _render(self) -> None:
         width = self.value.winfo_width()
@@ -102,17 +109,30 @@ def path_caption(path: str, empty: str) -> tuple[str, str]:
 
 
 class ResponsiveColumns(tk.Frame):
-    """Zwei Karten nebeneinander bei breitem Fenster, untereinander bei schmalem."""
+    """Zwei Bereiche nebeneinander bei ausreichender Breite, sonst untereinander.
 
-    def __init__(self, master, breakpoint: int = 780, gap: int = 12) -> None:
+    ``central=True``: folgt dem zentral berechneten Layoutzustand des Fensters
+    (``ctx().layout.columns``). Sonst entscheidet die eigene Breite – mit
+    Hysterese, damit kleine Bewegungen am Breakpoint kein Hin- und Herspringen
+    auslösen. Umgestellt wird nur, wenn ein Breakpoint tatsächlich überschritten ist.
+    """
+
+    HYSTERESIS = 12
+
+    def __init__(self, master, breakpoint: int = 780, gap: int = 12, central: bool = False) -> None:
         super().__init__(master, bd=0, highlightthickness=0)
         self.surface_role = surface_of(master)
         ctx().theme.style(self, bg=self.surface_role)
         self._breakpoint = px(breakpoint)
+        self._hysteresis = px(self.HYSTERESIS)
         self._gap = px(gap)
         self._children: list[tk.Widget] = []
         self._wide: bool | None = None
-        self.bind("<Configure>", self._layout, add="+")
+        self._central = central
+        if central:
+            ctx().layout.subscribe(self._layout, owner=self)
+        else:
+            self.bind("<Configure>", self._configured, add="+")
 
     def add(self, widget: tk.Widget) -> tk.Widget:
         self._children.append(widget)
@@ -120,19 +140,36 @@ class ResponsiveColumns(tk.Frame):
         self._layout()
         return widget
 
-    def _layout(self, _event=None) -> None:
+    def _configured(self, event) -> None:
+        if event.width > 1:
+            self._layout()
+
+    def _want_wide(self) -> bool:
+        if self._central:
+            return ctx().layout.columns >= 2
         width = self.winfo_width()
-        wide = width >= self._breakpoint if width > 1 else True
+        if width <= 1:
+            return True if self._wide is None else self._wide
+        if self._wide is None:
+            return width >= self._breakpoint
+        if self._wide:
+            return width >= self._breakpoint - self._hysteresis
+        return width >= self._breakpoint
+
+    def _layout(self, _event=None) -> None:
+        wide = self._want_wide()
         if wide == self._wide:
             return
         self._wide = wide
         for index, child in enumerate(self._children):
-            child.grid_forget()
             if wide:
                 pad = (0, self._gap // 2) if index == 0 else (self._gap // 2, 0)
-                child.grid(row=0, column=index, sticky="nsew", padx=pad, pady=0)
+                options = {"row": 0, "column": index, "padx": pad, "pady": 0}
             else:
-                child.grid(row=index, column=0, sticky="nsew", padx=0, pady=(0 if index == 0 else self._gap, 0))
+                options = {"row": index, "column": 0, "padx": 0, "pady": (0 if index == 0 else self._gap, 0)}
+            # grid_configure verschiebt die Karte, ohne sie samt Inhalt ab- und wieder
+            # einzublenden (das würde den ganzen Widget-Baum neu abbilden und zeichnen).
+            child.grid_configure(sticky="nsew", **options)
         for column in range(max(2, len(self._children))):
             self.columnconfigure(column, weight=1 if (wide or column == 0) else 0, uniform="cols" if wide else "")
         self.rowconfigure(0, weight=1)

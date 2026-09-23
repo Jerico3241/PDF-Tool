@@ -2,7 +2,11 @@
 
 * Auswahlindikator in Akzentfarbe, der beim Seitenwechsel zur neuen Seite gleitet
 * Kompaktmodus (nur Symbole) bei schmalen Fenstern oder per Menüschaltfläche
-* Seitenübergang: neue Seite gleitet 16 px von rechts ein, Abschnitte erscheinen gestaffelt
+* Alle Seiten werden einmal beim Start aufgebaut und danach nur noch gewechselt.
+  Eine Zielseite wird verdeckt fertig angeordnet und erst dann gezeigt; der
+  Übergang bewegt die ganze Seite als Einheit (16 px von rechts).
+* Responsive Layoutzustände (breit, mittel, kompakt) werden zentral aus der
+  Fensterbreite bestimmt und nur beim Überschreiten eines Breakpoints gewechselt.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from PIL import Image
 
 from . import animations as motion
 from . import icons
-from .context import ctx
+from .context import MODE_COMPACT, MODE_MEDIUM, MODE_WIDE, ctx, settle
 from .render import rounded_box, to_photo
 from .scroll import ScrollArea
 from .theme import px
@@ -26,7 +30,19 @@ PANE_EXPANDED = 240
 PANE_COMPACT = 48
 ITEM_HEIGHT = 36
 ITEM_GAP = 4
-COMPACT_BELOW = 900  # Fensterbreite (effektive Pixel), unter der die Navigation kompakt wird
+
+# Breakpoints (effektive Pixel Fensterbreite), abgestimmt auf die Kartenbreiten der Seiten.
+# Ab 1008 px ist die Navigation ausgeklappt (wie WinUI »ExpandedModeThresholdWidth«).
+WIDE_FROM = 1008
+MEDIUM_FROM = 820
+BREAKPOINT_HYSTERESIS = 8
+# Mindestbreite des Seiteninhalts für zwei Kartenspalten
+TWO_COLUMNS_FROM = 680
+COLUMNS_HYSTERESIS = 12
+PAGE_PADDING = (36, 28)  # links, rechts
+COMPACT_BELOW = WIDE_FROM  # früherer Name
+# Nicht sichtbare Seiten liegen fertig angeordnet außerhalb des sichtbaren Bereichs.
+PARK_X = -20000
 
 
 @dataclass
@@ -38,6 +54,8 @@ class NavItem:
 
 
 class NavigationPane(tk.Canvas):
+    """Navigationsbereich. Alle Canvas-Elemente bestehen dauerhaft und werden nur angepasst."""
+
     def __init__(self, master, items: list[NavItem], on_select: Callable[[str], None], on_toggle: Callable[[], None]) -> None:
         self.c = ctx()
         super().__init__(master, width=px(PANE_EXPANDED), highlightthickness=0, bd=0, takefocus=1)
@@ -53,33 +71,61 @@ class NavigationPane(tk.Canvas):
         self._indicator_y: float | None = None
         self._indicator_h = float(px(16))
         self._backdrop_img: tk.PhotoImage | None = None
-        self._images: dict = {}
-        self._backdrop = self.create_image(0, 0, anchor="nw")
+        self._height = 0
+        self._applied: dict[int, tuple] = {}
+        self._backdrop = self.create_image(0, 0, anchor="nw", state="hidden")
+        self._slots: dict[str, dict[str, int]] = {"__toggle__": self._make_slot()}
+        for item in items:
+            self._slots[item.key] = self._make_slot()
+        self._pill = self.create_image(0, 0, anchor="w", state="hidden")
         self._tooltip = Tooltip(self, "")
         self._tooltip_key: str | None = None
+        self.configure(bg=self.c.pal.mica)
         self.bind("<Motion>", self._motion)
         self.bind("<Leave>", self._leave)
         self.bind("<ButtonPress-1>", self._press)
         self.bind("<ButtonRelease-1>", self._release)
-        self.bind("<Configure>", lambda _e: self.redraw())
+        self.bind("<Configure>", self._configured)
         self.bind("<FocusIn>", self._focus_in)
         self.bind("<FocusOut>", lambda _e: self.redraw())
         for key, delta in (("Up", -1), ("Down", 1)):
             self.bind(f"<KeyPress-{key}>", lambda _e, d=delta: self._move_focus(d))
         for key in ("Return", "space", "KP_Enter"):
             self.bind(f"<KeyPress-{key}>", lambda _e: self._activate_focus())
-        self.c.theme.subscribe(self.redraw, owner=self)
+        self.c.theme.subscribe(self._theme_changed, owner=self)
         self.c.on_focus_mode(self, self.redraw)
 
+    def _make_slot(self) -> dict[str, int]:
+        return {
+            "overlay": self.create_image(0, 0, anchor="nw", state="hidden"),
+            "icon": self.create_text(0, 0, text="", anchor="center"),
+            "label": self.create_text(0, 0, text="", anchor="w", state="hidden"),
+            "focus": self.create_image(0, 0, anchor="nw", state="hidden"),
+        }
+
+    def _theme_changed(self) -> None:
+        self.configure(bg=self.c.pal.mica)
+        self.redraw()
+
+    def _configured(self, event) -> None:
+        # Die Breite steuert NavigationView über expanded_amount; neu zu zeichnen ist nur
+        # bei geänderter Höhe (Position der unteren Einträge).
+        if event.height != self._height:
+            self._height = event.height
+            self.redraw()
+
     # Geometrie ----------------------------------------------------------------
+    def visual_width(self) -> int:
+        return int(round(px(PANE_COMPACT) + (px(PANE_EXPANDED) - px(PANE_COMPACT)) * self.expanded_amount))
+
     def _toggle_rect(self) -> tuple[int, int, int, int]:
         x0 = px(4)
         y0 = px(4)
         return x0, y0, x0 + px(40), y0 + px(ITEM_HEIGHT)
 
     def _item_rects(self) -> dict[str, tuple[int, int, int, int]]:
-        width = max(px(PANE_COMPACT), self.winfo_width())
-        height = self.winfo_height()
+        width = self.visual_width()
+        height = max(self._height, self.winfo_height())
         rects = {}
         y = px(4) + px(ITEM_HEIGHT) + px(8)
         top_items = [item for item in self.items if not item.footer]
@@ -103,14 +149,12 @@ class NavigationPane(tk.Canvas):
         return None
 
     # Hintergrund -------------------------------------------------------------------
-    def set_backdrop(self, image: Image.Image | None) -> None:
-        if image is None:
-            self._backdrop_img = None
+    def set_backdrop(self, photo: tk.PhotoImage | None) -> None:
+        self._backdrop_img = photo
+        if photo is None:
             self.itemconfigure(self._backdrop, state="hidden")
         else:
-            self._backdrop_img = to_photo(self, image)
-            self.itemconfigure(self._backdrop, image=self._backdrop_img, state="normal")
-        self.redraw()
+            self.itemconfigure(self._backdrop, image=photo, state="normal")
 
     # Ereignisse -----------------------------------------------------------------------
     def _motion(self, event) -> None:
@@ -186,6 +230,7 @@ class NavigationPane(tk.Canvas):
             return
         target = (rects[key][1] + rects[key][3]) / 2
         if old is None or self._indicator_y is None or not animate:
+            self.c.anim.cancel(f"navind:{self}")
             self._indicator_y = target
             self._indicator_h = float(px(16))
             self.redraw()
@@ -199,57 +244,71 @@ class NavigationPane(tk.Canvas):
             self._indicator_h = px(16) + min(distance * 0.5, px(28)) * math.sin(math.pi * t)
             self.redraw()
 
-        self.c.anim.run(f"navind:{self}", 300, step, easing=motion.POINT_TO_POINT, widget=self)
+        self.c.anim.run(f"navind:{self}", motion.PAGE, step, easing=motion.POINT_TO_POINT, widget=self)
 
     # Zeichnen ----------------------------------------------------------------------
-    def redraw(self) -> None:
+    def _set(self, item: int, coords: tuple | None = None, **options) -> None:
+        """itemconfigure/coords nur bei tatsächlicher Änderung (vermeidet unnötiges Neuzeichnen)."""
+        state = (coords, tuple(sorted((k, str(v)) for k, v in options.items())))
+        if self._applied.get(item) == state:
+            return
+        self._applied[item] = state
+        if coords is not None:
+            self.coords(item, *coords)
+        if options:
+            self.itemconfigure(item, **options)
+
+    def _paint_slot(self, slot: dict[str, int], rect: tuple, overlay: str | None, glyph: str, label: str | None, show_label: bool, focused: bool) -> None:
         c = self.c
         pal = c.pal
-        self.delete("fg")
-        self.configure(bg=pal.mica)
-        width = max(1, self.winfo_width())
+        x0, y0, x1, y1 = rect
         radius = px(CONTROL_RADIUS)
-        keyboard = c.keyboard_mode and self.focus_get() is self
-
-        def overlay(x0, y0, x1, y1, pressed: bool) -> None:
-            alpha = pal.subtle_pressed_alpha if pressed else pal.subtle_hover_alpha
+        if overlay:
+            alpha = pal.subtle_pressed_alpha if overlay == "pressed" else pal.subtle_hover_alpha
             img = c.images.box(x1 - x0, y1 - y0, radius, pal.subtle_color, alpha=alpha)
-            self._images[f"ov{x0}{y0}"] = img
-            self.create_image(x0, y0, anchor="nw", image=img, tags="fg")
-
-        def focus_rect(x0, y0, x1, y1) -> None:
-            ring = c.images.ring(x1 - x0 + px(6), y1 - y0 + px(6), radius + px(3), pal.focus_outer, pal.focus_inner)
-            self._images[f"fr{x0}{y0}"] = ring
-            self.create_image(x0 - px(3), y0 - px(3), anchor="nw", image=ring, tags="fg")
-
-        self._images = {}
-        # Menüschaltfläche
-        tx0, ty0, tx1, ty1 = self._toggle_rect()
-        if self.hover == "__toggle__" or self.pressed == "__toggle__":
-            overlay(tx0, ty0, tx1, ty1, self.pressed == "__toggle__")
-        if c.icons_available:
-            self.create_text((tx0 + tx1) / 2, (ty0 + ty1) / 2, text=icons.GLOBAL_NAV, font=c.fonts.icon, fill=pal.text, tags="fg")
+            self._set(slot["overlay"], (x0, y0), image=img, state="normal")
         else:
-            self.create_text((tx0 + tx1) / 2, (ty0 + ty1) / 2, text="≡", font=c.fonts.body_large, fill=pal.text, tags="fg")
-        if keyboard and self.focus_key == "__toggle__":
-            focus_rect(tx0, ty0, tx1, ty1)
+            self._set(slot["overlay"], None, state="hidden")
+        cy = (y0 + y1) / 2
+        if c.icons_available:
+            self._set(slot["icon"], (x0 + px(20), cy), text=glyph, font=c.fonts.icon, fill=pal.text, state="normal")
+        elif label is None:
+            self._set(slot["icon"], ((x0 + x1) / 2, cy), text="≡", font=c.fonts.body_large, fill=pal.text, state="normal")
+        elif not show_label:
+            self._set(slot["icon"], (x0 + px(20), cy), text=label[:1], font=c.fonts.body_strong, fill=pal.text, state="normal")
+        else:
+            self._set(slot["icon"], None, state="hidden")
+        if label is not None and show_label:
+            label_x = x0 + (px(44) if c.icons_available else px(12))
+            self._set(slot["label"], (label_x, cy), text=label, font=c.fonts.body, fill=pal.text, state="normal")
+        else:
+            self._set(slot["label"], None, state="hidden")
+        if focused:
+            ring = c.images.ring(x1 - x0 + px(6), y1 - y0 + px(6), radius + px(3), pal.focus_outer, pal.focus_inner)
+            self._set(slot["focus"], (x0 - px(3), y0 - px(3)), image=ring, state="normal")
+        else:
+            self._set(slot["focus"], None, state="hidden")
+
+    def redraw(self) -> None:
+        c = self.c
+        try:
+            keyboard = c.keyboard_mode and self.focus_get() is self
+        except (tk.TclError, KeyError):
+            keyboard = False
+
+        def overlay_state(key: str) -> str | None:
+            if key == self.pressed or (key == self.selected and key == self.hover):
+                return "pressed" if key == self.pressed else "hover"
+            if key == self.selected or key == self.hover:
+                return "hover"
+            return None
+
+        toggle_overlay = "pressed" if self.pressed == "__toggle__" else ("hover" if self.hover == "__toggle__" else None)
+        self._paint_slot(self._slots["__toggle__"], self._toggle_rect(), toggle_overlay, icons.GLOBAL_NAV, None, False, keyboard and self.focus_key == "__toggle__")
         rects = self._item_rects()
         show_labels = self.expanded_amount > 0.55
         for item in self.items:
-            x0, y0, x1, y1 = rects[item.key]
-            is_sel = item.key == self.selected
-            if is_sel or item.key == self.hover or item.key == self.pressed:
-                overlay(x0, y0, x1, y1, item.key == self.pressed or (is_sel and item.key == self.hover))
-            cy = (y0 + y1) / 2
-            if c.icons_available:
-                self.create_text(x0 + px(20), cy, text=item.glyph, font=c.fonts.icon, fill=pal.text, tags="fg", anchor="center")
-            elif not show_labels:
-                self.create_text(x0 + px(20), cy, text=item.label[:1], font=c.fonts.body_strong, fill=pal.text, tags="fg")
-            if show_labels:
-                label_x = x0 + (px(44) if c.icons_available else px(12))
-                self.create_text(label_x, cy, text=item.label, font=c.fonts.body, fill=pal.text, anchor="w", tags="fg")
-            if keyboard and self.focus_key == item.key:
-                focus_rect(x0, y0, x1, y1)
+            self._paint_slot(self._slots[item.key], rects[item.key], overlay_state(item.key), item.glyph, item.label, show_labels, keyboard and self.focus_key == item.key)
         if self.selected in rects and not c.anim.running(f"navind:{self}"):
             sel = rects[self.selected]
             self._indicator_y = (sel[1] + sel[3]) / 2
@@ -257,9 +316,10 @@ class NavigationPane(tk.Canvas):
         if self.selected in rects and self._indicator_y is not None:
             x0 = rects[self.selected][0]
             h = max(px(8), int(self._indicator_h))
-            pill = c.images.box(px(3), h, px(1.5), pal.accent)
-            self._images["pill"] = pill
-            self.create_image(x0, self._indicator_y, anchor="w", image=pill, tags="fg")
+            pill = c.images.box(px(3), h, px(1.5), c.pal.accent)
+            self._set(self._pill, (x0, self._indicator_y), image=pill, state="normal")
+        else:
+            self._set(self._pill, None, state="hidden")
 
 
 class ContentLayer(Surface):
@@ -291,6 +351,7 @@ class ContentLayer(Surface):
         shape = rounded_box(r * 2, r * 2, r, pal.layer, pal.layer_stroke).crop((0, 0, r, r))
         base = self._mica_corner.convert("RGBA").resize((r, r)) if self._mica_corner is not None else Image.new("RGBA", (r, r), pal.mica)
         base.alpha_composite(shape)
+        self._corner.configure(bg=pal.mica)
         self._corner_img = to_photo(self, base.convert("RGB"))
         self._corner.itemconfigure(self._corner_item, image=self._corner_img)
         tk.Misc.lift(self._corner)
@@ -299,7 +360,7 @@ class ContentLayer(Surface):
 
 
 class Page(tk.Frame):
-    """Seite mit Titel, Untertitel und gestaffelt erscheinenden Abschnitten."""
+    """Seite mit Titel, Untertitel und Abschnitten. Wird einmal aufgebaut und bleibt bestehen."""
 
     MAX_WIDTH = 1180
 
@@ -307,21 +368,16 @@ class Page(tk.Frame):
         super().__init__(master, bd=0, highlightthickness=0)
         self.surface_role = "layer"
         ctx().theme.style(self, bg="layer")
-        self.scroll = ScrollArea(self)
+        self.scroll = ScrollArea(self, max_width=self.MAX_WIDTH)
         self.scroll.pack(fill="both", expand=True)
-        self.scroll.canvas.bind("<Configure>", self._limit_width, add="+")
         self.content = frame(self.scroll.body)
-        self.content.pack(fill="both", expand=True, padx=(px(36), px(28)), pady=(px(28), px(28)))
+        self.content.pack(fill="both", expand=True, padx=(px(PAGE_PADDING[0]), px(PAGE_PADDING[1])), pady=(px(28), px(28)))
         self._sections: list[tuple[tk.Widget, dict]] = []
         header = frame(self.content)
         Text(header, title, style="title").pack(anchor="w")
         if subtitle:
             Text(header, subtitle, style="body", color="text2").pack(anchor="w", pady=(px(2), 0))
         self.add_section(header, pady=(0, px(20)))
-
-    def _limit_width(self, event) -> None:
-        limit = px(self.MAX_WIDTH)
-        self.scroll.canvas.itemconfigure(self.scroll._window, width=min(event.width, limit))
 
     def add_section(self, widget: tk.Widget, **pack) -> tk.Widget:
         options = {"fill": "x", "anchor": "n"}
@@ -335,42 +391,23 @@ class Page(tk.Frame):
         return self.add_section(label, pady=(px(20), px(8)))
 
     def enter(self, animate: bool) -> None:
-        """Eintrittsanimation: Seite gleitet ein, Abschnitte erscheinen nacheinander."""
+        """Übergang als Einheit: Die fertig aufgebaute Seite gleitet 16 px von rechts ein."""
         c = ctx()
         key = f"page:{self}"
         c.anim.cancel_prefix(key)
         self.scroll.to_top()
-        if not animate or not c.anim.enabled:
-            self._show_all()
+        if not animate or not c.anim.allowed():
             self.scroll.set_offset(0)
             return
-        for widget, _options in self._sections:
-            widget.pack_forget()
         shift = px(16)
 
         def slide(t: float) -> None:
             self.scroll.set_offset(int(round(shift * (1 - t))))
 
         c.anim.run(f"{key}:slide", motion.PAGE, slide, easing=motion.DECELERATE, widget=self)
-        visible = self._sections[:6]
-        rest = self._sections[6:]
-        for index, (widget, options) in enumerate(visible):
-            c.anim.later(f"{key}:sec{index}", index * 45, lambda w=widget, o=options: w.pack(**o))
-        if rest:
-            c.anim.later(f"{key}:rest", len(visible) * 45, lambda: [w.pack(**o) for w, o in rest])
-
-    def _show_all(self) -> None:
-        for widget, options in self._sections:
-            if not widget.winfo_manager():
-                widget.pack(**options)
 
     def leave(self) -> None:
-        c = ctx()
-        c.anim.cancel_prefix(f"page:{self}")
-        # Abgebrochene Staffelung vervollständigen, damit die Seite beim nächsten Besuch vollständig ist.
-        for widget, _options in self._sections:
-            widget.pack_forget()
-        self._show_all()
+        ctx().anim.cancel_prefix(f"page:{self}")
         self.scroll.set_offset(0)
 
 
@@ -396,10 +433,16 @@ class StatusBar(Surface):
         self.label = Text(row, "Bereit", style="caption", color="text2", width=1)
         self.label.pack(side="left", fill="x", expand=True)
         self.text = "Bereit"
+        self._label_width = 0
         self._tooltip = Tooltip(self.label, "")
-        self.label.bind("<Configure>", lambda _e: self._fit(), add="+")
+        self.label.bind("<Configure>", self._label_configured, add="+")
         self._kind = "neutral"
         c.theme.subscribe(self._recolor, owner=self)
+
+    def _label_configured(self, event) -> None:
+        if event.width != self._label_width:
+            self._label_width = event.width
+            self._fit()
 
     def _fit(self) -> None:
         font = ctx().fonts.caption
@@ -409,7 +452,8 @@ class StatusBar(Surface):
             while text and font.measure(text + "…") > width:
                 text = text[:-1]
             text = text.rstrip() + "…"
-        self.label.configure(text=text)
+        if self.label.cget("text") != text:
+            self.label.configure(text=text)
         self._tooltip.text = self.text if text != self.text else ""
 
     def set(self, text: str, kind: str = "neutral") -> None:
@@ -448,7 +492,26 @@ class StatusBar(Surface):
 
 
 class NavigationView(tk.Frame):
-    def __init__(self, master, items: list[NavItem], factories: dict[str, Callable[[tk.Misc], Page]], on_change: Callable[[str], None] | None = None, compact: bool = False, status_hint: str = "") -> None:
+    """Navigationsbereich und Inhaltsebene mit dauerhaft bestehenden Seiten.
+
+    Aufbau: Hintergrund (Mica) · Inhaltsebene ab x = Breite der Navigation ·
+    Navigationsbereich darüber. Beim Ein- und Ausklappen wird der Inhalt genau
+    einmal auf seine Endposition angeordnet; animiert wird nur der
+    Navigationsbereich, der dabei über der Inhaltsebene liegt.
+    """
+
+    PANE_MS = 180
+
+    def __init__(
+        self,
+        master,
+        items: list[NavItem],
+        factories: dict[str, Callable[[tk.Misc], Page]],
+        on_change: Callable[[str], None] | None = None,
+        compact: bool = False,
+        status_hint: str = "",
+        on_layout: Callable[[], None] | None = None,
+    ) -> None:
         super().__init__(master, bd=0, highlightthickness=0)
         self.surface_role = "mica"
         c = ctx()
@@ -457,81 +520,208 @@ class NavigationView(tk.Frame):
         self.pages: dict[str, Page] = {}
         self.current: str | None = None
         self.on_change = on_change
+        self.on_layout = on_layout
         self.user_compact = compact
-        self.auto_compact = False
-        self.pane = NavigationPane(self, items, self.navigate, self.toggle_pane)
+        self.user_expanded = False  # bei schmalem Fenster per Menüschaltfläche ausgeklappt
+        self.mode = MODE_WIDE
+        self._width = 0
+        self._layer_x: int | None = None
+        self._navigating = False
+        self._pending: tuple[str, bool] | None = None
+        # Hintergrund mit demselben Material wie der Navigationsbereich: Beim Ausklappen
+        # entsteht so keine sichtbare Kante zwischen Navigation und Inhaltsebene.
+        self.backdrop = tk.Canvas(self, highlightthickness=0, bd=0)
+        self._backdrop_item = self.backdrop.create_image(0, 0, anchor="nw", state="hidden")
+        self._backdrop_photo: tk.PhotoImage | None = None
+        c.theme.style(self.backdrop, bg="mica")
+        self.backdrop.place(x=0, y=0, relwidth=1.0, relheight=1.0)
         self.layer = ContentLayer(self)
-        self.pane.grid(row=0, column=0, sticky="ns")
-        self.layer.grid(row=0, column=1, sticky="nsew")
-        self.columnconfigure(1, weight=1)
-        self.rowconfigure(0, weight=1)
+        self.pane = NavigationPane(self, items, self.navigate, self.toggle_pane)
         self.host = Surface(self.layer, role="layer")
         self.host.pack(fill="both", expand=True, padx=(1, 0), pady=(1, 0))
         self.status = StatusBar(self.layer, status_hint)
         self.status.pack(fill="x", side="bottom", before=self.host, padx=(1, 0))
-        self._apply_width(animate=False)
+        self._apply_pane(animate=False)
         c.window_hooks.append(self._window_resized)
+        # Alle Seiten sofort aufbauen (das Fenster ist dabei noch unsichtbar).
+        for key in factories:
+            self.page(key)
 
     # Seiten -----------------------------------------------------------------
     def page(self, key: str) -> Page:
         if key not in self.pages:
             page = self.factories[key](self.host)
             self.pages[key] = page
+            # Beim Start liegen alle Seiten übereinander und werden verdeckt fertig angeordnet.
+            page.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+            if self.current in self.pages:
+                tk.Misc.lower(page, self.pages[self.current])
         return self.pages[key]
 
-    def navigate(self, key: str, animate: bool = True) -> None:
-        if key == self.current:
-            return
-        c = ctx()
-        old = self.pages.get(self.current) if self.current else None
-        page = self.page(key)
-        if old is not None:
-            old.leave()
-            old.place_forget()
-        page.place(x=0, y=0, relwidth=1.0, relheight=1.0)
-        page.lift()
-        self.current = key
-        self.pane.select(key, animate=animate and c.anim.enabled)
-        page.enter(animate and c.anim.enabled)
-        if self.on_change:
-            self.on_change(key)
+    def park_hidden_pages(self) -> None:
+        """Nicht sichtbare Seiten fertig angeordnet außerhalb des Sichtbereichs ablegen.
 
-    # Kompaktmodus -----------------------------------------------------------
+        Sie bleiben abgebildet (ein Wechsel muss nichts neu aufbauen), haben aber
+        eine feste Größe: Beim Ändern der Fenstergröße arbeitet nur die sichtbare Seite.
+        """
+        width, height = self.host.winfo_width(), self.host.winfo_height()
+        for key, page in self.pages.items():
+            if key != self.current:
+                self._park(page, width, height)
+
+    def _park(self, page: Page, width: int, height: int) -> None:
+        page.place(x=PARK_X, y=0, width=max(1, width), height=max(1, height), relwidth=0, relheight=0)
+        ctx().block_focus(page, True)
+
+    def navigate(self, key: str, animate: bool = True) -> None:
+        if key == self.current or key not in self.factories:
+            return
+        if self._navigating:
+            self._pending = (key, animate)
+            return
+        self._navigating = True
+        try:
+            c = ctx()
+            old = self.pages.get(self.current) if self.current else None
+            page = self.page(key)
+            width, height = self.host.winfo_width(), self.host.winfo_height()
+            if old is not None:
+                if (page.winfo_width(), page.winfo_height()) != (width, height):
+                    # Fenstergröße hat sich geändert: Seite außerhalb des Sichtbereichs neu anordnen.
+                    page.place(x=PARK_X, y=0, width=max(1, width), height=max(1, height), relwidth=0, relheight=0)
+                    self._settle()
+                self._release_focus(old)
+                old.leave()
+            # Die fertige Seite wird nur noch hereingeholt …
+            c.block_focus(page, False)
+            page.place(x=0, y=0, width=0, height=0, relwidth=1.0, relheight=1.0)
+            tk.Misc.lift(page)
+            # … und die bisherige Seite abgelegt.
+            if old is not None:
+                self._park(old, width, height)
+            self.current = key
+            allowed = animate and c.anim.allowed()
+            self.pane.select(key, animate=allowed)
+            page.enter(allowed)
+            if self.on_change:
+                self.on_change(key)
+        finally:
+            self._navigating = False
+        if self._pending is not None:
+            pending, self._pending = self._pending, None
+            self.after_idle(lambda: self.navigate(*pending))
+
+    def _settle(self) -> None:
+        settle(self)
+
+    def _release_focus(self, page: Page) -> None:
+        """Tastaturfokus nicht auf einer abgelegten Seite zurücklassen."""
+        try:
+            focus = self.focus_get()
+        except (tk.TclError, KeyError):
+            return
+        if focus is not None and str(focus).startswith(str(page) + "."):
+            self.pane.focus_set()
+
+    # Responsives Layout ------------------------------------------------------------
     def _window_resized(self, event) -> None:
-        compact = event.width < px(COMPACT_BELOW)
-        if compact != self.auto_compact:
-            self.auto_compact = compact
-            self._apply_width(animate=True)
+        if event.width == self._width:
+            return
+        self.apply_layout(event.width)
+
+    def apply_layout(self, width: int) -> None:
+        """Layoutzustand für eine Fensterbreite bestimmen; umgestellt wird nur an Breakpoints."""
+        self._width = width
+        mode = self._mode_for(width)
+        if mode != self.mode:
+            if mode == MODE_WIDE or self.mode == MODE_WIDE:
+                self.user_expanded = False
+            self.mode = mode
+            self._apply_pane(animate=False)  # sofort, ohne Animation
+        else:
+            self._update_columns()
+
+    def _mode_for(self, width: int) -> str:
+        hysteresis = px(BREAKPOINT_HYSTERESIS)
+        wide_from = px(WIDE_FROM) - (hysteresis if self.mode == MODE_WIDE else 0)
+        medium_from = px(MEDIUM_FROM) - (hysteresis if self.mode in (MODE_WIDE, MODE_MEDIUM) else 0)
+        if width >= wide_from:
+            return MODE_WIDE
+        if width >= medium_from:
+            return MODE_MEDIUM
+        return MODE_COMPACT
+
+    def _update_columns(self) -> None:
+        c = ctx()
+        if self._width <= 1 or self._layer_x is None:
+            return
+        content = min(self._width - self._layer_x - 1, px(Page.MAX_WIDTH)) - px(PAGE_PADDING[0] + PAGE_PADDING[1])
+        need = px(TWO_COLUMNS_FROM) - (px(COLUMNS_HYSTERESIS) if c.layout.columns >= 2 else 0)
+        columns = 2 if (self.mode != MODE_COMPACT and content >= need) else 1
+        c.layout.set(self.mode, columns)
+
+    # Navigationsbereich ------------------------------------------------------------
+    def pane_expanded(self) -> bool:
+        if self.user_compact:
+            return False
+        if self.mode == MODE_WIDE:
+            return True
+        return self.user_expanded
 
     def is_compact(self) -> bool:
-        return self.user_compact or self.auto_compact
+        return not self.pane_expanded()
+
+    @property
+    def auto_compact(self) -> bool:
+        return self.mode != MODE_WIDE
 
     def toggle_pane(self) -> None:
-        if self.is_compact():
-            # Auch bei schmalem Fenster klappt die Menüschaltfläche die Navigation aus.
-            self.user_compact = False
-            self.auto_compact = False
-        else:
+        if self.pane_expanded():
             self.user_compact = True
-        self._apply_width(animate=True)
+            self.user_expanded = False
+        else:
+            self.user_compact = False
+            # Auch bei schmalem Fenster klappt die Menüschaltfläche die Navigation aus.
+            self.user_expanded = self.mode != MODE_WIDE
+        self._apply_pane(animate=True)
         if self.on_change and self.current:
             self.on_change(self.current)
 
-    def _apply_width(self, animate: bool) -> None:
+    def _apply_pane(self, animate: bool) -> None:
         c = ctx()
-        target = 0.0 if self.is_compact() else 1.0
+        target = 1.0 if self.pane_expanded() else 0.0
+        compact_w, expanded_w = px(PANE_COMPACT), px(PANE_EXPANDED)
+        layer_x = int(round(compact_w + (expanded_w - compact_w) * target))
+        # Der Inhalt springt einmal auf seine Endposition; animiert wird nur die Navigation.
+        if layer_x != self._layer_x:
+            self._layer_x = layer_x
+            self.layer.place(x=layer_x, y=0, relheight=1.0, relwidth=1.0, width=-layer_x)
+        self._update_columns()
         start = self.pane.expanded_amount
-        if start == target:
-            self._set_amount(target)
-            return
 
         def step(t: float) -> None:
             self._set_amount(start + (target - start) * t)
 
-        c.anim.run(f"pane:{self}", 180 if animate else 0, step, easing=motion.DECELERATE, widget=self)
+        if start == target:
+            self._set_amount(target)
+        else:
+            c.anim.run(f"pane:{self}", self.PANE_MS if animate else 0, step, easing=motion.DECELERATE, widget=self)
+        tk.Misc.lift(self.pane)
+        if self.on_layout:
+            self.on_layout()
 
     def _set_amount(self, amount: float) -> None:
         self.pane.expanded_amount = amount
-        width = px(PANE_COMPACT) + (px(PANE_EXPANDED) - px(PANE_COMPACT)) * amount
-        self.pane.configure(width=int(width))
+        self.pane.place(x=0, y=0, relheight=1.0, width=self.pane.visual_width())
         self.pane.redraw()
+
+    # Hintergrund (Mica) ------------------------------------------------------------
+    def set_backdrop(self, image: Image.Image | None) -> None:
+        if image is None:
+            self._backdrop_photo = None
+            self.backdrop.itemconfigure(self._backdrop_item, state="hidden")
+            self.pane.set_backdrop(None)
+            return
+        self._backdrop_photo = to_photo(self, image)
+        self.backdrop.itemconfigure(self._backdrop_item, image=self._backdrop_photo, state="normal")
+        self.pane.set_backdrop(self._backdrop_photo)
