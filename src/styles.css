@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --font-mono: "Segoe UI Mono", ui-monospace, Consolas, monospace;
+
+  --color-desktop: #efece6;
+  --color-titlebar: #f7f4ef;
+  --color-sidebar: #f4f1eb;
+  --color-canvas: #f4f1eb;
+  --color-background: #f6f3ee;
+  --color-card: #fffcf7;
+  --color-foreground: #1c1916;
+  --color-muted: #ebe6de;
+  --color-muted-foreground: #5f584f;
+  --color-border: #e3dcd2;
+  --color-primary: #b51f1f;
+  --color-primary-hover: #9c1a1a;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #ebe6de;
+  --color-secondary-hover: #e3dcd2;
+  --color-secondary-foreground: #1c1916;
+  --color-ring: #b51f1f;
+  --color-danger: #b51f1f;
+  --color-danger-foreground: #ffffff;
+  --color-success: #2f6f4e;
+  --color-row-alt: #fdf2f2;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+
+  --shadow-border: 0 0 0 1px rgb(28 25 22 / 0.06), 0 1px 2px -1px rgb(28 25 22 / 0.06),
+    0 2px 4px 0 rgb(28 25 22 / 0.04);
+  --shadow-border-hover: 0 0 0 1px rgb(28 25 22 / 0.08), 0 1px 2px -1px rgb(28 25 22 / 0.08),
+    0 2px 4px 0 rgb(28 25 22 / 0.06);
+  --shadow-window: 0 16px 40px rgb(28 25 22 / 0.12), 0 0 0 1px rgb(28 25 22 / 0.06);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}

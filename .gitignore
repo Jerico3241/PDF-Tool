@@ -1,0 +1,37 @@
+# Dependencies and build output
+node_modules/
+.vercel/
+.tanstack/
+dist/
+build/
+coverage/
+
+# Grok/App Builder workspace metadata
+.grok/
+.project_id
+.node_modules.lock
+artifacts/
+attachments/
+screenshots/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Windows build artifacts
+windows-app/dist/
+windows-app/installer/payload.zip
+public/downloads/*.exe
+public/downloads/*.zip
+*.exe
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
