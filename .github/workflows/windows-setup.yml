@@ -1,0 +1,65 @@
+name: Windows-Setup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows-app/**"
+      - ".github/workflows/windows-setup.yml"
+  pull_request:
+    paths:
+      - "windows-app/**"
+      - ".github/workflows/windows-setup.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Setup bauen (Inno Setup)
+    runs-on: windows-latest
+    permissions:
+      contents: write # nur für das Anhängen an ein Release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: x64
+
+      - name: Build- und Testpakete
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd
+
+      - name: Tests (Kernlogik)
+        run: python -m pytest windows-app/tests/test_core.py -q
+
+      - name: Inno Setup 6 bereitstellen
+        shell: pwsh
+        run: |
+          choco upgrade innosetup -y --no-progress
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe nicht gefunden: $iscc" }
+          (Get-Item $iscc).VersionInfo.ProductVersion
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Setup bauen
+        run: python windows-app/build.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Uebersichten-Ersteller-Setup
+          path: |
+            windows-app/dist/*.exe
+            windows-app/dist/*.sha256
+          if-no-files-found: error
+
+      - name: An Release anhängen
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" (Get-ChildItem windows-app/dist/*.exe, windows-app/dist/*.sha256) --clobber

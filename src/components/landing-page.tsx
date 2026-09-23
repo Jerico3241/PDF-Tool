@@ -2,19 +2,18 @@ import { Download } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 
-const SETUP_HREF = "/downloads/Uebersichten-Ersteller-Setup.exe";
-const ZIP_HREF = "/downloads/Uebersichten-Ersteller-Windows.zip";
+const SETUP_HREF = "/downloads/Uebersichten-Ersteller-Setup-2.1.0.exe";
 
 const STEPS = [
   {
     n: "1",
     title: "Setup doppelklicken",
-    body: "Die Datei Uebersichten-Ersteller-Setup.exe öffnen. Administratorrechte sind nicht nötig.",
+    body: "Die Datei Uebersichten-Ersteller-Setup-2.1.0.exe öffnen. Administratorrechte sind nicht nötig.",
   },
   {
     n: "2",
     title: "Einrichtung bestätigen",
-    body: "Falls SmartScreen erscheint: Weitere Informationen, dann Trotzdem ausführen. Danach mit Ja einrichten.",
+    body: "Falls SmartScreen erscheint: Weitere Informationen, dann Trotzdem ausführen. Danach dem Setup-Assistenten folgen. Ein Update behält alle Einstellungen.",
   },
   {
     n: "3",
@@ -42,7 +41,7 @@ export function LandingPage() {
               Für Windows 10 und 11
             </p>
             <h1 className="mt-3 max-w-xl font-display text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-              Übersichten-Ersteller 2.0.5
+              Übersichten-Ersteller 2.1.0
             </h1>
             <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground text-pretty">
               Die einfache Windows-Oberfläche. Entwickler und Inhaber: Jerico.
@@ -56,53 +55,47 @@ export function LandingPage() {
               </Button>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              Setup.exe · 64-Bit · ohne Admin-Rechte · Version 2.0.5
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Alternativ:{" "}
-              <a href={ZIP_HREF} download className="underline underline-offset-2">
-                portables ZIP
-              </a>
+              Setup.exe · 64-Bit · ohne Admin-Rechte · Version 2.1.0
             </p>
           </div>
 
           <div className="overflow-hidden rounded-xl bg-canvas shadow-[var(--shadow-window)]">
             <div className="flex h-9 items-center justify-between border-b border-border bg-card px-3">
-              <p className="text-xs text-muted-foreground">Übersichten-Ersteller 2.0.5</p>
+              <p className="text-xs text-muted-foreground">Übersichten-Ersteller 2.1.0</p>
               <div className="flex gap-1.5 text-muted-foreground">
                 <span className="size-2.5 rounded-sm bg-muted" />
                 <span className="size-2.5 rounded-sm bg-muted" />
                 <span className="size-2.5 rounded-sm bg-muted" />
               </div>
             </div>
-            <div className="border-b border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-              Datei · Bearbeiten · Hilfe
-            </div>
-            <div className="flex gap-1 border-b border-border bg-muted/50 px-3 py-1.5 text-xs">
-              <span className="rounded-sm border border-border bg-card px-2 py-0.5">Erstellen</span>
-              <span className="px-2 py-0.5 text-muted-foreground">Darstellung</span>
-            </div>
-            <div className="space-y-3 bg-muted/30 p-4">
-              <div className="rounded-sm border border-border bg-card p-3">
-                <p className="text-xs font-semibold">Kundendaten</p>
-                <MockField label="Firmenname" value="" />
-                <MockField label="Kundennummer" value="" />
-              </div>
-              <div className="rounded-sm border border-border bg-card p-3">
-                <p className="text-xs font-semibold">Dateien und Pfade</p>
-                <MockField label="Excel-Datei" value="Keine Datei gewählt" />
-                <MockField label="Logo" value="hott_logo_final.png" />
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-8 items-center rounded-sm border border-border bg-card px-3 text-xs">
-                  PDF erstellen
-                </span>
-                <span className="text-xs text-muted-foreground">PDF nach dem Erstellen öffnen</span>
+            <div className="flex">
+              <nav className="flex w-28 shrink-0 flex-col gap-1 bg-muted/50 p-2 text-xs">
+                <span className="rounded-md border-l-2 border-primary bg-card px-2 py-1">Erstellen</span>
+                <span className="px-2 py-1 text-muted-foreground">Darstellung</span>
+                <span className="px-2 py-1 text-muted-foreground">Einstellungen</span>
+              </nav>
+              <div className="flex-1 space-y-3 bg-muted/30 p-4">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-xs font-semibold">Kundendaten</p>
+                  <MockField label="Firmenname" value="" />
+                  <MockField label="Kundennummer" value="" />
+                </div>
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-xs font-semibold">Dateien und Pfade</p>
+                  <MockField label="Excel-Datei" value="Keine Datei gewählt" />
+                  <MockField label="Logo" value="hott_logo_final.png" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground">
+                    PDF erstellen
+                  </span>
+                  <span className="text-xs text-muted-foreground">PDF nach dem Erstellen öffnen</span>
+                </div>
               </div>
             </div>
             <div className="flex items-center justify-between border-t border-border bg-card px-3 py-1.5">
-              <p className="text-xs text-muted-foreground">Bereit.</p>
-              <p className="text-xs text-muted-foreground">Version 2.0.5</p>
+              <p className="text-xs text-muted-foreground">Bereit</p>
+              <p className="text-xs text-muted-foreground">Version 2.1.0</p>
             </div>
           </div>
         </section>
