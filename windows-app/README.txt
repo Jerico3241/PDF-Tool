@@ -2,17 +2,35 @@
 Entwickler und Inhaber: Jerico
 =================================
 
-Version 2.1.0
+Version 2.2.0
 
 Erstellt Vertragsübersichten aus Excel-Listen und speichert sie als PDF.
 
 
 Was Sie herunterladen
 ---------------------
-Uebersichten-Ersteller-Setup-2.1.0.exe
+Uebersichten-Ersteller-Setup-2.2.0.exe
 
-Die Datei enthält die komplette App einschließlich Python und aller Pakete.
-Eine eigene Python-Installation ist nicht nötig.
+Die Datei enthält die komplette App einschließlich Python und aller Pakete
+(pandas, openpyxl, xlrd, ReportLab, Pillow). Eine eigene Python-Installation
+oder zusätzliche Pakete sind nicht nötig.
+
+
+Neu in Version 2.2
+------------------
+- Fettschrift aus der Excel-Liste wird zellgenau in die PDF übernommen –
+  auch nach dem Sortieren nach Vertragsbeginn und dem Ausblenden inaktiver
+  Verträge.
+- Kopf- und Fußzeile lassen sich formatieren: Schriftart, Schriftgröße,
+  fett, kursiv, unterstrichen, durchgestrichen, Schriftfarbe und Ausrichtung
+  je Absatz. Platzhalter wie {kd} behalten ihre Formatierung.
+- Übersichtlichere Excel-Prüfung: aktive und ausgeblendete Verträge,
+  Rechnungsempfänger, fehlende Spalten und – nur wenn in der Datei vorhanden –
+  Kundennummer und Firmenname.
+- »Bereit zum Erstellen« zeigt schon vor dem Klick, was noch fehlt.
+- Nach dem Erstellen: Öffnen, Ordner öffnen, Pfad kopieren, Neue Übersicht.
+- Eingaben werden automatisch gespeichert; Dateiauswahl startet im zuletzt
+  verwendeten Ordner; Excel-Dateien werden beim Hineinziehen hervorgehoben.
 
 
 Voraussetzungen
@@ -58,8 +76,8 @@ Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   Uebersichten-Ersteller-Setup-2.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   Uebersichten-Ersteller-Setup-2.1.0.exe /SILENT          (mit Fortschritt)
+   Uebersichten-Ersteller-Setup-2.2.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   Uebersichten-Ersteller-Setup-2.2.0.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -77,15 +95,33 @@ Verwendung
 1. Seite „Erstellen“: Firmenname und Kundennummer eintragen oder unter
    „Zuletzt verwendet“ einen Kunden wählen.
 2. Excel-Liste wählen (Strg+O) oder die Datei in das Fenster ziehen.
-   Die Prüfung zeigt aktive Verträge, Kundennummer und Rechnungsempfänger.
+   Die Prüfung zeigt aktive und ausgeblendete Verträge, den oder die
+   Rechnungsempfänger, fehlende Spalten sowie Kundennummer und Firmenname,
+   sofern sie in der Datei stehen. Bei mehreren Empfängern einen auswählen.
 3. Optional Logo und Zielordner ändern.
-4. „PDF erstellen“ klicken oder Strg+Enter drücken.
+4. Sobald „Bereit zum Erstellen“ erscheint: „PDF erstellen“ klicken oder
+   Strg+Enter drücken. Fehlt etwas, nennt die Anzeige den Grund; ein Klick
+   darauf führt zum passenden Feld.
+5. Nach dem Erstellen: „Öffnen“, „Ordner öffnen“, „Pfad kopieren“ oder
+   „Neue Übersicht“ (leert Firma, Kundennummer, Empfänger und Excel-Datei;
+   Logo, Zielordner, Darstellung, Vorlage, Kopf-/Fußzeile und Regeln bleiben).
+
+Fettschrift: In der Excel-Liste fett formatierte Zellen erscheinen in der PDF
+fett – zellgenau für Vertrag-Nr., Beschreibung (auch „Art“), Beginn,
+Abrechnungszyklus, Netto und Zahlungsart. Andere Excel-Formate (Farben,
+Schriftgrößen, Rahmen) werden bewusst nicht übernommen.
 
 Seite „Darstellung“: Vorlagen, Titel, Dateiname, Logo-Breite, Hoch- oder
 Querformat, Kopfzeile, Fußzeile mit Textbausteinen und Zyklus-Regeln.
+Kopf- und Fußzeile haben eine Formatierungsleiste: Schriftart (Helvetica,
+Times, Courier sowie – falls installiert – Arial, Calibri, Segoe UI und
+Times New Roman), Größe 6–18 pt, fett (Strg+B), kursiv (Strg+I),
+unterstrichen (Strg+U), durchgestrichen, Schriftfarbe und Ausrichtung
+(Strg+L/E/R). Ohne Markierung gilt die Formatierung für neu getippten Text.
+Strg+Z/Strg+Y machen Text- und Formatänderungen rückgängig bzw. wieder.
 Die Fußzeile ist mit einem Standardtext vorbelegt; „Standard wiederherstellen“
-setzt ihn zurück. Änderungen an Kopf- und Fußzeile werden automatisch
-gespeichert und bleiben mit allen Zeilenumbrüchen erhalten.
+setzt Text und Formatierung zurück. Kopf- und Fußzeile, Vorlagen,
+Textbausteine und die Kundenakte speichern die Formatierung mit.
 
 Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
 (Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen,
@@ -151,7 +187,7 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Push auf windows-latest

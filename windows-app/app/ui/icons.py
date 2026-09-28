@@ -55,3 +55,5 @@ CHECK_MARK = ""
 KEYBOARD = ""
 RULER = ""
 LIGHTBULB = ""
+COPY = "\ue8c8"  # Kopieren
+ALIGN_RIGHT = "\ue8e2"

@@ -534,6 +534,196 @@ class WindowHook:
         self.installed = False
 
 
+class DropTarget:
+    """OLE-Ablageziel (IDropTarget): Rückmeldung schon beim Hineinziehen von Dateien.
+
+    ``WM_DROPFILES`` meldet Dateien erst beim Loslassen. Für eine sichtbare
+    Hervorhebung braucht es DragEnter/DragLeave – dafür wird das Fenster per
+    ``RegisterDragDrop`` als OLE-Ziel angemeldet. Gelingt das nicht, bleibt der
+    ``WindowHook`` mit ``WM_DROPFILES`` zuständig.
+
+    ``accept(dateien)`` entscheidet, ob die gezogenen Dateien angenommen werden
+    (Mauszeiger »Kopieren« statt »Verboten«). Alle Rückrufe laufen über
+    ``schedule`` in der Tk-Ereignisschleife.
+    """
+
+    _IID_IUNKNOWN = bytes.fromhex("00000000" "0000" "0000" "C000000000000046")
+    _IID_IDROPTARGET = bytes.fromhex("22010000" "0000" "0000" "C000000000000046")
+
+    def __init__(
+        self,
+        hwnd: int,
+        schedule: Callable[[Callable[[], None]], None],
+        accept: Callable[[list[str]], bool],
+        on_enter: Callable[[bool], None],
+        on_leave: Callable[[], None],
+        on_drop: Callable[[list[str]], None],
+    ) -> None:
+        self.hwnd = hwnd
+        self._schedule = schedule
+        self._accept_fn = accept
+        self._on_enter = on_enter
+        self._on_leave = on_leave
+        self._on_drop = on_drop
+        self._accepted = False
+        self.registered = False
+        if IS_WINDOWS and hwnd:
+            try:
+                self.registered = self._register()
+            except Exception:
+                self.registered = False
+
+    # COM-Objekt -------------------------------------------------------------------
+    def _register(self) -> bool:
+        import ctypes
+        from ctypes import wintypes
+
+        HRESULT = ctypes.c_long
+        ULONG = ctypes.c_ulong
+        # POINTL (8 Byte) wird als Wert übergeben – als 64-Bit-Ganzzahl deklariert (Windows-ABI).
+        prototypes = {
+            "QueryInterface": ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)),
+            "AddRef": ctypes.WINFUNCTYPE(ULONG, ctypes.c_void_p),
+            "Release": ctypes.WINFUNCTYPE(ULONG, ctypes.c_void_p),
+            "DragEnter": ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.c_uint64, ctypes.POINTER(wintypes.DWORD)),
+            "DragOver": ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, wintypes.DWORD, ctypes.c_uint64, ctypes.POINTER(wintypes.DWORD)),
+            "DragLeave": ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p),
+            "Drop": ctypes.WINFUNCTYPE(HRESULT, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.c_uint64, ctypes.POINTER(wintypes.DWORD)),
+        }
+        names = list(prototypes)
+
+        class VTable(ctypes.Structure):
+            _fields_ = [(name, ctypes.c_void_p) for name in names]
+
+        class Object(ctypes.Structure):
+            _fields_ = [("vtbl", ctypes.POINTER(VTable))]
+
+        handlers = {
+            "QueryInterface": self._query_interface,
+            "AddRef": lambda _this: 1,
+            "Release": lambda _this: 1,
+            "DragEnter": self._drag_enter,
+            "DragOver": self._drag_over,
+            "DragLeave": self._drag_leave,
+            "Drop": self._drop,
+        }
+        self._callbacks = {name: prototypes[name](handlers[name]) for name in names}
+        self._vtable = VTable(*[ctypes.cast(self._callbacks[name], ctypes.c_void_p) for name in names])
+        self._object = Object(ctypes.pointer(self._vtable))
+        ole32 = ctypes.windll.ole32
+        ole32.OleInitialize.argtypes = [ctypes.c_void_p]
+        ole32.RegisterDragDrop.argtypes = [wintypes.HWND, ctypes.c_void_p]
+        ole32.RevokeDragDrop.argtypes = [wintypes.HWND]
+        ole32.ReleaseStgMedium.argtypes = [ctypes.c_void_p]
+        hr = ole32.OleInitialize(None)
+        if hr not in (0, 1):  # S_OK, S_FALSE (bereits initialisiert)
+            return False
+        return ole32.RegisterDragDrop(self.hwnd, ctypes.byref(self._object)) == 0
+
+    def remove(self) -> None:
+        if not self.registered:
+            return
+        try:
+            import ctypes
+
+            ctypes.windll.ole32.RevokeDragDrop(self.hwnd)
+        except Exception:
+            pass
+        self.registered = False
+
+    def _query_interface(self, this, riid, ppv) -> int:
+        import ctypes
+
+        try:
+            iid = ctypes.string_at(riid, 16)
+        except Exception:
+            iid = b""
+        if iid in (self._IID_IUNKNOWN, self._IID_IDROPTARGET):
+            ppv[0] = this
+            return 0
+        ppv[0] = None
+        return ctypes.c_long(0x80004002).value  # E_NOINTERFACE
+
+    # Ereignisse -----------------------------------------------------------------
+    def _effect(self, effect) -> None:
+        try:
+            effect[0] = 1 if self._accepted else 0  # DROPEFFECT_COPY / DROPEFFECT_NONE
+        except Exception:
+            pass
+
+    def _drag_enter(self, _this, data, _keys, _point, effect) -> int:
+        try:
+            files = self.files(data)
+            self._accepted = bool(files) and bool(self._accept_fn(files))
+            accepted = self._accepted
+            self._schedule(lambda: self._on_enter(accepted))
+        except Exception:
+            self._accepted = False
+        self._effect(effect)
+        return 0
+
+    def _drag_over(self, _this, _keys, _point, effect) -> int:
+        self._effect(effect)
+        return 0
+
+    def _drag_leave(self, _this) -> int:
+        self._accepted = False
+        try:
+            self._schedule(self._on_leave)
+        except Exception:
+            pass
+        return 0
+
+    def _drop(self, _this, data, _keys, _point, effect) -> int:
+        try:
+            files = self.files(data)
+            accepted = bool(files) and bool(self._accept_fn(files))
+            self._accepted = accepted
+            self._effect(effect)
+            self._schedule(self._on_leave)
+            if files:
+                self._schedule(lambda: self._on_drop(files))
+        except Exception:
+            self._effect(effect)
+        self._accepted = False
+        return 0
+
+    @staticmethod
+    def files(data) -> list[str]:
+        """Dateipfade (CF_HDROP) aus einem IDataObject."""
+        import ctypes
+        from ctypes import wintypes
+
+        if not data:
+            return []
+
+        class FORMATETC(ctypes.Structure):
+            _fields_ = [("cfFormat", ctypes.c_ushort), ("ptd", ctypes.c_void_p), ("dwAspect", wintypes.DWORD), ("lindex", ctypes.c_long), ("tymed", wintypes.DWORD)]
+
+        class STGMEDIUM(ctypes.Structure):
+            _fields_ = [("tymed", wintypes.DWORD), ("handle", ctypes.c_void_p), ("pUnkForRelease", ctypes.c_void_p)]
+
+        vtable = ctypes.cast(data, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0]
+        get_data = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(FORMATETC), ctypes.POINTER(STGMEDIUM))(vtable[3])
+        fmt = FORMATETC(15, None, 1, -1, 1)  # CF_HDROP, DVASPECT_CONTENT, TYMED_HGLOBAL
+        medium = STGMEDIUM()
+        if get_data(data, ctypes.byref(fmt), ctypes.byref(medium)) != 0:
+            return []
+        shell32 = ctypes.windll.shell32
+        shell32.DragQueryFileW.argtypes = [ctypes.c_void_p, wintypes.UINT, ctypes.c_wchar_p, wintypes.UINT]
+        shell32.DragQueryFileW.restype = wintypes.UINT
+        files: list[str] = []
+        try:
+            count = shell32.DragQueryFileW(medium.handle, 0xFFFFFFFF, None, 0)
+            buffer = ctypes.create_unicode_buffer(32768)
+            for index in range(count):
+                shell32.DragQueryFileW(medium.handle, index, buffer, len(buffer))
+                files.append(buffer.value)
+        finally:
+            ctypes.windll.ole32.ReleaseStgMedium(ctypes.byref(medium))
+        return files
+
+
 APP_USER_MODEL_ID = "Jerico.UebersichtenErsteller"  # muss zur AppUserModelID der Verknüpfungen (Inno Setup) passen
 APP_MUTEX = "Jerico.UebersichtenErsteller.Instanz"  # Inno Setup (AppMutex) erkennt damit eine laufende App
 _mutex_handle = None

@@ -88,3 +88,58 @@ def wait_until(app, condition, timeout: float = 60.0) -> bool:
             return True
         time.sleep(0.02)
     return False
+
+
+@pytest.fixture(params=[True, False], ids=["animationen", "ohne-animationen"])
+def app(request, config_file: Path, monkeypatch):
+    """Gestartete App mit frischer Konfiguration (Neuerungen bereits gesehen)."""
+    import json
+
+    import appstate
+
+    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light", "accent": "#005FB8"}), encoding="utf-8")
+    if request.param:
+        monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
+    else:
+        monkeypatch.setenv("UE_NO_ANIMATIONS", "1")
+    from ui import dialogs
+
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
+    import vertragdesk
+
+    instance = vertragdesk.App()
+    instance.ctx.anim.enabled = request.param
+    pump(instance, 0.5)
+    yield instance
+    try:
+        instance._on_close()
+    except Exception:
+        pass
+    # Tk-Objekte im Hauptthread freigeben, nicht später in einem Worker-Thread.
+    import gc
+
+    gc.collect()
+
+
+def neustart(app):
+    """App schließen (speichert wie beim Beenden) und mit derselben Konfiguration neu starten."""
+    import gc
+
+    import vertragdesk
+
+    app._on_close()
+    gc.collect()
+    neu = vertragdesk.App()
+    neu.ctx.anim.enabled = False
+    pump(neu, 0.3)
+    return neu
+
+
+def schliessen(app) -> None:
+    import gc
+
+    try:
+        app._on_close()
+    except Exception:
+        pass
+    gc.collect()

@@ -53,7 +53,8 @@ def test_erstelle_pdf_with_header_footer(excel_file: Path, tmp_path: Path) -> No
     reader = pypdf.PdfReader(str(pfad))
     text = "\n".join(page.extract_text() for page in reader.pages)
     assert "Kopf 10042" in text
-    assert "Fuß Muster_GmbH" in text
+    # Im Text erscheint der Firmenname wie eingetragen; nur der Dateiname ist dateisystemtauglich.
+    assert "Fuß Muster GmbH" in text
     assert "Supportvertrag" in text
     assert "V-0999" not in text  # inaktiv
     assert "Seite 1 von" in text
@@ -235,13 +236,22 @@ def test_versions_are_consistent() -> None:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     iss = (root / "installer" / "Uebersichten-Ersteller.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "2.1.0"
+    assert appstate.VERSION == version == "2.2.0"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]
     assert f"Version {version}" in readme
+    assert f"Uebersichten-Ersteller-Setup-{version}.exe" in readme
     assert not (root / "installer" / "main.go").exists()
     assert not (root / "installer" / "go.mod").exists()
+    # Die aktuelle Version steht nirgends hart codiert – weder im App-Code noch auf der Downloadseite
+    # (Hinweise auf frühere Versionen wie »bis 2.0.5« sind Geschichte, keine Versionsanzeige).
+    for datei in (root / "app").rglob("*.py"):
+        assert version not in datei.read_text(encoding="utf-8"), datei.name
+    seite = (root.parent / "src" / "components" / "landing-page.tsx").read_text(encoding="utf-8")
+    assert "windows-app/VERSION?raw" in seite and version not in seite
+    haupt = (root.parent / "README.md").read_text(encoding="utf-8")
+    assert f"Übersichten-Ersteller {version}" in haupt
 
 
 # --- Farben und Bewegung -------------------------------------------------------------------

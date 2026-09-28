@@ -13,6 +13,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Nach bestandenen Prüfungen das Release v<Version> (»Version <Version>«) mit Setup und SHA-256 veröffentlichen"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,10 +37,13 @@ jobs:
           architecture: x64
 
       - name: Build- und Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf xlwt
 
-      - name: Tests (Kernlogik)
-        run: python -m pytest windows-app/tests/test_core.py -q
+      - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py -q -p no:cacheprovider
+
+      - name: Tests (Oberfläche)
+        run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -48,6 +56,16 @@ jobs:
 
       - name: Setup bauen
         run: python windows-app/build.py
+
+      - name: Eingebettete Laufzeit prüfen (Module, PDF, Programmstart)
+        shell: pwsh
+        run: |
+          & ./windows-app/build/payload/runtime/python.exe -s windows-app/tests/smoke_runtime.py --app windows-app/build/payload/app --ui
+          if ($LASTEXITCODE -ne 0) { throw "Prüfung der eingebetteten Laufzeit fehlgeschlagen" }
+
+      - name: Setup still installieren, prüfen und deinstallieren
+        shell: pwsh
+        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName
 
       - uses: actions/upload-artifact@v4
         with:
@@ -63,3 +81,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.event.release.tag_name }}" (Get-ChildItem windows-app/dist/*.exe, windows-app/dist/*.sha256) --clobber
+
+  release:
+    name: Release veröffentlichen
+    needs: setup
+    # nur manuell auf main und nur, wenn alle Tests, der Build und die Setup-Prüfungen bestanden sind
+    if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Uebersichten-Ersteller-Setup
+          path: dist
+
+      - name: Tag und Release v<Version> erstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < windows-app/VERSION)"
+          tag="v${version}"
+          setup="Uebersichten-Ersteller-Setup-${version}.exe"
+          notes="windows-app/release-notes/${version}.md"
+          test -f "dist/${setup}" || { echo "Setup fehlt: ${setup}" >&2; exit 1; }
+          test -f "dist/${setup}.sha256" || { echo "Prüfsumme fehlt" >&2; exit 1; }
+          test -f "${notes}" || { echo "Release Notes fehlen: ${notes}" >&2; exit 1; }
+          (cd dist && sha256sum -c "${setup}.sha256")
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} existiert bereits – nichts verändert." >&2
+            exit 1
+          fi
+          gh release create "${tag}" "dist/${setup}" "dist/${setup}.sha256" \
+            --target "${GITHUB_SHA}" --title "Version ${version}" --notes-file "${notes}" --latest
+          gh release view "${tag}"
