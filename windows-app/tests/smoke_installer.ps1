@@ -129,8 +129,9 @@ Write-Host "   App lief ohne Fehler"
 Write-Host "5. Stille Deinstallation"
 $uninstall = Start-Process -FilePath (Join-Path $target "unins000.exe") -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
 if ($uninstall.ExitCode -ne 0) { throw "Deinstallation fehlgeschlagen (Code $($uninstall.ExitCode))" }
+# Der Deinstaller laeuft als Kopie weiter: auf Programmordner und Registrierungseintrag warten
 $deadline = (Get-Date).AddSeconds(90)
-while ((Test-Path (Join-Path $target "app")) -and ((Get-Date) -lt $deadline)) { Start-Sleep -Seconds 2 }
+while (((Test-Path (Join-Path $target "app")) -or (AppEntries).Count -ne 0) -and ((Get-Date) -lt $deadline)) { Start-Sleep -Seconds 2 }
 if (Test-Path (Join-Path $target "app")) { throw "Programmdateien sind nach der Deinstallation noch vorhanden" }
 if (Test-Path (Join-Path $target "runtime")) { throw "Laufzeit ist nach der Deinstallation noch vorhanden" }
 if (Test-Path $shortcut) { throw "Verknuepfung ist nach der Deinstallation noch vorhanden" }
