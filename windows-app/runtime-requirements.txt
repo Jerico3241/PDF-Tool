@@ -1,11 +1,17 @@
 # Pakete der Windows-Laufzeit (Python 3.13, win_amd64). build.py lädt genau diese Dateien.
 # Prüfsummen sichern reproduzierbare Builds (pip --require-hashes).
+# PDF reparieren: pikepdf (qpdf) und pypdfium2 (PDFium) bringen ihre DLLs im Wheel mit.
+# lxml (von pikepdf nur für XMP-Metadaten gebraucht) wird bewusst nicht mitgeliefert –
+# die App schreibt Metadaten unverändert (fix_metadata_version=False), Test: test_engine_works_without_lxml.
 charset-normalizer==3.5.1 --hash=sha256:aea996a6aba25260827c9ea511d1addfde2da9eb686ac961838509086188b7e6
 et-xmlfile==2.0.0 --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa
 numpy==2.5.3 --hash=sha256:71cad2b2a7451ab79d8f5e71b453485b6775963d5cf794179144a7463fe6e8ec
 openpyxl==3.1.5 --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2
+packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
 pandas==2.3.3 --hash=sha256:f8bfc0e12dc78f777f323f55c58649591b2cd0c43534e8355c51d3fede5f4dee
+pikepdf==10.15.0 --hash=sha256:225c041d12c3813cfb65236f1f3b2ea768ec0758da59e63854b619a8a0486120
 pillow==12.3.0 --hash=sha256:1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8
+pypdfium2==5.13.0 --hash=sha256:47dcca2a8d507b5fd24f94c3c9d48fb379430f097bc20f01beff6c963ffbcedb
 python-dateutil==2.9.0.post0 --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
 pytz==2026.3.post1 --hash=sha256:dd95840dd199baea12d9cc096a1d452caa6596a1c1e4b5f3dbd1541855d5e815
 reportlab==4.5.1 --hash=sha256:06fce8cb56c83307cfa4909cdf4e6a2ddbb44e5d6ef4d2edca896d7e9769f091

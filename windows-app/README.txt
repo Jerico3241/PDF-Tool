@@ -1,43 +1,48 @@
-Übersichten-Ersteller für Windows
+PDF Tool für Windows
 Entwickler und Inhaber: Jerico
-=================================
+=============================
 
-Version 2.2.0
+Version 2.3.0
 
-Erstellt Vertragsübersichten aus Excel-Listen und speichert sie als PDF.
+Werkzeuge für PDF-Dateien:
+- Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
+  Excel-Listen und speichert sie als PDF.
+- PDF reparieren: analysiert beschädigte PDF-Dateien und versucht, lesbare
+  Inhalte in eine neue PDF zu übertragen.
+
+Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 
 Was Sie herunterladen
 ---------------------
-Uebersichten-Ersteller-Setup-2.2.0.exe
+PDF-Tool-Setup-2.3.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
-(pandas, openpyxl, xlrd, ReportLab, Pillow). Eine eigene Python-Installation
-oder zusätzliche Pakete sind nicht nötig.
+(pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit qpdf, pypdfium2 mit
+PDFium). Eine eigene Python-Installation, qpdf, Ghostscript oder andere
+Zusatzprogramme sind nicht nötig.
 
 
-Neu in Version 2.2
+Neu in Version 2.3
 ------------------
-- Fettschrift aus der Excel-Liste wird zellgenau in die PDF übernommen –
-  auch nach dem Sortieren nach Vertragsbeginn und dem Ausblenden inaktiver
-  Verträge.
-- Kopf- und Fußzeile lassen sich formatieren: Schriftart, Schriftgröße,
-  fett, kursiv, unterstrichen, durchgestrichen, Schriftfarbe und Ausrichtung
-  je Absatz. Platzhalter wie {kd} behalten ihre Formatierung.
-- Übersichtlichere Excel-Prüfung: aktive und ausgeblendete Verträge,
-  Rechnungsempfänger, fehlende Spalten und – nur wenn in der Datei vorhanden –
-  Kundennummer und Firmenname.
-- »Bereit zum Erstellen« zeigt schon vor dem Klick, was noch fehlt.
-- Nach dem Erstellen: Öffnen, Ordner öffnen, Pfad kopieren, Neue Übersicht.
-- Eingaben werden automatisch gespeichert; Dateiauswahl startet im zuletzt
-  verwendeten Ordner; Excel-Dateien werden beim Hineinziehen hervorgehoben.
+- Die App heißt jetzt PDF Tool. Nach dem Start zeigt eine Startseite alle
+  Werkzeuge; die Navigation links führt zu Start, Tools und Einstellungen.
+- „Vertragsübersichten“ ist ein eigenes Werkzeug. Alle Funktionen,
+  Vorlagen, Textbausteine, Zyklus-Regeln, Kopf- und Fußzeilen und der
+  Kundenverlauf bleiben erhalten.
+- Neues Werkzeug „PDF reparieren“: Analyse, mehrstufige Reparatur mit zwei
+  Engines (qpdf und PDFium), ehrliche Ergebnisse, Originaldatei bleibt
+  unverändert.
+- Verschlüsselte PDFs lassen sich mit dem richtigen Passwort reparieren;
+  das Passwort wird nicht gespeichert.
+- Neues App-Symbol.
 
 
 Voraussetzungen
 ---------------
 - Windows 10 oder Windows 11 (64 Bit)
 - keine Administratorrechte
-- rund 250 MB freier Speicher
+- rund 300 MB freier Speicher
 
 
 Installation
@@ -47,15 +52,15 @@ Installation
    „Weitere Informationen“ → „Trotzdem ausführen“.
 3. Dem Assistenten folgen: Zielordner bestätigen, optional
    „Verknüpfung auf dem Desktop erstellen“ an- oder abwählen.
-4. Am Ende „Übersichten-Ersteller starten“ angehakt lassen und
-   „Fertigstellen“ wählen.
+4. Am Ende „PDF Tool starten“ angehakt lassen und „Fertigstellen“ wählen.
 
-Programmdateien:  %LOCALAPPDATA%\Uebersichten-Ersteller
-Ihre Daten:       %APPDATA%\Uebersichten-Ersteller
+Programmdateien:  %LOCALAPPDATA%\PDF-Tool
+Ihre Daten:       %APPDATA%\PDF-Tool
                   (Einstellungen, Kundenverlauf, Vorlagen, Textbausteine,
-                  Kopf- und Fußzeile, Zyklus-Regeln, Design, Akzentfarbe)
+                  Kopf- und Fußzeile, Zyklus-Regeln, Design, Akzentfarbe,
+                  Protokoll pdf-repair.log)
 
-Die App erscheint im Startmenü unter „Übersichten-Ersteller“ und unter
+Die App erscheint im Startmenü unter „PDF Tool“ und unter
 Einstellungen → Apps → Installierte Apps.
 
 
@@ -64,20 +69,36 @@ Aktualisieren
 Einfach das neue Setup ausführen. Die vorhandene Installation wird ersetzt,
 es entsteht keine zweite Installation. Ihre Daten bleiben erhalten.
 
-Update von 2.0.5 oder älter: Das Setup erkennt die alte Installation,
-übernimmt deren Ordner und die gespeicherten Einstellungen
-(gui-config.json wandert in den Datenordner), entfernt die alten Programm-
-dateien, Verknüpfungen und den alten Eintrag in „Installierte Apps“.
+Update vom Übersichten-Ersteller (bis 2.2): Das Setup erkennt die
+vorhandene Installation und aktualisiert sie – unter „Installierte Apps“
+steht danach nur noch „PDF Tool“.
+- Die Programmdateien ziehen von %LOCALAPPDATA%\Uebersichten-Ersteller
+  nach %LOCALAPPDATA%\PDF-Tool um; der alte Programmordner wird entfernt
+  (nur bekannte Programmdateien). Wurde ein eigener Ordner gewählt, bleibt
+  er erhalten.
+- Die Verknüpfungen „Übersichten-Ersteller“ im Startmenü und auf dem
+  Desktop werden durch „PDF Tool“ ersetzt. Eine an die Taskleiste
+  angeheftete alte Verknüpfung bitte lösen und PDF Tool neu anheften.
+- Beim ersten Start übernimmt PDF Tool Ihre Daten aus
+  %APPDATA%\Uebersichten-Ersteller: zuerst eine Sicherung
+  (migration-backup-<Version>.zip im neuen Datenordner), dann eine Kopie,
+  bei der jede Datei geprüft wird. Der alte Datenordner bleibt unverändert
+  erhalten. Schlägt die Übernahme fehl, arbeitet die App mit dem alten
+  Ordner weiter und versucht es beim nächsten Start erneut.
 
-Läuft die App während des Updates, meldet das Setup dies und wartet, bis
-sie geschlossen ist. Dasselbe Setup erneut ausführen repariert die
-Installation.
+Update von 2.0.5 oder älter: Das Setup übernimmt die gespeicherten
+Einstellungen (gui-config.json) und entfernt die alten Programmdateien,
+Verknüpfungen und den alten Eintrag in „Installierte Apps“.
+
+Läuft die App (auch der alte Übersichten-Ersteller) während des Updates,
+meldet das Setup dies und wartet, bis sie geschlossen ist. Dasselbe Setup
+erneut ausführen repariert die Installation.
 
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   Uebersichten-Ersteller-Setup-2.2.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   Uebersichten-Ersteller-Setup-2.2.0.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.3.0.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -86,13 +107,28 @@ Weitere Parameter:
    /MERGETASKS="!desktopicon"    dito, übrige Aufgaben unverändert
 
 Stille Deinstallation:
-   "%LOCALAPPDATA%\Uebersichten-Ersteller\unins000.exe" /VERYSILENT
+   "%LOCALAPPDATA%\PDF-Tool\unins000.exe" /VERYSILENT
    (Ihre Daten bleiben dabei erhalten.)
 
 
 Verwendung
 ----------
-1. Seite „Erstellen“: Firmenname und Kundennummer eintragen oder unter
+Startseite: Jedes Werkzeug hat eine Karte mit „Öffnen“. Eine Datei kann
+auch direkt in das Fenster gezogen werden: Eine PDF öffnet „PDF reparieren“,
+eine Excel-Liste „Vertragsübersichten“.
+
+Tastatur: Strg+1 Start · Strg+2 Vertragsübersichten · Strg+3 PDF reparieren ·
+Strg+4 Einstellungen · Strg+O Datei wählen · Strg+Enter Hauptaktion des
+Werkzeugs · F1 Kurzanleitung · Tab/Umschalt+Tab zwischen Feldern wechseln ·
+Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Listen.
+
+
+Werkzeug „Vertragsübersichten“
+------------------------------
+Oben wechselt „Übersicht erstellen“ / „Darstellung“ zwischen den beiden
+Ansichten des Werkzeugs.
+
+1. „Übersicht erstellen“: Firmenname und Kundennummer eintragen oder unter
    „Zuletzt verwendet“ einen Kunden wählen.
 2. Excel-Liste wählen (Strg+O) oder die Datei in das Fenster ziehen.
    Die Prüfung zeigt aktive und ausgeblendete Verträge, den oder die
@@ -101,7 +137,8 @@ Verwendung
 3. Optional Logo und Zielordner ändern.
 4. Sobald „Bereit zum Erstellen“ erscheint: „PDF erstellen“ klicken oder
    Strg+Enter drücken. Fehlt etwas, nennt die Anzeige den Grund; ein Klick
-   darauf führt zum passenden Feld.
+   darauf führt zum passenden Feld. Der Schalter daneben legt fest, ob die
+   PDF nach dem Erstellen geöffnet wird.
 5. Nach dem Erstellen: „Öffnen“, „Ordner öffnen“, „Pfad kopieren“ oder
    „Neue Übersicht“ (leert Firma, Kundennummer, Empfänger und Excel-Datei;
    Logo, Zielordner, Darstellung, Vorlage, Kopf-/Fußzeile und Regeln bleiben).
@@ -111,8 +148,9 @@ fett – zellgenau für Vertrag-Nr., Beschreibung (auch „Art“), Beginn,
 Abrechnungszyklus, Netto und Zahlungsart. Andere Excel-Formate (Farben,
 Schriftgrößen, Rahmen) werden bewusst nicht übernommen.
 
-Seite „Darstellung“: Vorlagen, Titel, Dateiname, Logo-Breite, Hoch- oder
-Querformat, Kopfzeile, Fußzeile mit Textbausteinen und Zyklus-Regeln.
+„Darstellung“: Vorlagen, Titel, Dateiname, Logo-Breite, Hoch- oder
+Querformat, Kopfzeile, Fußzeile mit Textbausteinen, Zyklus-Regeln und
+„Verlauf löschen“ (zuletzt verwendete Kunden und PDFs).
 Kopf- und Fußzeile haben eine Formatierungsleiste: Schriftart (Helvetica,
 Times, Courier sowie – falls installiert – Arial, Calibri, Segoe UI und
 Times New Roman), Größe 6–18 pt, fett (Strg+B), kursiv (Strg+I),
@@ -123,13 +161,67 @@ Die Fußzeile ist mit einem Standardtext vorbelegt; „Standard wiederherstellen
 setzt Text und Formatierung zurück. Kopf- und Fußzeile, Vorlagen,
 Textbausteine und die Kundenakte speichern die Formatierung mit.
 
-Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
-(Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen,
-Verhalten nach dem Erstellen und Informationen zur App.
 
-Tastatur: Strg+Enter PDF erstellen · Strg+O Excel öffnen · F1 Kurzanleitung ·
-Strg+1/2/3 Seiten wechseln · Tab/Umschalt+Tab zwischen Feldern wechseln ·
-Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Listen.
+Werkzeug „PDF reparieren“
+-------------------------
+1. Eine PDF wählen (Strg+O) oder in das Fenster ziehen – eine PDF pro
+   Vorgang. Sie wird sofort analysiert.
+2. Die Analyse zeigt Größe, Seiten, PDF-Version, Verschlüsselung und den
+   Zustand:
+   - „Keine Fehler gefunden“ – die PDF scheint strukturell in Ordnung zu
+     sein. Ein Neuaufbau ist trotzdem möglich („Trotzdem neu aufbauen“).
+   - „Reparierbare Probleme erkannt“ – beschädigte Strukturen, die
+     möglicherweise repariert werden können.
+   - „Schwer beschädigt“ – Teile der PDF können nicht gelesen werden;
+     PDF Tool versucht, so viele Seiten und Inhalte wie möglich zu retten.
+   - „Keine Reparatur möglich“ – die Datei lässt sich mit keiner der
+     eingebauten Engines lesen.
+   „Technische Details anzeigen“ listet Querverweistabelle, Objekte,
+   Trailer, Seitenbaum, Metadaten, Datenströme und alle Befunde.
+3. Verschlüsselte PDF: Passwort eingeben und „Entsperren“ wählen. Das
+   Passwort wird nur für diesen Vorgang verwendet und nirgends gespeichert.
+   Die reparierte Kopie bleibt mit demselben Passwort geschützt.
+4. Speicherort wählen: „Neben der Original-PDF“ (Standard) oder „Anderer
+   Ordner“. Die Einstellung wird gemerkt.
+5. „PDF reparieren“ klicken oder Strg+Enter drücken. Der Fortschritt nennt
+   die Arbeitsschritte; „Abbrechen“ beendet den Vorgang sofort, es bleibt
+   keine unvollständige Datei zurück.
+6. Ergebnis: Ausgabedatei, Größe vorher/nachher, Seiten vorher/nachher und
+   Hinweise – mit „Öffnen“, „Ordner öffnen“, „Pfad kopieren“ und
+   „Weitere PDF reparieren“.
+
+Ergebnisse:
+- „PDF wurde repariert“ – alle Seiten wurden vollständig übernommen und die
+  neue Datei wurde geprüft.
+- „PDF teilweise wiederhergestellt“ – z. B. „12 von 15 Seiten konnten
+  vollständig rekonstruiert werden“. Fehlende Bestandteile werden genannt.
+- „PDF konnte nicht repariert werden“ – es wird keine Datei gespeichert.
+Nicht jede beschädigte Datei lässt sich vollständig wiederherstellen.
+
+Die Originaldatei wird nie verändert oder überschrieben. Die neue Datei
+heißt <Name>_repariert.pdf (bei Bedarf <Name>_repariert_2.pdf usw.).
+
+Digitale Signaturen: Eine Reparatur kann die Gültigkeit von Signaturen
+aufheben. Die App fragt deshalb vorher nach.
+
+Rettungsmodus „Lesbare Seiten als neue PDF retten“: Nur wenn nichts anderes
+hilft und nur nach Bestätigung. Die lesbaren Seiten werden als Bilder in
+eine neue PDF übertragen – Text ist dann nicht mehr durchsuchbar oder
+kopierbar, Links, Formulare und Lesezeichen fehlen.
+
+Datenschutz: Die Verarbeitung erfolgt vollständig lokal auf diesem PC; es
+wird nichts hochgeladen. Zwischendateien entstehen nur im temporären Ordner
+von Windows und werden danach gelöscht. Das Protokoll pdf-repair.log im
+Datenordner enthält technische Befunde, aber keine PDF-Inhalte, keine
+vollständigen Pfade und keine Passwörter.
+
+
+Einstellungen
+-------------
+Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
+(Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen und
+Informationen zur App. Einstellungen der Werkzeuge stehen im jeweiligen
+Werkzeug.
 
 
 Windows-11-Design
@@ -145,20 +237,32 @@ abschalten.
 Wenn etwas nicht klappt
 -----------------------
 Falls die App nicht startet, erscheint ein Fehlerfenster. Die Datei
-fehler.log liegt im Datenordner %APPDATA%\Uebersichten-Ersteller.
+fehler.log liegt im Datenordner %APPDATA%\PDF-Tool.
 Das Setup schreibt ein Protokoll nach %TEMP% („Setup Log <Datum>.txt“)
 oder an den mit /LOG angegebenen Ort.
 
 
 Deinstallation
 --------------
-Einstellungen → Apps → Installierte Apps → „Übersichten-Ersteller“ →
-Deinstallieren.
+Einstellungen → Apps → Installierte Apps → „PDF Tool“ → Deinstallieren.
 
 Entfernt werden Programmdateien, Verknüpfungen und der Eintrag in den
 Windows-Einstellungen. Anschließend fragt die Deinstallation, ob auch Ihre
-gespeicherten Einstellungen gelöscht werden sollen (Standard: Nein).
-Erstellte PDF-Dateien bleiben in jedem Fall erhalten.
+gespeicherten Einstellungen gelöscht werden sollen (Standard: Nein) – dazu
+gehören auch die bei der Übernahme erhaltenen Daten des Übersichten-
+Erstellers. Erstellte und reparierte PDF-Dateien bleiben in jedem Fall
+erhalten.
+
+
+Lizenzen
+--------
+PDF Tool nutzt freie Bibliotheken, u. a. Python (PSF), pikepdf (MPL-2.0)
+mit qpdf (Apache-2.0), pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium
+(BSD-3-Clause), ReportLab (BSD), pandas, NumPy, openpyxl, xlrd und Pillow.
+Die Übersicht steht im Programmordner in THIRD_PARTY_LICENSES.md, die
+Lizenztexte unter runtime\LICENSE.txt und
+runtime\Lib\site-packages\<Paket>.dist-info. Portions of this software are
+copyright © The FreeType Project (www.freetype.org). All rights reserved.
 
 
 Für Entwickler: Setup bauen
@@ -174,8 +278,8 @@ Bauen (im Repository-Ordner):
    py -3.13 windows-app\build.py
 
 Ergebnis:
-   windows-app\dist\Uebersichten-Ersteller-Setup-<Version>.exe
-   windows-app\dist\Uebersichten-Ersteller-Setup-<Version>.exe.sha256
+   windows-app\dist\PDF-Tool-Setup-<Version>.exe
+   windows-app\dist\PDF-Tool-Setup-<Version>.exe.sha256
 
 Die Version steht nur in windows-app\VERSION. App, Setup und Dateiname
 übernehmen sie von dort. ISCC.exe wird automatisch gesucht (PATH,
@@ -187,9 +291,10 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Push auf windows-latest
-(.github/workflows/windows-setup.yml) und stellt es als Artefakt bereit;
-bei einem veröffentlichten Release wird es zusätzlich angehängt.
+(.github/workflows/windows-setup.yml), prüft es (auch das Update vom
+Übersichten-Ersteller 2.2.0) und stellt es als Artefakt bereit; bei einem
+veröffentlichten Release wird es zusätzlich angehängt.

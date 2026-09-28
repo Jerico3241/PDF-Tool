@@ -14,7 +14,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 INSTALL_DIR = APP_DIR.parent
 RUNTIME = INSTALL_DIR / "runtime"
-APP_NAME = "Übersichten-Ersteller"
+APP_NAME = "PDF Tool"
 
 
 def _message(title: str, text: str, error: bool = True) -> None:
@@ -28,7 +28,7 @@ def _message(title: str, text: str, error: bool = True) -> None:
 
 def _log_path() -> Path:
     base = os.environ.get("APPDATA")
-    folder = Path(base) / "Uebersichten-Ersteller" if base else INSTALL_DIR
+    folder = Path(base) / "PDF-Tool" if base else INSTALL_DIR
     return folder / "fehler.log"
 
 

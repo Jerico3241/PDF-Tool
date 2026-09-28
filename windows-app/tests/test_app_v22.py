@@ -426,6 +426,7 @@ def test_autosave_of_all_fields_is_debounced(app, config_file: Path, tmp_path: P
 
 
 def test_drag_and_drop_highlight_and_drop(app, excel_file: Path) -> None:
+    app.nav.navigate("create", animate=False)
     card = app.ui.dateien_card
     app._drag_enter(True)
     pump(app, 0.05)

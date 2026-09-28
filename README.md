@@ -1,39 +1,87 @@
-# Übersichten-Ersteller
+# PDF Tool
 
-Quellcode für den **Übersichten-Ersteller 2.2.0**. Entwickler und Inhaber: Jerico.
+Quellcode von **PDF Tool 2.3.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
+Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Das Repository enthält:
 
 - die Windows-App (Python/Tkinter, Fluent-Oberfläche für Windows 10 und 11) unter `windows-app/app/`
-- das Inno-Setup-Skript für den Windows-Installer unter `windows-app/installer/`
+- das Inno-Setup-Skript für den Windows-Installer unter `windows-app/installer/PDF-Tool.iss`
 - das Build-Skript `windows-app/build.py`
 - die Web-/Downloadseite auf Basis von React, TanStack Start und Vite
 
-## Windows-App
+## Werkzeuge
 
-Die Anwendung erstellt Vertragsübersichten aus Excel-Daten und exportiert diese als PDF.
-Benutzerhinweise (Installation, Update, stille Installation, Deinstallation) stehen in
+Nach dem Start zeigt PDF Tool eine Startseite mit allen Werkzeugen. Die Navigation links führt zu
+**Start**, den **Tools** und den **Einstellungen**. Eine Datei kann direkt in das Fenster gezogen
+werden: eine PDF öffnet „PDF reparieren“, eine Excel-Liste „Vertragsübersichten“.
+
+| Werkzeug | Zweck | Code |
+| --- | --- | --- |
+| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln und Kundenverlauf | `app/tools/contract_overview/` (Ablauf und Seiten), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
+| **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen | `app/tools/pdf_repair/` |
+
+Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
+Logik; gemeinsam sind nur Fenster, Navigation, Design und Dialoge (`app/vertragdesk.py`, `app/ui/`).
+Neue Werkzeuge bekommen ein eigenes Paket unter `app/tools/` und einen Eintrag in
+`app/tools/registry.py`.
+
+### PDF reparieren
+
+- **Analyse vor der Reparatur:** Größe, Seiten, PDF-Version, Verschlüsselung, Querverweistabelle,
+  Objekte, Trailer, Seitenbaum, Metadaten, Datenströme, Formulare, Anhänge und digitale Signaturen.
+  Ergebnis: „Keine Fehler gefunden“, „Reparierbare Probleme erkannt“, „Schwer beschädigt“ oder
+  „Keine Reparatur möglich“.
+- **Mehrstufig:** (1) Prüfen und Neuaufbau mit qpdf (pikepdf), (2) Übertragen der lesbaren Seiten in
+  ein neues Dokument, (3) zweite Engine PDFium (pypdfium2). Die geprüfte Ausgabe mit den meisten
+  vollständigen Seiten wird verwendet. Seiten werden nicht standardmäßig in Bilder umgewandelt; der
+  Rettungsmodus „Lesbare Seiten als neue PDF retten“ tut das nur nach Bestätigung.
+- **Ehrliche Ergebnisse:** repariert, teilweise wiederhergestellt („12 von 15 Seiten …“) oder
+  nicht reparierbar – ohne Garantieversprechen. Nicht übernommene Bestandteile (z. B. Lesezeichen,
+  Anhänge, gültige Signaturen) werden genannt.
+- **Original bleibt unverändert:** Es wird nur gelesen; vor und nach der Verarbeitung wird die
+  SHA-256-Prüfsumme verglichen. Die Ausgabe heißt `<Name>_repariert.pdf` (bei Bedarf `_2`, `_3` …)
+  und entsteht neben dem Original oder in einem gewählten Ordner. Bei einem Fehler bleibt keine
+  Ausgabe zurück.
+- **Verschlüsselte PDFs** lassen sich mit dem richtigen Passwort reparieren; die Kopie bleibt
+  verschlüsselt. Das Passwort wird nie gespeichert oder protokolliert, Passwortschutz wird nicht
+  umgangen.
+- **Arbeitsprozess:** Analyse und Reparatur laufen in einem eigenen Prozess mit niedriger Priorität.
+  Die Oberfläche bleibt bedienbar, „Abbrechen“ beendet den Prozess wirklich und entfernt alle
+  Zwischendateien. Schutz vor Ressourcenbomben: Der Arbeitsspeicher des Arbeitsprozesses ist
+  begrenzt (Windows-Job-Objekt), Bildgröße und Zahl der untersuchten Objekte je Seite haben
+  Obergrenzen; stürzt eine Engine an einer manipulierten Datei ab, endet nur der Arbeitsprozess.
+
+## Installation
+
+Das Setup `PDF-Tool-Setup-<Version>.exe` enthält Python, qpdf (über pikepdf), PDFium (über
+pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert werden. Benutzerhinweise
+(Installation, Update, stille Installation, Deinstallation, Bedienung) stehen in
 [`windows-app/README.txt`](windows-app/README.txt).
 
-Neu in 2.2.0:
-
-- **Excel-Fettschrift in der PDF:** fett formatierte Zellen erscheinen zellgenau fett
-  (`excelstyle.py`: openpyxl bzw. xlrd mit `formatting_info`; jede Datenzeile behält ihre
-  Excel-Zeile in `_source_excel_row`, auch nach Filtern und Sortieren)
-- **Rich-Text-Kopf- und -Fußzeilen:** Schriftart, Größe, fett, kursiv, unterstrichen,
-  durchgestrichen, Farbe und Ausrichtung je Absatz (`richtext.py` als JSON-Datenmodell,
-  `ui/richtext.py` als Editor, `pdffonts.py` für PDF- und Windows-Schriften)
-- **Verbesserte Excel-Prüfung** und Anzeige **„Bereit zum Erstellen“**
-- **Neuer PDF-Abschluss:** Öffnen, Ordner öffnen, Pfad kopieren, Neue Übersicht
-- automatisches Speichern aller Eingaben (verzögert, atomar)
-
-Das Setup enthält Python und alle Pakete – eine eigene Python-Installation ist nicht nötig.
-
-- Programmdateien: `%LOCALAPPDATA%\Uebersichten-Ersteller` (Installation ohne Administratorrechte)
-- Benutzerdaten: `%APPDATA%\Uebersichten-Ersteller` – bleiben bei Updates erhalten
+- Programmdateien: `%LOCALAPPDATA%\PDF-Tool` (Installation ohne Administratorrechte)
+- Benutzerdaten: `%APPDATA%\PDF-Tool` – bleiben bei Updates erhalten
+- **Update vom Übersichten-Ersteller (bis 2.2):** Das Setup verwendet dieselbe AppId – unter
+  „Installierte Apps“ entsteht kein zweiter Eintrag. Die Programmdateien ziehen von
+  `%LOCALAPPDATA%\Uebersichten-Ersteller` nach `%LOCALAPPDATA%\PDF-Tool` um, alte Verknüpfungen
+  werden durch „PDF Tool“ ersetzt. Beim ersten Start übernimmt die App die Daten aus
+  `%APPDATA%\Uebersichten-Ersteller` einmalig: zuerst eine Sicherung
+  (`migration-backup-<Version>.zip`), dann Kopie mit Prüfung jeder Datei (Größe und SHA-256).
+  Der alte Datenordner bleibt unverändert erhalten; schlägt die Übernahme fehl, arbeitet die App mit
+  ihm weiter.
 - Die Version steht zentral in `windows-app/VERSION`.
 
-## Setup bauen
+## Datenschutz
+
+Alle Dateien werden vollständig lokal auf dem PC verarbeitet; es wird nichts hochgeladen und keine
+Verbindung zu einem Dienst aufgebaut. PDF Tool schreibt Einstellungen und das technische Protokoll
+`pdf-repair.log` in den Datenordner. Das Protokoll enthält Dateinamen, Größen und technische
+Befunde, aber keine PDF-Inhalte, keine vollständigen Pfade und keine Passwörter. Zwischendateien
+entstehen nur im temporären Ordner von Windows und werden nach jedem Vorgang gelöscht.
+
+## Entwicklung
+
+### Setup bauen
 
 Voraussetzungen unter Windows 10/11 (64 Bit):
 
@@ -46,21 +94,38 @@ Voraussetzungen unter Windows 10/11 (64 Bit):
 py -3.13 windows-app\build.py
 ```
 
-Ergebnis: `windows-app\dist\Uebersichten-Ersteller-Setup-<Version>.exe` und die zugehörige
-`.sha256`-Datei. Go wird nicht mehr benötigt.
+Ergebnis: `windows-app\dist\PDF-Tool-Setup-<Version>.exe` und die zugehörige `.sha256`-Datei.
+Das Build-Skript prüft, dass die Laufzeit alle Module und die nativen Bibliotheken von qpdf und
+PDFium enthält.
 
 Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) baut das Setup auf
-`windows-latest`, führt alle Tests aus, prüft die eingebettete Laufzeit und das installierte Setup
-(stille Installation, Programmstart, stille Deinstallation) und stellt Setup und `.sha256` als
-Build-Artefakt bereit. Manuell gestartet mit `release: true` veröffentlicht sie danach das Release
-`v<Version>` („Version <Version>“) mit beiden Dateien – nur wenn alle Prüfungen bestanden sind.
+`windows-latest`, führt alle Tests aus, prüft die eingebettete Laufzeit (Module, Vertragsübersicht,
+PDF-Reparatur im Arbeitsprozess, Programmstart) und das installierte Setup: stille Installation,
+Programmstart, stille Deinstallation sowie das Update vom Übersichten-Ersteller 2.2.0 (ein Eintrag
+unter „Installierte Apps“, Ordner, Verknüpfungen, Datenübernahme). Manuell gestartet mit
+`release: true` veröffentlicht sie danach das Release `v<Version>` („PDF Tool <Version>“) mit Setup
+und Prüfsumme – nur wenn alle Prüfungen bestanden sind.
 
-Tests der Windows-App:
+### Tests
 
 ```powershell
-py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt
+py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0
 py -3.13 -m pytest windows-app\tests
 ```
+
+Die Tests erzeugen ihre Test-PDFs selbst (`windows-app/tests/pdfsamples.py`): gültige Dateien,
+falsche Querverweise, fehlender Trailer, abgeschnittene Dateien, beschädigte Datenströme, nicht
+reparierbare Dateien, verschlüsselte PDFs, Formulare, Anhänge, Signaturen und große PDFs.
+
+Das App-Symbol entsteht mit `python windows-app/scripts/make_icons.py` (Windows-Symbol, Favicons
+und Logo der Downloadseite).
+
+## Lizenzen
+
+PDF Tool nutzt ausschließlich Bibliotheken mit freien Lizenzen, darunter pikepdf (MPL-2.0) mit
+qpdf (Apache-2.0) und pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium (BSD-3-Clause). Die vollständige
+Übersicht steht in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md); die Lizenztexte liegen im
+Setup bei den jeweiligen Paketen (`runtime\Lib\site-packages\*.dist-info`).
 
 ## Sicherheit
 

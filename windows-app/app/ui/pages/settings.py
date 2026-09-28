@@ -1,4 +1,6 @@
-"""Seite »Einstellungen« im Aufbau der Windows-11-Einstellungen."""
+"""Seite »Einstellungen«: globale Einstellungen von PDF Tool (Design, Akzentfarbe, Mica, Animationen).
+
+Einstellungen einzelner Werkzeuge stehen im jeweiligen Werkzeug."""
 
 from __future__ import annotations
 
@@ -10,7 +12,7 @@ from ..context import ctx
 from ..inputs import ComboBox
 from ..navigation import Page
 from ..theme import ACCENTS, SYSTEM_ACCENT, accent_name, px, system_accent
-from ..widgets import Button, InfoBar, Swatch, Text, ToggleSwitch, frame
+from ..widgets import Button, Swatch, Text, ToggleSwitch, frame
 
 if TYPE_CHECKING:
     from vertragdesk import App
@@ -71,34 +73,19 @@ def build(app: "App", host) -> Page:
 
     # Verhalten -----------------------------------------------------------------------
     page.section_title("Verhalten")
-    open_card = SettingsCard(page.content, icons.OPEN_IN_WINDOW, "PDF nach dem Erstellen öffnen", "Öffnet die fertige PDF im Standardprogramm")
-    page.add_section(open_card)
-    ToggleSwitch(open_card.control, app.var_open, command=app.persist).pack()
     anim_card = SettingsCard(page.content, icons.PLAY, "Animationen", app.animation_description())
-    page.add_section(anim_card, pady=(px(4), 0))
+    page.add_section(anim_card)
     ui.anim_card = anim_card
     ToggleSwitch(anim_card.control, app.var_anim, command=app.apply_animation_setting).pack()
-
-    # Daten ------------------------------------------------------------------------------
-    page.section_title("Daten")
-    clear_card = SettingsCard(page.content, icons.CONTACT, "Kundendaten leeren", "Leert Firmenname, Kundennummer und Rechnungsempfänger")
-    page.add_section(clear_card)
-    Button(clear_card.control, "Leeren", app.clear_customer, icon=icons.CLEAR).pack()
-    logo_card = SettingsCard(page.content, icons.PICTURE, "Standardlogo", "Setzt das mitgelieferte Logo für die nächste PDF")
-    page.add_section(logo_card, pady=(px(4), 0))
-    Button(logo_card.control, "Verwenden", app.use_default_logo, icon=icons.REFRESH).pack()
-    history_card = SettingsCard(page.content, icons.HISTORY, "Verlauf löschen", "Entfernt zuletzt verwendete Kunden und zuletzt erstellte PDFs aus der Liste. Dateien bleiben erhalten.")
-    page.add_section(history_card, pady=(px(4), 0))
-    Button(history_card.control, "Löschen", app.clear_history, icon=icons.DELETE).pack()
-    ui.settings_info = InfoBar(page.content)
-    page.add_section(ui.settings_info, pady=(px(8), 0))
+    note = Text(page.content, "Einstellungen der einzelnen Werkzeuge stehen im jeweiligen Werkzeug – z. B. Vorlagen und Verlauf unter »Vertragsübersichten · Darstellung«.", style="caption", color="text2", wrap=True)
+    page.add_section(note, pady=(px(8), 0))
 
     # App ----------------------------------------------------------------------------------
     page.section_title("Info")
     about_card = SettingsCard(page.content, icons.INFO, app.app_name, f"Version {app.version} · Entwickler und Inhaber: {app.developer}")
     page.add_section(about_card)
     Button(about_card.control, "Über", app.show_about).pack()
-    help_card = SettingsCard(page.content, icons.HELP, "Kurzanleitung", "So entsteht eine Vertragsübersicht in fünf Schritten (F1)")
+    help_card = SettingsCard(page.content, icons.HELP, "Kurzanleitung", "So arbeiten Sie mit den Werkzeugen von PDF Tool (F1)")
     page.add_section(help_card, pady=(px(4), 0))
     Button(help_card.control, "Öffnen", app.show_help).pack()
     news_card = SettingsCard(page.content, icons.MEGAPHONE, "Neuerungen", f"Was ist neu in Version {app.version}")

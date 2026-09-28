@@ -30,6 +30,7 @@ PANE_EXPANDED = 240
 PANE_COMPACT = 48
 ITEM_HEIGHT = 36
 ITEM_GAP = 4
+HEADER_HEIGHT = 32  # Abschnittsüberschrift, z. B. »Tools«
 
 # Breakpoints (effektive Pixel Fensterbreite), abgestimmt auf die Kartenbreiten der Seiten.
 # Ab 1008 px ist die Navigation ausgeklappt (wie WinUI »ExpandedModeThresholdWidth«).
@@ -47,20 +48,29 @@ PARK_X = -20000
 
 @dataclass
 class NavItem:
+    """Eintrag der Navigation. Ein Werkzeug kann mehrere Seiten haben (``pages``);
+    ``header`` kennzeichnet eine nicht auswählbare Abschnittsüberschrift."""
+
     key: str
     label: str
-    glyph: str
+    glyph: str = ""
     footer: bool = False
+    pages: tuple[str, ...] = ()
+    header: bool = False
+
+    def owns(self, page: str) -> bool:
+        return page == self.key or page in self.pages
 
 
 class NavigationPane(tk.Canvas):
     """Navigationsbereich. Alle Canvas-Elemente bestehen dauerhaft und werden nur angepasst."""
 
-    def __init__(self, master, items: list[NavItem], on_select: Callable[[str], None], on_toggle: Callable[[], None]) -> None:
+    def __init__(self, master, items: list[NavItem], on_select: Callable[[str], None], on_toggle: Callable[[], None], title: str = "") -> None:
         self.c = ctx()
         super().__init__(master, width=px(PANE_EXPANDED), highlightthickness=0, bd=0, takefocus=1)
         self.surface_role = "mica"
         self.items = items
+        self.title = title
         self.on_select = on_select
         self.on_toggle = on_toggle
         self.selected: str | None = None
@@ -76,7 +86,8 @@ class NavigationPane(tk.Canvas):
         self._backdrop = self.create_image(0, 0, anchor="nw", state="hidden")
         self._slots: dict[str, dict[str, int]] = {"__toggle__": self._make_slot()}
         for item in items:
-            self._slots[item.key] = self._make_slot()
+            self._slots[item.key] = self._make_header_slot() if item.header else self._make_slot()
+        self._title_item = self.create_text(0, 0, text=title, anchor="w", state="hidden")
         self._pill = self.create_image(0, 0, anchor="w", state="hidden")
         self._tooltip = Tooltip(self, "")
         self._tooltip_key: str | None = None
@@ -102,6 +113,15 @@ class NavigationPane(tk.Canvas):
             "label": self.create_text(0, 0, text="", anchor="w", state="hidden"),
             "focus": self.create_image(0, 0, anchor="nw", state="hidden"),
         }
+
+    def _make_header_slot(self) -> dict[str, int]:
+        return {
+            "label": self.create_text(0, 0, text="", anchor="w", state="hidden"),
+            "line": self.create_line(0, 0, 0, 0, state="hidden"),
+        }
+
+    def _selectable(self) -> list[NavItem]:
+        return [item for item in self.items if not item.header]
 
     def _theme_changed(self) -> None:
         self.configure(bg=self.c.pal.mica)
@@ -131,8 +151,9 @@ class NavigationPane(tk.Canvas):
         top_items = [item for item in self.items if not item.footer]
         foot_items = [item for item in self.items if item.footer]
         for item in top_items:
-            rects[item.key] = (px(4), y, width - px(4), y + px(ITEM_HEIGHT))
-            y += px(ITEM_HEIGHT) + px(ITEM_GAP)
+            item_h = px(HEADER_HEIGHT) if item.header else px(ITEM_HEIGHT)
+            rects[item.key] = (px(4), y, width - px(4), y + item_h)
+            y += item_h + px(ITEM_GAP)
         y = height - px(4) - px(ITEM_HEIGHT)
         for item in reversed(foot_items):
             rects[item.key] = (px(4), y, width - px(4), y + px(ITEM_HEIGHT))
@@ -143,8 +164,9 @@ class NavigationPane(tk.Canvas):
         tx0, ty0, tx1, ty1 = self._toggle_rect()
         if tx0 <= x < tx1 and ty0 <= y < ty1:
             return "__toggle__"
+        headers = {item.key for item in self.items if item.header}
         for key, (x0, y0, x1, y1) in self._item_rects().items():
-            if x0 <= x < x1 and y0 <= y < y1:
+            if key not in headers and x0 <= x < x1 and y0 <= y < y1:
                 return key
         return None
 
@@ -199,11 +221,13 @@ class NavigationPane(tk.Canvas):
 
     def _focus_in(self, _event=None) -> None:
         if self.focus_key is None:
-            self.focus_key = self.selected or (self.items[0].key if self.items else None)
+            selectable = self._selectable()
+            self.focus_key = self.selected or (selectable[0].key if selectable else None)
         self.redraw()
 
     def _order(self) -> list[str]:
-        return ["__toggle__"] + [item.key for item in self.items if not item.footer] + [item.key for item in self.items if item.footer]
+        selectable = self._selectable()
+        return ["__toggle__"] + [item.key for item in selectable if not item.footer] + [item.key for item in selectable if item.footer]
 
     def _move_focus(self, delta: int) -> str:
         order = self._order()
@@ -289,6 +313,18 @@ class NavigationPane(tk.Canvas):
         else:
             self._set(slot["focus"], None, state="hidden")
 
+    def _paint_header(self, slot: dict[str, int], rect: tuple, label: str, show_label: bool) -> None:
+        """Abschnittsüberschrift: ausgeklappt als Text, eingeklappt als Trennlinie (wie WinUI)."""
+        pal = self.c.pal
+        x0, y0, x1, y1 = rect
+        cy = (y0 + y1) / 2 + px(4)
+        if show_label:
+            self._set(slot["label"], (x0 + px(12), cy), text=label, font=self.c.fonts.body_strong, fill=pal.text2, state="normal")
+            self._set(slot["line"], None, state="hidden")
+        else:
+            self._set(slot["label"], None, state="hidden")
+            self._set(slot["line"], (x0 + px(8), cy, x1 - px(8), cy), fill=pal.divider, width=1, state="normal")
+
     def redraw(self) -> None:
         c = self.c
         try:
@@ -304,10 +340,18 @@ class NavigationPane(tk.Canvas):
             return None
 
         toggle_overlay = "pressed" if self.pressed == "__toggle__" else ("hover" if self.hover == "__toggle__" else None)
-        self._paint_slot(self._slots["__toggle__"], self._toggle_rect(), toggle_overlay, icons.GLOBAL_NAV, None, False, keyboard and self.focus_key == "__toggle__")
+        toggle = self._toggle_rect()
+        self._paint_slot(self._slots["__toggle__"], toggle, toggle_overlay, icons.GLOBAL_NAV, None, False, keyboard and self.focus_key == "__toggle__")
         rects = self._item_rects()
         show_labels = self.expanded_amount > 0.55
+        if self.title and show_labels:
+            self._set(self._title_item, (toggle[2] + px(8), (toggle[1] + toggle[3]) / 2), text=self.title, font=c.fonts.body, fill=c.pal.text, state="normal")
+        else:
+            self._set(self._title_item, None, state="hidden")
         for item in self.items:
+            if item.header:
+                self._paint_header(self._slots[item.key], rects[item.key], item.label, show_labels)
+                continue
             self._paint_slot(self._slots[item.key], rects[item.key], overlay_state(item.key), item.glyph, item.label, show_labels, keyboard and self.focus_key == item.key)
         if self.selected in rects and not c.anim.running(f"navind:{self}"):
             sel = rects[self.selected]
@@ -431,6 +475,7 @@ class StatusBar(Surface):
         self.hint = Text(row, hint, style="caption", color="text3", anchor="e")
         self.hint.pack(side="right", padx=(px(12), 0))
         self.label = Text(row, "Bereit", style="caption", color="text2", width=1)
+        self.hint_text = hint
         self.label.pack(side="left", fill="x", expand=True)
         self.text = "Bereit"
         self._label_width = 0
@@ -438,6 +483,16 @@ class StatusBar(Surface):
         self.label.bind("<Configure>", self._label_configured, add="+")
         self._kind = "neutral"
         c.theme.subscribe(self._recolor, owner=self)
+
+    def set_hint(self, text: str) -> None:
+        """Tastenhinweise rechts – je Seite passend (z. B. Strg+O öffnet eine Excel bzw. PDF)."""
+        if text != self.hint_text:
+            self.hint_text = text
+            self.hint.configure(text=text)
+            if text and not self.hint.winfo_manager():
+                self.hint.pack(side="right", padx=(px(12), 0), before=self.label)
+            elif not text and self.hint.winfo_manager():
+                self.hint.pack_forget()
 
     def _label_configured(self, event) -> None:
         if event.width != self._label_width:
@@ -511,12 +566,16 @@ class NavigationView(tk.Frame):
         compact: bool = False,
         status_hint: str = "",
         on_layout: Callable[[], None] | None = None,
+        title: str = "",
     ) -> None:
         super().__init__(master, bd=0, highlightthickness=0)
         self.surface_role = "mica"
         c = ctx()
         c.theme.style(self, bg="mica")
         self.factories = factories
+        self.items = items
+        # zuletzt gezeigte Seite je Navigationseintrag (ein Werkzeug kann mehrere Seiten haben)
+        self._last_page: dict[str, str] = {}
         self.pages: dict[str, Page] = {}
         self.current: str | None = None
         self.on_change = on_change
@@ -536,7 +595,7 @@ class NavigationView(tk.Frame):
         c.theme.style(self.backdrop, bg="mica")
         self.backdrop.place(x=0, y=0, relwidth=1.0, relheight=1.0)
         self.layer = ContentLayer(self)
-        self.pane = NavigationPane(self, items, self.navigate, self.toggle_pane)
+        self.pane = NavigationPane(self, items, self._select_item, self.toggle_pane, title=title)
         self.host = Surface(self.layer, role="layer")
         self.host.pack(fill="both", expand=True, padx=(1, 0), pady=(1, 0))
         self.status = StatusBar(self.layer, status_hint)
@@ -573,8 +632,33 @@ class NavigationView(tk.Frame):
         page.place(x=PARK_X, y=0, width=max(1, width), height=max(1, height), relwidth=0, relheight=0)
         ctx().block_focus(page, True)
 
+    def item_for_page(self, page: str) -> str | None:
+        """Navigationseintrag, zu dem eine Seite gehört."""
+        return next((item.key for item in self.items if not item.header and item.owns(page)), None)
+
+    def page_for_item(self, key: str) -> str | None:
+        """Seite, die ein Navigationseintrag öffnet: die zuletzt gezeigte bzw. die erste."""
+        item = next((item for item in self.items if item.key == key and not item.header), None)
+        if item is None:
+            return key if key in self.factories else None
+        if key in self._last_page:
+            return self._last_page[key]
+        if item.pages:
+            return item.pages[0]
+        return key if key in self.factories else None
+
+    def _select_item(self, key: str) -> None:
+        page = self.page_for_item(key)
+        if page is not None:
+            self.navigate(page)
+
     def navigate(self, key: str, animate: bool = True) -> None:
-        if key == self.current or key not in self.factories:
+        if key not in self.factories:
+            resolved = self.page_for_item(key)
+            if resolved is None or resolved not in self.factories:
+                return
+            key = resolved
+        if key == self.current:
             return
         if self._navigating:
             self._pending = (key, animate)
@@ -601,7 +685,9 @@ class NavigationView(tk.Frame):
                 self._park(old, width, height)
             self.current = key
             allowed = animate and c.anim.allowed()
-            self.pane.select(key, animate=allowed)
+            item = self.item_for_page(key) or key
+            self._last_page[item] = key
+            self.pane.select(item, animate=allowed and self.pane.selected != item)
             page.enter(allowed)
             if self.on_change:
                 self.on_change(key)

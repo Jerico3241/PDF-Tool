@@ -234,14 +234,14 @@ def test_templates_blocks_rules() -> None:
 def test_versions_are_consistent() -> None:
     root = Path(__file__).resolve().parents[1]
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
-    iss = (root / "installer" / "Uebersichten-Ersteller.iss").read_text(encoding="utf-8-sig")
+    iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "2.2.0"
+    assert appstate.VERSION == version == "2.3.0"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]
     assert f"Version {version}" in readme
-    assert f"Uebersichten-Ersteller-Setup-{version}.exe" in readme
+    assert f"PDF-Tool-Setup-{version}.exe" in readme
     assert not (root / "installer" / "main.go").exists()
     assert not (root / "installer" / "go.mod").exists()
     # Die aktuelle Version steht nirgends hart codiert – weder im App-Code noch auf der Downloadseite
@@ -251,7 +251,41 @@ def test_versions_are_consistent() -> None:
     seite = (root.parent / "src" / "components" / "landing-page.tsx").read_text(encoding="utf-8")
     assert "windows-app/VERSION?raw" in seite and version not in seite
     haupt = (root.parent / "README.md").read_text(encoding="utf-8")
-    assert f"Übersichten-Ersteller {version}" in haupt
+    assert f"PDF Tool {version}" in haupt
+    assert (root / "release-notes" / f"{version}.md").is_file()
+
+
+# SHA-256 des Hottgenroth-Logos der Vertragsübersichten (Dokument-Branding, kein App-Branding)
+HOTT_LOGO_SHA256 = "a1564c62fe01caa4cb041d8178578da051449d87db187b3cd7de2b667d202c5d"
+
+
+def test_branding_is_consistent() -> None:
+    import hashlib
+
+    from ui import windows
+
+    root = Path(__file__).resolve().parents[1]
+    iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
+    assert not (root / "installer" / "Uebersichten-Ersteller.iss").exists()
+    assert '#define AppName        "PDF Tool"' in iss
+    # Die AppId bleibt – ein Update vom Übersichten-Ersteller erzeugt keinen zweiten App-Eintrag.
+    assert '#define AppGuid        "59C40061-D5E5-446D-ACB4-E077D3C71E1A"' in iss
+    assert "OutputBaseFilename=PDF-Tool-Setup-{#AppVersion}" in iss
+    assert f'#define AppUserModelID "{windows.APP_USER_MODEL_ID}"' in iss
+    assert f'#define AppMutexName   "{windows.APP_MUTEX}"' in iss
+    assert "AppMutex={#AppMutexName},{#OldMutexName}" in iss  # läuft noch die alte App?
+    assert appstate.APP_NAME == "PDF Tool" and appstate.DATA_FOLDER == "PDF-Tool"
+    assert appstate.LEGACY_DATA_FOLDER == "Uebersichten-Ersteller"
+    # Alte Produktnamen stehen nur noch dort, wo die Vorversion übernommen wird.
+    for datei in (root / "app").rglob("*.py"):
+        text = datei.read_text(encoding="utf-8")
+        for alt in ("PDF Multi Tool", "Vertragsübersichten-Ersteller", "VertraView"):
+            assert alt not in text, datei
+        if datei.name != "appstate.py":
+            assert "Übersichten-Ersteller" not in text and "Uebersichten-Ersteller" not in text, datei
+    # Das Logo in den erzeugten Vertragsübersichten ist Dokument-Branding und bleibt unverändert.
+    assert appstate.DEFAULT_LOGO.name == "hott_logo_final.png"
+    assert hashlib.sha256(appstate.DEFAULT_LOGO.read_bytes()).hexdigest() == HOTT_LOGO_SHA256
 
 
 # --- Farben und Bewegung -------------------------------------------------------------------

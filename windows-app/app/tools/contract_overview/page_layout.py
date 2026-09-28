@@ -1,4 +1,5 @@
-"""Seite »Darstellung«: Vorlagen, PDF-Einstellungen, Kopf- und Fußzeile, Zyklus-Regeln."""
+"""Vertragsübersichten – Ansicht »Darstellung«: Vorlagen, PDF-Einstellungen, Kopf- und
+Fußzeile, Zyklus-Regeln und Verlauf."""
 
 from __future__ import annotations
 
@@ -7,14 +8,14 @@ from typing import TYPE_CHECKING
 
 from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE
 
-from .. import icons
-from ..components import ResponsiveColumns, field_label
-from ..context import ctx
-from ..inputs import ComboBox, TextField
-from ..navigation import Page
-from ..richtext import RichTextEditor
-from ..theme import px
-from ..widgets import Button, Card, FlowRow, IconButton, InfoBar, RadioGroup, RoundedFrame, Text, frame
+from ui import icons
+from ui.components import ResponsiveColumns, SelectorBar, SettingsCard, field_label
+from ui.context import ctx
+from ui.inputs import ComboBox, TextField
+from ui.navigation import Page
+from ui.richtext import RichTextEditor
+from ui.theme import px
+from ui.widgets import Button, Card, FlowRow, IconButton, InfoBar, RadioGroup, RoundedFrame, Text, frame
 
 if TYPE_CHECKING:
     from vertragdesk import App
@@ -30,8 +31,12 @@ def _number(value: str) -> bool:
 
 
 def build(app: "App", host) -> Page:
+    from .page_create import TITLE, VIEWS
+
     ui = app.ui
-    page = Page(host, "Darstellung", "Vorlagen, Layout der PDF sowie Kopf- und Fußzeile")
+    page = Page(host, TITLE, "Vorlagen, Layout der PDF sowie Kopf- und Fußzeile.")
+    ui.selector_layout = SelectorBar(page.content, VIEWS, "layout", lambda key: app.nav.navigate(key))
+    page.add_section(ui.selector_layout, fill="none", anchor="w", pady=(0, px(16)))
 
     # Vorlagen ------------------------------------------------------------------
     vorlagen = Card(page.content, "Vorlagen", icons.LIBRARY, "Speichert Logo, Format, Dateiname, Kopfzeile, Fußzeile und Zyklus-Regeln unter einem Namen.")
@@ -151,6 +156,13 @@ def build(app: "App", host) -> Page:
     actions.add(Button(actions, "Regel speichern", app.add_regel, icon=icons.ADD, kind="accent"))
     ui.regeln_info = InfoBar(body)
     ui.regeln_info.pack(fill="x", pady=(px(8), 0))
+
+    # Verlauf (bis 2.2 unter »Einstellungen«) ------------------------------------------
+    history = SettingsCard(page.content, icons.HISTORY, "Verlauf löschen", "Entfernt zuletzt verwendete Kunden und zuletzt erstellte PDFs aus den Listen. Dateien bleiben erhalten.")
+    page.add_section(history, pady=(px(12), 0))
+    Button(history.control, "Löschen", app.clear_history, icon=icons.DELETE).pack()
+    ui.daten_info = InfoBar(page.content)
+    page.add_section(ui.daten_info, pady=(px(8), 0))
 
     app.reload_vorlagen()
     app.reload_bausteine()

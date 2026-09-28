@@ -3,7 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Übersichten-Ersteller";
+const APP_NAME = "PDF Tool";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,7 +15,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Übersichten-Ersteller: Windows-App für Vertragsübersichten. Setup laden, Kundennummer eintragen, PDF lokal speichern.",
+          "PDF Tool: Windows-App mit Werkzeugen für PDF-Dateien – Vertragsübersichten erstellen und beschädigte PDFs reparieren. Alles lokal auf Ihrem PC.",
       },
     ],
     links: [

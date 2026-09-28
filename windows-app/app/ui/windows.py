@@ -724,8 +724,8 @@ class DropTarget:
         return files
 
 
-APP_USER_MODEL_ID = "Jerico.UebersichtenErsteller"  # muss zur AppUserModelID der Verknüpfungen (Inno Setup) passen
-APP_MUTEX = "Jerico.UebersichtenErsteller.Instanz"  # Inno Setup (AppMutex) erkennt damit eine laufende App
+APP_USER_MODEL_ID = "Jerico.PDFTool"  # muss zur AppUserModelID der Verknüpfungen (Inno Setup) passen
+APP_MUTEX = "Jerico.PDFTool.Instanz"  # Inno Setup (AppMutex) erkennt damit eine laufende App
 _mutex_handle = None
 
 

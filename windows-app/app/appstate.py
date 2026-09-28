@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
 import tempfile
+import time
+import zipfile
 from pathlib import Path
 
 from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE, RichText
@@ -15,9 +18,12 @@ INSTALL_DIR = APP_DIR.parent
 ASSETS_DIR = INSTALL_DIR / "assets"
 DEFAULT_LOGO = ASSETS_DIR / "hott_logo_final.png"
 ICON_FILE = ASSETS_DIR / "icon.ico"
-APP_NAME = "Übersichten-Ersteller"
+APP_NAME = "PDF Tool"
 DEVELOPER = "Jerico"
-DATA_FOLDER = "Uebersichten-Ersteller"
+DATA_FOLDER = "PDF-Tool"
+# Datenordner bis Version 2.2 (»Übersichten-Ersteller«) – wird beim ersten Start übernommen
+LEGACY_DATA_FOLDER = "Uebersichten-Ersteller"
+MIGRATION_MARKER = "migration.json"
 
 
 def _read_version() -> str:
@@ -29,19 +35,103 @@ def _read_version() -> str:
     return text or "0.0.0"
 
 
+def _file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def migrate_user_data(legacy: Path, target: Path, version: str = "") -> bool:
+    """Übernimmt die Daten des Übersichten-Erstellers (bis 2.2) einmalig und verlustfrei.
+
+    1. Nur wenn der neue Ordner noch keine Einstellungen hat und keine Übernahme vermerkt ist.
+    2. Sicherung: vollständiges ZIP des alten Ordners im neuen Ordner
+       (``migration-backup-<Version>.zip``).
+    3. Alle Dateien kopieren (Zeitstempel bleiben), danach Größe und SHA-256 jeder Datei
+       sowie die Einstellungen (JSON) vergleichen.
+    4. Vermerk ``migration.json`` schreiben. Der alte Ordner bleibt unverändert erhalten.
+
+    Schlägt ein Schritt fehl, werden nur die neu kopierten Dateien entfernt – die Sicherung
+    und der alte Ordner bleiben. Rückgabe: ``True``, wenn die Daten übernommen wurden.
+    """
+    legacy, target = Path(legacy), Path(target)
+    if not legacy.is_dir() or (target / "gui-config.json").is_file() or (target / MIGRATION_MARKER).is_file():
+        return False
+    files = [path for path in legacy.rglob("*") if path.is_file()]
+    if not files:
+        return False
+    old_config = legacy / "gui-config.json"
+    seen = ""
+    try:
+        seen = str(json.loads(old_config.read_text(encoding="utf-8")).get("gesehen") or "")
+    except (OSError, ValueError, AttributeError):
+        pass
+    label = seen if seen and all(part.isdigit() for part in seen.split(".")) else "alt"
+    created: list[Path] = []
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        backup = target / f"migration-backup-{label}.zip"
+        with zipfile.ZipFile(backup, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path in files:
+                archive.write(path, path.relative_to(legacy).as_posix())
+        with zipfile.ZipFile(backup) as archive:
+            if archive.testzip() is not None or len(archive.namelist()) != len(files):
+                raise OSError("Sicherung unvollständig")
+        for path in files:
+            destination = target / path.relative_to(legacy)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            existed = destination.exists()
+            shutil.copy2(path, destination)
+            if not existed:
+                created.append(destination)
+        for path in files:
+            destination = target / path.relative_to(legacy)
+            if destination.stat().st_size != path.stat().st_size or _file_hash(destination) != _file_hash(path):
+                raise OSError(f"Kopie weicht ab: {path.name}")
+        if old_config.is_file():
+            if json.loads((target / "gui-config.json").read_text(encoding="utf-8")) != json.loads(old_config.read_text(encoding="utf-8")):
+                raise OSError("Einstellungen weichen ab")
+        marker = {
+            "von": str(legacy),
+            "am": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "version": version,
+            "zuletzt_gesehen": seen,
+            "dateien": len(files),
+            "sicherung": backup.name,
+        }
+        (target / MIGRATION_MARKER).write_text(json.dumps(marker, ensure_ascii=False, indent=2), encoding="utf-8")
+        return True
+    except (OSError, ValueError, zipfile.BadZipFile):
+        for path in created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        return False
+
+
 def data_dir() -> Path:
     """Benutzerdaten liegen getrennt von den Programmdateien.
 
-    Windows: %APPDATA%\\Uebersichten-Ersteller – bleibt bei Updates und
-    Neuinstallationen unberührt. UE_DATA_DIR überschreibt den Ort (Tests).
+    Windows: %APPDATA%\\PDF-Tool – bleibt bei Updates und Neuinstallationen unberührt.
+    Daten der Vorversion (%APPDATA%\\Uebersichten-Ersteller) werden beim ersten Start
+    übernommen; misslingt das, arbeitet die App weiter mit dem alten Ordner.
+    UE_DATA_DIR überschreibt den Ort (Tests).
     """
     override = os.environ.get("UE_DATA_DIR")
     if override:
         return Path(override)
     base = os.environ.get("APPDATA")
-    if base:
-        return Path(base) / DATA_FOLDER
-    return Path.home() / ".config" / DATA_FOLDER
+    root = Path(base) if base else Path.home() / ".config"
+    target = root / DATA_FOLDER
+    legacy = root / LEGACY_DATA_FOLDER
+    if (target / "gui-config.json").is_file() or (target / MIGRATION_MARKER).is_file() or not legacy.is_dir():
+        return target
+    if migrate_user_data(legacy, target, _read_version()):
+        return target
+    return legacy if (legacy / "gui-config.json").is_file() else target
 
 
 VERSION = _read_version()
@@ -51,12 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Fettschrift aus der Excel-Liste wird jetzt zellgenau in die PDF übernommen.",
-    "Kopf- und Fußzeile lassen sich formatieren: Schriftart, Größe, Farbe, fett, kursiv, unterstrichen und Ausrichtung je Absatz.",
-    "Übersichtlichere Excel-Prüfung: aktive und ausgeblendete Verträge, Rechnungsempfänger und fehlende Spalten auf einen Blick.",
-    "»Bereit zum Erstellen« zeigt schon vor dem Klick, was noch fehlt.",
-    "Nach dem Erstellen: Öffnen, Ordner öffnen, Pfad kopieren oder direkt eine neue Übersicht beginnen.",
-    "Eingaben werden automatisch gespeichert; zahlreiche Verbesserungen bei Speicherung und Stabilität.",
+    "Die App heißt jetzt PDF Tool – mit einer Startseite für alle Werkzeuge.",
+    "Vertragsübersichten sind ein eigenes Werkzeug. Alle Funktionen, Vorlagen, Textbausteine, Regeln und der Kundenverlauf bleiben erhalten.",
+    "Neu: »PDF reparieren« analysiert beschädigte PDF-Dateien und überträgt lesbare Inhalte in eine neue PDF.",
+    "Die Originaldatei wird nie überschrieben; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
+    "Verschlüsselte PDFs lassen sich mit dem richtigen Passwort reparieren – das Passwort wird nicht gespeichert.",
+    "Alle Dateien werden vollständig lokal auf diesem PC verarbeitet.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]

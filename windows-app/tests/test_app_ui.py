@@ -17,19 +17,19 @@ pytestmark = pytest.mark.skipif(not display_available(), reason="kein Display ve
 def test_start_and_version(app) -> None:
     import appstate
 
-    assert app.title() == "Übersichten-Ersteller"
-    assert app.version == appstate.VERSION == "2.2.0"
-    assert app.nav.current == "create"
+    assert app.title() == appstate.APP_NAME == "PDF Tool"
+    assert app.version == appstate.VERSION == "2.3.0"
+    assert app.nav.current == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert app.ui.btn_pdf.text() == "PDF erstellen"
 
 
 def test_navigation_all_pages_and_rapid_switching(app) -> None:
-    for key in ("layout", "settings", "create"):
+    for key in ("layout", "settings", "create", "repair", "home"):
         app.nav.navigate(key)
         pump(app, 0.4)
         assert app.nav.current == key
     for _ in range(4):
-        for key in ("layout", "settings", "create", "settings", "layout"):
+        for key in ("layout", "settings", "create", "repair", "home", "settings", "layout"):
             app.nav.navigate(key)
             app.update()
     pump(app, 0.8)
@@ -210,13 +210,15 @@ def test_dialogs_and_keyboard(app) -> None:
 
 def test_toggle_switch_and_combobox_keyboard(app) -> None:
     before = app.var_open.get()
-    app.nav.navigate("settings")
+    app.nav.navigate("create")  # werkzeugbezogene Einstellung: im Werkzeug, nicht unter »Einstellungen«
     pump(app, 0.3)
-    toggles = [w for w in _descendants(app.nav.pages["settings"]) if w.__class__.__name__ == "ToggleSwitch"]
+    toggles = [w for w in _descendants(app.nav.pages["create"]) if w.__class__.__name__ == "ToggleSwitch"]
     target = next(t for t in toggles if t.var is app.var_open)
     target.toggle()
     pump(app, 0.3)
     assert app.var_open.get() is (not before)
+    app.nav.navigate("settings")
+    pump(app, 0.3)
     combo = app.ui.theme_combo
     combo.focus_set()
     combo._step(1)
@@ -412,7 +414,7 @@ def test_pdf_uses_visible_footer(app, excel_file: Path, tmp_path: Path) -> None:
 def test_all_pages_prepared_at_startup(app) -> None:
     from ui.navigation import PARK_X
 
-    assert set(app.nav.pages) == {"create", "layout", "settings"}
+    assert set(app.nav.pages) == {"home", "create", "layout", "repair", "settings"}
     assert app.ctx.ready and not app.ctx.anim.is_resizing
     host_w = app.nav.host.winfo_width()
     for key, page in app.nav.pages.items():
@@ -435,7 +437,7 @@ def test_navigation_shows_finished_page_without_rebuild(app) -> None:
 
     tk.Widget.__init__ = counting
     try:
-        for key in ("layout", "settings", "create", "settings"):
+        for key in ("layout", "settings", "create", "repair", "home", "settings"):
             app.nav.navigate(key)
             page = app.nav.pages[key]
             # direkt nach dem Wechsel: Seite liegt vorn und ist fertig angeordnet
