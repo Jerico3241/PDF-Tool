@@ -1,4 +1,4 @@
-"""Baut die Windows-Setup-Datei des Übersichten-Erstellers mit Inno Setup.
+"""Baut die Windows-Setup-Datei von PDF Tool mit Inno Setup.
 
     python windows-app/build.py
 
@@ -12,7 +12,7 @@ Ablauf:
  7. Inno Setup (ISCC.exe) aufrufen
  8. Setup prüfen, SHA-256 schreiben, optional signieren
 
-Ergebnis:  windows-app/dist/Uebersichten-Ersteller-Setup-<Version>.exe (+ .sha256)
+Ergebnis:  windows-app/dist/PDF-Tool-Setup-<Version>.exe (+ .sha256)
 
 Voraussetzungen (Windows):
   * Python 3.13 (64 Bit) mit pip und Pillow – dieselbe Hauptversion wie die
@@ -48,7 +48,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 APP = ROOT / "app"
 ASSETS = ROOT / "assets"
-ISS = ROOT / "installer" / "Uebersichten-Ersteller.iss"
+ISS = ROOT / "installer" / "PDF-Tool.iss"
+SETUP_PREFIX = "PDF-Tool-Setup"
 CACHE = ROOT / ".cache"
 BUILD = ROOT / "build"
 DIST = ROOT / "dist"
@@ -78,6 +79,7 @@ SITE_REMOVE_SUFFIXES = {".pyi", ".pxd", ".pyx", ".c", ".h", ".cpp", ".lib", ".a"
 REQUIRED_PAYLOAD = [
     "VERSION",
     "README.txt",
+    "THIRD_PARTY_LICENSES.md",
     "runtime/pythonw.exe",
     "runtime/python313.dll",
     "runtime/DLLs/_tkinter.pyd",
@@ -91,6 +93,10 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/xlrd/__init__.py",
     "runtime/Lib/site-packages/reportlab/__init__.py",
     "runtime/Lib/site-packages/PIL/__init__.py",
+    "runtime/Lib/site-packages/pikepdf/__init__.py",
+    "runtime/Lib/site-packages/packaging/__init__.py",
+    "runtime/Lib/site-packages/pypdfium2/__init__.py",
+    "runtime/Lib/site-packages/pypdfium2_raw/pdfium.dll",
     "app/start.py",
     "app/vertragdesk.py",
     "app/engine.py",
@@ -100,8 +106,24 @@ REQUIRED_PAYLOAD = [
     "app/pdffonts.py",
     "app/ui/navigation.py",
     "app/ui/richtext.py",
+    "app/ui/pages/home.py",
+    "app/tools/__init__.py",
+    "app/tools/registry.py",
+    "app/tools/contract_overview/controller.py",
+    "app/tools/contract_overview/page_create.py",
+    "app/tools/contract_overview/page_layout.py",
+    "app/tools/pdf_repair/models.py",
+    "app/tools/pdf_repair/engine.py",
+    "app/tools/pdf_repair/process.py",
+    "app/tools/pdf_repair/page.py",
     "assets/icon.ico",
     "assets/hott_logo_final.png",
+]
+# Native Bibliotheken der PDF-Engines (Dateinamen enthalten eine Prüfsumme)
+REQUIRED_NATIVE = [
+    "runtime/Lib/site-packages/pikepdf/_core.cp313-win_amd64.pyd",
+    "runtime/Lib/site-packages/pikepdf.libs/qpdf*.dll",
+    "runtime/Lib/site-packages/pikepdf.libs/msvcp140*.dll",
 ]
 
 
@@ -269,6 +291,7 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copytree(APP, PAYLOAD / "app", ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
     shutil.copytree(ASSETS, PAYLOAD / "assets")
     shutil.copy2(ROOT / "README.txt", PAYLOAD / "README.txt")
+    shutil.copy2(ROOT.parent / "THIRD_PARTY_LICENSES.md", PAYLOAD / "THIRD_PARTY_LICENSES.md")
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
 
     if compile_pyc:
@@ -281,6 +304,7 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
             log(f"Hinweis: kein Python {PYTHON_VERSION.rsplit('.', 1)[0]} gefunden – .pyc entstehen beim ersten Start.")
 
     missing = [rel for rel in REQUIRED_PAYLOAD if not (PAYLOAD / rel).is_file()]
+    missing += [pattern for pattern in REQUIRED_NATIVE if not any(path.is_file() for path in PAYLOAD.glob(pattern))]
     if missing:
         fail("Im Paket fehlen: " + ", ".join(missing))
 
@@ -357,7 +381,7 @@ def run_iscc(iscc: list[str], version: str) -> Path:
     cmd = iscc + ["/Q"] + [f"/D{key}={value}" for key, value in defines.items()] + [to_iscc_path(ISS, iscc)]
     log("Inno Setup: " + " ".join(cmd[-1:]))
     subprocess.check_call(cmd)
-    return DIST / f"Uebersichten-Ersteller-Setup-{version}.exe"
+    return DIST / f"{SETUP_PREFIX}-{version}.exe"
 
 
 def validate(setup: Path, version: str) -> None:
@@ -378,7 +402,7 @@ def validate(setup: Path, version: str) -> None:
     found = f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}"
     if found != version:
         fail(f"Dateiversion der Setup-Datei ist {found}, erwartet {version}")
-    if setup.name != f"Uebersichten-Ersteller-Setup-{version}.exe":
+    if setup.name != f"{SETUP_PREFIX}-{version}.exe":
         fail(f"Unerwarteter Dateiname: {setup.name}")
 
 
@@ -393,13 +417,13 @@ def sign(setup: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Baut Uebersichten-Ersteller-Setup-<Version>.exe mit Inno Setup.")
+    parser = argparse.ArgumentParser(description="Baut PDF-Tool-Setup-<Version>.exe mit Inno Setup.")
     parser.add_argument("--no-compile", action="store_true", help="keine .pyc-Dateien vorkompilieren")
     parser.add_argument("--reuse-payload", action="store_true", help="vorhandenes build/payload wiederverwenden (nur Installer neu bauen)")
     args = parser.parse_args()
 
     version = read_version()
-    log(f"Übersichten-Ersteller {version}")
+    log(f"PDF Tool {version}")
     iscc = find_iscc()
     remove(DIST)
     if not (args.reuse_payload and PAYLOAD.is_dir()):

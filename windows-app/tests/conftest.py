@@ -18,6 +18,12 @@ APP_DIR = Path(__file__).resolve().parents[1] / "app"
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
+# Tests schreiben nie in den echten Datenordner (Einstellungen, Protokolle, Datenübernahme).
+if not os.environ.get("UE_DATA_DIR"):
+    import tempfile
+
+    os.environ["UE_DATA_DIR"] = tempfile.mkdtemp(prefix="pdf-tool-testdaten-")
+
 COLUMNS = [
     "Vertrag-Nr.",
     "Beginnt am",

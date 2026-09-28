@@ -296,3 +296,213 @@ class ResponsiveColumns(tk.Frame):
 
 def card(master, title: str, icon: str | None = None, description: str | None = None) -> Card:
     return Card(master, title=title, icon=icon, description=description)
+
+
+class SelectorBar(tk.Canvas):
+    """Umschalter zwischen Ansichten einer Seite (WinUI 3 »SelectorBar«).
+
+    Textelemente mit Hover-Fläche; das gewählte Element trägt einen kurzen Balken in
+    Akzentfarbe. Bedienbar mit Maus sowie Pfeiltasten, Eingabe und Leertaste.
+    """
+
+    ITEM_HEIGHT = 36
+    PAD = 12
+
+    def __init__(self, master, items: list[tuple[str, str]], selected: str, command: Callable[[str], None]) -> None:
+        c = ctx()
+        super().__init__(master, height=px(self.ITEM_HEIGHT) + px(4), highlightthickness=0, bd=0, takefocus=1)
+        self.surface_role = surface_of(master)
+        self.items = list(items)
+        self.selected = selected
+        self.command = command
+        self.hover: str | None = None
+        self.pressed: str | None = None
+        self.focus_key = selected
+        self._texts = {key: self.create_text(0, 0, text=label, anchor="center") for key, label in self.items}
+        self._overlays = {key: self.create_image(0, 0, anchor="nw", state="hidden") for key, _label in self.items}
+        self._pill = self.create_image(0, 0, anchor="n", state="hidden")
+        self._focus = self.create_image(0, 0, anchor="nw", state="hidden")
+        self._rects: dict[str, tuple[int, int, int, int]] = {}
+        self.bind("<Motion>", self._motion)
+        self.bind("<Leave>", self._leave)
+        self.bind("<ButtonPress-1>", self._press)
+        self.bind("<ButtonRelease-1>", self._release)
+        self.bind("<FocusIn>", lambda _e: self.redraw())
+        self.bind("<FocusOut>", lambda _e: self.redraw())
+        for key, delta in (("Left", -1), ("Right", 1)):
+            self.bind(f"<KeyPress-{key}>", lambda _e, d=delta: self._move(d))
+        for key in ("Return", "space", "KP_Enter"):
+            self.bind(f"<KeyPress-{key}>", lambda _e: self._activate(self.focus_key))
+        c.theme.subscribe(self.redraw, owner=self)
+        c.on_focus_mode(self, self.redraw)
+        self._layout()
+        self.redraw()
+
+    def _layout(self) -> None:
+        font = ctx().fonts.body
+        x = 0
+        for key, label in self.items:
+            width = font.measure(label) + 2 * px(self.PAD)
+            self._rects[key] = (x, px(2), x + width, px(2) + px(self.ITEM_HEIGHT))
+            x += width + px(4)
+        self.configure(width=max(1, x - px(4)))
+
+    def _hit(self, x: int, y: int) -> str | None:
+        for key, (x0, y0, x1, y1) in self._rects.items():
+            if x0 <= x < x1 and y0 <= y < y1:
+                return key
+        return None
+
+    def _motion(self, event) -> None:
+        key = self._hit(event.x, event.y)
+        if key != self.hover:
+            self.hover = key
+            self.configure(cursor="hand2" if key else "")
+            self.redraw()
+
+    def _leave(self, _event=None) -> None:
+        self.hover = self.pressed = None
+        self.redraw()
+
+    def _press(self, event) -> None:
+        self.pressed = self._hit(event.x, event.y)
+        self.redraw()
+
+    def _release(self, event) -> None:
+        key = self._hit(event.x, event.y)
+        pressed, self.pressed = self.pressed, None
+        if key and key == pressed:
+            self._activate(key)
+        self.redraw()
+
+    def _move(self, delta: int) -> str:
+        keys = [key for key, _label in self.items]
+        index = keys.index(self.focus_key) if self.focus_key in keys else 0
+        self.focus_key = keys[(index + delta) % len(keys)]
+        self._activate(self.focus_key)
+        return "break"
+
+    def _activate(self, key: str | None) -> str:
+        if key and key != self.selected:
+            self.command(key)
+        return "break"
+
+    def select(self, key: str) -> None:
+        self.selected = self.focus_key = key
+        self.redraw()
+
+    def redraw(self) -> None:
+        c = ctx()
+        pal = c.pal
+        try:
+            self.configure(bg=surface_color(self.master))
+            keyboard = c.keyboard_mode and self.focus_get() is self
+        except (tk.TclError, KeyError):
+            keyboard = False
+        radius = px(4)
+        for key, (x0, y0, x1, y1) in self._rects.items():
+            active = key == self.selected
+            color = pal.text if (active or key == self.hover) else pal.text2
+            self.coords(self._texts[key], (x0 + x1) / 2, (y0 + y1) / 2 - px(1))
+            self.itemconfigure(self._texts[key], fill=color, font=c.fonts.body)
+            if key == self.hover or key == self.pressed:
+                alpha = pal.subtle_pressed_alpha if key == self.pressed else pal.subtle_hover_alpha
+                self.itemconfigure(self._overlays[key], image=c.images.box(x1 - x0, y1 - y0, radius, pal.subtle_color, alpha=alpha), state="normal")
+                self.coords(self._overlays[key], x0, y0)
+            else:
+                self.itemconfigure(self._overlays[key], state="hidden")
+        if self.selected in self._rects:
+            x0, _y0, x1, y1 = self._rects[self.selected]
+            pill = c.images.box(px(16), px(3), px(1.5), pal.accent)
+            self.coords(self._pill, (x0 + x1) / 2, y1 - px(3))
+            self.itemconfigure(self._pill, image=pill, state="normal")
+        if keyboard and self.focus_key in self._rects:
+            x0, y0, x1, y1 = self._rects[self.focus_key]
+            ring = c.images.ring(x1 - x0, y1 - y0, radius + px(1), pal.focus_outer, pal.focus_inner)
+            self.coords(self._focus, x0, y0)
+            self.itemconfigure(self._focus, image=ring, state="normal")
+        else:
+            self.itemconfigure(self._focus, state="hidden")
+
+
+class ToolCard(RoundedFrame):
+    """Karte eines Werkzeugs auf der Startseite: Symbol, Titel, Beschreibung, »Öffnen«."""
+
+    def __init__(self, master, glyph: str, title: str, description: str, command: Callable[[], None], shortcut: str = "") -> None:
+        from .widgets import Button
+
+        super().__init__(master, fill="card", stroke="card_stroke")
+        c = ctx()
+        self._command = command
+        body = frame(self)
+        body.pack(fill="both", expand=True, padx=px(20), pady=px(20))
+        top = frame(body)
+        top.pack(fill="x")
+        if c.icons_available:
+            tile = tk.Canvas(top, width=px(48), height=px(48), highlightthickness=0, bd=0)
+            tile.pack(side="left", anchor="n")
+            self._tile = tile
+            self._tile_bg = tile.create_image(0, 0, anchor="nw")
+            self._tile_glyph = tile.create_text(px(24), px(24), text=glyph, anchor="center")
+        else:
+            self._tile = None
+        texts = frame(top)
+        texts.pack(side="left", fill="x", expand=True, padx=(px(16) if self._tile else 0, 0))
+        Text(texts, title, style="subtitle").pack(anchor="w")
+        Text(texts, description, style="body", color="text2", wrap=True).pack(anchor="w", fill="x", pady=(px(4), 0))
+        bottom = frame(body)
+        bottom.pack(fill="x", pady=(px(16), 0))
+        self.button = Button(bottom, "Öffnen", command, kind="accent", min_width=120, tooltip=f"{title} öffnen" + (f" ({shortcut})" if shortcut else ""))
+        self.button.pack(side="left")
+        if shortcut:
+            Text(bottom, shortcut, style="caption", color="text3").pack(side="right")
+        for widget in (self, body, top, texts):
+            widget.bind("<Button-1>", self._clicked, add="+")
+        c.theme.subscribe(self._paint_tile, owner=self)
+        self._paint_tile()
+        self.lift_corners()
+
+    def _clicked(self, event) -> None:
+        if event.widget is not self.button:
+            self._command()
+
+    def _paint_tile(self) -> None:
+        if self._tile is None:
+            return
+        c = ctx()
+        pal = c.pal
+        self._tile.configure(bg=pal.card)
+        self._tile_img = c.images.box(px(48), px(48), px(8), pal.accent)
+        self._tile.itemconfigure(self._tile_bg, image=self._tile_img)
+        self._tile.itemconfigure(self._tile_glyph, fill=pal.on_accent, font=c.fonts.icon_large or c.fonts.icon)
+
+
+class DropZone(RoundedFrame):
+    """Großer Ablagebereich für eine Datei: Symbol, Hinweis, Schaltfläche.
+
+    ``set_highlight(True)`` hebt den Bereich beim Hineinziehen hervor.
+    """
+
+    def __init__(self, master, glyph: str, title: str, hint: str, button_text: str, command: Callable[[], None], button_icon: str | None = None) -> None:
+        from .widgets import Button
+
+        super().__init__(master, fill="card", stroke="card_stroke")
+        c = ctx()
+        body = frame(self)
+        body.pack(fill="both", expand=True, padx=px(24), pady=px(28))
+        if c.icons_available:
+            Icon(body, glyph, color="accent_text", size="icon_large").pack(pady=(0, px(10)))
+        self.title = Text(body, title, style="body_strong", anchor="center", justify="center")
+        self.title.pack()
+        self.hint = Text(body, hint, style="caption", color="text2", anchor="center", justify="center", wrap=True)
+        self.hint.pack(fill="x", pady=(px(4), px(14)))
+        self.button = Button(body, button_text, command, icon=button_icon, min_width=160)
+        self.button.pack()
+        self.highlighted = False
+        self.lift_corners()
+
+    def set_highlight(self, on: bool) -> None:
+        if on == self.highlighted:
+            return
+        self.highlighted = on
+        self.set_fill("card", "accent" if on else "card_stroke")

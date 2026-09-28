@@ -1,25 +1,30 @@
-"""Seite »Erstellen«: Kundendaten, Dateien, Excel-Prüfung, Bereitschaft und PDF-Erstellung."""
+"""Vertragsübersichten – Ansicht »Übersicht erstellen«: Kundendaten, Dateien, Excel-Prüfung,
+Bereitschaft und PDF-Erstellung."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .. import icons
-from ..components import FactList, FileRow, ResponsiveColumns, StatusLine, field_label
-from ..inputs import ComboBox, TextField
-from ..navigation import Page
-from ..theme import px
-from ..widgets import Button, Card, Collapsible, Divider, FlowRow, IconButton, InfoBar, Text, ToggleSwitch, frame
+from ui import icons
+from ui.components import FactList, FileRow, ResponsiveColumns, SelectorBar, StatusLine, field_label
+from ui.inputs import ComboBox, TextField
+from ui.navigation import Page
+from ui.theme import px
+from ui.widgets import Button, Card, Collapsible, Divider, FlowRow, IconButton, InfoBar, Text, ToggleSwitch, frame
 
 if TYPE_CHECKING:
     from vertragdesk import App
 
+TITLE = "Vertragsübersichten"
+VIEWS = [("create", "Übersicht erstellen"), ("layout", "Darstellung")]
 EXCEL_EMPTY = "Excel-Datei wählen oder in das Fenster ziehen – sie wird sofort geprüft."
 
 
 def build(app: "App", host) -> Page:
     ui = app.ui
-    page = Page(host, "Vertragsübersicht", "Vertragsübersichten aus Excel erstellen")
+    page = Page(host, TITLE, "Kundendaten und Excel-Liste – daraus entsteht die PDF.")
+    ui.selector_create = SelectorBar(page.content, VIEWS, "create", lambda key: app.nav.navigate(key))
+    page.add_section(ui.selector_create, fill="none", anchor="w", pady=(0, px(16)))
 
     # Zwei Karten nebeneinander oder untereinander – entschieden zentral an den Fenster-Breakpoints.
     columns = ResponsiveColumns(page.content, central=True)

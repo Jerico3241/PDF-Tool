@@ -3,13 +3,17 @@
 Aufruf mit der zu prüfenden Laufzeit (nicht mit einem System-Python):
 
     build\\payload\\runtime\\python.exe -s windows-app\\tests\\smoke_runtime.py --app build\\payload\\app
-    %LOCALAPPDATA%\\Uebersichten-Ersteller\\runtime\\python.exe -s smoke_runtime.py --app ...\\app --ui
+    %LOCALAPPDATA%\\PDF-Tool\\runtime\\python.exe -s smoke_runtime.py --app ...\\app --ui
 
 Geprüft wird:
-1. Import aller Laufzeitmodule (tkinter, numpy, pandas, openpyxl, xlrd, reportlab, PIL)
-   und der App-Module (engine, vertragdesk, excelstyle, richtext, pdffonts)
-2. eine echte PDF: Excel mit fett formatierter Zelle und formatierter Fußzeile
-3. mit ``--ui``: Programmstart (Hauptfenster erscheint, Einstellungen werden gespeichert)
+1. Import aller Laufzeitmodule (tkinter, numpy, pandas, openpyxl, xlrd, reportlab, PIL,
+   pikepdf mit qpdf, pypdfium2 mit PDFium) und der App-Module beider Werkzeuge
+2. Vertragsübersichten: eine echte PDF aus einer Excel mit fett formatierter Zelle und
+   formatierter Fußzeile
+3. PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
+   Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen
+4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge öffnen,
+   Einstellungen werden gespeichert)
 
 Endet mit Code 0 und »OK«, sonst mit einer Fehlermeldung und Code 1.
 """
@@ -47,7 +51,7 @@ def main() -> int:
     print(f"Python {sys.version.split()[0]} · {sys.executable}")
     check(Path(sys.executable).resolve().parent.name.lower() == "runtime", "Prüfung muss mit der eingebetteten Laufzeit laufen (runtime\\python.exe)")
 
-    work = Path(tempfile.mkdtemp(prefix="ue-smoke-"))
+    work = Path(tempfile.mkdtemp(prefix="pdf-tool-smoke-"))
     # Einstellungen der Prüfung in einem eigenen Ordner (vor dem Import von appstate setzen)
     os.environ["UE_DATA_DIR"] = str(work / "daten")
     os.environ["UE_NO_ANIMATIONS"] = "1"
@@ -59,17 +63,27 @@ def main() -> int:
     import openpyxl
     import pandas
     import PIL
+    import pikepdf
+    import pypdfium2
     import reportlab
     import xlrd
 
     print(f"tkinter {tkinter.TkVersion} · numpy {numpy.__version__} · pandas {pandas.__version__} · openpyxl {openpyxl.__version__} · xlrd {xlrd.__version__} · reportlab {reportlab.Version} · Pillow {PIL.__version__}")
+    print(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__}) · pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO})")
     import engine
     import excelstyle
     import pdffonts
     import richtext
     import vertragdesk
+    from tools import registry
+    from tools.contract_overview import controller
+    from tools.pdf_repair import engine as repair_engine
+    from tools.pdf_repair import process as repair_process
+    from tools.pdf_repair.models import Condition, RepairStatus
 
-    print(f"App {vertragdesk.VERSION} · Schriften: {', '.join(pdffonts.available_families())}")
+    check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
+    check(hasattr(controller, "ContractOverviewTool"), "Werkzeug Vertragsübersichten fehlt")
+    print(f"App {vertragdesk.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
 
     # 2. PDF mit Excel-Fettschrift und formatierter Fußzeile
     from datetime import datetime
@@ -99,7 +113,37 @@ def main() -> int:
     print(f"PDF: {pdf.name} ({len(data)} Bytes)")
     check(excelstyle.SOURCE_ROW == "_source_excel_row", "Quellzeilen-Spalte unerwartet")
 
-    # 3. Programmstart
+    # 3. PDF reparieren – im eigenen Arbeitsprozess wie in der App
+    import re
+
+    folder = work / "Übersichten März"
+    folder.mkdir()
+    damaged = folder / "Vertrag beschädigt.pdf"
+    damaged.write_bytes(re.sub(rb"startxref\s+(\d+)", lambda m: b"startxref\n" + str(int(m.group(1)) + 97).encode(), data))
+    before = damaged.read_bytes()
+    job = repair_process.Job("analyze", {"path": str(damaged), "password": None})
+    events = job.wait(120)
+    results = [event[1] for event in events if event[0] == "result"]
+    check(bool(results), f"Analyse ohne Ergebnis: {events[-1:]}")
+    analysis = results[0]
+    check(analysis.condition is Condition.REPAIRABLE, f"Analyse: {analysis.condition.value}")
+    job = repair_process.Job("repair", {"path": str(damaged), "password": None, "mode": "auto", "sha256": analysis.sha256})
+    events = job.wait(120)
+    results = [event[1] for event in events if event[0] == "result"]
+    check(bool(results), f"Reparatur ohne Ergebnis: {events[-1:]}")
+    result = results[0]
+    check(result.status is RepairStatus.REPAIRED, f"Reparatur: {result.status.value} {result.error}")
+    output = repair_process.deliver(Path(result.output_path), damaged)
+    job.cleanup()
+    check(output == folder / "Vertrag beschädigt_repariert.pdf", f"Ausgabe: {output}")
+    check(damaged.read_bytes() == before, "Original wurde verändert")
+    with pikepdf.open(output) as repaired:
+        check(len(repaired.pages) == result.pages_before, "Seitenzahl der reparierten PDF stimmt nicht")
+    with pypdfium2.PdfDocument(str(output)) as second:
+        check(len(second) == result.pages_before, "PDFium liest die reparierte PDF nicht")
+    print(f"Reparatur: {output.name} ({result.method.value}, {result.pages_after} Seiten, {output.stat().st_size} Bytes)")
+
+    # 4. Programmstart
     if args.ui:
         from ui import dialogs
 
@@ -111,12 +155,21 @@ def main() -> int:
         def probe() -> None:
             shown["mapped"] = bool(app.winfo_ismapped())
             shown["page"] = app.nav.current
+            shown["title"] = app.title()
+            app.open_tool("repair")
+            app.update()
+            shown["repair"] = app.nav.current
+            app.open_tool("contracts")
+            app.update()
+            shown["contracts"] = app.nav.current
             app._on_close()
 
         app.after(3000, probe)
         app.mainloop()
         check(shown.get("mapped") is True, "Hauptfenster wurde nicht angezeigt")
-        check(shown.get("page") == "create", "Startseite fehlt")
+        check(shown.get("page") == "home", "Startseite fehlt")
+        check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
+        check(shown.get("repair") == "repair" and shown.get("contracts") == "create", "Werkzeuge lassen sich nicht öffnen")
         config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
         check(config.is_file(), "Einstellungen wurden beim Beenden nicht gespeichert")
         print(f"Programmstart: Fenster sichtbar, beendet nach {time.monotonic() - started:.1f} s")

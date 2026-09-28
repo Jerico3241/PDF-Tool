@@ -39,7 +39,7 @@ class ContentDialog:
         default: str = PRIMARY,
         danger: bool = False,
         build: Callable[[tk.Frame], None] | None = None,
-        window_title: str = "Übersichten-Ersteller",
+        window_title: str = "PDF Tool",
         icon: Path | None = None,
         width: int | None = None,
     ) -> None:

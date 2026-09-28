@@ -5,17 +5,19 @@ on:
     branches: [main]
     paths:
       - "windows-app/**"
+      - "THIRD_PARTY_LICENSES.md"
       - ".github/workflows/windows-setup.yml"
   pull_request:
     paths:
       - "windows-app/**"
+      - "THIRD_PARTY_LICENSES.md"
       - ".github/workflows/windows-setup.yml"
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       release:
-        description: "Nach bestandenen Prüfungen das Release v<Version> (»Version <Version>«) mit Setup und SHA-256 veröffentlichen"
+        description: "Nach bestandenen Prüfungen das Release v<Version> (»PDF Tool <Version>«) mit Setup und SHA-256 veröffentlichen"
         type: boolean
         default: false
 
@@ -37,13 +39,16 @@ jobs:
           architecture: x64
 
       - name: Build- und Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf xlwt
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0
 
-      - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text)
-        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py -q -p no:cacheprovider
+      - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py -q -p no:cacheprovider
+
+      - name: Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle)
+        run: python -m pytest windows-app/tests/test_pdf_repair.py -q -p no:cacheprovider
 
       - name: Tests (Oberfläche)
-        run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py -q -p no:cacheprovider
+        run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py windows-app/tests/test_app_v23.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -67,9 +72,27 @@ jobs:
         shell: pwsh
         run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName
 
+      - name: Vorversion 2.2.0 laden (Übersichten-Ersteller)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "vorversion"
+          $name = "Uebersichten-Ersteller-Setup-2.2.0.exe"
+          gh release download v2.2.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Vorversion konnte nicht geladen werden" }
+          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion stimmt nicht: $actual" }
+          "PREVIOUS_SETUP=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Update von 2.2.0 prüfen (ein App-Eintrag, Ordner, Verknüpfungen, Datenübernahme)
+        shell: pwsh
+        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP
+
       - uses: actions/upload-artifact@v4
         with:
-          name: Uebersichten-Ersteller-Setup
+          name: PDF-Tool-Setup
           path: |
             windows-app/dist/*.exe
             windows-app/dist/*.sha256
@@ -95,7 +118,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: Uebersichten-Ersteller-Setup
+          name: PDF-Tool-Setup
           path: dist
 
       - name: Tag und Release v<Version> erstellen
@@ -105,7 +128,7 @@ jobs:
           set -euo pipefail
           version="$(tr -d '[:space:]' < windows-app/VERSION)"
           tag="v${version}"
-          setup="Uebersichten-Ersteller-Setup-${version}.exe"
+          setup="PDF-Tool-Setup-${version}.exe"
           notes="windows-app/release-notes/${version}.md"
           test -f "dist/${setup}" || { echo "Setup fehlt: ${setup}" >&2; exit 1; }
           test -f "dist/${setup}.sha256" || { echo "Prüfsumme fehlt" >&2; exit 1; }
@@ -116,5 +139,5 @@ jobs:
             exit 1
           fi
           gh release create "${tag}" "dist/${setup}" "dist/${setup}.sha256" \
-            --target "${GITHUB_SHA}" --title "Version ${version}" --notes-file "${notes}" --latest
+            --target "${GITHUB_SHA}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
           gh release view "${tag}"
