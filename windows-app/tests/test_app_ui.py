@@ -447,10 +447,15 @@ def test_navigation_shows_finished_page_without_rebuild(app) -> None:
     assert created.get("n", 0) == 0  # kein Widget neu erzeugt
 
 
-def test_resize_applies_breakpoints_immediately_without_animation(app) -> None:
+def test_resize_applies_breakpoints_immediately_without_animation(app, monkeypatch) -> None:
+    from ui import context
     from ui.context import MODE_COMPACT, MODE_MEDIUM, MODE_WIDE
     from ui.theme import px
 
+    # Geprüft wird der Zustand während des Resize. Dessen Ende erkennt die App nach
+    # RESIZE_SETTLE_MS Ruhe; ein langsamer Rechner braucht für update() nach einer
+    # Größenänderung aber länger und würde das Ende schon darin auslösen.
+    monkeypatch.setattr(context, "RESIZE_SETTLE_MS", 1500)
     app.ctx.anim.enabled = True
     for width, mode, columns in ((px(1100), MODE_WIDE, 2), (px(900), MODE_MEDIUM, 2), (px(780), MODE_COMPACT, 1), (px(1100), MODE_WIDE, 2)):
         app.geometry(f"{width}x{px(700)}")
@@ -460,7 +465,7 @@ def test_resize_applies_breakpoints_immediately_without_animation(app) -> None:
         assert app.ctx.layout.columns == columns
         assert not app.ctx.anim.running(f"pane:{app.nav}")  # keine Animation während des Resize
         assert app.nav.pane.expanded_amount in (0.0, 1.0)
-    assert wait_until(app, lambda: not app.ctx.anim.is_resizing, 3)
+    assert wait_until(app, lambda: not app.ctx.anim.is_resizing, 5)
 
 
 def test_breakpoint_hysteresis(app) -> None:

@@ -1524,7 +1524,8 @@ class FlowRow(tk.Frame):
         self._gap = px(gap)
         self._row_gap = px(row_gap)
         self._items: list[tuple[tk.Widget, str]] = []
-        self._last = None
+        self._placed: tuple = ()
+        self._height = 0
         self._width = 0
         self._sizes: dict[str, tuple[int, int]] = {}
         self._pending = False
@@ -1580,11 +1581,18 @@ class FlowRow(tk.Frame):
             x += w + self._gap
             line_h = max(line_h, h)
         total_h = y + line_h
+        placement = []
         for row in rows:
             row_h = max((wd.winfo_reqheight() for wd, _x, _y in row), default=0)
             for widget, wx, wy in row:
-                widget.place(x=wx, y=wy + (row_h - widget.winfo_reqheight()) // 2)
-        key = (width, total_h)
-        if key != self._last:
-            self._last = key
+                placement.append((widget, wx, wy + (row_h - widget.winfo_reqheight()) // 2))
+        # Beim Ziehen am Fensterrand ändert sich meist nur die Breite, nicht die Anordnung:
+        # dann weder neu platzieren noch eine neue Höhe anfordern.
+        placed = tuple((str(widget), wx, wy) for widget, wx, wy in placement)
+        if placed != self._placed:
+            self._placed = placed
+            for widget, wx, wy in placement:
+                widget.place(x=wx, y=wy)
+        if total_h != self._height:
+            self._height = total_h
             self.configure(height=max(1, total_h))
