@@ -5,18 +5,21 @@ from __future__ import annotations
 import tkinter as tk
 from typing import TYPE_CHECKING
 
+from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE
+
 from .. import icons
 from ..components import ResponsiveColumns, field_label
 from ..context import ctx
-from ..inputs import ComboBox, TextArea, TextField
+from ..inputs import ComboBox, TextField
 from ..navigation import Page
+from ..richtext import RichTextEditor
 from ..theme import px
 from ..widgets import Button, Card, FlowRow, IconButton, InfoBar, RadioGroup, RoundedFrame, Text, frame
 
 if TYPE_CHECKING:
     from vertragdesk import App
 
-PLACEHOLDERS = "Platzhalter: {kd}  {kunde}  {datum}"
+PLACEHOLDERS = "Platzhalter: {kd}  {kunde}  {firma}  {datum}  {datumkurz} – auch formatiert"
 
 
 def _number(value: str) -> bool:
@@ -83,11 +86,11 @@ def build(app: "App", host) -> Page:
     kopf = Card(page.content, "Kopfzeile", icons.ALIGN_LEFT, "Optional. Erscheint oben auf jeder Seite. Leer lassen, wenn keine Kopfzeile gewünscht ist.")
     page.add_section(kopf, pady=(px(12), 0))
     body = kopf.body
-    txt_kopf = TextArea(body, lines=3, on_change=app.schedule_text_save)
+    txt_kopf = RichTextEditor(body, HEADER_STYLE, HEADER_ALIGN, lines=3, on_change=app.schedule_text_save)
     txt_kopf.pack(fill="x")
-    # Mit dem geladenen Wert füllen, *bevor* das Feld unter app.ui bekannt ist: header_text()
+    # Mit dem geladenen Wert füllen, *bevor* das Feld unter app.ui bekannt ist: header_rich()
     # liefert sonst bereits den (noch leeren) Inhalt des neuen Felds.
-    txt_kopf.set(app.header_text())
+    txt_kopf.set_rich(app.header_rich())
     ui.txt_kopf = txt_kopf
     row = FlowRow(body)
     row.pack(fill="x", pady=(px(10), 0))
@@ -111,14 +114,14 @@ def build(app: "App", host) -> Page:
     cols.add(left)
     cols.add(right)
     field_label(body, "Text")
-    txt_fuss = TextArea(body, lines=5, on_change=app.schedule_text_save)
+    txt_fuss = RichTextEditor(body, FOOTER_STYLE, FOOTER_ALIGN, lines=5, on_change=app.schedule_text_save)
     txt_fuss.pack(fill="x")
-    txt_fuss.set(app.footer_text())  # geladene bzw. Standard-Fußzeile (siehe Kopfzeile)
+    txt_fuss.set_rich(app.footer_rich())  # geladene bzw. Standard-Fußzeile (siehe Kopfzeile)
     ui.txt_fuss = txt_fuss
     row = FlowRow(body)
     row.pack(fill="x", pady=(px(10), 0))
     row.add(Button(row, "Fußzeile speichern", app.save_footer, icon=icons.SAVE, kind="accent"))
-    row.add(Button(row, "Standard wiederherstellen", app.restore_default_footer, icon=icons.UNDO, tooltip="Setzt die Fußzeile auf den Standardtext der App zurück"))
+    row.add(Button(row, "Standard wiederherstellen", app.restore_default_footer, icon=icons.UNDO, tooltip="Setzt Text und Formatierung der Fußzeile auf den Standard der App zurück"))
     row.add(Button(row, "Textbaustein löschen", app.delete_baustein, icon=icons.DELETE))
     row.add(Text(row, PLACEHOLDERS, style="caption", color="text2"))
     ui.fuss_info = InfoBar(body)

@@ -1,7 +1,8 @@
-"""Übersichten-Ersteller 2.1.0 – Windows-App mit Fluent-Oberfläche.
+"""Übersichten-Ersteller – Windows-App mit Fluent-Oberfläche.
 
 Dieses Modul verbindet Oberfläche (Paket ``ui``), gespeicherte Daten
-(``appstate``) und PDF-Erzeugung (``engine``).
+(``appstate``) und PDF-Erzeugung (``engine``). Die Version steht nur in
+``windows-app/VERSION``.
 """
 
 from __future__ import annotations
@@ -25,22 +26,28 @@ from appstate import (  # noqa: E402
     DEFAULT_LOGO,
     DEFAULT_LOGO_BREITE,
     DEFAULT_TITEL,
-    DEFAULT_FOOTER,
     DEFAULT_UNTERTITEL,
     DEVELOPER,
     ERROR_LOG,
     FOOTER_EXPLICIT,
+    FOOTER_FORMAT,
+    HEADER_FORMAT,
     ICON_FILE,
     NEUERUNGEN,
     VERSION,
     State,
-    customer_footer,
+    baustein_rich,
+    customer_footer_rich,
+    customer_header_rich,
+    default_footer_rich,
     desktop_dir,
-    footer_from,
+    footer_rich_from,
+    header_rich_from,
     load_config,
     major_minor,
     save_config,
 )
+from richtext import RichText  # noqa: E402
 from ui import context as ui_context  # noqa: E402
 from ui import dialogs, icons, windows  # noqa: E402
 from ui.mica import MicaSource  # noqa: E402
@@ -124,10 +131,20 @@ class App(tk.Tk):
         self.var_regel_zyk = tk.StringVar(self, "")
         self.var_mica = tk.BooleanVar(self, bool(cfg.get("mica", True)))
         self.var_anim = tk.BooleanVar(self, animations)
-        # Ohne bewusst gespeicherte Fußzeile gilt die Standard-Fußzeile (auch nach Update).
-        self._fuss_start = footer_from(cfg)
-        self._kopf_start = str(cfg.get("kopfzeile", "") or "")
+        # Kopf- und Fußzeile samt Formatierung. Ohne bewusst gespeicherte Fußzeile gilt die
+        # Standard-Fußzeile (auch nach einem Update), ohne gespeicherte Formatierung das Standardformat.
+        self._fuss_start: RichText = footer_rich_from(cfg)
+        self._kopf_start: RichText = header_rich_from(cfg)
         self._excel_mails: list[str] = []
+        # Ergebnis der Excel-Prüfung für die gewählte Datei (``None``: Prüfung läuft bzw. keine Datei)
+        self._analysis: dict | None = None
+        self._analysis_path = ""
+        self._undo_overview: tuple[str, str, str, str] | None = None
+        # zuletzt verwendete Ordner für die Dateiauswahl
+        self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
+        self._drop: windows.DropTarget | None = None
+        self._drag_saved: tuple | None = None
+        self._ready_job = None
         self._recent_by_label: dict[str, dict] = {}
         self._pdf_by_label: dict[str, str] = {}
         self._undo_customer: tuple[str, str, str] | None = None
@@ -166,6 +183,18 @@ class App(tk.Tk):
         self.theme.subscribe(self._theme_changed)
         self.nav.navigate("create", animate=False)
 
+        # Eingaben automatisch speichern – verzögert, nicht bei jedem Tastendruck.
+        for var in (
+            self.var_firma, self.var_kd, self.var_mail, self.var_excel, self.var_logo, self.var_ziel,
+            self.var_name, self.var_format, self.var_breite, self.var_titel, self.var_untertitel,
+            self.var_open, self.var_baustein,
+        ):
+            var.trace_add("write", lambda *_a: self.schedule_save())
+        # »Bereit zum Erstellen« folgt jeder Änderung einer Pflichtangabe.
+        for var in (self.var_kd, self.var_mail, self.var_excel, self.var_logo, self.var_ziel, self.var_breite):
+            var.trace_add("write", lambda *_a: self.update_readiness())
+        self.update_readiness(now=True)
+
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         for sequence in ("<Control-Return>", "<Control-KP_Enter>"):
             self.bind_all(sequence, lambda _e: (self.start_pdf(), "break")[1])
@@ -203,6 +232,15 @@ class App(tk.Tk):
             self._mica_thread.join(0.4)
         self._apply_chrome()
         self._hook = windows.WindowHook(windows.frame_hwnd(self), lambda func: self.after(0, func), on_drop=self._on_drop, on_settings=self._on_system_settings)
+        # OLE-Ablageziel: hebt den Dateibereich schon beim Hineinziehen hervor (sonst WM_DROPFILES).
+        self._drop = windows.DropTarget(
+            windows.frame_hwnd(self),
+            lambda func: self.after(0, func),
+            accept=lambda files: bool(_excel_in(files)),
+            on_enter=self._drag_enter,
+            on_leave=self._drag_leave,
+            on_drop=self._on_drop,
+        )
         ui_context.reveal(self, self.state_zoomed if self._start_zoomed else self.deiconify, position=self._start_position, prepare=False)
         self.nav.park_hidden_pages()
         self._schedule_backdrop()
@@ -450,26 +488,65 @@ class App(tk.Tk):
                 text, full = path_caption(value, empty)
             row.set_value(text, full)
 
+    def _initial_dir(self, key: str, current: str) -> str:
+        """Startordner für die Dateiauswahl: Ordner der aktuellen Datei, sonst der zuletzt verwendete."""
+        for candidate in (current, self._dirs.get(key, "")):
+            if not candidate:
+                continue
+            path = Path(candidate)
+            folder = path if path.is_dir() else path.parent
+            if folder.is_dir():
+                return str(folder)
+        return str(desktop_dir())
+
+    def _remember_dir(self, key: str, path: str) -> None:
+        folder = str(Path(path).parent)
+        if self._dirs.get(key) != folder:
+            self._dirs[key] = folder
+            self.schedule_save()
+
     def pick_excel(self) -> None:
-        path = filedialog.askopenfilename(parent=self, title="Excel-Liste wählen", filetypes=[("Excel", "*.xlsx *.xls"), ("Alle Dateien", "*.*")])
+        path = filedialog.askopenfilename(
+            parent=self,
+            title="Excel-Liste wählen",
+            initialdir=self._initial_dir("excel", self.var_excel.get().strip()),
+            filetypes=[("Excel", "*.xlsx *.xlsm *.xls"), ("Alle Dateien", "*.*")],
+        )
         if path:
-            self.var_excel.set(path)
-            self.refresh_files()
-            self.inspect_excel(path)
+            self.use_excel(path)
+
+    def use_excel(self, path: str) -> None:
+        self._remember_dir("excel", path)
+        self.var_excel.set(path)
+        self.refresh_files()
+        self.inspect_excel(path)
 
     def pick_logo(self) -> None:
-        path = filedialog.askopenfilename(parent=self, title="Logo wählen", filetypes=[("Bilder", "*.png *.jpg *.jpeg *.webp"), ("Alle Dateien", "*.*")])
+        current = self.var_logo.get().strip()
+        if current and Path(current).resolve().parent == DEFAULT_LOGO.resolve().parent:
+            current = ""  # Standardlogo: lieber den zuletzt benutzten eigenen Ordner zeigen
+        path = filedialog.askopenfilename(
+            parent=self,
+            title="Logo wählen",
+            initialdir=self._initial_dir("logo", current),
+            filetypes=[("Bilder", "*.png *.jpg *.jpeg *.webp"), ("Alle Dateien", "*.*")],
+        )
         if path:
+            self._remember_dir("logo", path)
             self.var_logo.set(path)
             self.refresh_files()
             self.set_status(f"Logo gewählt: {Path(path).name}", "success")
 
     def pick_ziel(self) -> None:
-        path = filedialog.askdirectory(parent=self, title="Zielordner für die PDF")
+        path = filedialog.askdirectory(parent=self, title="Zielordner für die PDF", initialdir=self._initial_dir("ziel", self.var_ziel.get().strip()))
         if path:
             self.var_ziel.set(path)
             self.refresh_files()
             self.set_status(f"Zielordner: {path}", "success")
+
+    def target_folder(self) -> str:
+        """Zielordner der PDF (ohne Auswahl: der Desktop)."""
+        return self.var_ziel.get().strip() or str(desktop_dir())
 
     def use_default_logo(self) -> None:
         if DEFAULT_LOGO.is_file():
@@ -489,23 +566,65 @@ class App(tk.Tk):
         except OSError as exc:
             self.notify("pdf_info", "error", str(exc), title="Ordner konnte nicht geöffnet werden")
 
+    def copy_path(self, path: str | Path) -> None:
+        """Vollständigen Pfad in die Windows-Zwischenablage kopieren."""
+        text = str(path or "").strip()
+        if not text:
+            self.set_status("Kein Pfad zum Kopieren vorhanden.", "warning")
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+        except tk.TclError as exc:
+            self.set_status(f"Pfad konnte nicht kopiert werden: {exc}", "error")
+            return
+        self.set_status(f"Pfad kopiert: {text}", "success")
+
+    # Ziehen und Ablegen ---------------------------------------------------------------
+    def _drag_enter(self, accepted: bool) -> None:
+        """Datei wird über das Fenster gezogen: Excel-Bereich hervorheben."""
+        if not accepted:
+            return
+        card = getattr(self.ui, "dateien_card", None)
+        bar = getattr(self.ui, "info_excel", None)
+        if self._drag_saved is None and bar is not None:
+            self._drag_saved = (bar.severity, bar.message, bar.title)
+        if card is not None:
+            card.set_fill("card", stroke="accent")
+        if bar is not None:
+            bar.show("info", "Loslassen, um die Excel-Datei zu übernehmen und zu prüfen.", animate=False)
+        if self.nav.current != "create":
+            self.set_status("Excel-Datei loslassen – sie wird auf der Seite »Erstellen« geprüft.", "info")
+
+    def _drag_leave(self) -> None:
+        card = getattr(self.ui, "dateien_card", None)
+        if card is not None:
+            card.set_fill("card", stroke="card_stroke")
+        saved, self._drag_saved = self._drag_saved, None
+        bar = getattr(self.ui, "info_excel", None)
+        if saved is not None and bar is not None and bar.message.startswith("Loslassen"):
+            severity, message, title = saved
+            bar.show(severity, message, title, animate=False)
+
     def _on_drop(self, dateien: list[str]) -> None:
-        excel = next((pfad for pfad in dateien if pfad.lower().endswith((".xlsx", ".xls"))), "")
+        self._drag_leave()
+        excel = next(iter(_excel_in(dateien)), "")
         if not excel:
             self.notify("info_excel", "warning", "Bitte eine Excel-Datei (.xlsx oder .xls) in das Fenster ziehen.")
             return
         if self.nav.current != "create":
             self.nav.navigate("create")
-        self.var_excel.set(excel)
-        self.refresh_files()
-        self.inspect_excel(excel)
+        self.use_excel(excel)
 
     # ------------------------------------------------------------------
     # Excel-Prüfung
     # ------------------------------------------------------------------
     def inspect_excel(self, path: str) -> None:
+        self._analysis = None
+        self._analysis_path = path
         self.notify("info_excel", "info", "Excel wird geprüft …", status=False)
         self.set_status("Excel wird geprüft …", "busy")
+        self.update_readiness()
         regeln = [dict(r) for r in self.state.regeln]
 
         def work() -> dict:
@@ -524,18 +643,84 @@ class App(tk.Tk):
         # Das Ergebnis der Prüfung beim Start erscheint ohne Ein-/Ausklapp-Animation.
         animate = not self._initial_check
         self._initial_check = False
+        self._analysis = result
+        self._analysis_path = path
         text = str(result.get("text", ""))
         if not result.get("ok"):
             self.notify("info_excel", "error", text or "Die Datei konnte nicht gelesen werden.", title="Excel-Prüfung fehlgeschlagen", animate=animate)
             self._set_mails([], animate=animate)
+            self._show_facts([], animate)
+            self.update_readiness()
             return
-        self.notify("info_excel", "success", text, status=False, animate=animate)
-        self.set_status(f"Excel erfolgreich geprüft: {text}", "success")
-        self._set_mails([str(mail) for mail in result.get("mails") or []], animate=animate)
+        mails = [str(mail) for mail in result.get("mails") or []]
+        aktiv = int(result.get("aktiv", 0) or 0)
+        inaktiv = int(result.get("inaktiv", 0) or 0)
+        fehlend = [str(name) for name in result.get("fehlend") or []]
+        vertraege = "1 aktiver Vertrag" if aktiv == 1 else f"{aktiv} aktive Verträge"
+        if inaktiv:
+            vertraege += f" · {inaktiv} inaktiv ausgeblendet"
+        if fehlend:
+            spalten = ", ".join(f"»{name}«" for name in fehlend)
+            self.notify("info_excel", "error", f"Für die PDF fehlt {'die Spalte' if len(fehlend) == 1 else 'die Spalten'} {spalten}.", title="Spalten fehlen", status=False, animate=animate)
+        elif aktiv == 0:
+            self.notify("info_excel", "warning", "In der Datei steht kein aktiver Vertrag." + (f" {inaktiv} inaktive wurden ausgeblendet." if inaktiv else ""), title="Keine aktiven Verträge", status=False, animate=animate)
+        else:
+            self.notify("info_excel", "success", vertraege, title="Excel geprüft", status=False, animate=animate)
+        self.set_status(f"Excel geprüft: {text}", "success" if aktiv and not fehlend else "warning")
+        self._show_facts(self._facts_for(result), animate)
+        self._set_mails(mails, animate=animate)
+        # Nur Werte übernehmen, die tatsächlich in der Datei stehen – nie aus der E-Mail-Adresse raten.
         if not self.var_kd.get().strip() and len(result.get("kunden") or []) == 1:
             self.var_kd.set(result["kunden"][0])
         if not self.var_firma.get().strip() and len(result.get("firmen") or []) == 1:
             self.var_firma.set(result["firmen"][0])
+        self.update_readiness()
+
+    @staticmethod
+    def _facts_for(result: dict) -> list[tuple[str, str, str]]:
+        """Übersicht der Excel-Prüfung: nur Angaben, die tatsächlich in der Datei stehen."""
+        facts: list[tuple[str, str, str]] = []
+        aktiv = int(result.get("aktiv", 0) or 0)
+        inaktiv = int(result.get("inaktiv", 0) or 0)
+        facts.append(("Aktive Verträge", str(aktiv), "" if aktiv else "caution"))
+        facts.append(("Ausgeblendet (inaktiv)", str(inaktiv), "muted"))
+        mails = [str(mail) for mail in result.get("mails") or []]
+        if len(mails) == 1:
+            facts.append(("Rechnungsempfänger", mails[0], ""))
+        elif len(mails) > 1:
+            facts.append(("Rechnungsempfänger", f"{len(mails)} verschiedene – bitte bei den Kundendaten auswählen: " + ", ".join(mails), "caution"))
+        else:
+            facts.append(("Rechnungsempfänger", "keine Angabe in der Datei", "muted"))
+        kunden = [str(kd) for kd in result.get("kunden") or []]
+        if len(kunden) == 1:
+            facts.append(("Kundennummer", f"{kunden[0]} (aus der Datei)", ""))
+        elif len(kunden) > 1:
+            facts.append(("Kundennummer", f"{len(kunden)} verschiedene in der Datei: " + ", ".join(kunden), "caution"))
+        firmen = [str(firma) for firma in result.get("firmen") or []]
+        if len(firmen) == 1:
+            facts.append(("Firmenname", f"{firmen[0]} (aus der Datei)", ""))
+        elif len(firmen) > 1:
+            facts.append(("Firmenname", f"{len(firmen)} verschiedene in der Datei: " + ", ".join(firmen), "caution"))
+        fett = int(result.get("fett", 0) or 0)
+        if fett:
+            facts.append(("Fettschrift", f"{fett} {'Zelle wird' if fett == 1 else 'Zellen werden'} fett in die PDF übernommen", "muted"))
+        fehlend = [str(name) for name in result.get("fehlend") or []]
+        if fehlend:
+            facts.append(("Fehlende Spalten", ", ".join(fehlend), "critical"))
+        for hinweis in result.get("hinweise") or []:
+            facts.append(("Hinweis", str(hinweis), "muted"))
+        return facts
+
+    def _show_facts(self, facts: list[tuple[str, str, str]], animate: bool = True) -> None:
+        details = getattr(self.ui, "excel_details", None)
+        facts_list = getattr(self.ui, "excel_facts", None)
+        if details is None or facts_list is None:
+            return
+        facts_list.set(facts)
+        if facts:
+            details.expand(animate=animate)
+        else:
+            details.collapse(animate=animate)
 
     def _set_mails(self, mails: list[str], animate: bool = True) -> None:
         self._excel_mails = mails
@@ -545,10 +730,114 @@ class App(tk.Tk):
             return
         if len(mails) > 1:
             combo.set_values(mails, keep=True)
+            current = self.var_mail.get().strip()
+            if current in mails:
+                combo.set(current)
             area.expand(animate=animate)
         else:
             combo.set_values([], keep=False)
             area.collapse(animate=animate)
+
+    def on_mail_pick(self, mail: str) -> None:
+        """Empfänger aus der Excel wählen: übernimmt die Adresse in das Feld Rechnungsempfänger."""
+        if mail:
+            self.var_mail.set(mail)
+            self.set_status(f"Rechnungsempfänger: {mail}", "success")
+
+    # ------------------------------------------------------------------
+    # Bereit zum Erstellen
+    # ------------------------------------------------------------------
+    def readiness(self) -> list[tuple[str, str]]:
+        """Offene Punkte vor dem Erstellen als (Bereich, Text); leer = bereit.
+
+        Bereich ``busy`` bedeutet: Die Excel-Prüfung läuft noch.
+        """
+        issues: list[tuple[str, str]] = []
+        excel = self.var_excel.get().strip()
+        if not excel:
+            issues.append(("excel", "Excel-Datei fehlt"))
+        elif not Path(excel).is_file():
+            issues.append(("excel", "Excel-Datei nicht gefunden"))
+        elif self._analysis_path != excel or self._analysis is None:
+            issues.append(("busy", "Excel wird geprüft …"))
+        elif not self._analysis.get("ok"):
+            issues.append(("excel", "Excel-Datei konnte nicht gelesen werden"))
+        elif self._analysis.get("fehlend"):
+            fehlend = list(self._analysis.get("fehlend") or [])
+            issues.append(("excel", f"Spalte »{fehlend[0]}« fehlt in der Excel" if len(fehlend) == 1 else f"{len(fehlend)} Spalten fehlen in der Excel"))
+        elif not int(self._analysis.get("aktiv", 0) or 0):
+            issues.append(("excel", "Keine aktiven Verträge in der Excel"))
+        if not self.var_kd.get().strip():
+            issues.append(("kd", "Kundennummer fehlt"))
+        if len(self._excel_mails) > 1 and not self.var_mail.get().strip():
+            issues.append(("mail", "Bitte Rechnungsempfänger auswählen"))
+        logo = self.var_logo.get().strip()
+        if not logo:
+            issues.append(("logo", "Logo fehlt"))
+        elif not Path(logo).is_file():
+            issues.append(("logo", "Logo-Datei nicht gefunden"))
+        if not _valid_width(self.var_breite.get()):
+            issues.append(("breite", "Logo-Breite ungültig"))
+        if not _target_reachable(self.target_folder()):
+            issues.append(("ziel", "Zielordner nicht erreichbar"))
+        return issues
+
+    def update_readiness(self, now: bool = False) -> None:
+        """Anzeige »Bereit zum Erstellen« aktualisieren – gesammelt im Leerlauf."""
+        if now:
+            self._run_readiness()
+        elif self._ready_job is None:
+            try:
+                self._ready_job = self.after_idle(self._run_readiness)
+            except tk.TclError:
+                self._ready_job = None
+
+    def _run_readiness(self) -> None:
+        self._ready_job = None
+        line = getattr(self.ui, "ready", None)
+        if line is None:
+            return
+        issues = self.readiness()
+        if not issues:
+            line.set("success", "Bereit zum Erstellen")
+        elif issues[0][0] == "busy" and len(issues) == 1:
+            line.set("busy", issues[0][1])
+        else:
+            texts = [text for area, text in issues if area != "busy"]
+            more = len(texts) - 2
+            label = " · ".join(texts[:2]) + (f" · {more} weitere" if more > 0 else "")
+            kind = "critical" if any(area == "excel" for area, _t in issues) and self.var_excel.get().strip() else "caution"
+            line.set(kind, label)
+
+    def fix_readiness(self) -> None:
+        """Zum ersten offenen Punkt springen (Klick auf die Bereitschaftsanzeige)."""
+        issues = [issue for issue in self.readiness() if issue[0] != "busy"]
+        if not issues:
+            return
+        area, text = issues[0]
+        if area == "excel":
+            if self.var_excel.get().strip() and Path(self.var_excel.get().strip()).is_file():
+                self.notify("pdf_info", "warning", text, actions=(("Andere Excel wählen", self.pick_excel),))
+            else:
+                self.pick_excel()
+        elif area == "kd":
+            self.kd_required = True
+            field = getattr(self.ui, "field_kd", None)
+            if field is not None:
+                field.set_error(True)
+                field.focus()
+        elif area == "mail":
+            combo = getattr(self.ui, "mail_combo", None)
+            if combo is not None:
+                combo.focus_set()
+                combo.open_popup()
+        elif area == "logo":
+            self.notify("pdf_info", "warning", text, actions=(("Logo wählen", self.pick_logo), ("Standardlogo", self.use_default_logo)))
+        elif area == "breite":
+            self.nav.navigate("layout")
+            self.after(50, lambda: self._require(False, "Die Logo-Breite muss eine positive Zahl sein (z. B. 62).", getattr(self.ui, "field_breite", None), page="layout"))
+        elif area == "ziel":
+            self.notify("pdf_info", "warning", text, actions=(("Ordner wählen", self.pick_ziel),))
 
     # ------------------------------------------------------------------
     # Kundenakte
@@ -582,28 +871,33 @@ class App(tk.Tk):
         if logo and Path(logo).is_file():
             self.var_logo.set(logo)
             self.refresh_files()
-        # Nur eine sinnvolle eigene Fußzeile der Kundenakte übernehmen – ein leerer Wert
-        # aus älteren Versionen lässt die aktuell gültige Fußzeile stehen.
-        fusszeile = customer_footer(eintrag)
+        # Nur eine sinnvolle eigene Fußzeile der Kundenakte übernehmen (samt Formatierung) –
+        # ein leerer Wert aus älteren Versionen lässt die aktuell gültige Fußzeile stehen.
+        fusszeile = customer_footer_rich(eintrag)
         if fusszeile is not None:
-            self._set_long_text("txt_fuss", "_fuss_start", fusszeile)
-        if "kopfzeile" in eintrag:
-            self._set_long_text("txt_kopf", "_kopf_start", str(eintrag.get("kopfzeile") or ""))
+            self._set_rich("txt_fuss", "_fuss_start", fusszeile)
+        kopfzeile = customer_header_rich(eintrag)
+        if kopfzeile is not None:
+            self._set_rich("txt_kopf", "_kopf_start", kopfzeile)
         pdf = str(eintrag.get("pdf") or "").strip()
         if pdf and Path(pdf).is_file():
             self._remember_pdf(Path(pdf))
         self.set_status(f"Kundenakte übernommen: {eintrag.get('firmenname') or eintrag.get('kundennummer')}", "success")
 
     def _remember_customer(self, pdf: str | None = None) -> None:
+        fuss = self.footer_rich()
+        kopf = self.header_rich()
         if self.state.remember_customer(
             self.var_firma.get(),
             self.var_kd.get(),
             self.var_mail.get(),
             self.var_excel.get(),
             self.var_logo.get(),
-            self.footer_text(),
-            self.header_text(),
+            fuss.text,
+            kopf.text,
             pdf,
+            fusszeile_format=fuss.to_dict(),
+            kopfzeile_format=kopf.to_dict(),
         ):
             self.reload_recent()
 
@@ -678,42 +972,50 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
     # Kopf- und Fußzeile, Textbausteine
     # ------------------------------------------------------------------
-    def header_text(self) -> str:
+    def header_rich(self) -> RichText:
+        """Aktuelle Kopfzeile mit Formatierung (Inhalt des Editors; vorher der geladene Wert)."""
         widget = getattr(self.ui, "txt_kopf", None)
         if widget is None:
             return self._kopf_start
-        return widget.get().strip()
+        return widget.get_rich()
 
-    def footer_text(self) -> str:
-        """Aktuelle Fußzeile: immer der Inhalt des Textfelds, exakt mit allen Zeilenumbrüchen.
-
-        Nur bevor das Textfeld existiert, gilt der geladene Startwert.
-        """
+    def footer_rich(self) -> RichText:
+        """Aktuelle Fußzeile mit Formatierung – exakt mit allen Zeilenumbrüchen."""
         widget = getattr(self.ui, "txt_fuss", None)
         if widget is None:
             return self._fuss_start
-        return widget.get()
+        return widget.get_rich()
 
-    def _set_long_text(self, widget_name: str, start_name: str, text: str) -> None:
-        setattr(self, start_name, text)
+    def header_text(self) -> str:
+        return self.header_rich().text
+
+    def footer_text(self) -> str:
+        """Aktuelle Fußzeile als reiner Text: immer der Inhalt des Editors, exakt.
+
+        Nur bevor der Editor existiert, gilt der geladene Startwert.
+        """
+        return self.footer_rich().text
+
+    def _set_rich(self, widget_name: str, start_name: str, rich: RichText) -> None:
+        setattr(self, start_name, rich)
         widget = getattr(self.ui, widget_name, None)
         if widget is not None:
-            widget.set(text)
+            widget.set_rich(rich)
 
     def save_header(self) -> None:
-        self._kopf_start = self.header_text()
+        self._kopf_start = self.header_rich()
         self.persist()
-        if self._kopf_start:
+        if not self._kopf_start.is_blank():
             self.notify("kopf_info", "success", "Die Kopfzeile wurde gespeichert.", auto_hide=5000)
         else:
             self.notify("kopf_info", "info", "Die Kopfzeile ist leer und erscheint nicht in der PDF.", auto_hide=6000)
 
     def save_footer(self) -> None:
         name = self.var_baustein.get().strip()
-        text = self.footer_text()  # aktueller Inhalt des Textfelds
-        self._fuss_start = text
+        rich = self.footer_rich()  # aktueller Inhalt des Editors samt Formatierung
+        self._fuss_start = rich
         if name:
-            self.state.save_baustein(name, text)
+            self.state.save_baustein(name, rich.text, rich.to_dict())
         self.persist()
         self.reload_bausteine()
         if name:
@@ -722,36 +1024,42 @@ class App(tk.Tk):
             self.notify("fuss_info", "success", "Die Fußzeile wurde gespeichert.", auto_hide=5000)
 
     def restore_default_footer(self) -> None:
-        """Standard-Fußzeile wiederherstellen (rückgängig machbar, daher ohne Rückfrage)."""
-        previous = self.footer_text()
+        """Standardtext und Standardformatierung wiederherstellen (rückgängig machbar, daher ohne Rückfrage)."""
+        previous = self.footer_rich()
+        default = default_footer_rich()
         widget = getattr(self.ui, "txt_fuss", None)
         if widget is not None:
-            widget.replace(DEFAULT_FOOTER)
-        self._fuss_start = DEFAULT_FOOTER
+            widget.replace_rich(default)
+        self._fuss_start = default
         self.persist()
         actions = ()
-        if previous != DEFAULT_FOOTER:
+        if previous != default:
             actions = (("Rückgängig", lambda: self._undo_footer(previous)),)
         self.notify("fuss_info", "success", "Standard-Fußzeile wiederhergestellt.", actions=actions, auto_hide=8000)
 
-    def _undo_footer(self, previous: str) -> None:
+    def _undo_footer(self, previous: RichText) -> None:
         widget = getattr(self.ui, "txt_fuss", None)
         if widget is not None:
-            widget.replace(previous)
+            widget.replace_rich(previous)
         self._fuss_start = previous
         self.persist()
         self.hide_notice("fuss_info")
         self.set_status("Vorherige Fußzeile wiederhergestellt.", "success")
 
-    def schedule_text_save(self) -> None:
-        """Änderungen an Kopf- und Fußzeile verzögert speichern (nicht bei jedem Tastendruck)."""
-        self.ctx.anim.later("autosave:texte", 800, self._save_texts)
-
-    def _save_texts(self) -> None:
+    def schedule_save(self) -> None:
+        """Änderungen verzögert speichern (800 ms nach der letzten Änderung, nicht bei jedem Tastendruck)."""
         if self._closing:
             return
-        self._fuss_start = self.footer_text()
-        self._kopf_start = self.header_text()
+        self.ctx.anim.later("autosave", 800, self._autosave)
+
+    # Kopf- und Fußzeile melden Änderungen über denselben verzögerten Weg.
+    schedule_text_save = schedule_save
+
+    def _autosave(self) -> None:
+        if self._closing:
+            return
+        self._fuss_start = self.footer_rich()
+        self._kopf_start = self.header_rich()
         self.persist()
 
     def reload_bausteine(self) -> None:
@@ -771,7 +1079,9 @@ class App(tk.Tk):
 
     def _apply_baustein(self, eintrag: dict) -> None:
         self.var_baustein.set(str(eintrag.get("name", "")))
-        self._set_long_text("txt_fuss", "_fuss_start", str(eintrag.get("text", "")))
+        # Alte Bausteine (nur Text) erhalten die Standardformatierung.
+        self._set_rich("txt_fuss", "_fuss_start", baustein_rich(eintrag))
+        self.schedule_save()
         self.set_status(f"Textbaustein „{eintrag.get('name', '')}“ geladen.", "success")
 
     def delete_baustein(self) -> None:
@@ -824,9 +1134,10 @@ class App(tk.Tk):
             self.var_titel.set(str(eintrag.get("titel")))
         if eintrag.get("untertitel"):
             self.var_untertitel.set(str(eintrag.get("untertitel")))
-        self._set_long_text("txt_kopf", "_kopf_start", str(eintrag.get("kopfzeile") or ""))
-        # Vorlage mit eigener Fußzeile: diese; alte Vorlage ohne (gültigen) Wert: Standard.
-        self._set_long_text("txt_fuss", "_fuss_start", footer_from(eintrag))
+        self._set_rich("txt_kopf", "_kopf_start", header_rich_from(eintrag))
+        # Vorlage mit eigener Fußzeile: diese (mit Formatierung); alte Vorlage ohne gültigen Wert:
+        # Standard. Fehlt die Formatierung (Vorlagen bis 2.1), gilt das Standardformat.
+        self._set_rich("txt_fuss", "_fuss_start", footer_rich_from(eintrag))
         from appstate import normalize_regeln
 
         self.state.regeln = normalize_regeln(eintrag.get("regeln") or [])
@@ -848,6 +1159,8 @@ class App(tk.Tk):
             return
         if field is not None:
             field.set_error(False)
+        kopf = self.header_rich()
+        fuss = self.footer_rich()
         self.state.save_vorlage(
             {
                 "name": name,
@@ -857,8 +1170,10 @@ class App(tk.Tk):
                 "logo_breite": self.var_breite.get().strip(),
                 "titel": self.var_titel.get().strip(),
                 "untertitel": self.var_untertitel.get().strip(),
-                "kopfzeile": self.header_text(),
-                "fusszeile": self.footer_text(),
+                "kopfzeile": kopf.text,
+                HEADER_FORMAT: kopf.to_dict(),
+                "fusszeile": fuss.text,
+                FOOTER_FORMAT: fuss.to_dict(),
                 FOOTER_EXPLICIT: True,
                 "regeln": [dict(regel) for regel in self.state.regeln],
             }
@@ -1074,7 +1389,9 @@ class App(tk.Tk):
                 return
             empfaenger = wahl
         regeln = [dict(eintrag) for eintrag in self.state.regeln]
-        ziel = Path(self.var_ziel.get().strip() or desktop_dir())
+        ziel = Path(self.target_folder())
+        fuss = self.footer_rich()
+        kopf = self.header_rich()
         auftrag = dict(
             excel=Path(excel),
             logo=Path(logo),
@@ -1087,8 +1404,10 @@ class App(tk.Tk):
             logo_breite=breite,
             titel=self.var_titel.get().strip() or DEFAULT_TITEL,
             untertitel=self.var_untertitel.get().strip() or DEFAULT_UNTERTITEL,
-            fusszeile=self.footer_text(),
-            kopfzeile=self.header_text(),
+            fusszeile=fuss.text,
+            fusszeile_format=fuss.to_dict(),
+            kopfzeile=kopf.text,
+            kopfzeile_format=kopf.to_dict(),
             regeln=regeln,
         )
         self.persist()
@@ -1123,12 +1442,69 @@ class App(tk.Tk):
             "success",
             path.name,
             title="PDF wurde erfolgreich erstellt.",
-            actions=(("Öffnen", lambda: self._open_pdf(path)), ("Ordner öffnen", lambda: self._open_folder_of(path))),
+            actions=(
+                ("Öffnen", lambda: self._open_pdf(path)),
+                ("Ordner öffnen", lambda: self._open_folder_of(path)),
+                ("Pfad kopieren", lambda: self.copy_path(path)),
+                ("Neue Übersicht", self.new_overview),
+            ),
             status=False,
         )
         self.set_status(f"PDF gespeichert: {path}", "success")
         if self.var_open.get():
             self._open_pdf(path)
+
+    def new_overview(self) -> None:
+        """Nur die kundenspezifischen Arbeitsdaten zurücksetzen (Firma, Kundennummer, Empfänger, Excel).
+
+        Logo, Zielordner, Darstellung, Vorlage, Kopf-/Fußzeile, Design und Regeln bleiben.
+        """
+        previous = (self.var_firma.get(), self.var_kd.get(), self.var_mail.get(), self.var_excel.get())
+        self._undo_overview = previous if any(value.strip() for value in previous) else None
+        self._reset_work(("", "", "", ""))
+        self.hide_notice("pdf_info")
+        actions = (("Rückgängig", self._undo_new_overview),) if self._undo_overview else ()
+        self.notify("kunde_info", "info", "Bereit für eine neue Übersicht: Kundendaten und Excel-Datei wurden zurückgesetzt.", actions=actions, auto_hide=10000)
+        field = getattr(self.ui, "field_firma", None)
+        if field is not None:
+            try:
+                field.focus()
+            except tk.TclError:
+                pass
+
+    def _reset_work(self, values: tuple[str, str, str, str]) -> None:
+        firma, kd, mail, excel = values
+        self.kd_required = False
+        for name in ("field_kd", "field_firma"):
+            field = getattr(self.ui, name, None)
+            if field is not None:
+                field.set_error(False)
+        self.var_firma.set(firma)
+        self.var_kd.set(kd)
+        self.var_mail.set(mail)
+        self.var_excel.set(excel)
+        self.refresh_files()
+        if excel and Path(excel).is_file():
+            self.inspect_excel(excel)
+        else:
+            self._analysis = None
+            self._analysis_path = ""
+            self._set_mails([])
+            self._show_facts([])
+            bar = getattr(self.ui, "info_excel", None)
+            if bar is not None:
+                from ui.pages.create import EXCEL_EMPTY
+
+                bar.show("neutral", EXCEL_EMPTY)
+        self.update_readiness()
+        self.persist()
+
+    def _undo_new_overview(self) -> None:
+        if self._undo_overview is not None:
+            values, self._undo_overview = self._undo_overview, None
+            self._reset_work(values)
+            self.hide_notice("kunde_info")
+            self.set_status("Kundendaten und Excel-Datei wiederhergestellt.", "success")
 
     def _fail(self, exc: BaseException, tb: str) -> None:
         self._finish_busy()
@@ -1139,6 +1515,10 @@ class App(tk.Tk):
     # Speichern und Beenden
     # ------------------------------------------------------------------
     def persist(self) -> None:
+        # Ein ausstehendes verzögertes Speichern ist damit erledigt.
+        self.ctx.anim.cancel_later("autosave")
+        fuss = self.footer_rich()
+        kopf = self.header_rich()
         data = dict(self.cfg)
         data.update(
             {
@@ -1153,9 +1533,11 @@ class App(tk.Tk):
                 "logo_breite": self.var_breite.get().strip(),
                 "titel": self.var_titel.get().strip(),
                 "untertitel": self.var_untertitel.get().strip(),
-                "fusszeile": self.footer_text(),
+                "fusszeile": fuss.text,
+                FOOTER_FORMAT: fuss.to_dict(),
                 FOOTER_EXPLICIT: True,
-                "kopfzeile": self.header_text(),
+                "kopfzeile": kopf.text,
+                HEADER_FORMAT: kopf.to_dict(),
                 "baustein_name": self.var_baustein.get().strip(),
                 "bausteine": self.state.bausteine,
                 "kunden": self.state.kunden,
@@ -1169,6 +1551,8 @@ class App(tk.Tk):
                 "accent": self.theme.accent_choice,
                 "mica": bool(self.var_mica.get()),
                 "nav_kompakt": bool(self.nav.user_compact) if hasattr(self, "nav") else False,
+                "ordner_excel": self._dirs.get("excel", ""),
+                "ordner_logo": self._dirs.get("logo", ""),
             }
         )
         if self._anim_pref is None:
@@ -1187,12 +1571,15 @@ class App(tk.Tk):
         if self._closing:
             return
         self._closing = True
-        self.ctx.anim.cancel_later("autosave:texte")
+        self.ctx.anim.cancel_later("autosave")
         try:
             self._remember_customer()
             self.persist()
         finally:
             self.ctx.anim.shutdown()
+            self.worker.shutdown()
+            if self._drop is not None:
+                self._drop.remove()
             if self._hook is not None:
                 self._hook.remove()
             self.destroy()
@@ -1204,6 +1591,31 @@ class App(tk.Tk):
             self.set_status(f"Unerwarteter Fehler: {val} – Details in fehler.log", "error")
         except Exception:
             pass
+
+
+def _valid_width(value: str) -> bool:
+    try:
+        width = float(str(value).replace(",", "."))
+    except ValueError:
+        return False
+    return 0 < width <= 400
+
+
+def _excel_in(files: list[str]) -> list[str]:
+    return [path for path in files if str(path).lower().endswith((".xlsx", ".xlsm", ".xls"))]
+
+
+def _target_reachable(path: str) -> bool:
+    """Zielordner vorhanden und beschreibbar – oder anlegbar (nächster vorhandener Ordner beschreibbar)."""
+    folder = Path(path)
+    if folder.is_dir():
+        return os.access(folder, os.W_OK)
+    if folder.exists():
+        return False
+    parent = folder.parent
+    while not parent.exists() and parent.parent != parent:
+        parent = parent.parent
+    return parent.is_dir() and os.access(parent, os.W_OK)
 
 
 def _write_log(text: str) -> None:

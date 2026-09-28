@@ -95,7 +95,11 @@ REQUIRED_PAYLOAD = [
     "app/vertragdesk.py",
     "app/engine.py",
     "app/appstate.py",
+    "app/excelstyle.py",
+    "app/richtext.py",
+    "app/pdffonts.py",
     "app/ui/navigation.py",
+    "app/ui/richtext.py",
     "assets/icon.ico",
     "assets/hott_logo_final.png",
 ]

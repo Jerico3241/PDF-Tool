@@ -8,39 +8,17 @@ from pathlib import Path
 import pytest
 
 from conftest import display_available, pump, wait_until
+from conftest import neustart as _neustart
+from conftest import schliessen as _schliessen
 
 pytestmark = pytest.mark.skipif(not display_available(), reason="kein Display verfügbar")
 
 
-@pytest.fixture(params=[True, False], ids=["animationen", "ohne-animationen"])
-def app(request, config_file: Path, monkeypatch):
-    config_file.write_text(json.dumps({"gesehen": "2.1.0", "theme": "light", "accent": "#005FB8"}), encoding="utf-8")
-    if request.param:
-        monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
-    else:
-        monkeypatch.setenv("UE_NO_ANIMATIONS", "1")
-    from ui import dialogs
-
-    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
-    import vertragdesk
-
-    instance = vertragdesk.App()
-    instance.ctx.anim.enabled = request.param
-    pump(instance, 0.5)
-    yield instance
-    try:
-        instance._on_close()
-    except Exception:
-        pass
-    # Tk-Objekte im Hauptthread freigeben, nicht später in einem Worker-Thread.
-    import gc
-
-    gc.collect()
-
-
 def test_start_and_version(app) -> None:
+    import appstate
+
     assert app.title() == "Übersichten-Ersteller"
-    assert app.version == "2.1.0"
+    assert app.version == appstate.VERSION == "2.2.0"
     assert app.nav.current == "create"
     assert app.ui.btn_pdf.text() == "PDF erstellen"
 
@@ -283,30 +261,6 @@ def test_long_status_is_elided_and_keeps_hints(app) -> None:
 FUSS_EIGEN = "Eigener kundenspezifischer Text\nZeile 2\n\nZeile 4"
 
 
-def _neustart(app):
-    """App schließen (speichert wie beim Beenden) und mit derselben Konfiguration neu starten."""
-    import gc
-
-    import vertragdesk
-
-    app._on_close()
-    gc.collect()
-    neu = vertragdesk.App()
-    neu.ctx.anim.enabled = False
-    pump(neu, 0.3)
-    return neu
-
-
-def _schliessen(app) -> None:
-    import gc
-
-    try:
-        app._on_close()
-    except Exception:
-        pass
-    gc.collect()
-
-
 def test_footer_default_on_first_start(app) -> None:
     from appstate import DEFAULT_FOOTER
 
@@ -350,9 +304,12 @@ def test_footer_restore_is_undoable(app) -> None:
     aktion = app.ui.fuss_info._actions.winfo_children()[0]
     aktion.invoke()
     assert app.footer_text() == FUSS_EIGEN
-    # und Strg+Z im Textfeld
+    # und Strg+Z im Textfeld (eigener Rückgängig-Verlauf für Text und Formatierung)
     app.restore_default_footer()
-    app.ui.txt_fuss.text.edit_undo()
+    app.ui.txt_fuss.text.focus_force()
+    pump(app, 0.1)
+    app.ui.txt_fuss.text.event_generate("<Control-z>")
+    pump(app, 0.1)
     assert app.footer_text() == FUSS_EIGEN
 
 
@@ -391,7 +348,7 @@ def test_footer_migration_of_old_config(config_file: Path, monkeypatch, alt: dic
     import vertragdesk
 
     erwartet = DEFAULT_FOOTER if erwartet == "STANDARD" else erwartet
-    config_file.write_text(json.dumps({"gesehen": "2.1.0", "theme": "light", **alt}), encoding="utf-8")
+    config_file.write_text(json.dumps({"gesehen": "2.2.0", "theme": "light", **alt}), encoding="utf-8")
     monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
     app = vertragdesk.App()
     try:
@@ -490,10 +447,15 @@ def test_navigation_shows_finished_page_without_rebuild(app) -> None:
     assert created.get("n", 0) == 0  # kein Widget neu erzeugt
 
 
-def test_resize_applies_breakpoints_immediately_without_animation(app) -> None:
+def test_resize_applies_breakpoints_immediately_without_animation(app, monkeypatch) -> None:
+    from ui import context
     from ui.context import MODE_COMPACT, MODE_MEDIUM, MODE_WIDE
     from ui.theme import px
 
+    # Geprüft wird der Zustand während des Resize. Dessen Ende erkennt die App nach
+    # RESIZE_SETTLE_MS Ruhe; ein langsamer Rechner braucht für update() nach einer
+    # Größenänderung aber länger und würde das Ende schon darin auslösen.
+    monkeypatch.setattr(context, "RESIZE_SETTLE_MS", 1500)
     app.ctx.anim.enabled = True
     for width, mode, columns in ((px(1100), MODE_WIDE, 2), (px(900), MODE_MEDIUM, 2), (px(780), MODE_COMPACT, 1), (px(1100), MODE_WIDE, 2)):
         app.geometry(f"{width}x{px(700)}")
@@ -503,7 +465,7 @@ def test_resize_applies_breakpoints_immediately_without_animation(app) -> None:
         assert app.ctx.layout.columns == columns
         assert not app.ctx.anim.running(f"pane:{app.nav}")  # keine Animation während des Resize
         assert app.nav.pane.expanded_amount in (0.0, 1.0)
-    assert wait_until(app, lambda: not app.ctx.anim.is_resizing, 3)
+    assert wait_until(app, lambda: not app.ctx.anim.is_resizing, 5)
 
 
 def test_breakpoint_hysteresis(app) -> None:

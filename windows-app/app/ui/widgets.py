@@ -452,6 +452,8 @@ class RingSpinner:
         self._index = 0
         self._job = None
         self.running = False
+        # Mit dem Canvas endet auch der Zeitgeber (sonst ruft er einen gelöschten Befehl auf).
+        canvas.bind("<Destroy>", lambda event: self.stop() if event.widget is canvas else None, add="+")
 
     def place(self, x: float, y: float, color: str, background: str) -> None:
         if (color, background) != self._key:
@@ -1188,9 +1190,12 @@ class InfoBar(tk.Frame):
         self._title = tk.Label(texts, text="", font=c.fonts.body_strong, anchor="w", justify="left", bd=0)
         self._message = tk.Label(texts, text="", font=c.fonts.body, anchor="w", justify="left", bd=0)
         self._mode = None
-        self._actions = tk.Frame(inner, bd=0, highlightthickness=0)
-        self._actions.pack(side="left", anchor="n", pady=(px(1), 0))
+        # Aktionen stehen neben dem Text – bei mehr als zwei Aktionen darunter (wie in WinUI).
+        # Das Kind der Box lässt sich in beide Bereiche einordnen (pack -in).
+        self._actions = tk.Frame(self.box, bd=0, highlightthickness=0)
+        self._actions.pack(in_=inner, side="left", anchor="n", pady=(px(1), 0))
         self._actions.surface_role = "info_bg"  # type: ignore[attr-defined]
+        self._actions_below = False
         self._close = None
         if closable:
             self._close = IconButton(inner, icons.CANCEL, self._close_clicked, tooltip="Schließen", size=32)
@@ -1297,10 +1302,21 @@ class InfoBar(tk.Frame):
             self._message.pack(side="left", anchor="n", fill="x", expand=True)
         for child in self._actions.winfo_children():
             child.destroy()
+        actions = list(actions)
         bg = self._colors()[0]
         self._actions.surface_role = bg  # type: ignore[attr-defined]
-        for text, command in actions:
-            Button(self._actions, text, command, kind="standard").pack(side="left", padx=(px(4), 0), pady=(px(4), 0))
+        below = len(actions) > 2
+        if below != self._actions_below:
+            self._actions_below = below
+            if below:
+                # unter dem Text, bündig mit ihm (Symbol 20 px + Abstand 12 px)
+                self._actions.pack_configure(in_=self.box, side="top", anchor="w", padx=(px(14) + px(20) + px(12) - px(4), px(12)), pady=(0, px(10)))
+            else:
+                self._actions.pack_configure(in_=self._inner, side="left", anchor="n", padx=0, pady=(px(1), 0), before=self._close if self._close is not None else None)
+            self.box.lift_corners()
+        for index, (text, command) in enumerate(actions):
+            pad = (px(4), 0) if not below else ((0 if index == 0 else px(8)), 0)
+            Button(self._actions, text, command, kind="standard").pack(side="left", padx=pad, pady=(px(4), 0) if not below else 0)
         self._repaint()
         self.after_idle(self._relayout)
 
@@ -1508,7 +1524,8 @@ class FlowRow(tk.Frame):
         self._gap = px(gap)
         self._row_gap = px(row_gap)
         self._items: list[tuple[tk.Widget, str]] = []
-        self._last = None
+        self._placed: tuple = ()
+        self._height = 0
         self._width = 0
         self._sizes: dict[str, tuple[int, int]] = {}
         self._pending = False
@@ -1564,11 +1581,18 @@ class FlowRow(tk.Frame):
             x += w + self._gap
             line_h = max(line_h, h)
         total_h = y + line_h
+        placement = []
         for row in rows:
             row_h = max((wd.winfo_reqheight() for wd, _x, _y in row), default=0)
             for widget, wx, wy in row:
-                widget.place(x=wx, y=wy + (row_h - widget.winfo_reqheight()) // 2)
-        key = (width, total_h)
-        if key != self._last:
-            self._last = key
+                placement.append((widget, wx, wy + (row_h - widget.winfo_reqheight()) // 2))
+        # Beim Ziehen am Fensterrand ändert sich meist nur die Breite, nicht die Anordnung:
+        # dann weder neu platzieren noch eine neue Höhe anfordern.
+        placed = tuple((str(widget), wx, wy) for widget, wx, wy in placement)
+        if placed != self._placed:
+            self._placed = placed
+            for widget, wx, wy in placement:
+                widget.place(x=wx, y=wy)
+        if total_h != self._height:
+            self._height = total_h
             self.configure(height=max(1, total_h))

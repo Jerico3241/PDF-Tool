@@ -70,3 +70,13 @@ class Worker:
 
     def busy(self) -> bool:
         return self._active > 0
+
+    def shutdown(self) -> None:
+        """Beim Beenden: keine weitere Abfrage mehr (Ergebnisse laufender Aufgaben verfallen)."""
+        if self._job is not None:
+            try:
+                self.root.after_cancel(self._job)
+            except tk.TclError:
+                pass
+            self._job = None
+        self._active = 0

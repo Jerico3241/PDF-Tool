@@ -8,6 +8,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE, RichText
+
 APP_DIR = Path(__file__).resolve().parent
 INSTALL_DIR = APP_DIR.parent
 ASSETS_DIR = INSTALL_DIR / "assets"
@@ -49,15 +51,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Vollständig modernisierte Windows-11-Oberfläche mit Fluent Design.",
-    "Neue Navigation an der linken Seite mit Symbolen, Kompaktmodus und weichen Seitenübergängen.",
-    "Mica-Material in Titelleiste und Navigation unter Windows 11.",
-    "Design »Wie Windows« folgt automatisch dem hellen oder dunklen Modus.",
-    "Akzentfarbe »Windows« übernimmt die Akzentfarbe des Systems.",
-    "Neue Status- und Hinweisleisten statt Meldungsfenstern, mit Fortschrittsring bei der PDF-Erstellung.",
-    "Moderne Dialoge für Bestätigungen, Kurzanleitung und Info.",
-    "Animationen lassen sich abschalten und folgen der Windows-Einstellung.",
-    "Die Fußzeile ist mit einem Standardtext vorbelegt, lässt sich wiederherstellen und wird automatisch gespeichert.",
+    "Fettschrift aus der Excel-Liste wird jetzt zellgenau in die PDF übernommen.",
+    "Kopf- und Fußzeile lassen sich formatieren: Schriftart, Größe, Farbe, fett, kursiv, unterstrichen und Ausrichtung je Absatz.",
+    "Übersichtlichere Excel-Prüfung: aktive und ausgeblendete Verträge, Rechnungsempfänger und fehlende Spalten auf einen Blick.",
+    "»Bereit zum Erstellen« zeigt schon vor dem Klick, was noch fehlt.",
+    "Nach dem Erstellen: Öffnen, Ordner öffnen, Pfad kopieren oder direkt eine neue Übersicht beginnen.",
+    "Eingaben werden automatisch gespeichert; zahlreiche Verbesserungen bei Speicherung und Stabilität.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
@@ -79,6 +78,10 @@ DEFAULT_FOOTER = (
 # Markiert eine bewusst gespeicherte Fußzeile (ab 2.1.0). Fehlt die Markierung, stammt
 # der Wert aus einer älteren Version, in der eine leere Fußzeile der Normalfall war.
 FOOTER_EXPLICIT = "fusszeile_explizit"
+# Formatierung (neu in Version 2.2) neben dem weiterhin gespeicherten reinen Text – siehe richtext.py
+HEADER_FORMAT = "kopfzeile_format"
+FOOTER_FORMAT = "fusszeile_format"
+BAUSTEIN_FORMAT = "format"
 
 MAX_KUNDEN = 12
 MAX_PDFS = 8
@@ -138,6 +141,55 @@ def customer_footer(entry: dict | None) -> str | None:
     if isinstance(value, str) and value.strip():
         return value
     return None
+
+
+# --- Formatierte Kopf- und Fußzeile (Rich Text) ---------------------------------------
+#
+# Der reine Text bleibt unter »kopfzeile«/»fusszeile« gespeichert (kompatibel zu älteren
+# Versionen). Die Formatierung steht daneben unter »kopfzeile_format«/»fusszeile_format«.
+# Fehlt sie oder passt sie nicht zum Text, gilt die Standardformatierung.
+
+
+def default_footer_rich() -> RichText:
+    """Standard-Fußzeile mit Standardformatierung (Helvetica 8 pt, dunkelgrau, zentriert)."""
+    return RichText.plain(DEFAULT_FOOTER, FOOTER_STYLE, FOOTER_ALIGN)
+
+
+def footer_rich_from(entry: dict | None) -> RichText:
+    """Fußzeile samt Formatierung aus Konfiguration oder Vorlage (Migration wie ``footer_from``)."""
+    text = footer_from(entry)
+    fmt = entry.get(FOOTER_FORMAT) if isinstance(entry, dict) else None
+    return RichText.from_storage(text, fmt, FOOTER_STYLE, FOOTER_ALIGN)
+
+
+def header_rich_from(entry: dict | None) -> RichText:
+    """Kopfzeile samt Formatierung; ohne gespeicherten Text ist sie leer."""
+    text = entry.get("kopfzeile") if isinstance(entry, dict) else None
+    fmt = entry.get(HEADER_FORMAT) if isinstance(entry, dict) else None
+    return RichText.from_storage(text if isinstance(text, str) else "", fmt, HEADER_STYLE, HEADER_ALIGN)
+
+
+def customer_footer_rich(entry: dict | None) -> RichText | None:
+    """Eigene Fußzeile einer Kundenakte mit Formatierung – ``None`` bei leeren Altwerten."""
+    text = customer_footer(entry)
+    if text is None:
+        return None
+    return RichText.from_storage(text, entry.get(FOOTER_FORMAT), FOOTER_STYLE, FOOTER_ALIGN)  # type: ignore[union-attr]
+
+
+def customer_header_rich(entry: dict | None) -> RichText | None:
+    """Kopfzeile einer Kundenakte (auch bewusst leer); ``None``, wenn sie keine gespeichert hat."""
+    if not isinstance(entry, dict) or "kopfzeile" not in entry:
+        return None
+    text = entry.get("kopfzeile")
+    return RichText.from_storage(text if isinstance(text, str) else "", entry.get(HEADER_FORMAT), HEADER_STYLE, HEADER_ALIGN)
+
+
+def baustein_rich(entry: dict | None) -> RichText:
+    """Textbaustein mit Formatierung; alte Bausteine (nur Text) erhalten das Standardformat."""
+    text = entry.get("text") if isinstance(entry, dict) else None
+    fmt = entry.get(BAUSTEIN_FORMAT) if isinstance(entry, dict) else None
+    return RichText.from_storage(text if isinstance(text, str) else "", fmt, FOOTER_STYLE, FOOTER_ALIGN)
 
 
 # --- Konfiguration --------------------------------------------------------------
@@ -219,7 +271,19 @@ class State:
         self.gesehen = str(cfg.get("gesehen", ""))
 
     # Kundenakte ---------------------------------------------------------------
-    def remember_customer(self, firma: str, kd: str, mail: str, excel: str, logo: str, fusszeile: str, kopfzeile: str, pdf: str | None = None) -> bool:
+    def remember_customer(
+        self,
+        firma: str,
+        kd: str,
+        mail: str,
+        excel: str,
+        logo: str,
+        fusszeile: str,
+        kopfzeile: str,
+        pdf: str | None = None,
+        fusszeile_format: dict | None = None,
+        kopfzeile_format: dict | None = None,
+    ) -> bool:
         firma, kd = firma.strip(), kd.strip()
         if not firma and not kd:
             return False
@@ -230,19 +294,21 @@ class State:
                 previous_pdf = str(alt.get("pdf") or "")
                 break
         self.kunden = [alt for alt in self.kunden if (str(alt.get("firmenname", "")).casefold(), str(alt.get("kundennummer", ""))) != key]
-        self.kunden.insert(
-            0,
-            {
-                "firmenname": firma,
-                "kundennummer": kd,
-                "rechnungsempfaenger": mail.strip(),
-                "excel": excel.strip(),
-                "logo": logo.strip(),
-                "fusszeile": fusszeile,
-                "kopfzeile": kopfzeile,
-                "pdf": previous_pdf if pdf is None else pdf,
-            },
-        )
+        eintrag = {
+            "firmenname": firma,
+            "kundennummer": kd,
+            "rechnungsempfaenger": mail.strip(),
+            "excel": excel.strip(),
+            "logo": logo.strip(),
+            "fusszeile": fusszeile,
+            "kopfzeile": kopfzeile,
+            "pdf": previous_pdf if pdf is None else pdf,
+        }
+        if fusszeile_format is not None:
+            eintrag[FOOTER_FORMAT] = fusszeile_format
+        if kopfzeile_format is not None:
+            eintrag[HEADER_FORMAT] = kopfzeile_format
+        self.kunden.insert(0, eintrag)
         self.kunden = self.kunden[:MAX_KUNDEN]
         return True
 
@@ -292,8 +358,11 @@ class State:
     def find_vorlage(self, name: str) -> dict | None:
         return next((v for v in self.vorlagen if str(v.get("name", "")) == name), None)
 
-    def save_baustein(self, name: str, text: str) -> None:
-        self.bausteine = self._upsert(self.bausteine, {"name": name, "text": text}, MAX_BAUSTEINE)
+    def save_baustein(self, name: str, text: str, fmt: dict | None = None) -> None:
+        entry = {"name": name, "text": text}
+        if fmt is not None:
+            entry[BAUSTEIN_FORMAT] = fmt
+        self.bausteine = self._upsert(self.bausteine, entry, MAX_BAUSTEINE)
 
     def delete_baustein(self, name: str) -> bool:
         before = len(self.bausteine)

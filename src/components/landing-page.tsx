@@ -1,14 +1,18 @@
 import { Download } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
+import versionFile from "../../windows-app/VERSION?raw";
 
-const SETUP_HREF = "/downloads/Uebersichten-Ersteller-Setup-2.1.0.exe";
+// Die Version steht – wie für App und Setup – nur in windows-app/VERSION.
+const VERSION = versionFile.trim();
+const SETUP_FILE = `Uebersichten-Ersteller-Setup-${VERSION}.exe`;
+const SETUP_HREF = `/downloads/${SETUP_FILE}`;
 
 const STEPS = [
   {
     n: "1",
     title: "Setup doppelklicken",
-    body: "Die Datei Uebersichten-Ersteller-Setup-2.1.0.exe öffnen. Administratorrechte sind nicht nötig.",
+    body: `Die Datei ${SETUP_FILE} öffnen. Administratorrechte sind nicht nötig.`,
   },
   {
     n: "2",
@@ -41,7 +45,7 @@ export function LandingPage() {
               Für Windows 10 und 11
             </p>
             <h1 className="mt-3 max-w-xl font-display text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-              Übersichten-Ersteller 2.1.0
+              Übersichten-Ersteller {VERSION}
             </h1>
             <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground text-pretty">
               Die einfache Windows-Oberfläche. Entwickler und Inhaber: Jerico.
@@ -55,13 +59,13 @@ export function LandingPage() {
               </Button>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              Setup.exe · 64-Bit · ohne Admin-Rechte · Version 2.1.0
+              Setup.exe · 64-Bit · ohne Admin-Rechte · Version {VERSION}
             </p>
           </div>
 
           <div className="overflow-hidden rounded-xl bg-canvas shadow-[var(--shadow-window)]">
             <div className="flex h-9 items-center justify-between border-b border-border bg-card px-3">
-              <p className="text-xs text-muted-foreground">Übersichten-Ersteller 2.1.0</p>
+              <p className="text-xs text-muted-foreground">Übersichten-Ersteller {VERSION}</p>
               <div className="flex gap-1.5 text-muted-foreground">
                 <span className="size-2.5 rounded-sm bg-muted" />
                 <span className="size-2.5 rounded-sm bg-muted" />
@@ -95,7 +99,7 @@ export function LandingPage() {
             </div>
             <div className="flex items-center justify-between border-t border-border bg-card px-3 py-1.5">
               <p className="text-xs text-muted-foreground">Bereit</p>
-              <p className="text-xs text-muted-foreground">Version 2.1.0</p>
+              <p className="text-xs text-muted-foreground">Version {VERSION}</p>
             </div>
           </div>
         </section>

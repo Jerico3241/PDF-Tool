@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
+from typing import Callable
 
-from .context import ctx, surface_of
+from . import icons
+from .context import ctx, surface_color, surface_of
 from .inputs import elide_middle
 from .theme import px
-from .widgets import Card, Icon, RoundedFrame, Text, frame
+from .widgets import Card, Icon, RingSpinner, RoundedFrame, Text, frame
 
 
 def field_label(master, text: str, first: bool = False) -> Text:
@@ -96,6 +98,123 @@ class FileRow(tk.Frame):
             text = elide_middle(ctx().fonts.caption, text, width - px(4))
         if self.value.cget("text") != text:
             self.value.configure(text=text)
+
+
+class FactList(tk.Frame):
+    """Kompakte Zeilen »Bezeichnung  Wert« – z. B. das Ergebnis der Excel-Prüfung.
+
+    ``tone`` färbt den Wert: "" (normal), "success", "caution", "critical", "muted".
+    Neu aufgebaut wird nur, wenn sich die Angaben tatsächlich ändern.
+    """
+
+    TONES = {"": "text", "success": "success", "caution": "caution", "critical": "critical", "muted": "text2"}
+
+    def __init__(self, master, label_width: int = 150) -> None:
+        super().__init__(master, bd=0, highlightthickness=0)
+        self.surface_role = surface_of(master)
+        ctx().theme.style(self, bg=self.surface_role)
+        self._label_width = px(label_width)
+        self._facts: list[tuple[str, str, str]] = []
+        self.columnconfigure(1, weight=1)
+
+    def facts(self) -> list[tuple[str, str, str]]:
+        return list(self._facts)
+
+    def set(self, facts: list[tuple[str, str, str]]) -> None:
+        facts = [(str(label), str(value), tone if tone in self.TONES else "") for label, value, tone in facts]
+        if facts == self._facts:
+            return
+        self._facts = facts
+        for child in self.winfo_children():
+            child.destroy()
+        for row, (label, value, tone) in enumerate(facts):
+            pad = (0 if row == 0 else px(4), 0)
+            # Beschriftung (12 px) auf die Grundlinie des Werts (14 px) ausrichten
+            label_pad = (pad[0] + px(2), 0)
+            Text(self, label, style="caption", color="text2").grid(row=row, column=0, sticky="nw", padx=(0, px(12)), pady=label_pad)
+            value_label = Text(self, value, style="body", color=self.TONES[tone], wrap=True, width=1)
+            value_label.grid(row=row, column=1, sticky="ew", pady=pad)
+        self.columnconfigure(0, minsize=self._label_width if facts else 0)
+
+
+class StatusLine(tk.Frame):
+    """Zustandsanzeige mit Symbol, z. B. »Bereit zum Erstellen« (Erfolg) oder was noch fehlt.
+
+    ``kind``: "success", "caution", "critical", "busy" oder "neutral". Ein Klick
+    ruft ``command`` auf (z. B. zum Feld springen, das noch fehlt).
+    """
+
+    def __init__(self, master, command: Callable[[], None] | None = None) -> None:
+        super().__init__(master, bd=0, highlightthickness=0)
+        self.surface_role = surface_of(master)
+        c = ctx()
+        c.theme.style(self, bg=self.surface_role)
+        self._command = command
+        self.kind = "neutral"
+        self.text = ""
+        size = px(20)
+        self._icon = tk.Canvas(self, width=size, height=size, highlightthickness=0, bd=0)
+        self._icon.pack(side="left", padx=(0, px(10)))
+        self._icon_bg = self._icon.create_image(size / 2, size / 2, anchor="center")
+        self._icon_glyph = self._icon.create_text(size / 2, size / 2, text="", anchor="center")
+        self._icon_img = None
+        self._spinner = None
+        self._label = Text(self, "", style="body_strong")
+        self._label.pack(side="left", fill="x", expand=True)
+        for widget in (self, self._icon, self._label):
+            widget.bind("<Button-1>", self._clicked, add="+")
+        c.theme.subscribe(self._repaint, owner=self)
+        self._repaint()
+
+    def _clicked(self, _event=None) -> None:
+        if self._command is not None and self.kind in ("caution", "critical"):
+            self._command()
+
+    def set(self, kind: str, text: str) -> None:
+        if (kind, text) == (self.kind, self.text):
+            return
+        self.kind = kind
+        self.text = text
+        self._label.configure(text=text)
+        self._repaint()
+
+    def _repaint(self) -> None:
+        c = ctx()
+        pal = c.pal
+        surface = surface_color(self)
+        self._icon.configure(bg=surface)
+        colors = {
+            "success": (pal.success, pal.on_status, icons.CHECK_MARK, "✓"),
+            "caution": (pal.caution, "#000000", "!", "!"),
+            "critical": (pal.critical, pal.on_status, icons.CANCEL, "×"),
+            "neutral": (pal.neutral, pal.on_status, "i", "i"),
+            "busy": (None, None, "", ""),
+        }
+        fill, glyph_color, glyph, fallback = colors.get(self.kind, colors["neutral"])
+        size = px(20)
+        if self.kind == "busy":
+            if self._spinner is None:
+                self._spinner = RingSpinner(self._icon, px(16))
+            self._icon.itemconfigure(self._icon_bg, state="hidden")
+            self._icon.itemconfigure(self._icon_glyph, text="")
+            self._spinner.place(size / 2, size / 2, pal.accent, surface)
+            self._spinner.start()
+        else:
+            if self._spinner is not None:
+                self._spinner.stop()
+            img = c.images.circle(px(16), fill, background=surface)
+            self._icon_img = img
+            self._icon.itemconfigure(self._icon_bg, image=img, state="normal")
+            is_icon = glyph not in ("!", "i") and c.icons_available
+            if is_icon:
+                font = (c.fonts.families["icons"], -max(6, px(9)))
+            else:
+                glyph = fallback if glyph not in ("!", "i") else glyph
+                font = (c.fonts.families.get("text_semibold") or c.fonts.families["text"], -px(11), "bold")
+            self._icon.itemconfigure(self._icon_glyph, text=glyph, fill=glyph_color, font=font)
+        role = {"success": "text", "caution": "text", "critical": "critical", "busy": "text2", "neutral": "text2"}.get(self.kind, "text")
+        self._label.set_color(role)
+        self.configure(cursor="hand2" if self._command is not None and self.kind in ("caution", "critical") else "")
 
 
 def path_caption(path: str, empty: str) -> tuple[str, str]:

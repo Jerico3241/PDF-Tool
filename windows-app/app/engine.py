@@ -1,15 +1,32 @@
-"""PDF-Engine für die Vertragsübersicht – gleiche Regeln wie das Originalskript."""
+"""PDF-Engine für die Vertragsübersicht – gleiche Regeln wie das Originalskript.
+
+pandas liest Werte und Spalten der Excel-Liste. Die Formatierung (Fettschrift)
+liefert die Schicht ``excelstyle``, formatierte Kopf- und Fußzeilen das Modell
+``richtext`` mit den Schriften aus ``pdffonts``.
+"""
 
 from __future__ import annotations
 
 import os
 import re
 import tempfile
-import html
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+
+from excelstyle import SOURCE_ROW, ExcelStyles, cell_key, read_styles
+from richtext import (
+    FOOTER_ALIGN,
+    FOOTER_STYLE,
+    HEADER_ALIGN,
+    HEADER_STYLE,
+    LINE_FACTOR,
+    RichText,
+    escape_markup,
+    paragraph_markup,
+    paragraph_size,
+)
 
 pd = None
 pdfcanvas = None
@@ -116,6 +133,27 @@ ZAHLUNGSART_MAP = {
     "Ueberweisung": "Überweisung",
 }
 
+# Spaltenüberschriften (flexible Erkennung: Groß-/Kleinschreibung und Sonderzeichen egal)
+SPALTE_VERTRAG = ("Vertrag-Nr.", "VertragNr", "Vertragsnummer")
+SPALTE_BEGINN = ("Beginnt am", "Beginn", "Startdatum")
+SPALTE_ZYKLUS = ("Abrechnungszyklus",)
+SPALTE_NETTO = ("Netto [€]", "Netto", "Netto €", "Netto EUR")
+SPALTE_ZAHLUNG = ("Zahlungsart",)
+SPALTE_BEMERKUNG = ("Bemerkung", "Beschreibung")
+SPALTE_MAIL = ("Rechnungsempfänger Email", "Rechnungsempfaenger Email")
+SPALTE_KUNDE = ("Kundennummer", "Kd-Nr.", "KdNr")
+SPALTE_FIRMA = ("Firmenname", "Firma", "Kunde")
+SPALTE_STATUS = ("Anwenderstatus", "Status")
+# Für die PDF zusätzlich zur Vertragsnummer erforderlich (Anzeigename, Varianten)
+PDF_SPALTEN = (
+    ("Beginnt am", SPALTE_BEGINN),
+    ("Abrechnungszyklus", SPALTE_ZYKLUS),
+    ("Netto [€]", SPALTE_NETTO),
+    ("Zahlungsart", SPALTE_ZAHLUNG),
+    ("Bemerkung", SPALTE_BEMERKUNG),
+)
+KOPF_SUCHE_ZEILEN = 30  # so weit wird nach der Überschriftenzeile gesucht, falls sie nicht in Zeile 1 steht
+
 
 def clean_bemerkung(text: str) -> str:
     if pd.isna(text):
@@ -137,10 +175,31 @@ def fmt_date(d) -> str:
     return d.strftime("%d.%m.%Y")
 
 
+def _betrag(text: str) -> float | None:
+    """Betrag aus Text wie »1.234,50 €« oder »49.90«."""
+    cleaned = re.sub(r"[^\d,.\-]", "", text)
+    if not re.search(r"\d", cleaned):
+        return None
+    if "," in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
 def fmt_euro(v) -> str:
     if pd.isna(v):
         return "–"
-    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    if isinstance(v, str):
+        zahl = _betrag(v)
+        if zahl is None:
+            return v.strip() or "–"
+        v = zahl
+    try:
+        return f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except (TypeError, ValueError):
+        return str(v)
 
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
@@ -209,18 +268,21 @@ def vertrag_art(bemerkung) -> str:
     return "Software-<br/>pflegevertrag"
 
 
+def _schluessel(name) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(name).lower())
+
+
 def _col(df: pd.DataFrame, *namen: str, required: bool = True) -> str:
-    wanted = {re.sub(r"[^a-z0-9]+", "", n.lower()) for n in namen}
+    wanted = {_schluessel(n) for n in namen}
     for col in df.columns:
-        key = re.sub(r"[^a-z0-9]+", "", str(col).lower())
-        if key in wanted:
+        if _schluessel(col) in wanted:
             return str(col)
     if required:
         raise ValueError(
             "In der Excel fehlt die Spalte "
             + " / ".join(namen)
             + ".\nGefundene Spalten: "
-            + ", ".join(str(c) for c in df.columns)
+            + ", ".join(str(c) for c in df.columns if str(c) != SOURCE_ROW)
         )
     return ""
 
@@ -240,19 +302,12 @@ class PdfAuftrag:
     untertitel: str = "Wartungs- und Nutzungsverträge"
     fusszeile: str = ""
     kopfzeile: str = ""
+    # Formatierung (richtext.RichText.to_dict()); ohne passende Angabe gilt das Standardformat
+    fusszeile_format: dict | None = None
+    kopfzeile_format: dict | None = None
     regeln: list | None = None
     pdf_oeffnen: bool = False
     status: Callable[[str], None] | None = None
-
-
-def _mehrzeilig(text: str | None) -> str:
-    """Mehrzeiligen Text (Fußzeile) unverändert übernehmen – Absätze bleiben erhalten.
-
-    Vereinheitlicht werden nur die Zeilenenden; entfernt werden lediglich Leerraum und
-    Zeilenumbrüche ganz am Ende. Text nur aus Leerzeichen gilt als leer.
-    """
-    text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
-    return text.rstrip() if text.strip() else ""
 
 
 def _zelltext(value) -> str:
@@ -264,9 +319,68 @@ def _zelltext(value) -> str:
     return text
 
 
+# ---------------------------------------------------------------------------
+# Excel lesen: Werte (pandas) mit ursprünglicher Zeilennummer
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ExcelTabelle:
+    """Die Excel-Liste als DataFrame; jede Zeile kennt ihre Excel-Zeile (``_source_excel_row``)."""
+
+    pfad: Path
+    df: "pd.DataFrame"
+    kopfzeile: int  # Excel-Zeile der Spaltenüberschriften (1-basiert)
+
+    def excel_spalte(self, name: str) -> int | None:
+        """Excel-Spaltennummer (1-basiert) einer erkannten Spalte – unabhängig von festen Buchstaben."""
+        if not name or name not in self.df.columns:
+            return None
+        return int(self.df.columns.get_loc(name)) + 1
+
+
+def _finde_kopfzeile(pfad: Path) -> int | None:
+    """Überschriftenzeile suchen, falls sie nicht in der ersten Zeile steht (0-basiert)."""
+    roh = pd.read_excel(pfad, header=None, nrows=KOPF_SUCHE_ZEILEN)
+    gesucht = {_schluessel(name) for name in SPALTE_VERTRAG}
+    for index in range(len(roh)):
+        if any(isinstance(wert, str) and _schluessel(wert) in gesucht for wert in roh.iloc[index].tolist()):
+            return index
+    return None
+
+
+def lies_tabelle(pfad: Path) -> ExcelTabelle:
+    """Liest das erste Tabellenblatt. pandas behält Leerzeilen (``skip_blank_lines=False``):
+    DataFrame-Zeile i entspricht damit der Excel-Zeile ``Überschrift + 1 + i``."""
+    _lade_pandas()
+    pfad = Path(pfad)
+    df = pd.read_excel(pfad)
+    kopf = 1
+    if not _col(df, *SPALTE_VERTRAG, required=False):
+        gefunden = _finde_kopfzeile(pfad)
+        if gefunden is not None and gefunden > 0:
+            df = pd.read_excel(pfad, header=gefunden)
+            kopf = gefunden + 1
+    df[SOURCE_ROW] = range(kopf + 1, kopf + 1 + len(df))
+    return ExcelTabelle(pfad, df, kopf)
+
+
+def excel_stile(tabelle: ExcelTabelle, daten: "pd.DataFrame", spalten: list[str], col_vertrag: str) -> ExcelStyles:
+    """Formatierung der Zellen ``spalten`` für alle Zeilen in ``daten`` (einmal lesen, dann zuordnen).
+
+    Die Vertragsnummern dienen als Probe: Nur wenn jede Zeile an der erwarteten
+    Excel-Position ihre Vertragsnummer findet, werden Stile übernommen.
+    """
+    vertrag = tabelle.excel_spalte(col_vertrag)
+    rows = [int(row) for row in daten[SOURCE_ROW].tolist()]
+    cols = [tabelle.excel_spalte(name) for name in spalten if name]
+    expected = {(int(row), vertrag): cell_key(wert) for row, wert in zip(daten[SOURCE_ROW].tolist(), daten[col_vertrag].tolist())}
+    return read_styles(tabelle.pfad, rows, [c for c in cols if c] + [vertrag], expected)
+
+
 def nur_aktive(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """Nur Zeilen mit Anwenderstatus Aktiv. Fehlt die Spalte, bleibt die Liste unverändert."""
-    col = _col(df, "Anwenderstatus", "Status", required=False)
+    col = _col(df, *SPALTE_STATUS, required=False)
     if not col:
         return df, 0
     status = df[col].astype(str).str.strip().str.casefold()
@@ -285,34 +399,62 @@ def _eindeutig(df: pd.DataFrame, spalte: str) -> list[str]:
     return werte
 
 
+def _lesefehler(exc: BaseException) -> str:
+    if isinstance(exc, ValueError) and "fehlt die Spalte" in str(exc):
+        return str(exc)
+    if isinstance(exc, PermissionError):
+        return "Die Datei ist gesperrt oder es fehlt die Berechtigung zum Lesen."
+    text = str(exc).strip() or exc.__class__.__name__
+    return f"Die Datei konnte nicht als Excel-Liste gelesen werden ({text})."
+
+
 def pruefe_excel(pfad: Path, regeln=None) -> dict:
-    """Liest die Liste nur zur Kontrolle, ohne ein PDF zu schreiben."""
+    """Liest die Liste nur zur Kontrolle, ohne ein PDF zu schreiben.
+
+    Ergebnis: ``aktiv``/``inaktiv`` (Anzahl), ``mails``, ``kunden`` und ``firmen``
+    (nur Werte, die tatsächlich in der Datei stehen), ``fehlend`` (für die PDF
+    benötigte Spalten, die fehlen), ``hinweise``, ``fett`` (fett formatierte
+    Zellen, die übernommen werden) und ``zeilen`` (Vorschau).
+    """
     _lade_pandas()
-    leer = {"ok": False, "text": "", "kunden": [], "mails": [], "firmen": [], "zeilen": []}
+    leer = {"ok": False, "text": "", "kunden": [], "mails": [], "firmen": [], "zeilen": [], "aktiv": 0, "inaktiv": 0, "fehlend": [], "hinweise": [], "fett": 0}
     pfad = Path(pfad)
     if not pfad.is_file():
         return {**leer, "text": "Datei nicht gefunden."}
     try:
-        df = pd.read_excel(pfad)
-        col_vertrag = _col(df, "Vertrag-Nr.", "VertragNr", "Vertragsnummer")
-    except Exception as exc:
-        return {**leer, "text": str(exc)}
+        tabelle = lies_tabelle(pfad)
+        df = tabelle.df
+        col_vertrag = _col(df, *SPALTE_VERTRAG)
+    except Exception as exc:  # noqa: BLE001 - jede Lesestörung wird verständlich gemeldet
+        return {**leer, "text": _lesefehler(exc)}
     daten = df.dropna(subset=[col_vertrag]).copy()
     daten, ausgeblendet = nur_aktive(daten)
-    col_beginn = _col(df, "Beginnt am", "Beginn", "Startdatum", required=False)
+    col_beginn = _col(df, *SPALTE_BEGINN, required=False)
     if col_beginn:
         daten["_sort"] = pd.to_datetime(daten[col_beginn], errors="coerce")
-        daten = daten.sort_values("_sort")
+        daten = daten.sort_values("_sort", kind="stable")
     anzahl = int(len(daten))
-    kunden = _eindeutig(daten, _col(df, "Kundennummer", "Kd-Nr.", "KdNr", required=False))
-    mails = _eindeutig(
-        daten,
-        _col(df, "Rechnungsempfänger Email", "Rechnungsempfaenger Email", required=False),
-    )
-    firmen = _eindeutig(daten, _col(df, "Firmenname", "Firma", "Kunde", required=False))
-    col_bem = _col(df, "Bemerkung", "Beschreibung", required=False)
-    col_zyk = _col(df, "Abrechnungszyklus", required=False)
-    col_netto = _col(df, "Netto [€]", "Netto", "Netto €", "Netto EUR", required=False)
+    col_kunde = _col(df, *SPALTE_KUNDE, required=False)
+    col_mail = _col(df, *SPALTE_MAIL, required=False)
+    col_firma = _col(df, *SPALTE_FIRMA, required=False)
+    kunden = _eindeutig(daten, col_kunde)
+    mails = _eindeutig(daten, col_mail)
+    firmen = _eindeutig(daten, col_firma)
+    col_bem = _col(df, *SPALTE_BEMERKUNG, required=False)
+    col_zyk = _col(df, *SPALTE_ZYKLUS, required=False)
+    col_netto = _col(df, *SPALTE_NETTO, required=False)
+    col_zahlung = _col(df, *SPALTE_ZAHLUNG, required=False)
+    fehlend = [anzeige for anzeige, namen in PDF_SPALTEN if not _col(df, *namen, required=False)]
+    hinweise: list[str] = []
+    if not _col(df, *SPALTE_STATUS, required=False):
+        hinweise.append("Keine Spalte »Anwenderstatus«: Alle Verträge gelten als aktiv.")
+    if not col_mail:
+        hinweise.append("Keine Spalte »Rechnungsempfänger Email«: Empfänger bitte selbst eintragen.")
+    fett = 0
+    if anzahl:
+        stile = excel_stile(tabelle, daten, [col_vertrag, col_bem, col_beginn, col_zyk, col_netto, col_zahlung], col_vertrag)
+        spalten = [tabelle.excel_spalte(name) for name in (col_vertrag, col_bem, col_beginn, col_zyk, col_netto, col_zahlung) if name]
+        fett = sum(1 for row in daten[SOURCE_ROW].tolist() for col in spalten if stile.bold(row, col))
     zeilen = []
     for _, row in daten.iterrows():
         bem = row[col_bem] if col_bem else ""
@@ -345,12 +487,81 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
         text += f" · {mails[0]}"
     elif len(mails) > 1:
         text += f" · {len(mails)} Rechnungsempfänger"
-    return {"ok": True, "text": text, "kunden": kunden, "mails": mails, "firmen": firmen, "zeilen": zeilen}
+    return {
+        "ok": True,
+        "text": text,
+        "kunden": kunden,
+        "mails": mails,
+        "firmen": firmen,
+        "zeilen": zeilen,
+        "aktiv": anzahl,
+        "inaktiv": int(ausgeblendet),
+        "fehlend": fehlend,
+        "hinweise": hinweise,
+        "fett": fett,
+        "kopfzeile": tabelle.kopfzeile,
+    }
+
+
+# ---------------------------------------------------------------------------
+# PDF
+# ---------------------------------------------------------------------------
 
 
 def _status(auftrag: PdfAuftrag, text: str) -> None:
     if auftrag.status:
         auftrag.status(text)
+
+
+def _rich_text(text: str, fmt, style, align, werte: dict[str, str], trim_start: bool = False) -> RichText | None:
+    """Kopf- bzw. Fußzeile als formatierter Text mit eingesetzten Platzhaltern (``None``, wenn leer)."""
+    rich = RichText.from_storage(text or "", fmt, style, align).stripped()
+    if trim_start:
+        # wie bisher bei der Kopfzeile: führende Leerzeilen und Leerzeichen entfallen
+        skip = len(rich.text) - len(rich.text.lstrip())
+        if skip:
+            rest = rich.text[skip:]
+            first_paragraph = rich.text[:skip].count("\n")
+            rich = RichText(rest, rich.styles[skip:], rich.aligns[first_paragraph:], rich.default, rich.align)
+    if rich.is_blank():
+        return None
+    return rich.with_placeholders(werte)
+
+
+def _rich_absaetze(rich: RichText, breite: float, name: str) -> list[tuple[object, float]]:
+    """Ein ReportLab-Absatz je Textabsatz (eigene Ausrichtung), Leerzeilen als Abstand."""
+    from pdffonts import pdf_font
+
+    ausrichtung = {"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT}
+    teile: list[tuple[object, float]] = []
+    for index, (start, end, align) in enumerate(rich.paragraphs()):
+        groesse = paragraph_size(rich, start, end)
+        zeile = groesse * LINE_FACTOR
+        if start == end:
+            teile.append((Spacer(breite, zeile), zeile))
+            continue
+        basis = rich.style_at(start)
+        stil = ParagraphStyle(
+            f"{name}{index}",
+            fontName=pdf_font(basis.font, basis.bold, basis.italic),
+            fontSize=groesse,
+            leading=zeile,
+            alignment=ausrichtung.get(align, TA_LEFT),
+            textColor=colors.HexColor(basis.color),
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        absatz = Paragraph(paragraph_markup(rich, start, end, pdf_font), stil)
+        _w, hoehe = absatz.wrap(breite, 100000)
+        teile.append((absatz, hoehe))
+    return teile
+
+
+def _zeichne_block(canvas, teile: list[tuple[object, float]], x: float, oben: float) -> None:
+    y = oben
+    for flowable, hoehe in teile:
+        y -= hoehe
+        flowable.drawOn(canvas, x, y)
 
 
 def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
@@ -367,21 +578,27 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         raise ValueError("Bitte eine Kundennummer eintragen.")
 
     _status(auftrag, "Excel wird gelesen …")
-    df = pd.read_excel(excel)
-    col_vertrag = _col(df, "Vertrag-Nr.", "VertragNr", "Vertragsnummer")
-    col_beginn = _col(df, "Beginnt am", "Beginn", "Startdatum")
-    col_zyklus = _col(df, "Abrechnungszyklus")
-    col_netto = _col(df, "Netto [€]", "Netto", "Netto €", "Netto EUR")
-    col_zahlung = _col(df, "Zahlungsart")
-    col_bemerkung = _col(df, "Bemerkung", "Beschreibung")
-    col_mail = _col(df, "Rechnungsempfänger Email", "Rechnungsempfaenger Email", required=False)
+    tabelle = lies_tabelle(excel)
+    df = tabelle.df
+    col_vertrag = _col(df, *SPALTE_VERTRAG)
+    col_beginn = _col(df, *SPALTE_BEGINN)
+    col_zyklus = _col(df, *SPALTE_ZYKLUS)
+    col_netto = _col(df, *SPALTE_NETTO)
+    col_zahlung = _col(df, *SPALTE_ZAHLUNG)
+    col_bemerkung = _col(df, *SPALTE_BEMERKUNG)
+    col_mail = _col(df, *SPALTE_MAIL, required=False)
 
+    # Filtern und Sortieren ändern die Werte in _source_excel_row nicht.
     df = df.dropna(subset=[col_vertrag]).copy()
     df, _ausgeblendet = nur_aktive(df)
     if df.empty:
         raise ValueError("Die Excel enthält keine aktiven Verträge.")
     df[col_beginn] = pd.to_datetime(df[col_beginn], errors="coerce")
-    df = df.sort_values(col_beginn).reset_index(drop=True)
+    df = df.sort_values(col_beginn, kind="stable").reset_index(drop=True)
+
+    _status(auftrag, "Formatierung wird gelesen …")
+    stile = excel_stile(tabelle, df, [col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung], col_vertrag)
+    excel_spalte = {name: tabelle.excel_spalte(name) for name in (col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung)}
 
     emails = []
     if col_mail:
@@ -407,6 +624,8 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         "kunde": re.sub(r"[^\w\-]+", "_", firmenname, flags=re.UNICODE).strip("_") or kundennummer,
         "firma": re.sub(r"[^\w\-]+", "_", firmenname, flags=re.UNICODE).strip("_") or kundennummer,
     }
+    # In Kopf- und Fußzeile erscheint der Firmenname wie eingetragen (nicht dateinamentauglich umgeschrieben).
+    text_werte = {**tokens, "kunde": firmenname or kundennummer, "firma": firmenname or kundennummer}
     muster = auftrag.dateiname.strip() or "Vertragsuebersicht_Kd{kd}.pdf"
     if not muster.lower().endswith(".pdf"):
         muster += ".pdf"
@@ -481,6 +700,8 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
             leading=9.5,
             fontName="Helvetica",
         )
+        # Fett aus der Excel: gleicher Stil, nur das Schriftgewicht ändert sich.
+        cell_style_strong = ParagraphStyle("CellStrong", parent=cell_style, fontName="Helvetica-Bold")
         cell_style_bold = ParagraphStyle(
             "CellBold",
             parent=styles["Normal"],
@@ -493,52 +714,18 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
 
         seitenmass = landscape(A4) if quer else A4
         nutzbreite = 269 * mm if quer else 182 * mm
-        fuss_text = _mehrzeilig(auftrag.fusszeile)
-        kopf_text = (auftrag.kopfzeile or "").strip()
-        try:
-            if fuss_text:
-                fuss_text = fuss_text.format(**tokens)
-        except (KeyError, ValueError, IndexError):
-            pass
-        try:
-            if kopf_text:
-                kopf_text = kopf_text.format(**tokens)
-        except (KeyError, ValueError, IndexError):
-            pass
-        fuss_html = html.escape(fuss_text).replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br/>")
-        kopf_html = html.escape(kopf_text).replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br/>")
-        fuss_style = ParagraphStyle(
-            "FooterDE",
-            parent=styles["Normal"],
-            fontSize=8,
-            leading=10,
-            alignment=TA_CENTER,
-            textColor=TEXT_DARK,
-            fontName="Helvetica",
-        )
-        kopf_style = ParagraphStyle(
-            "HeaderDE",
-            parent=styles["Normal"],
-            fontSize=8,
-            leading=10,
-            alignment=TA_LEFT,
-            textColor=TEXT_DARK,
-            fontName="Helvetica",
-        )
-        kopf_h = 0
-        kopf_para = None
-        if kopf_text:
-            kopf_para = Paragraph(kopf_html, kopf_style)
-            _w, kopf_h = kopf_para.wrap(nutzbreite, 24 * mm)
-        fuss_h = 0
-        fuss_para = None
-        if fuss_text:
-            fuss_para = Paragraph(fuss_html, fuss_style)
-            _w, fuss_h = fuss_para.wrap(nutzbreite, 60 * mm)
-        # Der untere Rand richtet sich nach der tatsächlichen Höhe der Fußzeile:
-        # Auch mehrzeilige Fußzeilen überdecken nie die Tabelle.
-        unten = max(24 * mm, 10 * mm + fuss_h + 2.2 * mm + 4 * mm) if fuss_text else 14 * mm
-        oben = 12 * mm + (kopf_h + 4 * mm if kopf_text else 0)
+        kopf_rich = _rich_text(auftrag.kopfzeile, auftrag.kopfzeile_format, HEADER_STYLE, HEADER_ALIGN, text_werte, trim_start=True)
+        fuss_rich = _rich_text(auftrag.fusszeile, auftrag.fusszeile_format, FOOTER_STYLE, FOOTER_ALIGN, text_werte)
+        kopf_teile = _rich_absaetze(kopf_rich, nutzbreite, "HeaderDE") if kopf_rich else []
+        fuss_teile = _rich_absaetze(fuss_rich, nutzbreite, "FooterDE") if fuss_rich else []
+        kopf_h = sum(hoehe for _teil, hoehe in kopf_teile)
+        fuss_h = sum(hoehe for _teil, hoehe in fuss_teile)
+        # Ränder richten sich nach der tatsächlichen Höhe von Kopf- und Fußzeile:
+        # Auch mehrzeilige oder große Schrift überdeckt nie die Tabelle.
+        unten = max(24 * mm, 10 * mm + fuss_h + 2.2 * mm + 4 * mm) if fuss_teile else 14 * mm
+        oben = 12 * mm + (kopf_h + 4 * mm if kopf_teile else 0)
+        if seitenmass[1] - oben - unten < 60 * mm:
+            raise ValueError("Kopf- und Fußzeile sind zusammen zu hoch für die Seite. Bitte den Text kürzen oder eine kleinere Schrift wählen.")
         doc = SimpleDocTemplate(
             str(ausgabe_pdf),
             pagesize=seitenmass,
@@ -555,16 +742,16 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         logo.hAlign = "CENTER"
         story.append(logo)
         story.append(Spacer(1, 3 * mm))
-        story.append(Paragraph(auftrag.titel, title_style))
-        story.append(Paragraph(auftrag.untertitel, subtitle_style))
+        story.append(Paragraph(escape_markup(auftrag.titel), title_style))
+        story.append(Paragraph(escape_markup(auftrag.untertitel), subtitle_style))
         story.append(HRFlowable(width="100%", thickness=1.8, color=PRIMARY, spaceAfter=6))
 
         left_lines = []
         if firmenname:
-            left_lines.append(Paragraph(f"<b>Firmenname:</b> {firmenname}", header_info_style))
-        left_lines.append(Paragraph(f"<b>Kundennummer:</b> {kundennummer}", header_info_style))
+            left_lines.append(Paragraph(f"<b>Firmenname:</b> {escape_markup(firmenname)}", header_info_style))
+        left_lines.append(Paragraph(f"<b>Kundennummer:</b> {escape_markup(kundennummer)}", header_info_style))
         left_lines.append(
-            Paragraph(f"<b>Rechnungsempfänger:</b> {rechnungsempfaenger}", header_info_style)
+            Paragraph(f"<b>Rechnungsempfänger:</b> {escape_markup(rechnungsempfaenger)}", header_info_style)
         )
         right_lines = [
             Paragraph(f"<b>Erstellt am:</b> {jetzt.strftime('%d.%m.%Y')}", header_info_right),
@@ -600,15 +787,24 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         ]
         table_data = [header]
         for _, row in df.iterrows():
+            quelle = row[SOURCE_ROW]
+
+            def zelle(markup: str, spalte: str) -> object:
+                # Zellweise: fett nur, wenn genau diese Excel-Zelle fett ist.
+                fett = stile.bold(quelle, excel_spalte.get(spalte))
+                return Paragraph(markup, cell_style_strong if fett else cell_style)
+
+            bemerkung = row[col_bemerkung]
             table_data.append(
                 [
-                    Paragraph(vertrag_art(row[col_bemerkung]), cell_style),
-                    Paragraph(str(row[col_vertrag]), cell_style),
-                    Paragraph(clean_bemerkung(row[col_bemerkung]), cell_style),
-                    Paragraph(fmt_date(row[col_beginn]), cell_style),
-                    Paragraph(fmt_zyklus(row[col_zyklus], row[col_bemerkung], zyklus_regeln), cell_style),
-                    Paragraph(fmt_euro(row[col_netto]), cell_style),
-                    Paragraph(fmt_zahlungsart(row[col_zahlung]), cell_style),
+                    # Art wird aus der Bemerkung abgeleitet und übernimmt deren Formatierung.
+                    zelle(vertrag_art(bemerkung), col_bemerkung),
+                    zelle(escape_markup(_zelltext(row[col_vertrag])), col_vertrag),
+                    zelle(escape_markup(clean_bemerkung(bemerkung)), col_bemerkung),
+                    zelle(fmt_date(row[col_beginn]), col_beginn),
+                    zelle(escape_markup(fmt_zyklus(row[col_zyklus], bemerkung, zyklus_regeln)), col_zyklus),
+                    zelle(escape_markup(fmt_euro(row[col_netto])), col_netto),
+                    zelle(escape_markup(fmt_zahlungsart(row[col_zahlung])), col_zahlung),
                 ]
             )
 
@@ -641,22 +837,23 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         story.append(tbl)
 
         def _seite(canvas, _doc) -> None:
-            if kopf_para is not None:
+            if kopf_teile:
                 canvas.saveState()
-                y = _doc.pagesize[1] - 8 * mm - kopf_h
-                kopf_para.drawOn(canvas, _doc.leftMargin, y)
+                oben_kopf = _doc.pagesize[1] - 8 * mm
+                _zeichne_block(canvas, kopf_teile, _doc.leftMargin, oben_kopf)
+                y = oben_kopf - kopf_h
                 canvas.setStrokeColor(PRIMARY)
                 canvas.setLineWidth(0.4)
                 canvas.line(_doc.leftMargin, y - 1.4 * mm, _doc.leftMargin + _doc.width, y - 1.4 * mm)
                 canvas.restoreState()
-            if fuss_para is None:
+            if not fuss_teile:
                 return
             canvas.saveState()
             y = 10 * mm
             canvas.setStrokeColor(PRIMARY)
             canvas.setLineWidth(0.5)
             canvas.line(_doc.leftMargin, y + fuss_h + 2.2 * mm, _doc.leftMargin + _doc.width, y + fuss_h + 2.2 * mm)
-            fuss_para.drawOn(canvas, _doc.leftMargin, y)
+            _zeichne_block(canvas, fuss_teile, _doc.leftMargin, y + fuss_h)
             canvas.restoreState()
 
         doc.build(story, onFirstPage=_seite, onLaterPages=_seite, canvasmaker=_NummernCanvas)
