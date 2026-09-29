@@ -13,6 +13,7 @@ from ui.theme import px
 from ui.widgets import Button, Card, Collapsible, Divider, FlowRow, Icon, IconButton, InfoBar, RoundedFrame, Text, ToggleSwitch, frame
 
 from .customer_widgets import PickerBox
+from .history_widgets import ComparisonView
 
 if TYPE_CHECKING:
     from vertragdesk import App
@@ -125,6 +126,15 @@ def build(app: "App", host) -> Page:
     IconButton(ui.row_ziel.buttons, icons.COPY, lambda: app.copy_path(app.target_folder()), tooltip="Pfad des Zielordners kopieren").pack(side="right", padx=(0, px(4)))
     ui.dateien_info = InfoBar(body)
     ui.dateien_info.pack(fill="x", pady=(px(8), 0))
+
+    # Vertragsänderungen (nur mit geprüfter Excel) ------------------------------------------
+    ui.comparison_area = Collapsible(page.content)
+    page.add_section(ui.comparison_area, pady=(px(12), 0))
+    card = Card(ui.comparison_area.content, "Vertragsänderungen", icons.HISTORY, "Vergleich mit einem gespeicherten Vertragsstand dieses Kunden – nur zur Kontrolle, die PDF bleibt unverändert.")
+    card.pack(fill="x")
+    ui.comparison = ComparisonView(card.body, app.choose_baseline, app.copy_comparison)
+    ui.comparison.pack(fill="x")
+    card.lift_corners()
 
     # Aktionen ----------------------------------------------------------------------
     action = Card(page.content)

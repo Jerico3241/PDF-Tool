@@ -569,6 +569,8 @@ class BatchFlow:
             if result.status in CREATED and customer_id and self.customers.get(customer_id) is not None:
                 # nur Metadaten: zuletzt verwendet, letzte Excel, letzte PDF – nie Darstellungswerte
                 self.customers.touch(customer_id, excel=item.path, pdf=result.output)
+                # Vertragsstand dieser PDF für den Vertragsvergleich (nur erfolgreich erstellte Einträge)
+                self._history_after_batch_item(item, customer_id, result.contracts)
         else:
             item.status = ItemStatus.FAILED
             item.error = result.error or "Unbekannter Fehler"
@@ -670,6 +672,9 @@ class BatchFlow:
         self.batch_items.clear()
         self.batch_by_id.clear()
         self.batch_resolutions.clear()
+        self._batch_saved_snapshot.clear()
+        self._batch_baselines.clear()
+        self._batch_comparisons.clear()
         self.batch_summary = None
         self.batch_filter = "all"
         self._batch_removed = None

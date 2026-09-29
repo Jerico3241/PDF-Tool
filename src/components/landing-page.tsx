@@ -29,11 +29,11 @@ const STEPS = [
 const TOOLS = [
   {
     title: "Vertragsübersichten",
-    body: "Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel aus vielen Excel-Listen in einem Durchlauf, mit Vorlagen, Kopf- und Fußzeile, Textbausteinen, Live-Vorschau und Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen.",
+    body: "Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel aus vielen Excel-Listen in einem Durchlauf, mit Vorlagen, Kopf- und Fußzeile, Textbausteinen, Live-Vorschau, Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen, und einem Vergleich mit dem letzten Vertragsstand des Kunden.",
   },
   {
     title: "PDF reparieren",
-    body: "Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen. Die Originaldatei wird nie verändert.",
+    body: "Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen – bei Bedarf wird die Dokumentstruktur aus den noch vorhandenen Objekten neu aufgebaut. Die Originaldatei wird nie verändert.",
   },
 ];
 

@@ -868,6 +868,7 @@ class CustomerFlow:
         target = self.customers.merge(target_id, source_id)
         if self._active_customer_id == source_id:
             self._active_customer_id = target_id
+        self.merge_history(target_id, source_id)
         self.customers_changed()
         self.notify("kunde_detail_info", "success", f"„{label}“ wurde in „{target.label}“ übernommen. E-Mail-Adressen und Aktivität sind vereint.", title="Zusammengeführt", auto_hide=8000)
 
@@ -932,6 +933,8 @@ class CustomerFlow:
                 button.set_enabled(enabled)
         # »Kunde · Nicht zugeordnet« unter der Excel-Prüfung folgt der aktiven Kundenakte.
         self.refresh_excel_details()
+        # Der Vertragsvergleich gilt immer der aktiven Kundenakte.
+        self.refresh_comparison()
 
     def find_customer(self) -> None:
         """Strg+F: in »Kunden« die Suche, sonst »Bekannten Kunden auswählen«."""

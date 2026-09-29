@@ -144,10 +144,13 @@ def test_structural_damage_is_repaired_completely(tmp_path: Path, make) -> None:
 def test_truncated_file_is_partially_recovered(tmp_path: Path) -> None:
     result = run_repair(samples.truncated(tmp_path / "abgeschnitten.pdf"), tmp_path)
     assert result.status is RepairStatus.PARTIALLY_RECOVERED
-    assert result.pages_after == 5 and result.incomplete_pages == [2, 3, 4, 5]
-    assert result.warnings[0] == "1 von 5 Seiten konnten vollständig rekonstruiert werden."
+    assert result.pages_after == 5 and result.incomplete_pages == [3, 4, 5]
+    assert result.warnings[0] == "2 von 5 Seiten konnten vollständig rekonstruiert werden."
+    # qpdf verwirft den Inhalt von Seite 2 (»EOF after endobj«), die Rohrekonstruktion übernimmt ihn
+    assert result.method is Method.RAW_REBUILD
     with open_output(result) as out:
         assert len(out.pages) == 5
+        assert b"Seite 2" in out.pages[1].Contents.read_bytes()
 
 
 def test_corrupt_stream_is_reported_as_partial(tmp_path: Path) -> None:
@@ -208,8 +211,8 @@ def test_page_salvage_keeps_forms_and_attachments(tmp_path: Path, monkeypatch) -
 
 
 def test_second_engine_transfers_pages(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(engine, "_stage_rewrite", lambda *args: None)
-    monkeypatch.setattr(engine, "_stage_pages", lambda *args: None)
+    for stage in ("_stage_rewrite", "_stage_pages", "_stage_lenient", "_stage_raw"):
+        monkeypatch.setattr(engine, stage, lambda *args: None)
     result = run_repair(samples.healthy(tmp_path / "gesund.pdf"), tmp_path)
     assert result.method is Method.PDFIUM and result.pages_after == 5
     # Lesezeichen gehen dabei verloren – das wird ehrlich gemeldet

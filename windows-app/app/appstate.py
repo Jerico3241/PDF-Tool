@@ -141,11 +141,11 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Neue Stapelverarbeitung in »Vertragsübersichten« (Ansicht »Stapel«): mehrere Excel-Dateien gleichzeitig vorbereiten und in einem Durchlauf als PDF erstellen.",
-    "Jede Datei wird sofort geprüft; bekannte Kunden werden über die gespeicherten E-Mail-Zuordnungen erkannt – wie im Einzelmodus.",
-    "Status je Datei, Filter, Massenaktionen und Fortschritt; ein Fehler bei einer Datei unterbricht den Stapel nicht.",
-    "»Fehlgeschlagene erneut versuchen«, »Stapel abbrechen« ohne halbe PDFs und vorhandene PDFs werden nie unbeabsichtigt überschrieben.",
-    "Kompaktere Excel-Karte: Die Vertragszahlen stehen nur noch in der Statuszeile, darunter nur zusätzliche Angaben.",
+    "Vertragsvergleich in »Vertragsübersichten«: Nach der Excel-Prüfung zeigt die Karte »Vertragsänderungen«, welche Verträge seit dem letzten Stand des Kunden neu, entfernt oder geändert sind.",
+    "Ein Vertragsstand wird nur nach einer erfolgreich erstellten PDF gespeichert – je Kundenakte, nie für die Vorschau, einen Abbruch oder einen Fehler.",
+    "Im Stapel stehen die Änderungen kompakt in der Liste (z. B. »+2 neu · ~1 geändert«), die Einzelheiten in der Detailansicht.",
+    "»PDF reparieren« rettet deutlich mehr: Öffnet keine PDF-Engine die Datei, baut PDF Tool Querverweise, Trailer und Seitenbaum aus den noch vorhandenen Objekten neu auf.",
+    "Neue dritte, tolerante PDF-Engine (pypdf); jede reparierte Datei wird danach normalisiert und streng geprüft – teilweise gerettete Dateien sind deutlich gekennzeichnet.",
     "Alles bleibt lokal auf diesem PC – keine Cloud, keine Uploads.",
 )
 

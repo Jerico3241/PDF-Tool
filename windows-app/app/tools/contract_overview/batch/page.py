@@ -22,6 +22,9 @@ from ui.navigation import Page
 from ui.theme import px
 from ui.widgets import Button, Card, CheckBox, Collapsible, Divider, FlowRow, Icon, IconButton, InfoBar, ProgressBar, ProgressRing, RoundedFrame, Text, ToggleSwitch, frame
 
+from ..history import report
+from ..history_flow import AFTER_EXPORT, NO_CUSTOMER, baseline_choices, snapshot_facts
+from ..history_widgets import ComparisonView
 from ..overview import contract_summary
 from ..page_create import DETAIL_LABEL_WIDTH, TITLE, VIEWS
 from . import resolver
@@ -78,8 +81,11 @@ def status_label(item) -> tuple[str, str]:
     return label, tone
 
 
-def facts_line(item) -> str:
-    """Kompakt und ohne Doppelungen: »5 aktive · 3 inaktiv ausgeblendet · rechnung@kunde.de«."""
+def facts_line(item, changes: str = "") -> str:
+    """Kompakt und ohne Doppelungen: »5 aktive · 3 inaktiv ausgeblendet · rechnung@kunde.de«.
+
+    ``changes``: Vertragsänderungen gegenüber dem letzten Stand, z. B. »+2 neu · ~1 geändert«.
+    """
     analysis = item.analysis
     if analysis is None or not analysis.ok:
         return ""
@@ -91,6 +97,8 @@ def facts_line(item) -> str:
         parts.append(analysis.emails[0])
     elif len(analysis.emails) > 1:
         parts.append(f"{len(analysis.emails)} Rechnungsempfänger")
+    if changes:
+        parts.append(changes)
     return " · ".join(parts)
 
 
@@ -384,6 +392,17 @@ class BatchPage:
         ui.batch_mail_info.pack(fill="x", pady=(px(8), 0))
         kunde.lift_corners()
 
+        # Vertragsänderungen gegenüber dem letzten Stand der Kundenakte (dieselbe Anzeige wie im Einzelmodus)
+        self.d_changes_card = Card(self.detail_view, "Vertragsänderungen", icons.HISTORY)
+        self.d_changes_card.pack(fill="x", pady=(px(12), 0))
+        self.d_changes = ComparisonView(
+            self.d_changes_card.body,
+            lambda snapshot_id: app.batch_choose_baseline(self.item_id, snapshot_id),
+            lambda: app.batch_copy_comparison(self.item_id),
+        )
+        self.d_changes.pack(fill="x")
+        self.d_changes_card.lift_corners()
+
         # Darstellung und Ausgabe
         output = Card(self.detail_view, "Darstellung und Ausgabe", icons.DOCUMENT, "Eigene Angaben gelten nur für diesen Eintrag; »Zurücksetzen« übernimmt wieder Kundenakte bzw. Stapel.")
         output.pack(fill="x", pady=(px(12), 0))
@@ -519,7 +538,7 @@ class BatchPage:
             res = app.batch_resolutions.get(item.id)
             label, tone = status_label(item)
             detail, detail_tone = detail_line(item, res)
-            rows.append(RowData(item.id, item.name, facts_line(item), detail, detail_tone, label, tone, item.selected))
+            rows.append(RowData(item.id, item.name, facts_line(item, app.batch_comparison_badges(item)), detail, detail_tone, label, tone, item.selected))
         self.listing.set_rows(rows)
         if rows:
             if self.filter_empty.winfo_manager():
@@ -666,6 +685,7 @@ class BatchPage:
             app.hide_notice("batch_detail_info")
         self._refresh_excel(item, res)
         self._refresh_customer(item, res, load_fields)
+        self._refresh_changes(item, res)
         self._refresh_output(item, res)
         running = item.status is ItemStatus.PROCESSING
         for button in (self.btn_pick, self.btn_no_customer, self.btn_auto_customer):
@@ -677,6 +697,27 @@ class BatchPage:
         self.detail_actions.set_visible(self.btn_open_folder, has_output)
         preview_ok, _problem = (True, "") if res is None else (not any(issue.code in resolver.PREVIEW_BLOCKING for issue in res.issues), "")
         self.btn_preview.set_enabled(preview_ok and item.analysis is not None and item.analysis.ok)
+
+    def _refresh_changes(self, item, res) -> None:
+        """Vertragsänderungen des Eintrags – mit Kundenakte und gespeichertem Stand."""
+        app = self.app
+        view = self.d_changes
+        customer = res.customer if res is not None else None
+        if item.analysis is None or not item.analysis.ok:
+            view.show_message("info", "Die Vertragsänderungen erscheinen nach der Excel-Prüfung.")
+            return
+        if customer is None:
+            view.show_message("info", NO_CUSTOMER)
+            return
+        comparison = app.batch_comparison(item)
+        if comparison is None:
+            view.show_message("info", f"{report.NO_HISTORY} {AFTER_EXPORT}")
+            return
+        snapshots = app.history_snapshots(customer.id)
+        saved = app._batch_saved_snapshot.get(item.id)
+        earlier = [snapshot for snapshot in snapshots if snapshot.id != saved]
+        choices = baseline_choices(snapshots, earlier[0] if earlier else None, {saved} if saved else set())
+        view.show_comparison(comparison, choices, comparison.baseline.id, snapshot_facts(comparison.baseline))
 
     def _refresh_excel(self, item, res) -> None:
         analysis = item.analysis

@@ -41,6 +41,8 @@ from . import page_layout
 from .batch.flow import BatchFlow
 from .customer_flow import CustomerFlow
 from .customers.matching import MatchKind
+from .history.models import records_from
+from .history_flow import HistoryFlow
 from .overview import (
     ExcelAnalysis,
     contract_summary,
@@ -75,7 +77,7 @@ BATCH_HELP_NOTES = (
 )
 
 
-class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
+class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow, HistoryFlow):
     """Vertragsübersichten als Werkzeug von PDF Tool (Einzelmodus, Stapel, Vorschau, Kunden)."""
 
     # Einrichtung --------------------------------------------------------------------
@@ -117,6 +119,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
         self._init_customers(cfg)
         self._init_preview()
         self._init_batch(cfg)
+        self._init_history()
 
     def _start_contract_overview(self) -> None:
         """Nach dem Aufbau der Seiten: automatisches Speichern und Bereitschaft verbinden."""
@@ -355,6 +358,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
             self.refresh_excel_details(animate)
             self.update_readiness()
             self.mark_preview_dirty()
+            self.refresh_comparison()
             return
         mails = [str(mail) for mail in result.get("mails") or []]
         aktiv = int(result.get("aktiv", 0) or 0)
@@ -382,6 +386,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
         self.refresh_excel_details(animate)
         self.update_readiness()
         self.mark_preview_dirty()
+        self.refresh_comparison()  # nur Anzeige – keine neue Vorschau
 
     def _excel_facts(self) -> list[tuple[str, str, str]]:
         """Angaben unter der Statuszeile – nur, was sie nicht schon nennt und was weiterhilft.
@@ -943,6 +948,10 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
             empfaenger = wahl
         auftrag = self._pdf_fields(kd, empfaenger, breite)
         auftrag["zielordner"] = Path(self.target_folder())
+        # Der Vertragsstand gehört zur Kundenakte, die beim Start aktiv war.
+        customer = self.active_customer()
+        customer_id, customer_label = (customer.id, customer.label) if customer is not None else (None, "")
+        regeln = auftrag.get("regeln")
         self.persist()
         self.busy = True
         self.hide_notice("pdf_info")
@@ -954,11 +963,18 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
         def work():
             from engine import PdfAuftrag, erstelle_pdf
 
+            job = PdfAuftrag(**auftrag, pdf_oeffnen=False, status=lambda msg: self.worker.post(self.set_status, msg, "busy"))
             # Gemeinsame Sperre mit der Vorschau: die PDF-Erzeugung läuft nie parallel.
             with RENDER_LOCK:
-                return erstelle_pdf(PdfAuftrag(**auftrag, pdf_oeffnen=False, status=lambda msg: self.worker.post(self.set_status, msg, "busy")))
+                path = erstelle_pdf(job)
+            return path, records_from(job.vertraege, regeln)
 
-        self.worker.run(work, self._done, self._fail)
+        def done(result) -> None:
+            path, records = result
+            self._done(path)
+            self._history_after_export(customer_id, customer_label, records, str(auftrag["excel"]), Path(path))
+
+        self.worker.run(work, done, self._fail)
 
     def _pdf_fields(self, kd: str, empfaenger: str, breite: float) -> dict:
         """Auftrag für ``engine.erstelle_pdf`` aus dem Formular – gemeinsam für PDF und Vorschau."""
@@ -1051,6 +1067,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
 
                 bar.show("neutral", EXCEL_EMPTY)
         self.update_readiness()
+        self.refresh_comparison()
         self.persist()
 
     def _undo_new_overview(self) -> None:

@@ -7,15 +7,19 @@ Aufruf mit der zu prüfenden Laufzeit (nicht mit einem System-Python):
 
 Geprüft wird:
 1. Import aller Laufzeitmodule (tkinter, numpy, pandas, openpyxl, xlrd, reportlab, PIL,
-   pikepdf mit qpdf, pypdfium2 mit PDFium) und der App-Module beider Werkzeuge
+   pikepdf mit qpdf, pypdfium2 mit PDFium, pypdf) und der App-Module beider Werkzeuge
 2. Vertragsübersichten: eine echte PDF aus einer Excel mit fett formatierter Zelle und
    formatierter Fußzeile; Kundenakte 2.0 (Übernahme einer Kundenhistorie aus 2.3 mit
    Sicherung, Wiedererkennung per E-Mail, Speichern) und Live-Vorschau (PDF im
    Hintergrund erzeugen, Seite mit PDFium zeichnen, temporäre Dateien löschen);
    Stapel: zwei Excel-Listen prüfen, Kunden erkennen bzw. ergänzen und mit derselben
-   Engine nacheinander erstellen – eine vorhandene PDF wird nicht überschrieben
+   Engine nacheinander erstellen – eine vorhandene PDF wird nicht überschrieben;
+   Vertragsvergleich: Stand nach dem Export speichern (unverändert nicht doppelt),
+   Änderungen erkennen
 3. PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
-   Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen
+   Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen;
+   erweiterte Wiederherstellung: klassische PDF ohne xref, Trailer, %%EOF und mit
+   defektem Seitenbaum rekonstruieren, Text und Seiten mit pypdf prüfen
 4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge und die Ansichten
    »Stapel«, »Vorschau« und »Kunden« öffnen, Einstellungen werden gespeichert)
 
@@ -68,12 +72,13 @@ def main() -> int:
     import pandas
     import PIL
     import pikepdf
+    import pypdf
     import pypdfium2
     import reportlab
     import xlrd
 
     print(f"tkinter {tkinter.TkVersion} · numpy {numpy.__version__} · pandas {pandas.__version__} · openpyxl {openpyxl.__version__} · xlrd {xlrd.__version__} · reportlab {reportlab.Version} · Pillow {PIL.__version__}")
-    print(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__}) · pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO})")
+    print(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__}) · pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO}) · pypdf {pypdf.__version__}")
     import engine
     import excelstyle
     import pdffonts
@@ -86,10 +91,20 @@ def main() -> int:
     from tools.contract_overview.batch import page as batch_page
     from tools.contract_overview.batch import processor as batch_processor
     from tools.contract_overview.batch import resolver as batch_resolver
+    from tools.contract_overview import history_flow, history_widgets
     from tools.contract_overview.customers import matching, migration, repository
+    from tools.contract_overview.history import compare as history_compare
+    from tools.contract_overview.history import models as history_models
+    from tools.contract_overview.history import report as history_report
+    from tools.contract_overview.history import repository as history_repository
     from tools.pdf_repair import engine as repair_engine
     from tools.pdf_repair import process as repair_process
-    from tools.pdf_repair.models import Condition, RepairStatus
+    from tools.pdf_repair.models import Condition, Method, RepairStatus
+    from tools.pdf_repair.recovery import lenient, rebuild, scanner
+
+    check(lenient.available(), "pypdf fehlt in der Laufzeit (dritte Engine)")
+    check(hasattr(history_widgets, "ComparisonView") and history_flow.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
+    check(hasattr(rebuild, "write_classic") and hasattr(scanner, "scan"), "Rohrekonstruktion fehlt")
 
     check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(controller, "ContractOverviewTool"), "Werkzeug Vertragsübersichten fehlt")
@@ -117,9 +132,8 @@ def main() -> int:
     styles = [style] * 14 + [style.with_(bold=True, color="#B51F1F")] * 4
     fuss = richtext.RichText(text, styles, None, style, "center")
     logo = app_dir.parent / "assets" / "hott_logo_final.png"
-    pdf = engine.erstelle_pdf(
-        engine.PdfAuftrag(excel=excel, logo=logo, kundennummer="4711", zielordner=work, fusszeile=fuss.text, fusszeile_format=fuss.to_dict())
-    )
+    auftrag = engine.PdfAuftrag(excel=excel, logo=logo, kundennummer="4711", zielordner=work, fusszeile=fuss.text, fusszeile_format=fuss.to_dict())
+    pdf = engine.erstelle_pdf(auftrag)
     data = pdf.read_bytes()
     check(data.startswith(b"%PDF") and len(data) > 5000, "PDF fehlt oder ist leer")
     check(b"Helvetica-Bold" in data, "keine fette Schrift in der PDF")
@@ -152,6 +166,22 @@ def main() -> int:
     gespeichert = repository.CustomerStore.load(akten / repository.FILE_NAME)
     check(gespeichert.get(kunde.id) is not None and gespeichert.get(kunde.id).company == "Müller & Söhne GmbH", "Kundenakte nicht dauerhaft gespeichert")
     print(f"Kundenakte: {report.migrated} Kunden übernommen (Sicherung {report.backup.name}), Wiedererkennung: {treffer.kind.value}")
+
+    # Vertragsvergleich: Stand der erstellten PDF speichern, unverändert nicht doppelt, Änderungen erkennen
+    staende = history_repository.HistoryStore(work / "daten" / history_repository.FOLDER)
+    records = history_models.records_from(auftrag.vertraege)
+    check([r.contract_number for r in records] == ["V-1", "V-2"] and records[1].net_amount == "20.00", f"Vertragsstand der PDF: {records}")
+    quelle = history_models.SnapshotSource(str(excel), history_repository.file_sha256(excel), str(pdf))
+    erster, neu_angelegt = staende.record(kunde.id, records, quelle, kunde.label)
+    zweiter, doppelt = staende.record(kunde.id, records, quelle, kunde.label)
+    check(neu_angelegt and not doppelt and zweiter.id == erster.id and staende.count(kunde.id) == 1, "unveränderter Stand wurde doppelt gespeichert")
+    from dataclasses import replace
+
+    geaendert = (records[0], replace(records[1], net_amount="25.00", net_text="25,00 €"))
+    vergleich = history_compare.compare(staende.latest(kunde.id), geaendert + (history_models.ContractRecord("V-3", "Softwarepflegevertrag", "Gamma", "2024-01-01", "jährlich", "5.00", "5,00 €", "Sofort"),))
+    check(history_report.badges(vergleich) == "+1 neu · ~1 geändert" and len(vergleich.unchanged) == 1, f"Vergleich: {history_report.counts_text(vergleich)}")
+    check(staende.snapshots("andere-kunden-id") == [], "Stände eines anderen Kunden sichtbar")
+    print(f"Vertragsvergleich: 1 Stand gespeichert, {history_report.counts_text(vergleich)}")
 
     # Live-Vorschau: dieselbe PDF im Hintergrund erzeugen und die erste Seite mit PDFium zeichnen
     doc = preview.PreviewDocument.build(dict(excel=excel, logo=logo, kundennummer="4711", fusszeile=fuss.text, fusszeile_format=fuss.to_dict()))
@@ -239,6 +269,36 @@ def main() -> int:
     with pypdfium2.PdfDocument(str(output)) as second:
         check(len(second) == result.pages_before, "PDFium liest die reparierte PDF nicht")
     print(f"Reparatur: {output.name} ({result.method.value}, {result.pages_after} Seiten, {output.stat().st_size} Bytes)")
+
+    # Erweiterte Wiederherstellung: klassische PDF 1.4 ohne xref, Trailer und %%EOF, Seitenbaum zeigt ins Leere
+    objs = {1: b"<< /Type /Catalog /Pages 2 0 R >>", 2: b"<< /Type /Pages /Kids [ 99 0 R ] /Count 1 >>", 3: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
+    for index in range(3):
+        inhalt = f"BT /F1 24 Tf 72 700 Td (Seite {index + 1} von 3) Tj ET".encode()
+        objs[5 + 2 * index] = b"<< /Length %d >>\nstream\n" % len(inhalt) + inhalt + b"\nendstream"
+        objs[4 + 2 * index] = b"<< /Type /Page /Parent 2 0 R /Contents %d 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> >>" % (5 + 2 * index)
+    roh = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    for number in sorted(objs):
+        roh += b"%d 0 obj\n" % number + objs[number] + b"\nendobj\n"
+    zerstoert = folder / "Struktur zerstört.pdf"
+    zerstoert.write_bytes(bytes(roh) + b"xref\n0 12\ngarbage 00000 f\n")
+    vorher = zerstoert.read_bytes()
+    job = repair_process.Job("analyze", {"path": str(zerstoert), "password": None})
+    results = [event[1] for event in job.wait(120) if event[0] == "result"]
+    check(bool(results) and results[0].condition is Condition.RAW_RECOVERABLE, f"Analyse (erweitert): {results[0].condition.value if results else 'ohne Ergebnis'}")
+    check(results[0].raw is not None and results[0].raw.objects == 9 and results[0].raw.pages == 3, f"Rohanalyse: {results[0].raw}")
+    job = repair_process.Job("repair", {"path": str(zerstoert), "password": None, "mode": "auto", "sha256": results[0].sha256})
+    results = [event[1] for event in job.wait(120) if event[0] == "result"]
+    check(bool(results), "Rekonstruktion ohne Ergebnis")
+    result = results[0]
+    check(result.status is RepairStatus.REPAIRED and result.method is Method.PAGE_TREE_REBUILD and result.pages_after == 3, f"Rekonstruktion: {result.status.value} {result.method} {result.pages_after} {result.error}")
+    output = repair_process.deliver(Path(result.output_path), zerstoert)
+    job.cleanup()
+    check(zerstoert.read_bytes() == vorher, "Original wurde bei der Rekonstruktion verändert")
+    texte = [(seite.extract_text() or "").strip() for seite in pypdf.PdfReader(str(output)).pages]
+    check(texte == ["Seite 1 von 3", "Seite 2 von 3", "Seite 3 von 3"], f"Text der rekonstruierten PDF: {texte}")
+    with pikepdf.open(output, attempt_recovery=False) as rebuilt:
+        check(rebuilt.get_warnings() == [] and len(rebuilt.pages) == 3, "rekonstruierte PDF öffnet nicht ohne Wiederherstellung")
+    print(f"Erweiterte Wiederherstellung: {output.name} ({result.method.value}, {result.pages_after} Seiten)")
 
     # 4. Programmstart
     if args.ui:

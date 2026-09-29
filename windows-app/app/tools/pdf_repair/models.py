@@ -17,7 +17,10 @@ class Condition(str, Enum):
     HEALTHY = "healthy"  # keine strukturellen Fehler gefunden
     REPAIRABLE = "repairable"  # beschädigte Strukturen, die sich voraussichtlich reparieren lassen
     DAMAGED = "damaged"  # schwer beschädigt: Teile der Datei sind nicht lesbar
-    UNREADABLE = "unreadable"  # keine Engine kann die Datei öffnen
+    # Keine Engine öffnet die Datei, aber die Rohanalyse findet noch Objekte, Datenströme und
+    # Seiten – die Dokumentstruktur lässt sich möglicherweise neu aufbauen
+    RAW_RECOVERABLE = "raw_recoverable"
+    UNREADABLE = "unreadable"  # auch die Rohanalyse findet keine verwertbare Struktur
     ENCRYPTED = "encrypted"  # verschlüsselt, Passwort fehlt oder ist falsch
 
 
@@ -46,6 +49,9 @@ class Method(str, Enum):
     REWRITE = "rewrite"  # Stufe 2: Struktur mit qpdf neu geschrieben
     PAGES = "pages"  # Stufe 3: lesbare Seiten einzeln übertragen (qpdf)
     PDFIUM = "pdfium"  # Stufe 3: Seiten über die zweite Engine (PDFium) übertragen
+    LENIENT = "lenient"  # Stufe 4: dritte, tolerante Engine (pypdf)
+    RAW_REBUILD = "raw_rebuild"  # Stufe 5: Objekte aus den Rohdaten, neue xref, neuer Trailer
+    PAGE_TREE_REBUILD = "page_tree_rebuild"  # Stufe 5 mit neu aufgebautem Seitenbaum
     RASTER = "raster"  # Rettungsmodus: Seiten als Bilder
 
 
@@ -57,6 +63,34 @@ class Check:
     label: str
     ok: bool | None
     detail: str = ""
+
+
+@dataclass
+class RawStructure:
+    """Ergebnis der Rohanalyse – was in den Bytes der Datei noch an PDF-Struktur steckt."""
+
+    candidates: int = 0  # gefundene Objektköpfe »N G obj«
+    objects: int = 0  # gültige Objekte (je Nummer die neueste vollständige Definition)
+    rejected: int = 0  # verworfene Kandidaten (z. B. zufällige Bytes in Datenströmen)
+    superseded: int = 0  # ältere Fassungen (inkrementelle Updates)
+    streams: int = 0
+    object_streams: int = 0
+    catalog: bool = False
+    pages: int = 0  # Seitenobjekte (/Type /Page)
+    page_nodes: int = 0  # Seitenbaum-Knoten (/Type /Pages)
+    xref_table: bool = False
+    xref_stream: bool = False
+    trailer: bool = False
+    startxref: bool = False
+    startxref_valid: bool = False
+    eof: bool = False
+    encrypted: bool = False
+    signatures: int = 0
+
+    @property
+    def recoverable(self) -> bool:
+        """Lohnt der Neuaufbau? Unverschlüsselt, Objekte vorhanden und ein Katalog oder Seiten."""
+        return not self.encrypted and self.objects >= 2 and (self.catalog or self.pages > 0)
 
 
 @dataclass
@@ -89,6 +123,7 @@ class PdfAnalysis:
     technical: list[str] = field(default_factory=list)  # Meldungen der Engines (Protokoll)
     repairable: bool = False
     rasterizable_pages: int = 0  # Seiten, die sich für den Rettungsmodus darstellen lassen
+    raw: RawStructure | None = None  # Rohanalyse (nur bei beschädigten Dateien)
     error: str | None = None
 
     @property
@@ -127,7 +162,13 @@ STAGES = {
     "rewrite": "Objekte werden rekonstruiert …",
     "write": "PDF wird neu geschrieben …",
     "pages": "Lesbare Seiten werden übertragen …",
+    "lenient": "Alternative PDF-Struktur wird geprüft …",
+    "raw_scan": "PDF-Objekte werden gesucht …",
+    "xref_rebuild": "Querverweistabelle wird rekonstruiert …",
+    "trailer_rebuild": "Trailer wird neu aufgebaut …",
+    "page_tree_rebuild": "Seitenstruktur wird neu aufgebaut …",
+    "normalize": "PDF wird normalisiert …",
     "raster": "Seiten werden als Bilder gerettet …",
-    "validate": "Ausgabe wird geprüft …",
+    "validate": "Reparierte Datei wird geprüft …",
     "finish": "Ausgabe wird gespeichert …",
 }

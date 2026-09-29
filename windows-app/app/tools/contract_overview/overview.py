@@ -35,6 +35,8 @@ class ExcelAnalysis:
     missing: tuple[str, ...] = ()
     hints: tuple[str, ...] = ()
     bold: int = 0
+    # Aktive Verträge mit Rohwerten (engine.Vertragsdaten) – Grundlage des Vertragsvergleichs
+    contracts: tuple = ()
 
     @classmethod
     def from_result(cls, result: dict | None) -> "ExcelAnalysis | None":
@@ -57,6 +59,7 @@ class ExcelAnalysis:
             missing=texts("fehlend"),
             hints=texts("hinweise"),
             bold=int(result.get("fett", 0) or 0),
+            contracts=tuple(result.get("vertraege") or ()) if ok else (),
         )
 
     @property

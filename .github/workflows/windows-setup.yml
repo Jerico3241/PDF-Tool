@@ -39,17 +39,17 @@ jobs:
           architecture: x64
 
       - name: Build- und Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0
 
-      - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel)
-        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py -q -p no:cacheprovider
+      - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py -q -p no:cacheprovider
 
-      - name: Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle)
-        run: python -m pytest windows-app/tests/test_pdf_repair.py -q -p no:cacheprovider
+      - name: Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
+        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py -q -p no:cacheprovider
 
       - name: Tests (Oberfläche)
-        timeout-minutes: 40 # normal etwa 10 Minuten – ein hängender Test bricht so früh ab
-        run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py windows-app/tests/test_app_v23.py windows-app/tests/test_app_v24.py windows-app/tests/test_app_v25.py -q -p no:cacheprovider
+        timeout-minutes: 45 # normal etwa 11 Minuten – ein hängender Test bricht so früh ab
+        run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py windows-app/tests/test_app_v23.py windows-app/tests/test_app_v24.py windows-app/tests/test_app_v25.py windows-app/tests/test_app_v26.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -126,6 +126,24 @@ jobs:
       - name: Update von 2.4.0 prüfen (Einstellungen, Kundenakten, Vorlagen, Rich Text, Reparatur-Einstellungen)
         shell: pwsh
         run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_24
+
+      - name: Vorversion 2.5.0 laden (PDF Tool)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.5"
+          $name = "PDF-Tool-Setup-2.5.0.exe"
+          gh release download v2.5.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.5.0 konnte nicht geladen werden" }
+          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.5.0 stimmt nicht: $actual" }
+          "PREVIOUS_SETUP_25=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Update von 2.5.0 prüfen (Einstellungen, Kundenakten, Vorlagen, Rich Text, Stapel- und Reparatur-Einstellungen, Vertragsstände)
+        shell: pwsh
+        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_25
 
       - uses: actions/upload-artifact@v4
         with:

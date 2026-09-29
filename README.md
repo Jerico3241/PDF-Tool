@@ -1,6 +1,6 @@
 # PDF Tool
 
-Quellcode von **PDF Tool 2.5.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
+Quellcode von **PDF Tool 2.6.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
 Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Das Repository enthält:
@@ -18,8 +18,8 @@ werden: eine PDF öffnet „PDF reparieren“, eine Excel-Liste „Vertragsüber
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
-| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau und Kundenakte mit Wiedererkennung bekannter Kunden | `app/tools/contract_overview/` (Ablauf, Seiten, `overview.py` als gemeinsame Fachlogik, `customers/` für die Kundenakte, `batch/` für den Stapel), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
-| **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen | `app/tools/pdf_repair/` |
+| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | `app/tools/contract_overview/` (Ablauf, Seiten, `overview.py` als gemeinsame Fachlogik, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
+| **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen – bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten | `app/tools/pdf_repair/` (`recovery/` für die erweiterte Wiederherstellung) |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
 Logik; gemeinsam sind nur Fenster, Navigation, Design und Dialoge (`app/vertragdesk.py`, `app/ui/`).
@@ -136,6 +136,52 @@ Gemeinsame Fachlogik von Einzel- und Stapelmodus liegt in `app/tools/contract_ov
 (Excel-Analyse als Datentyp, Statuszeile, Validierung, PDF-Auftrag, Vorlagenwerte) – es gibt keinen
 zweiten PDF-Generator und keine zweite Kundenerkennung.
 
+### Vertragsübersichten: Vertragsänderungen
+
+Nach der Excel-Prüfung zeigt die Karte **Vertragsänderungen**, was sich seit dem letzten Stand der
+aktiven Kundenakte geändert hat – „Seit 12.08.2026“, darunter „2 neu · 1 entfernt · 1 geändert ·
+4 unverändert“ in den Statusfarben (Neu grün, Entfernt rot, Geändert gelb, Unverändert neutral).
+Prominent sind nur die Änderungen; „4 unveränderte anzeigen“ blendet den Rest ein, geänderte
+Verträge klappen mit den geänderten Feldern auf („Netto: 250,00 € → 270,00 €“). „Vergleichen mit“
+wählt einen früheren Stand (Standard: „Letzter Stand“), „Änderungen kopieren“ legt den Vergleich als
+Text in die Zwischenablage. Code: `app/tools/contract_overview/history/` (Modelle, Ablage, Vergleich,
+Texte), `history_flow.py` (Ablauf), `history_widgets.py` (Anzeige).
+
+- **Stand = strukturierte Daten, keine PDF:** Nach jeder erfolgreich erstellten PDF speichert
+  PDF Tool die Verträge genau so, wie sie in der PDF stehen (Vertragsnummer, Art, Beschreibung,
+  Beginn, Abrechnungszyklus nach den Zyklus-Regeln, Netto, Zahlungsart) plus die Rohwerte der Excel.
+  Alte PDFs werden nie gelesen oder geparst; ein Vergleich funktioniert auch, wenn die alten Excel-
+  und PDF-Dateien längst gelöscht sind. Kein Stand entsteht für die Live-Vorschau, die Excel-Prüfung,
+  einen Abbruch, einen Fehler oder ohne Kundenakte.
+- **Identität:** Ein Stand gehört allein zur stabilen ID der Kundenakte – nie zu Firmenname,
+  Kundennummer oder E-Mail-Ähnlichkeit. Ein Vertrag ist seine Vertragsnummer als Text (`001234`
+  bleibt `001234`); eine neue Nummer ist „entfernt“ plus „neu“, nie eine Umbenennung.
+- **Normalisierung:** Datum als ISO-Datum, Beträge als Dezimalzahl mit zwei Nachkommastellen
+  (`250`, `250,0` und `250.00 €` sind gleich), Texte ohne Unterschiede bei Zeilenenden und Leerzeichen
+  am Rand. Formatierung (z. B. Excel-Fettschrift) ist kein Vertragsinhalt und zählt nicht.
+- **Vergleich:** neu, entfernt, geändert (mit Feld, altem und neuem Wert) und unverändert; doppelte
+  Vertragsnummern werden in ihrer Reihenfolge zugeordnet.
+- **Ablage:** `%APPDATA%\PDF-Tool\contract-history\<Kunden-ID>\<Zeit>-<ID>.json` – je Stand eine
+  kleine JSON-Datei mit `schema_version: 1`, atomar geschrieben (temporäre Datei, dann ersetzen).
+  Neben den Verträgen stehen Zeitpunkt, Kundenname zur Anzeige, Pfad und SHA-256 der Excel und der
+  Pfad der PDF. Bewusst ohne Datenbank.
+- **Keine Doppelungen:** Ein deterministischer SHA-256 über die normalisierten Vertragsdaten
+  (unabhängig von der Reihenfolge) erkennt einen unveränderten Stand; ein erneuter Export legt dann
+  keinen neuen Stand an, sondern zählt nur mit („2× erstellt, zuletzt …“).
+- **Aufbewahrung:** Je Kunde bleiben die letzten 50 unterschiedlichen Stände; beim Speichern eines
+  neuen Stands wird der älteste darüber entfernt. Beschädigte Dateien oder Dateien einer neueren
+  Version werden übersprungen, nie gelöscht. Werden Kundenakten zusammengeführt, gehören beide
+  Verläufe zum Ziel; wird eine Kundenakte gelöscht, bleiben ihre Stände erhalten (Rückgängig ist
+  möglich) und werden erst mit den übrigen Benutzerdaten bei der Deinstallation entfernt.
+- **Einführung ohne Altdaten:** Beim Update entstehen keine künstlichen Stände. Der erste Export
+  mit Kundenakte meldet „Erster Vertragsstand gespeichert“, ab dem nächsten Excel-Import gibt es
+  einen Vergleich; bis dahin steht dort „Noch kein früherer Vertragsstand vorhanden.“
+- **Stapel:** Jeder erfolgreich erstellte Eintrag mit Kundenakte speichert seinen eigenen Stand
+  (übersprungene und fehlgeschlagene nie). Die Liste zeigt kompakt „+2 neu · ~1 geändert“, die
+  Detailansicht den vollständigen Vergleich mit „Vergleichen mit“ und „Änderungen kopieren“.
+- **Reine Anzeige:** Der Vergleich ändert die PDF nicht, druckt nichts in die Übersicht und löst
+  keine neue Vorschau aus.
+
 ### Vertragsübersichten: Live-Vorschau
 
 Die Ansicht **Vorschau** erzeugt die PDF genau wie „PDF erstellen“, nur in einen privaten
@@ -149,10 +195,11 @@ Ergebnis angezeigt wird (schneller Wechsel Kunde A → B). Code: `app/tools/cont
 
 - **Analyse vor der Reparatur:** Größe, Seiten, PDF-Version, Verschlüsselung, Querverweistabelle,
   Objekte, Trailer, Seitenbaum, Metadaten, Datenströme, Formulare, Anhänge und digitale Signaturen.
-  Ergebnis: „Keine Fehler gefunden“, „Reparierbare Probleme erkannt“, „Schwer beschädigt“ oder
-  „Keine Reparatur möglich“.
-- **Mehrstufig:** (1) Prüfen und Neuaufbau mit qpdf (pikepdf), (2) Übertragen der lesbaren Seiten in
-  ein neues Dokument, (3) zweite Engine PDFium (pypdfium2). Die geprüfte Ausgabe mit den meisten
+  Ergebnis: „Keine Fehler gefunden“, „Reparierbare Probleme erkannt“, „Schwer beschädigt“,
+  „Erweiterte Wiederherstellung möglich“ oder „Keine Reparatur möglich“.
+- **Mehrstufig:** (1) Neuaufbau mit qpdf (pikepdf), (2) Übertragen der lesbaren Seiten in ein neues
+  Dokument, (3) zweite Engine PDFium (pypdfium2), (4) dritte, tolerante Engine pypdf, (5)
+  Rohrekonstruktion der Dokumentstruktur (siehe unten). Die geprüfte Ausgabe mit den meisten
   vollständigen Seiten wird verwendet. Seiten werden nicht standardmäßig in Bilder umgewandelt; der
   Rettungsmodus „Lesbare Seiten als neue PDF retten“ tut das nur nach Bestätigung.
 - **Ehrliche Ergebnisse:** repariert, teilweise wiederhergestellt („12 von 15 Seiten …“) oder
@@ -171,6 +218,48 @@ Ergebnis angezeigt wird (schneller Wechsel Kunde A → B). Code: `app/tools/cont
   begrenzt (Windows-Job-Objekt), Bildgröße und Zahl der untersuchten Objekte je Seite haben
   Obergrenzen; stürzt eine Engine an einer manipulierten Datei ab, endet nur der Arbeitsprozess.
 
+### Erweiterte PDF-Reparatur
+
+„Von keinem Parser lesbar“ heißt nicht „nicht wiederherstellbar“: Viele beschädigte Dateien enthalten
+noch alle Objekte und Datenströme, nur Querverweistabelle, Trailer, Dateiende oder Seitenbaum fehlen.
+Findet die Analyse das, heißt der Zustand **Erweiterte Wiederherstellung möglich**, und die
+Schaltfläche **PDF-Struktur rekonstruieren** startet die Wiederherstellung („PDF Tool versucht, die
+noch vorhandenen Inhalte wiederherzustellen.“). Die technischen Befunde – Objektkandidaten,
+Katalog, `/Page`-Objekte, `/Pages`-Knoten, xref, Trailer, startxref, `%%EOF` – stehen nur in den
+technischen Details. Code: `app/tools/pdf_repair/recovery/`.
+
+- **Ablauf:** qpdf neu schreiben → Seiten einzeln (qpdf) → Seiten über PDFium → pypdf
+  (`strict=False`) → Rohanalyse → neue Querverweistabelle, Trailer, startxref und `%%EOF` →
+  bei Bedarf neuer Seitenbaum → Normalisierung mit qpdf → Prüfung. Ein vollständiges Ergebnis ohne
+  Verluste beendet die Suche; der Rettungsmodus (Bilder) folgt nur nach Bestätigung.
+- **Dritte Engine:** pypdf (BSD-3-Clause) liest mit eigenen, toleranteren Regeln; dem Ergebnis wird
+  nicht vertraut – es wird mit qpdf normalisiert und wie jede Ausgabe geprüft. PyMuPDF und
+  Ghostscript wurden wegen ihrer AGPL-Lizenz nicht verwendet (siehe `THIRD_PARTY_LICENSES.md`).
+- **Rohanalyse** (`recovery/scanner.py`): durchsucht die Datei per `mmap` blockweise nach
+  Objektköpfen `N G obj`. Ein Kandidat zählt nur mit Trennzeichen davor, gültigem Objektanfang und
+  `endobj`; Datenströme werden über `/Length` oder `endstream` übersprungen – zufällige Bytes wie
+  „20 0 obj … /Type /Page“ in Bild- oder Schriftdaten werden nie zu Objekten. Bei inkrementellen
+  Updates gilt die letzte vollständige Definition; Objektströme werden entpackt, soweit sie nur mit
+  Flate komprimiert sind (andere Filter werden nicht geraten).
+- **Neuaufbau** (`recovery/rebuild.py`): alle gültigen Objekte unverändert übernehmen, klassische
+  Querverweistabelle mit exakten Offsets, neuer Trailer mit `/Size` und `/Root` (`/Info` und `/ID`
+  nur, wenn sicher vorhanden), `startxref` und `%%EOF`. Fehlt der Katalog, entsteht ein neuer.
+  Ist der Seitenbaum defekt (auch Verweise ins Leere, die qpdf beim Öffnen stillschweigend
+  entfernt), entsteht ein neuer `/Pages`-Knoten aus den gefundenen `/Page`-Objekten: Reihenfolge des
+  erhaltenen Baums, übrige Seiten nach Objektnummer, `/Parent` gesetzt, Inhalte, Ressourcen,
+  MediaBox, CropBox, Rotate und Anmerkungen bleiben; geerbte Eigenschaften werden vorher auf die
+  Seiten übertragen. Fehlende Schriften mit Ein-Byte-Text werden durch Helvetica ersetzt und
+  gemeldet; Zwei-Byte-Text bekommt nie eine geratene Schrift.
+- **Rangfolge und Prüfung:** Kandidaten zählen nach vollständigen Seiten, Seitenzahl, Struktur statt
+  Bildern, Verlusten und Methode. Jede Ausgabe muss existieren, eine PDF-Kennung und `%%EOF` haben,
+  sich mit qpdf ohne Wiederherstellung öffnen lassen, einen lesbaren Seitenbaum mit plausibler
+  Seitenzahl haben und von PDFium geöffnet werden. Fehlen Seiten oder Inhalte oder wurden Schriften
+  ersetzt, lautet das Ergebnis „teilweise wiederhergestellt“ – nie „repariert“.
+- **Grenzen:** Verschlüsselte Dateien, deren Verschlüsselungsangaben fehlen, werden nicht
+  rekonstruiert – ein Passwortschutz wird nie umgangen und `/Encrypt` nie geraten. Querverweis-
+  Datenströme werden nicht „repariert“, sondern durch eine neue Tabelle ersetzt. Das Original wird
+  nur gelesen; die Ausgabe heißt wie gewohnt `<Name>_repariert.pdf`.
+
 ## Installation
 
 Das Setup `PDF-Tool-Setup-<Version>.exe` enthält Python, qpdf (über pikepdf), PDFium (über
@@ -188,6 +277,11 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
   (`migration-backup-<Version>.zip`), dann Kopie mit Prüfung jeder Datei (Größe und SHA-256).
   Der alte Datenordner bleibt unverändert erhalten; schlägt die Übernahme fehl, arbeitet die App mit
   ihm weiter.
+- **Update von 2.5:** Das Setup ersetzt nur Programmdateien; Einstellungen, Kundenakten, Vorlagen,
+  Textbausteine, Rich-Text-Kopf- und Fußzeilen, Zyklus-Regeln, der gespeicherte Stapel mit seinen
+  Einstellungen und die Einstellungen von „PDF reparieren“ bleiben unverändert. Vertragsstände
+  (`contract-history`) sind Benutzerdaten: Ein Update löscht sie nie; bei der Deinstallation
+  werden sie nur mit den übrigen Benutzerdaten und nur auf Nachfrage entfernt.
 - **Update von 2.4:** Das Setup ersetzt nur Programmdateien; Einstellungen, Kundenakten, Vorlagen,
   Rich-Text-Kopf- und Fußzeilen und die Einstellungen von „PDF reparieren“ bleiben unverändert.
 - **Update von 2.3:** Das Setup ersetzt nur Programmdateien. Beim ersten Start übernimmt die App den
@@ -199,9 +293,15 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
 
 Alle Dateien werden vollständig lokal auf dem PC verarbeitet; es wird nichts hochgeladen und keine
 Verbindung zu einem Dienst aufgebaut. PDF Tool schreibt Einstellungen, die Kundenakten
-(`kundenakten.json`), den aktuellen Stapel (`stapel.json`) und die technischen Protokolle
-`pdf-repair.log` und `stapel.log` in den Datenordner. Auch die Stapelverarbeitung arbeitet
+(`kundenakten.json`), die Vertragsstände (`contract-history\`), den aktuellen Stapel (`stapel.json`)
+und die technischen Protokolle `pdf-repair.log` und `stapel.log` in den Datenordner. Auch die
+Stapelverarbeitung, der Vertragsvergleich und die erweiterte PDF-Wiederherstellung arbeiten
 vollständig lokal – keine Cloud, keine Uploads.
+
+**Vertragsstände** enthalten nur, was ohnehin in der erstellten Übersicht steht, und bleiben auf
+diesem PC. Protokolle enthalten weder Vertragsdaten noch Verläufe von Kunden; Fehler beim Speichern
+eines Stands werden ohne Vertragsinhalte protokolliert. Wer die Benutzerdaten sichert, sichert den
+Ordner `%APPDATA%\PDF-Tool` vollständig – `contract-history` gehört dazu.
 
 **Kundenakten und E-Mail-Zuordnungen** sind ausschließlich lokal gespeicherte Nutzerdaten: keine
 Cloud, keine Telemetrie, keine Synchronisierung, keine E-Mail-Abfrage, keine Internetsuche und
@@ -236,8 +336,11 @@ PDF-Reparatur im Arbeitsprozess, Kundenakte, Vorschau, Stapel, Programmstart) un
 Setup: stille Installation, Programmstart, stille Deinstallation, das Update vom Übersichten-Ersteller
 2.2.0 (ein Eintrag unter „Installierte Apps“, Ordner, Verknüpfungen, Datenübernahme), das Update
 von PDF Tool 2.3.0 mit Beispieldaten (Kundenverlauf wird mit Sicherung zu Kundenakten,
-Formatierung, Standard-Fußzeile und Vorlagen bleiben) und das Update von PDF Tool 2.4.0 mit
-Beispieldaten (Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten). Manuell gestartet mit
+Formatierung, Standard-Fußzeile und Vorlagen bleiben), das Update von PDF Tool 2.4.0 mit
+Beispieldaten (Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten) und das
+Update von PDF Tool 2.5.0 mit Beispieldaten (zusätzlich Stapel-Einstellungen und Vertragsstände).
+Der Runtime-Smoke-Test prüft außerdem pypdf, die Rohrekonstruktion einer beschädigten PDF und das
+Speichern und Vergleichen eines Vertragsstands. Manuell gestartet mit
 `release: true` veröffentlicht sie danach das Release `v<Version>` („PDF Tool <Version>“) mit Setup
 und Prüfsumme – nur wenn alle Prüfungen bestanden sind.
 
@@ -250,7 +353,12 @@ py -3.13 -m pytest windows-app\tests
 
 Die Tests erzeugen ihre Test-PDFs selbst (`windows-app/tests/pdfsamples.py`): gültige Dateien,
 falsche Querverweise, fehlender Trailer, abgeschnittene Dateien, beschädigte Datenströme, nicht
-reparierbare Dateien, verschlüsselte PDFs, Formulare, Anhänge, Signaturen und große PDFs.
+reparierbare Dateien, verschlüsselte PDFs, Formulare, Anhänge, Signaturen und große PDFs – für die
+erweiterte Wiederherstellung zusätzlich klassische PDF 1.4 ohne xref, Trailer, `%%EOF` oder
+Seitenbaum, falsche `/Parent`-Verweise, geerbte Ressourcen, Binärdaten mit scheinbaren
+Objektköpfen, inkrementelle Updates, Objektströme und eine Nachbildung einer realen, nach den Seiten
+abgeschnittenen Datei. Echte Kundendateien liegen nie im Repository; eine lokale Beispieldatei lässt
+sich mit `PDF_TOOL_REAL_SAMPLE=<Pfad>` zusätzlich prüfen.
 
 Das App-Symbol entsteht mit `python windows-app/scripts/make_icons.py` (Windows-Symbol, Favicons
 und Logo der Downloadseite).
@@ -258,7 +366,8 @@ und Logo der Downloadseite).
 ## Lizenzen
 
 PDF Tool nutzt ausschließlich Bibliotheken mit freien Lizenzen, darunter pikepdf (MPL-2.0) mit
-qpdf (Apache-2.0) und pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium (BSD-3-Clause). Die vollständige
+qpdf (Apache-2.0), pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium (BSD-3-Clause) und pypdf
+(BSD-3-Clause). Die vollständige
 Übersicht steht in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md); die Lizenztexte liegen im
 Setup bei den jeweiligen Paketen (`runtime\Lib\site-packages\*.dist-info`).
 
