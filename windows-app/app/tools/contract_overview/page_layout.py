@@ -158,7 +158,7 @@ def build(app: "App", host) -> Page:
     ui.regeln_info.pack(fill="x", pady=(px(8), 0))
 
     # Verlauf (bis 2.2 unter »Einstellungen«) ------------------------------------------
-    history = SettingsCard(page.content, icons.HISTORY, "Verlauf löschen", "Entfernt zuletzt verwendete Kunden und zuletzt erstellte PDFs aus den Listen. Dateien bleiben erhalten.")
+    history = SettingsCard(page.content, icons.HISTORY, "Verlauf löschen", "Leert die Liste »Zuletzt erstellt«. PDF-Dateien und Kundenakten bleiben erhalten – Kundenakten verwalten Sie in der Ansicht »Kunden«.")
     page.add_section(history, pady=(px(12), 0))
     Button(history.control, "Löschen", app.clear_history, icon=icons.DELETE).pack()
     ui.daten_info = InfoBar(page.content)

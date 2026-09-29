@@ -216,20 +216,30 @@ def test_text_block_keeps_formatting_across_restart(app) -> None:
         schliessen(zweite)
 
 
-def test_customer_history_keeps_formatting(app) -> None:
+def test_customer_record_keeps_formatting(app) -> None:
     fuss, kopf = formatiere_fuss_und_kopf(app)
     app.var_firma.set("Format AG")
     app.var_kd.set("777")
-    app._remember_customer()
+    app.save_as_customer()  # bewusst als Kundenakte speichern (samt Formatierung)
+    ident = app.active_customer().id
     zweite = neustart(app)
     try:
+        assert zweite.active_customer() is not None and zweite.active_customer().id == ident
         zweite.ui.txt_fuss.set("x")
         zweite.ui.txt_kopf.set("y")
-        label = next(label for label, eintrag in zweite._recent_by_label.items() if eintrag["kundennummer"] == "777")
-        zweite.on_recent_pick(label)
+        zweite.apply_customer(ident)
+        # vom Benutzer geänderte Texte werden nicht still überschrieben …
+        assert zweite.footer_text() == "x" and zweite.header_text() == "y"
+        assert any("Texte der Kundenakte" in text for text in _action_texts(zweite.ui.kunde_info))
+        # … sondern auf Wunsch übernommen – mit Formatierung
+        zweite.apply_customer_texts(ident)
         assert zweite.footer_rich() == fuss and zweite.header_rich() == kopf
     finally:
         schliessen(zweite)
+
+
+def _action_texts(bar) -> list[str]:
+    return [child.text() for child in bar._actions.winfo_children() if hasattr(child, "text")]
 
 
 def test_old_config_with_plain_header_and_footer(config_file: Path, monkeypatch) -> None:

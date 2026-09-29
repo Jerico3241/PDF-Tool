@@ -39,7 +39,7 @@ from appstate import (  # noqa: E402
     major_minor,
     save_config,
 )
-from tools.contract_overview import page_create, page_layout  # noqa: E402
+from tools.contract_overview import page_create, page_customers, page_layout, page_preview  # noqa: E402
 from tools.contract_overview.controller import HINT as CONTRACT_HINT  # noqa: E402
 from tools.contract_overview.controller import ContractOverviewTool  # noqa: E402
 from tools.pdf_repair import page as page_repair  # noqa: E402
@@ -142,6 +142,7 @@ class App(ContractOverviewTool, tk.Tk):
         self._active = True
         self._hook: windows.WindowHook | None = None
         self._closing = False
+        self._page = ""
         self._start_zoomed = False
         self._start_position: tuple[int, int] | None = None
         # Das Mica-Material (Desktophintergrund) lädt parallel zum Aufbau der Oberfläche.
@@ -157,6 +158,8 @@ class App(ContractOverviewTool, tk.Tk):
                 "home": lambda host: page_home.build(self, host),
                 "create": lambda host: page_create.build(self, host),
                 "layout": lambda host: page_layout.build(self, host),
+                "preview": lambda host: page_preview.build(self, host),
+                "customers": lambda host: page_customers.build(self, host),
                 "repair": lambda host: page_repair.build(self, host),
                 "settings": lambda host: page_settings.build(self, host),
             },
@@ -177,6 +180,8 @@ class App(ContractOverviewTool, tk.Tk):
             self.bind_all(sequence, lambda _e: (self._primary_action(), "break")[1])
         for sequence in ("<Control-o>", "<Control-O>"):
             self.bind_all(sequence, lambda _e: (self._open_action(), "break")[1])
+        for sequence in ("<Control-f>", "<Control-F>"):
+            self.bind_all(sequence, lambda _e: (self._find_action(), "break")[1])
         self.bind_all("<F1>", lambda _e: self.show_help())
         for number, key in enumerate(SHORTCUT_TARGETS, start=1):
             self.bind_all(f"<Control-Key-{number}>", lambda _e, k=key: self.open_tool(k))
@@ -400,15 +405,22 @@ class App(ContractOverviewTool, tk.Tk):
             self.worker.run(self.mica.load, lambda _ok: self._apply_chrome())
 
     def _page_changed(self, key: str) -> None:
+        previous, self._page = self._page, key
         if key == "settings":
             page_settings.refresh(self)
         tool = tool_for_page(key)
         hint = {CONTRACTS.key: CONTRACT_HINT, REPAIR.key: page_repair.HINT}.get(tool.key if tool else "", HOME_HINT)
         self.nav.status.set_hint(hint)
-        for name, view in (("selector_create", "create"), ("selector_layout", "layout")):
-            selector = getattr(self.ui, name, None)
-            if selector is not None and key in ("create", "layout"):
-                selector.select(key)
+        # Die Auswahlleisten aller Ansichten von »Vertragsübersichten« zeigen dieselbe Ansicht.
+        if key in CONTRACTS.pages:
+            for view in CONTRACTS.pages:
+                selector = getattr(self.ui, f"selector_{view}", None)
+                if selector is not None:
+                    selector.select(key)
+        if previous == "customers" and key != "customers" and self.customer_page is not None:
+            self.customer_page.flush()
+        if key == "preview":
+            self.preview_shown()
 
     # ------------------------------------------------------------------
     # Werkzeuge
@@ -428,6 +440,11 @@ class App(ContractOverviewTool, tk.Tk):
             self.start_pdf()
         elif tool == REPAIR.key:
             self.repair.start_repair()
+
+    def _find_action(self) -> None:
+        """Strg+F: in »Vertragsübersichten« einen bekannten Kunden suchen."""
+        if self.current_tool() == CONTRACTS.key:
+            self.find_customer()
 
     def _open_action(self) -> None:
         """Strg+O: Datei für das sichtbare Werkzeug wählen."""
@@ -580,6 +597,7 @@ class App(ContractOverviewTool, tk.Tk):
         if self._closing:
             return
         self.ctx.anim.later("autosave", 800, self._autosave)
+        self._contract_changed()
 
     # Kopf- und Fußzeile melden Änderungen über denselben verzögerten Weg.
     schedule_text_save = schedule_save

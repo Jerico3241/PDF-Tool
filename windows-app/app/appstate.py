@@ -141,12 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Die App heißt jetzt PDF Tool – mit einer Startseite für alle Werkzeuge.",
-    "Vertragsübersichten sind ein eigenes Werkzeug. Alle Funktionen, Vorlagen, Textbausteine, Regeln und der Kundenverlauf bleiben erhalten.",
-    "Neu: »PDF reparieren« analysiert beschädigte PDF-Dateien und überträgt lesbare Inhalte in eine neue PDF.",
-    "Die Originaldatei wird nie überschrieben; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
-    "Verschlüsselte PDFs lassen sich mit dem richtigen Passwort reparieren – das Passwort wird nicht gespeichert.",
-    "Alle Dateien werden vollständig lokal auf diesem PC verarbeitet.",
+    "Kundenakte 2.0 in »Vertragsübersichten«: Kunden mit Kundennummer, mehreren E-Mail-Adressen, bevorzugtem Logo, Zielordner, Vorlage sowie Kopf- und Fußzeile.",
+    "Bekannte Kunden werden nach der Excel-Prüfung an der Rechnungsempfänger-E-Mail wiedererkannt – »Übernehmen«, »Kundenakte« oder »Ignorieren«.",
+    "Neue Ansicht »Kunden«: suchen, sortieren, bearbeiten, E-Mail-Adressen zuordnen, Doppelungen zusammenführen und Kundenakten löschen.",
+    "Neue Ansicht »Vorschau«: die PDF vor dem Erstellen sehen – mit Seiten und Zoom, aktualisiert bei jeder Änderung.",
+    "Der bisherige Kundenverlauf wurde einmalig als Kundenakten übernommen (mit Sicherung).",
+    "Kundendaten bleiben ausschließlich lokal auf diesem PC – keine Cloud, keine Internetabfrage.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
@@ -173,7 +173,6 @@ HEADER_FORMAT = "kopfzeile_format"
 FOOTER_FORMAT = "fusszeile_format"
 BAUSTEIN_FORMAT = "format"
 
-MAX_KUNDEN = 12
 MAX_PDFS = 8
 MAX_VORLAGEN = 20
 MAX_BAUSTEINE = 20
@@ -219,20 +218,6 @@ def footer_from(entry: dict | None, fallback: str = DEFAULT_FOOTER) -> str:
     return value if value.strip() else fallback
 
 
-def customer_footer(entry: dict | None) -> str | None:
-    """Fußzeile einer Kundenakte oder ``None``, wenn sie keine sinnvolle eigene Fußzeile hat.
-
-    Die Kundenakte merkt sich die Fußzeile automatisch. Ein leerer Wert aus älteren
-    Versionen darf die aktuell gültige Fußzeile deshalb nicht ersetzen.
-    """
-    if not isinstance(entry, dict):
-        return None
-    value = entry.get("fusszeile")
-    if isinstance(value, str) and value.strip():
-        return value
-    return None
-
-
 # --- Formatierte Kopf- und Fußzeile (Rich Text) ---------------------------------------
 #
 # Der reine Text bleibt unter »kopfzeile«/»fusszeile« gespeichert (kompatibel zu älteren
@@ -257,22 +242,6 @@ def header_rich_from(entry: dict | None) -> RichText:
     text = entry.get("kopfzeile") if isinstance(entry, dict) else None
     fmt = entry.get(HEADER_FORMAT) if isinstance(entry, dict) else None
     return RichText.from_storage(text if isinstance(text, str) else "", fmt, HEADER_STYLE, HEADER_ALIGN)
-
-
-def customer_footer_rich(entry: dict | None) -> RichText | None:
-    """Eigene Fußzeile einer Kundenakte mit Formatierung – ``None`` bei leeren Altwerten."""
-    text = customer_footer(entry)
-    if text is None:
-        return None
-    return RichText.from_storage(text, entry.get(FOOTER_FORMAT), FOOTER_STYLE, FOOTER_ALIGN)  # type: ignore[union-attr]
-
-
-def customer_header_rich(entry: dict | None) -> RichText | None:
-    """Kopfzeile einer Kundenakte (auch bewusst leer); ``None``, wenn sie keine gespeichert hat."""
-    if not isinstance(entry, dict) or "kopfzeile" not in entry:
-        return None
-    text = entry.get("kopfzeile")
-    return RichText.from_storage(text if isinstance(text, str) else "", entry.get(HEADER_FORMAT), HEADER_STYLE, HEADER_ALIGN)
 
 
 def baustein_rich(entry: dict | None) -> RichText:
@@ -344,11 +313,14 @@ def save_config(data: dict, path: Path | None = None) -> bool:
 
 
 class State:
-    """Alle Listen und Werte, die zwischen Starts erhalten bleiben (kompatibel zu 2.0.5)."""
+    """Alle Listen und Werte, die zwischen Starts erhalten bleiben (kompatibel zu 2.0.5).
+
+    Die Kundenhistorie bis 2.3 (``kunden``) übernimmt die Kundenakte 2.0 beim ersten Start
+    (``tools/contract_overview/customers/migration.py``).
+    """
 
     def __init__(self, cfg: dict) -> None:
         self.raw = dict(cfg)
-        self.kunden = [c for c in cfg.get("kunden", []) if isinstance(c, dict)][:MAX_KUNDEN]
         self.bausteine = [b for b in cfg.get("bausteine", []) if isinstance(b, dict) and b.get("name")]
         if "regeln" in cfg:
             self.regeln = normalize_regeln(cfg.get("regeln"))
@@ -359,61 +331,6 @@ class State:
         staende = cfg.get("staende", {})
         self.staende = staende if isinstance(staende, dict) else {}
         self.gesehen = str(cfg.get("gesehen", ""))
-
-    # Kundenakte ---------------------------------------------------------------
-    def remember_customer(
-        self,
-        firma: str,
-        kd: str,
-        mail: str,
-        excel: str,
-        logo: str,
-        fusszeile: str,
-        kopfzeile: str,
-        pdf: str | None = None,
-        fusszeile_format: dict | None = None,
-        kopfzeile_format: dict | None = None,
-    ) -> bool:
-        firma, kd = firma.strip(), kd.strip()
-        if not firma and not kd:
-            return False
-        key = (firma.casefold(), kd)
-        previous_pdf = ""
-        for alt in self.kunden:
-            if (str(alt.get("firmenname", "")).casefold(), str(alt.get("kundennummer", ""))) == key:
-                previous_pdf = str(alt.get("pdf") or "")
-                break
-        self.kunden = [alt for alt in self.kunden if (str(alt.get("firmenname", "")).casefold(), str(alt.get("kundennummer", ""))) != key]
-        eintrag = {
-            "firmenname": firma,
-            "kundennummer": kd,
-            "rechnungsempfaenger": mail.strip(),
-            "excel": excel.strip(),
-            "logo": logo.strip(),
-            "fusszeile": fusszeile,
-            "kopfzeile": kopfzeile,
-            "pdf": previous_pdf if pdf is None else pdf,
-        }
-        if fusszeile_format is not None:
-            eintrag[FOOTER_FORMAT] = fusszeile_format
-        if kopfzeile_format is not None:
-            eintrag[HEADER_FORMAT] = kopfzeile_format
-        self.kunden.insert(0, eintrag)
-        self.kunden = self.kunden[:MAX_KUNDEN]
-        return True
-
-    @staticmethod
-    def customer_label(eintrag: dict) -> str:
-        return f"{eintrag.get('firmenname') or 'Ohne Name'} · {eintrag.get('kundennummer') or '–'}"
-
-    def customer_labels(self) -> dict[str, dict]:
-        labels: dict[str, dict] = {}
-        for eintrag in self.kunden:
-            label = self.customer_label(eintrag)
-            while label in labels:
-                label += " "
-            labels[label] = eintrag
-        return labels
 
     # PDFs -------------------------------------------------------------------------
     def remember_pdf(self, path: str) -> None:

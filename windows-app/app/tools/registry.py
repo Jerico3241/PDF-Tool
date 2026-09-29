@@ -14,7 +14,7 @@ CONTRACTS = ToolInfo(
     title="Vertragsübersichten",
     description="Erstellt professionelle Vertragsübersichten aus Excel-Dateien.",
     glyph=icons.DOCUMENT,
-    pages=("create", "layout"),
+    pages=("create", "layout", "preview", "customers"),
     shortcut="Strg+2",
 )
 REPAIR = ToolInfo(

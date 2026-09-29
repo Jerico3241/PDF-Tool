@@ -9,11 +9,13 @@ Geprüft wird:
 1. Import aller Laufzeitmodule (tkinter, numpy, pandas, openpyxl, xlrd, reportlab, PIL,
    pikepdf mit qpdf, pypdfium2 mit PDFium) und der App-Module beider Werkzeuge
 2. Vertragsübersichten: eine echte PDF aus einer Excel mit fett formatierter Zelle und
-   formatierter Fußzeile
+   formatierter Fußzeile; Kundenakte 2.0 (Übernahme einer Kundenhistorie aus 2.3 mit
+   Sicherung, Wiedererkennung per E-Mail, Speichern) und Live-Vorschau (PDF im
+   Hintergrund erzeugen, Seite mit PDFium zeichnen, temporäre Dateien löschen)
 3. PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen
-4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge öffnen,
-   Einstellungen werden gespeichert)
+4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge und die Ansichten
+   »Vorschau« und »Kunden« öffnen, Einstellungen werden gespeichert)
 
 Endet mit Code 0 und »OK«, sonst mit einer Fehlermeldung und Code 1.
 """
@@ -76,13 +78,16 @@ def main() -> int:
     import richtext
     import vertragdesk
     from tools import registry
-    from tools.contract_overview import controller
+    from tools.contract_overview import controller, customer_flow, page_customers, page_preview, preview
+    from tools.contract_overview.customers import matching, migration, repository
     from tools.pdf_repair import engine as repair_engine
     from tools.pdf_repair import process as repair_process
     from tools.pdf_repair.models import Condition, RepairStatus
 
     check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(controller, "ContractOverviewTool"), "Werkzeug Vertragsübersichten fehlt")
+    check(registry.CONTRACTS.pages == ("create", "layout", "preview", "customers"), "Ansichten von Vertragsübersichten fehlen")
+    check(hasattr(page_customers, "CustomerPage") and hasattr(page_preview, "PreviewView"), "Ansichten »Kunden« bzw. »Vorschau« fehlen")
     print(f"App {vertragdesk.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
 
     # 2. PDF mit Excel-Fettschrift und formatierter Fußzeile
@@ -112,6 +117,43 @@ def main() -> int:
     check(b"Helvetica-Bold" in data, "keine fette Schrift in der PDF")
     print(f"PDF: {pdf.name} ({len(data)} Bytes)")
     check(excelstyle.SOURCE_ROW == "_source_excel_row", "Quellzeilen-Spalte unerwartet")
+
+    # Kundenakte 2.0: Kundenhistorie wie aus 2.3 übernehmen (mit Sicherung), wiedererkennen, speichern
+    import json
+
+    akten = work / "kundenakten"
+    akten.mkdir()
+    alt = {
+        "gesehen": "2.3.0",
+        "kunden": [
+            {"firmenname": "Müller & Söhne GmbH", "kundennummer": "0815", "rechnungsempfaenger": "Rechnung@Mueller.de", "fusszeile": fuss.text, "fusszeile_format": fuss.to_dict(), "kopfzeile": ""},
+            {"firmenname": "Alt AG", "kundennummer": "1", "rechnungsempfaenger": "", "fusszeile": "", "kopfzeile": ""},
+        ],
+    }
+    alt_datei = akten / "gui-config.json"
+    alt_datei.write_text(json.dumps(alt, ensure_ascii=False, indent=2), encoding="utf-8")
+    store, report = migration.open_store(akten, alt, alt_datei)
+    check(report is not None and report.ok and report.migrated == 2, f"Übernahme der Kundenhistorie: {report}")
+    check(report.backup is not None and report.backup.read_bytes() == alt_datei.read_bytes(), "Sicherung vor der Übernahme weicht ab")
+    treffer = store.match([" RECHNUNG@mueller.de "])
+    check(treffer.kind is matching.MatchKind.SINGLE, f"Wiedererkennung: {treffer.kind.value}")
+    kunde = store.get(treffer.customer_id)
+    check(customer_flow.footer_of(kunde) == fuss, "Formatierung der Fußzeile ging bei der Übernahme verloren")
+    check(customer_flow.footer_of(next(k for k in store.all() if k.number == "1")) is None, "leere Fußzeile aus 2.3 wurde übernommen")
+    check(store.match(["rechnung@mueller-gmbh.de"]).kind is matching.MatchKind.NONE, "unbekannte Adresse wurde zugeordnet")
+    gespeichert = repository.CustomerStore.load(akten / repository.FILE_NAME)
+    check(gespeichert.get(kunde.id) is not None and gespeichert.get(kunde.id).company == "Müller & Söhne GmbH", "Kundenakte nicht dauerhaft gespeichert")
+    print(f"Kundenakte: {report.migrated} Kunden übernommen (Sicherung {report.backup.name}), Wiedererkennung: {treffer.kind.value}")
+
+    # Live-Vorschau: dieselbe PDF im Hintergrund erzeugen und die erste Seite mit PDFium zeichnen
+    doc = preview.PreviewDocument.build(dict(excel=excel, logo=logo, kundennummer="4711", fusszeile=fuss.text, fusszeile_format=fuss.to_dict()))
+    try:
+        bild, breite, hoehe = doc.render(0, 1.0)
+        check(doc.pages >= 1 and breite > 300 and hoehe > 300 and len(bild) > 1000, "Vorschau ist leer")
+    finally:
+        doc.close()
+    check(not doc.folder.exists(), "Vorschau-Dateien wurden nicht gelöscht")
+    print(f"Vorschau: {doc.pages} Seite(n), erste Seite {breite}×{hoehe} Pixel")
 
     # 3. PDF reparieren – im eigenen Arbeitsprozess wie in der App
     import re
@@ -162,6 +204,10 @@ def main() -> int:
             app.open_tool("contracts")
             app.update()
             shown["contracts"] = app.nav.current
+            for view in ("preview", "customers"):
+                app.nav.navigate(view)
+                app.update()
+                shown[view] = app.nav.current
             app._on_close()
 
         app.after(3000, probe)
@@ -170,6 +216,7 @@ def main() -> int:
         check(shown.get("page") == "home", "Startseite fehlt")
         check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
         check(shown.get("repair") == "repair" and shown.get("contracts") == "create", "Werkzeuge lassen sich nicht öffnen")
+        check(shown.get("preview") == "preview" and shown.get("customers") == "customers", "Ansichten »Vorschau« und »Kunden« lassen sich nicht öffnen")
         config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
         check(config.is_file(), "Einstellungen wurden beim Beenden nicht gespeichert")
         print(f"Programmstart: Fenster sichtbar, beendet nach {time.monotonic() - started:.1f} s")

@@ -1,6 +1,9 @@
 """Werkzeug »Vertragsübersichten«: Excel-Liste prüfen, Kundendaten, Vorlagen,
 Kopf- und Fußzeile, Zyklus-Regeln und PDF-Erstellung.
 
+Kundenakten (Wiedererkennung, Übernahme, Verwaltung) stehen in ``customer_flow``,
+die Live-Vorschau in ``preview``.
+
 Die Logik ist ein Baustein (Mixin) des Hauptfensters: Formularwerte und Methoden
 bleiben unter ``app.…`` erreichbar. Vom Hauptfenster nutzt das Werkzeug nur die
 gemeinsame Infrastruktur (``ui``, ``nav``, ``worker``, ``ctx``, ``notify``,
@@ -26,8 +29,6 @@ from appstate import (
     HEADER_FORMAT,
     ICON_FILE,
     baustein_rich,
-    customer_footer_rich,
-    customer_header_rich,
     default_footer_rich,
     desktop_dir,
     footer_rich_from,
@@ -37,13 +38,14 @@ from richtext import RichText
 from ui import dialogs, windows
 
 from . import page_layout
+from .customer_flow import CustomerFlow
+from .preview import RENDER_LOCK, PreviewFlow
 
 # Tastenhinweis in der Statuszeile, solange eine Seite des Werkzeugs sichtbar ist
-HINT = "Strg+Enter  PDF erstellen   ·   Strg+O  Excel öffnen"
+HINT = "Strg+Enter  PDF erstellen   ·   Strg+O  Excel öffnen   ·   Strg+F  Kunde suchen"
 
 
-
-class ContractOverviewTool:
+class ContractOverviewTool(CustomerFlow, PreviewFlow):
     """Vertragsübersichten als Werkzeug von PDF Tool."""
 
     # Einrichtung --------------------------------------------------------------------
@@ -74,17 +76,20 @@ class ContractOverviewTool:
         self._analysis: dict | None = None
         self._analysis_path = ""
         self._undo_overview: tuple[str, str, str, str] | None = None
+        self._undo_overview_customer: dict | None = None
         self._drag_saved: tuple | None = None
         self._ready_job = None
-        self._recent_by_label: dict[str, dict] = {}
         self._pdf_by_label: dict[str, str] = {}
-        self._undo_customer: tuple[str, str, str] | None = None
+        self._undo_customer: tuple[tuple[str, str, str], dict | None] | None = None
         self.busy = False
         self.kd_required = False
         self._initial_check = False
+        self._init_customers(cfg)
+        self._init_preview()
 
     def _start_contract_overview(self) -> None:
         """Nach dem Aufbau der Seiten: automatisches Speichern und Bereitschaft verbinden."""
+        self._start_customers()
         # Eingaben automatisch speichern – verzögert, nicht bei jedem Tastendruck.
         for var in (
             self.var_firma, self.var_kd, self.var_mail, self.var_excel, self.var_logo, self.var_ziel,
@@ -92,8 +97,8 @@ class ContractOverviewTool:
             self.var_open, self.var_baustein,
         ):
             var.trace_add("write", lambda *_a: self.schedule_save())
-        # »Bereit zum Erstellen« folgt jeder Änderung einer Pflichtangabe.
-        for var in (self.var_kd, self.var_mail, self.var_excel, self.var_logo, self.var_ziel, self.var_breite):
+        # »Bereit zum Erstellen« (und die Zeile der aktiven Kundenakte) folgen jeder Änderung.
+        for var in (self.var_firma, self.var_kd, self.var_mail, self.var_excel, self.var_logo, self.var_ziel, self.var_breite, self.var_vorlage):
             var.trace_add("write", lambda *_a: self.update_readiness())
         self.update_readiness(now=True)
         # Eine gespeicherte Excel-Liste wird im Hintergrund geprüft; der Hinweis
@@ -126,20 +131,28 @@ class ContractOverviewTool:
             HEADER_FORMAT: kopf.to_dict(),
             "baustein_name": self.var_baustein.get().strip(),
             "bausteine": self.state.bausteine,
-            "kunden": self.state.kunden,
             "pdfs": self.state.pdfs[:8],
             "regeln": self.state.regeln,
             "vorlagen": self.state.vorlagen,
             "staende": self.state.staende,
             "pdf_oeffnen": bool(self.var_open.get()),
+            **self.customer_config(),
         }
 
     def _contract_autosave(self) -> None:
         self._fuss_start = self.footer_rich()
         self._kopf_start = self.header_rich()
+        self.refresh_customer_line()
 
     def _contract_close(self) -> None:
-        self._remember_customer()
+        # Kundenakten werden nie automatisch angelegt – nur eine offene Eingabe in »Kunden« sichern.
+        if self.customer_page is not None:
+            self.customer_page.flush()
+        self._close_preview()
+
+    def _contract_changed(self) -> None:
+        """Eine Eingabe hat sich geändert (über das verzögerte Speichern gemeldet)."""
+        self.mark_preview_dirty()
 
     def contract_accepts(self, files: list[str]) -> bool:
         return bool(_excel_in(files))
@@ -264,6 +277,7 @@ class ContractOverviewTool:
         self.notify("info_excel", "info", "Excel wird geprüft …", status=False)
         self.set_status("Excel wird geprüft …", "busy")
         self.update_readiness()
+        self.mark_preview_dirty()
         regeln = [dict(r) for r in self.state.regeln]
 
         def work() -> dict:
@@ -289,7 +303,9 @@ class ContractOverviewTool:
             self.notify("info_excel", "error", text or "Die Datei konnte nicht gelesen werden.", title="Excel-Prüfung fehlgeschlagen", animate=animate)
             self._set_mails([], animate=animate)
             self._show_facts([], animate)
+            self._recognize_customer(path, result, animate)
             self.update_readiness()
+            self.mark_preview_dirty()
             return
         mails = [str(mail) for mail in result.get("mails") or []]
         aktiv = int(result.get("aktiv", 0) or 0)
@@ -308,12 +324,16 @@ class ContractOverviewTool:
         self.set_status(f"Excel geprüft: {text}", "success" if aktiv and not fehlend else "warning")
         self._show_facts(self._facts_for(result), animate)
         self._set_mails(mails, animate=animate)
+        # Bekannte Kunden über die Rechnungsempfänger erkennen – vor dem Füllen aus der Datei,
+        # damit »automatisch übernehmen« den unveränderten Stand des Formulars sieht.
+        self._recognize_customer(path, result, animate)
         # Nur Werte übernehmen, die tatsächlich in der Datei stehen – nie aus der E-Mail-Adresse raten.
         if not self.var_kd.get().strip() and len(result.get("kunden") or []) == 1:
             self.var_kd.set(result["kunden"][0])
         if not self.var_firma.get().strip() and len(result.get("firmen") or []) == 1:
             self.var_firma.set(result["firmen"][0])
         self.update_readiness()
+        self.mark_preview_dirty()
 
     @staticmethod
     def _facts_for(result: dict) -> list[tuple[str, str, str]]:
@@ -430,6 +450,7 @@ class ContractOverviewTool:
 
     def _run_readiness(self) -> None:
         self._ready_job = None
+        self.refresh_customer_line()
         line = getattr(self.ui, "ready", None)
         if line is None:
             return
@@ -475,90 +496,33 @@ class ContractOverviewTool:
         elif area == "ziel":
             self.notify("pdf_info", "warning", text, actions=(("Ordner wählen", self.pick_ziel),))
 
-    def reload_recent(self) -> None:
-        combo = getattr(self.ui, "recent_combo", None)
-        self._recent_by_label = self.state.customer_labels()
-        if combo is None:
-            return
-        combo.set_values(list(self._recent_by_label), keep=False)
-        combo.set_placeholder("Kunden aus dem Verlauf wählen" if self._recent_by_label else "Noch keine Einträge")
-
-    def on_recent_pick(self, label: str) -> None:
-        eintrag = self._recent_by_label.get(label)
-        if eintrag:
-            self._apply_customer(eintrag)
-        combo = getattr(self.ui, "recent_combo", None)
-        if combo is not None:
-            combo.set(None)
-
-    def _apply_customer(self, eintrag: dict) -> None:
-        self.var_firma.set(eintrag.get("firmenname", ""))
-        self.var_kd.set(eintrag.get("kundennummer", ""))
-        self.var_mail.set(eintrag.get("rechnungsempfaenger", ""))
-        excel = str(eintrag.get("excel") or "").strip()
-        if excel and Path(excel).is_file():
-            self.var_excel.set(excel)
-            self.refresh_files()
-            self.inspect_excel(excel)
-        logo = str(eintrag.get("logo") or "").strip()
-        if logo and Path(logo).is_file():
-            self.var_logo.set(logo)
-            self.refresh_files()
-        # Nur eine sinnvolle eigene Fußzeile der Kundenakte übernehmen (samt Formatierung) –
-        # ein leerer Wert aus älteren Versionen lässt die aktuell gültige Fußzeile stehen.
-        fusszeile = customer_footer_rich(eintrag)
-        if fusszeile is not None:
-            self._set_rich("txt_fuss", "_fuss_start", fusszeile)
-        kopfzeile = customer_header_rich(eintrag)
-        if kopfzeile is not None:
-            self._set_rich("txt_kopf", "_kopf_start", kopfzeile)
-        pdf = str(eintrag.get("pdf") or "").strip()
-        if pdf and Path(pdf).is_file():
-            self._remember_pdf(Path(pdf))
-        self.set_status(f"Kundenakte übernommen: {eintrag.get('firmenname') or eintrag.get('kundennummer')}", "success")
-
-    def _remember_customer(self, pdf: str | None = None) -> None:
-        fuss = self.footer_rich()
-        kopf = self.header_rich()
-        if self.state.remember_customer(
-            self.var_firma.get(),
-            self.var_kd.get(),
-            self.var_mail.get(),
-            self.var_excel.get(),
-            self.var_logo.get(),
-            fuss.text,
-            kopf.text,
-            pdf,
-            fusszeile_format=fuss.to_dict(),
-            kopfzeile_format=kopf.to_dict(),
-        ):
-            self.reload_recent()
-
     def clear_customer(self) -> None:
+        """Kundendaten leeren (rückgängig machbar). Eine aktive Kundenakte wird gelöst – nicht gelöscht."""
         previous = (self.var_firma.get(), self.var_kd.get(), self.var_mail.get())
+        customer = self._leave_customer()
         self.var_firma.set("")
         self.var_kd.set("")
         self.var_mail.set("")
-        if any(value.strip() for value in previous):
-            self._undo_customer = previous
+        if any(value.strip() for value in previous) or customer:
+            self._undo_customer = (previous, customer)
             self.notify("kunde_info", "info", "Kundendaten wurden geleert.", actions=(("Rückgängig", self._undo_clear),), auto_hide=8000)
 
     def _undo_clear(self) -> None:
         if self._undo_customer:
-            firma, kd, mail = self._undo_customer
+            (firma, kd, mail), customer = self._undo_customer
             self.var_firma.set(firma)
             self.var_kd.set(kd)
             self.var_mail.set(mail)
+            self._return_to_customer(customer)
             self._undo_customer = None
             self.hide_notice("kunde_info")
             self.set_status("Kundendaten wiederhergestellt.", "success")
 
     def clear_history(self) -> None:
-        if not dialogs.confirm(self, "Verlauf löschen?", "Die Listen »Zuletzt verwendet« und »Zuletzt erstellt« werden geleert. Erstellte PDF-Dateien bleiben erhalten.", "Verlauf löschen", icon=ICON_FILE):
+        """Liste »Zuletzt erstellt« leeren. Kundenakten werden in der Ansicht »Kunden« verwaltet."""
+        if not dialogs.confirm(self, "Verlauf löschen?", "Die Liste »Zuletzt erstellt« wird geleert. Erstellte PDF-Dateien und Kundenakten bleiben erhalten.", "Verlauf löschen", icon=ICON_FILE):
             return
-        self.state.kunden = []
         self.state.pdfs = []
-        self.reload_recent()
         self.reload_pdfs()
         self.persist()
         self.notify("daten_info", "success", "Der Verlauf wurde gelöscht.", auto_hide=5000)
@@ -621,6 +585,7 @@ class ContractOverviewTool:
         widget = getattr(self.ui, widget_name, None)
         if widget is not None:
             widget.set_rich(rich)
+        self.mark_preview_dirty()
 
     def save_header(self) -> None:
         self._kopf_start = self.header_rich()
@@ -719,7 +684,8 @@ class ContractOverviewTool:
         if eintrag:
             self._apply_vorlage(eintrag)
 
-    def _apply_vorlage(self, eintrag: dict) -> None:
+    def _apply_vorlage(self, eintrag: dict, texts: bool = True, quiet: bool = False) -> None:
+        """Vorlage anwenden. ``texts=False`` lässt Kopf- und Fußzeile unverändert (vom Benutzer geändert)."""
         self.var_vorlage.set(str(eintrag.get("name", "")))
         logo = str(eintrag.get("logo") or "").strip()
         if logo and Path(logo).is_file():
@@ -735,19 +701,26 @@ class ContractOverviewTool:
             self.var_titel.set(str(eintrag.get("titel")))
         if eintrag.get("untertitel"):
             self.var_untertitel.set(str(eintrag.get("untertitel")))
-        self._set_rich("txt_kopf", "_kopf_start", header_rich_from(eintrag))
-        # Vorlage mit eigener Fußzeile: diese (mit Formatierung); alte Vorlage ohne gültigen Wert:
-        # Standard. Fehlt die Formatierung (Vorlagen bis 2.1), gilt das Standardformat.
-        self._set_rich("txt_fuss", "_fuss_start", footer_rich_from(eintrag))
+        if texts:
+            self._set_rich("txt_kopf", "_kopf_start", header_rich_from(eintrag))
+            # Vorlage mit eigener Fußzeile: diese (mit Formatierung); alte Vorlage ohne gültigen Wert:
+            # Standard. Fehlt die Formatierung (Vorlagen bis 2.1), gilt das Standardformat.
+            self._set_rich("txt_fuss", "_fuss_start", footer_rich_from(eintrag))
+            # Die Texte stammen jetzt aus der Vorlage, nicht mehr aus einer Kundenakte.
+            self._customer_texts = False
+            self._base_texts = None
+            self._mark_text_baseline()
         from appstate import normalize_regeln
 
-        self.state.regeln = normalize_regeln(eintrag.get("regeln") or [])
+        regeln = normalize_regeln(eintrag.get("regeln") or [])
+        changed = regeln != self.state.regeln
+        self.state.regeln = regeln
         self.reload_regeln()
         self.persist()
-        excel = self.var_excel.get().strip()
-        if excel and Path(excel).is_file():
-            self.inspect_excel(excel)
-        self.notify("vorlagen_info", "success", f"Vorlage „{eintrag.get('name', '')}“ geladen.", auto_hide=5000)
+        if changed:
+            self._recheck_excel()  # andere Zyklus-Regeln: Excel neu prüfen (nie eine alte Analyse verwenden)
+        if not quiet:
+            self.notify("vorlagen_info", "success", f"Vorlage „{eintrag.get('name', '')}“ geladen.", auto_hide=5000)
 
     def save_vorlage(self) -> None:
         name = self.var_vorlage.get().strip()
@@ -859,16 +832,17 @@ class ContractOverviewTool:
 
     def show_contract_help(self) -> None:
         schritte = (
-            "Firmenname und Kundennummer eintragen oder unter »Zuletzt verwendet« wählen.",
-            "Die Excel-Datei wählen (Strg+O) oder in das Fenster ziehen.",
-            "Die Kurzinfo unter der Excel-Datei lesen: aktive Verträge, Kundennummer, Empfänger.",
-            "Optional Logo, Zielordner sowie Kopf- und Fußzeile in der Ansicht »Darstellung« setzen.",
+            "Die Excel-Datei wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort geprüft.",
+            "Ist der Rechnungsempfänger als Kunde bekannt, bietet PDF Tool die Kundenakte an: »Übernehmen«.",
+            "Sonst Firmenname und Kundennummer eintragen oder »Bekannten Kunden auswählen« (Strg+F).",
+            "Optional Logo, Zielordner sowie Kopf- und Fußzeile in der Ansicht »Darstellung« setzen; die »Vorschau« zeigt das Ergebnis.",
             "Auf »PDF erstellen« klicken oder Strg+Enter drücken.",
         )
         hinweise = (
+            "Kundenakten entstehen nur bewusst: »Als Kundenakte speichern« – auf Wunsch mit »Zuordnung merken« für die E-Mail-Adresse.",
+            "Kundenakten verwalten, bearbeiten, zusammenführen oder löschen: Ansicht »Kunden«. Alle Daten bleiben lokal auf diesem PC.",
             "Stehen mehrere Rechnungsempfänger in der Excel, bitte einen auswählen.",
-            "Zyklus-Regeln, Vorlagen und der Verlauf stehen in der Ansicht »Darstellung«. Hott-KI wird standardmäßig jährlich ausgegeben.",
-            "Zuletzt erstellte PDFs lassen sich in der Ansicht »Übersicht erstellen« wieder öffnen.",
+            "Zyklus-Regeln und Vorlagen stehen in der Ansicht »Darstellung«. Hott-KI wird standardmäßig jährlich ausgegeben.",
             "Hotline-Zeilen werden als Supportvertrag ausgegeben. Nur Netto, kein Brutto.",
         )
         self.show_steps("Kurzanleitung – Vertragsübersichten", schritte, hinweise)
@@ -918,28 +892,8 @@ class ContractOverviewTool:
                 self.notify("pdf_info", "warning", "In der Excel stehen mehrere Rechnungsempfänger. Bitte einen auswählen oder ins Feld eintragen.")
                 return
             empfaenger = wahl
-        regeln = [dict(eintrag) for eintrag in self.state.regeln]
-        ziel = Path(self.target_folder())
-        fuss = self.footer_rich()
-        kopf = self.header_rich()
-        auftrag = dict(
-            excel=Path(excel),
-            logo=Path(logo),
-            kundennummer=kd,
-            firmenname=self.var_firma.get().strip(),
-            rechnungsempfaenger=empfaenger,
-            zielordner=ziel,
-            dateiname=self.var_name.get().strip(),
-            seitenformat=self.var_format.get(),
-            logo_breite=breite,
-            titel=self.var_titel.get().strip() or DEFAULT_TITEL,
-            untertitel=self.var_untertitel.get().strip() or DEFAULT_UNTERTITEL,
-            fusszeile=fuss.text,
-            fusszeile_format=fuss.to_dict(),
-            kopfzeile=kopf.text,
-            kopfzeile_format=kopf.to_dict(),
-            regeln=regeln,
-        )
+        auftrag = self._pdf_fields(kd, empfaenger, breite)
+        auftrag["zielordner"] = Path(self.target_folder())
         self.persist()
         self.busy = True
         self.hide_notice("pdf_info")
@@ -951,9 +905,33 @@ class ContractOverviewTool:
         def work():
             from engine import PdfAuftrag, erstelle_pdf
 
-            return erstelle_pdf(PdfAuftrag(**auftrag, pdf_oeffnen=False, status=lambda msg: self.worker.post(self.set_status, msg, "busy")))
+            # Gemeinsame Sperre mit der Vorschau: die PDF-Erzeugung läuft nie parallel.
+            with RENDER_LOCK:
+                return erstelle_pdf(PdfAuftrag(**auftrag, pdf_oeffnen=False, status=lambda msg: self.worker.post(self.set_status, msg, "busy")))
 
         self.worker.run(work, self._done, self._fail)
+
+    def _pdf_fields(self, kd: str, empfaenger: str, breite: float) -> dict:
+        """Auftrag für ``engine.erstelle_pdf`` aus dem Formular – gemeinsam für PDF und Vorschau."""
+        fuss = self.footer_rich()
+        kopf = self.header_rich()
+        return dict(
+            excel=Path(self.var_excel.get().strip()),
+            logo=Path(self.var_logo.get().strip()),
+            kundennummer=kd,
+            firmenname=self.var_firma.get().strip(),
+            rechnungsempfaenger=empfaenger,
+            dateiname=self.var_name.get().strip(),
+            seitenformat=self.var_format.get(),
+            logo_breite=breite,
+            titel=self.var_titel.get().strip() or DEFAULT_TITEL,
+            untertitel=self.var_untertitel.get().strip() or DEFAULT_UNTERTITEL,
+            fusszeile=fuss.text,
+            fusszeile_format=fuss.to_dict(),
+            kopfzeile=kopf.text,
+            kopfzeile_format=kopf.to_dict(),
+            regeln=[dict(eintrag) for eintrag in self.state.regeln],
+        )
 
     def _finish_busy(self) -> None:
         self.busy = False
@@ -965,7 +943,7 @@ class ContractOverviewTool:
         self._finish_busy()
         path = Path(path)
         self._remember_pdf(path)
-        self._remember_customer(str(path))
+        self._customer_after_pdf(path)
         self.persist()
         self.notify(
             "pdf_info",
@@ -990,7 +968,9 @@ class ContractOverviewTool:
         Logo, Zielordner, Darstellung, Vorlage, Kopf-/Fußzeile, Design und Regeln bleiben.
         """
         previous = (self.var_firma.get(), self.var_kd.get(), self.var_mail.get(), self.var_excel.get())
-        self._undo_overview = previous if any(value.strip() for value in previous) else None
+        customer = self._leave_customer()
+        self._undo_overview = previous if any(value.strip() for value in previous) or customer else None
+        self._undo_overview_customer = customer
         self._reset_work(("", "", "", ""))
         self.hide_notice("pdf_info")
         actions = (("Rückgängig", self._undo_new_overview),) if self._undo_overview else ()
@@ -1032,6 +1012,8 @@ class ContractOverviewTool:
     def _undo_new_overview(self) -> None:
         if self._undo_overview is not None:
             values, self._undo_overview = self._undo_overview, None
+            customer, self._undo_overview_customer = self._undo_overview_customer, None
+            self._return_to_customer(customer)
             self._reset_work(values)
             self.hide_notice("kunde_info")
             self.set_status("Kundendaten und Excel-Datei wiederhergestellt.", "success")

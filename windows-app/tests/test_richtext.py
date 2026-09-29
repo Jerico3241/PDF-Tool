@@ -152,18 +152,19 @@ def test_text_blocks_old_and_new() -> None:
     assert appstate.baustein_rich(state.find_baustein("Neu")) == rich
 
 
-def test_customer_history_keeps_formatting() -> None:
-    state = appstate.State({})
+def test_customer_record_keeps_formatting() -> None:
+    from tools.contract_overview.customer_flow import footer_of, header_of
+    from tools.contract_overview.customers.migration import customer_from_legacy
+
     fuss = formatiert("Kunde A", [(0, 5, {"color": BLAU})])
     kopf = formatiert("Kopf A", [(0, 4, {"bold": True})], default=HEADER_STYLE, align="left")
-    state.remember_customer("A GmbH", "1", "", "", "", fuss.text, kopf.text, fusszeile_format=fuss.to_dict(), kopfzeile_format=kopf.to_dict())
-    eintrag = state.kunden[0]
-    assert appstate.customer_footer_rich(eintrag) == fuss
-    assert appstate.customer_header_rich(eintrag) == kopf
+    eintrag = {"firmenname": "A GmbH", "kundennummer": "1", "fusszeile": fuss.text, "fusszeile_format": fuss.to_dict(), "kopfzeile": kopf.text, "kopfzeile_format": kopf.to_dict()}
+    kunde = customer_from_legacy(eintrag, "")
+    assert footer_of(kunde) == fuss and header_of(kunde) == kopf
     # alte Einträge: leere Fußzeile ersetzt die aktuelle nicht; Kopfzeile ohne Format → Standard
-    assert appstate.customer_footer_rich({"fusszeile": ""}) is None
-    assert appstate.customer_header_rich({"kopfzeile": "K"}) == RichText.plain("K", HEADER_STYLE, "left")
-    assert appstate.customer_header_rich({}) is None
+    assert footer_of(customer_from_legacy({"firmenname": "A", "fusszeile": ""}, "")) is None
+    assert header_of(customer_from_legacy({"firmenname": "A", "kopfzeile": "K"}, "")) == RichText.plain("K", HEADER_STYLE, "left")
+    assert header_of(customer_from_legacy({"firmenname": "A"}, "")) is None
 
 
 # --- Schriften ------------------------------------------------------------------------------------

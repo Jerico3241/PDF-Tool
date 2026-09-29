@@ -1,5 +1,5 @@
-"""Vertragsübersichten – Ansicht »Übersicht erstellen«: Kundendaten, Dateien, Excel-Prüfung,
-Bereitschaft und PDF-Erstellung."""
+"""Vertragsübersichten – Ansicht »Übersicht erstellen«: Kundendaten (mit Kundenakte), Dateien,
+Excel-Prüfung, Bereitschaft und PDF-Erstellung."""
 
 from __future__ import annotations
 
@@ -10,13 +10,15 @@ from ui.components import FactList, FileRow, ResponsiveColumns, SelectorBar, Sta
 from ui.inputs import ComboBox, TextField
 from ui.navigation import Page
 from ui.theme import px
-from ui.widgets import Button, Card, Collapsible, Divider, FlowRow, IconButton, InfoBar, Text, ToggleSwitch, frame
+from ui.widgets import Button, Card, Collapsible, Divider, FlowRow, Icon, IconButton, InfoBar, RoundedFrame, Text, ToggleSwitch, frame
+
+from .customer_widgets import PickerBox
 
 if TYPE_CHECKING:
     from vertragdesk import App
 
 TITLE = "Vertragsübersichten"
-VIEWS = [("create", "Übersicht erstellen"), ("layout", "Darstellung")]
+VIEWS = [("create", "Übersicht erstellen"), ("layout", "Darstellung"), ("preview", "Vorschau"), ("customers", "Kunden")]
 EXCEL_EMPTY = "Excel-Datei wählen oder in das Fenster ziehen – sie wird sofort geprüft."
 
 
@@ -36,9 +38,30 @@ def build(app: "App", host) -> Page:
     clear = IconButton(kunde.header_right, icons.CLEAR, app.clear_customer, tooltip="Kundendaten leeren")
     clear.pack(side="right")
     body = kunde.body
-    field_label(body, "Zuletzt verwendet", first=True)
-    ui.recent_combo = ComboBox(body, placeholder="Kunden aus dem Verlauf wählen", command=app.on_recent_pick, width=240, tooltip="Übernimmt Kundendaten, Excel, Logo und Kopf-/Fußzeile")
-    ui.recent_combo.pack(fill="x")
+    # Aktive Kundenakte: »Kunde: Beispiel GmbH · 123456« (nur sichtbar, wenn eine übernommen wurde)
+    ui.kunde_active_area = Collapsible(body)
+    ui.kunde_active_area.pack(fill="x")
+    box = RoundedFrame(ui.kunde_active_area.content, fill="card_secondary", stroke="card_stroke", radius=4)
+    box.pack(fill="x", pady=(0, px(12)))
+    inner = frame(box)
+    inner.pack(fill="x", padx=px(12), pady=(px(10), px(8)))
+    top = frame(inner)
+    top.pack(fill="x")
+    Icon(top, icons.PEOPLE, color="accent_text").pack(side="left", anchor="n", padx=(0, px(10)), pady=(px(2), 0))
+    texts = frame(top)
+    texts.pack(side="left", fill="x", expand=True)
+    ui.kunde_active_title = Text(texts, "", style="body_strong", wrap=True)
+    ui.kunde_active_title.pack(anchor="w", fill="x")
+    ui.kunde_active_caption = Text(texts, "", style="caption", color="text2", wrap=True)
+    ui.kunde_active_caption.pack(anchor="w", fill="x")
+    buttons = FlowRow(inner, gap=4, row_gap=4)
+    buttons.pack(fill="x", pady=(px(6), 0))
+    buttons.add(Button(buttons, "Kundenakte öffnen", app.open_active_customer, icon=icons.OPEN_IN_WINDOW, kind="subtle", tooltip="Kundenakte in der Ansicht »Kunden« öffnen"))
+    buttons.add(Button(buttons, "Lösen", app.detach_customer, icon=icons.CANCEL, kind="subtle", tooltip="Kundenakte für diese Übersicht nicht mehr verwenden – die Angaben bleiben"))
+    box.lift_corners()
+    field_label(body, "Bekannten Kunden auswählen", first=True)
+    ui.kunde_picker = PickerBox(body, app.pick_customer, placeholder="Firma, Kundennummer oder E-Mail suchen", width=240, tooltip="Kundenakte suchen und übernehmen (Strg+F)")
+    ui.kunde_picker.pack(fill="x")
     field_label(body, "Firmenname")
     ui.field_firma = TextField(body, app.var_firma, placeholder="z. B. Muster GmbH")
     ui.field_firma.pack(fill="x")
@@ -54,8 +77,15 @@ def build(app: "App", host) -> Page:
     field_label(mail_inner, "Mehrere Rechnungsempfänger in der Excel")
     ui.mail_combo = ComboBox(mail_inner, placeholder="Empfänger wählen", command=app.on_mail_pick, width=240, tooltip="Übernimmt die Adresse als Rechnungsempfänger")
     ui.mail_combo.pack(fill="x")
+    # Wiedererkennung nach der Excel-Prüfung (Schließen = Ignorieren)
+    ui.kunde_match = InfoBar(body, on_close=app.ignore_match)
+    ui.kunde_match.pack(fill="x", pady=(px(8), 0))
     ui.kunde_info = InfoBar(body)
     ui.kunde_info.pack(fill="x", pady=(px(8), 0))
+    save_row = frame(body)
+    save_row.pack(fill="x", pady=(px(12), 0))
+    ui.btn_kunde_save = Button(save_row, "Als Kundenakte speichern", app.save_or_update_customer, icon=icons.SAVE, tooltip="Kundendaten bewusst als Kundenakte speichern bzw. die aktive Kundenakte aktualisieren")
+    ui.btn_kunde_save.pack(side="left")
 
     # Dateien ---------------------------------------------------------------------
     dateien = Card(columns, "Dateien", icons.FOLDER)
@@ -115,7 +145,7 @@ def build(app: "App", host) -> Page:
     ui.pdf_combo = ComboBox(recent, placeholder="Noch keine PDF erstellt", width=200, tooltip="Zuletzt erstellte PDFs – mit »Öffnen« anzeigen")
     ui.pdf_combo.pack(side="left", fill="x", expand=True, padx=(0, px(8)))
 
-    app.reload_recent()
     app.reload_pdfs()
     app.refresh_files()
+    app.refresh_customer_line()
     return page

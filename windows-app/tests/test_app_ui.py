@@ -18,7 +18,7 @@ def test_start_and_version(app) -> None:
     import appstate
 
     assert app.title() == appstate.APP_NAME == "PDF Tool"
-    assert app.version == appstate.VERSION == "2.3.0"
+    assert app.version == appstate.VERSION == "2.4.0"
     assert app.nav.current == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert app.ui.btn_pdf.text() == "PDF erstellen"
 
@@ -73,8 +73,9 @@ def test_excel_check_and_pdf_creation(app, excel_file: Path, tmp_path: Path) -> 
     assert pdf.is_file()
     assert app.state.pdfs[0] == str(pdf)
     assert app.ui.pdf_combo.get() == pdf.name
-    assert app.state.kunden[0]["kundennummer"] == "10042"
-    assert app.ui.recent_combo.values()
+    # Kundenakten entstehen nie automatisch – nach der PDF wird das Speichern nur angeboten.
+    assert len(app.customers) == 0
+    assert app.ui.kunde_info.title == "Als Kundenakte speichern?"
 
 
 def test_pdf_validation_messages(app, tmp_path: Path) -> None:
@@ -158,31 +159,34 @@ def test_templates_blocks_rules_history(app, tmp_path: Path) -> None:
     app.ui.txt_kopf.set("Kopfzeile X")
     app.save_header()
     assert app.ui.kopf_info.severity == "success"
-    # Kundenhistorie
+    # Kundenakte: bewusst speichern, leeren (rückgängig), wieder auswählen
     app.var_firma.set("Beispiel AG")
     app.var_kd.set("777")
-    app._remember_customer()
-    label = next(iter(app._recent_by_label))
+    app.save_as_customer()
+    kunde = app.active_customer()
+    assert kunde is not None and kunde.label == "Beispiel AG · 777"
     app.clear_customer()
-    assert app.var_kd.get() == ""
+    assert app.var_kd.get() == "" and app.active_customer() is None
     app._undo_clear()
-    assert app.var_kd.get() == "777"
+    assert app.var_kd.get() == "777" and app.active_customer() is kunde
     app.clear_customer()
-    app.on_recent_pick(label)
-    assert app.var_firma.get() == "Beispiel AG"
+    app.pick_customer()  # Dialog (Tests: erster Treffer)
+    assert app.var_firma.get() == "Beispiel AG" and app.active_customer() is kunde
     app.nav.navigate("settings")
     pump(app, 0.3)
     app.clear_history()
-    assert app.state.kunden == [] and app.state.pdfs == []
+    assert app.state.pdfs == [] and len(app.customers) == 1  # Kundenakten bleiben
 
 
 def test_persist_keeps_205_keys(app, config_file: Path) -> None:
     app.var_firma.set("Persist GmbH")
     app.persist()
     data = json.loads(config_file.read_text(encoding="utf-8"))
-    for key in ("firmenname", "kundennummer", "rechnungsempfaenger", "excel", "logo", "zielordner", "dateiname", "format", "logo_breite", "titel", "untertitel", "fusszeile", "kopfzeile", "baustein_name", "bausteine", "kunden", "pdfs", "regeln", "vorlagen", "staende", "gesehen", "pdf_oeffnen", "theme", "accent"):
+    for key in ("firmenname", "kundennummer", "rechnungsempfaenger", "excel", "logo", "zielordner", "dateiname", "format", "logo_breite", "titel", "untertitel", "fusszeile", "kopfzeile", "baustein_name", "bausteine", "pdfs", "regeln", "vorlagen", "staende", "gesehen", "pdf_oeffnen", "theme", "accent"):
         assert key in data, key
     assert data["firmenname"] == "Persist GmbH"
+    # Die Kundenhistorie bis 2.3 lebt als Kundenakte weiter (kundenakten.json), nicht in gui-config.json.
+    assert "kunden" not in data and data["kunden_auto_uebernehmen"] is False
 
 
 def test_dialogs_and_keyboard(app) -> None:
@@ -363,18 +367,20 @@ def test_footer_migration_of_old_config(config_file: Path, monkeypatch, alt: dic
         _schliessen(app)
 
 
-def test_customer_history_keeps_footer_unless_it_has_its_own(app) -> None:
+def test_customer_record_keeps_footer_unless_it_has_its_own(app) -> None:
+    from tools.contract_overview.customers.models import TextBlock
+
     app.ui.txt_fuss.set(FUSS_EIGEN)
-    app.state.kunden = [
-        {"firmenname": "Alt AG", "kundennummer": "1", "fusszeile": "", "kopfzeile": ""},
-        {"firmenname": "Neu AG", "kundennummer": "2", "fusszeile": "Kunde B\n\nGruß"},
-    ]
-    app.reload_recent()
-    labels = {eintrag["firmenname"]: label for label, eintrag in app._recent_by_label.items()}
-    app.on_recent_pick(labels["Alt AG"])
+    app._mark_text_baseline()  # gültiger Stand, noch nicht vom Benutzer verändert
+    alt = app.customers.create("Alt AG", "1")  # ohne eigene Fußzeile
+    neu = app.customers.create("Neu AG", "2", footer=TextBlock("Kunde B\n\nGruß"))
+    app.apply_customer(alt.id)
     assert app.footer_text() == FUSS_EIGEN
-    app.on_recent_pick(labels["Neu AG"])
+    app.apply_customer(neu.id)
     assert app.footer_text() == "Kunde B\n\nGruß"
+    # Zurück zu einem Kunden ohne eigene Fußzeile: wieder die vorher gültige
+    app.apply_customer(alt.id)
+    assert app.footer_text() == FUSS_EIGEN
 
 
 def test_footer_autosave_is_debounced(app, config_file: Path) -> None:
@@ -414,7 +420,7 @@ def test_pdf_uses_visible_footer(app, excel_file: Path, tmp_path: Path) -> None:
 def test_all_pages_prepared_at_startup(app) -> None:
     from ui.navigation import PARK_X
 
-    assert set(app.nav.pages) == {"home", "create", "layout", "repair", "settings"}
+    assert set(app.nav.pages) == {"home", "create", "layout", "preview", "customers", "repair", "settings"}
     assert app.ctx.ready and not app.ctx.anim.is_resizing
     host_w = app.nav.host.winfo_width()
     for key, page in app.nav.pages.items():

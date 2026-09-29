@@ -2,11 +2,13 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.3.0
+Version 2.4.0
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
-  Excel-Listen und speichert sie als PDF.
+  Excel-Listen und speichert sie als PDF – mit Live-Vorschau und
+  Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail
+  wiedererkennen.
 - PDF reparieren: analysiert beschädigte PDF-Dateien und versucht, lesbare
   Inhalte in eine neue PDF zu übertragen.
 
@@ -15,13 +17,29 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.3.0.exe
+PDF-Tool-Setup-2.4.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit qpdf, pypdfium2 mit
 PDFium). Eine eigene Python-Installation, qpdf, Ghostscript oder andere
 Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.4
+------------------
+- Kundenakte 2.0 in „Vertragsübersichten“: Firmenname, Kundennummer,
+  mehrere Rechnungsempfänger-E-Mails, Notiz, bevorzugtes Logo, Zielordner
+  und Vorlage sowie eigene Kopf- und Fußzeile (mit Formatierung).
+- Wiedererkennung: Nach der Excel-Prüfung erkennt PDF Tool bekannte Kunden
+  an der Rechnungsempfänger-E-Mail und bietet „Übernehmen“, „Kundenakte“
+  oder „Ignorieren“ an. Nichts wird geraten – kein Firmenname aus einer
+  E-Mail-Adresse, keine Internetabfrage.
+- Neue Ansicht „Kunden“: suchen, sortieren, bearbeiten, E-Mail-Adressen
+  zuordnen, Doppelungen zusammenführen, Kundenakten löschen.
+- Neue Ansicht „Vorschau“: die PDF vor dem Erstellen sehen, mit Seiten und
+  Zoom – sie aktualisiert sich bei jeder Änderung.
+- Der bisherige Kundenverlauf wird beim ersten Start einmalig als
+  Kundenakten übernommen (mit Sicherung).
 
 Neu in Version 2.3
 ------------------
@@ -56,9 +74,9 @@ Installation
 
 Programmdateien:  %LOCALAPPDATA%\PDF-Tool
 Ihre Daten:       %APPDATA%\PDF-Tool
-                  (Einstellungen, Kundenverlauf, Vorlagen, Textbausteine,
-                  Kopf- und Fußzeile, Zyklus-Regeln, Design, Akzentfarbe,
-                  Protokoll pdf-repair.log)
+                  (Einstellungen, Kundenakten kundenakten.json, Vorlagen,
+                  Textbausteine, Kopf- und Fußzeile, Zyklus-Regeln, Design,
+                  Akzentfarbe, Protokoll pdf-repair.log)
 
 Die App erscheint im Startmenü unter „PDF Tool“ und unter
 Einstellungen → Apps → Installierte Apps.
@@ -86,6 +104,15 @@ steht danach nur noch „PDF Tool“.
   erhalten. Schlägt die Übernahme fehl, arbeitet die App mit dem alten
   Ordner weiter und versucht es beim nächsten Start erneut.
 
+Update von PDF Tool 2.3: Das Setup ersetzt nur die Programmdateien. Beim
+ersten Start wird der bisherige Kundenverlauf einmalig zu Kundenakten.
+Vorher sichert die App die Einstellungen byte-genau nach
+%APPDATA%\PDF-Tool\sicherungen\gui-config-vor-kundenakte-<Zeit>.json.
+Schlägt die Übernahme fehl, bleibt der alte Verlauf unverändert erhalten
+und sie wird beim nächsten Start erneut versucht. Vorlagen, Textbausteine,
+Regeln sowie Kopf- und Fußzeile (auch die Standard-Fußzeile) bleiben wie
+sie sind.
+
 Update von 2.0.5 oder älter: Das Setup übernimmt die gespeicherten
 Einstellungen (gui-config.json) und entfernt die alten Programmdateien,
 Verknüpfungen und den alten Eintrag in „Installierte Apps“.
@@ -97,8 +124,8 @@ erneut ausführen repariert die Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   PDF-Tool-Setup-2.3.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   PDF-Tool-Setup-2.3.0.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.4.0.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -119,22 +146,26 @@ eine Excel-Liste „Vertragsübersichten“.
 
 Tastatur: Strg+1 Start · Strg+2 Vertragsübersichten · Strg+3 PDF reparieren ·
 Strg+4 Einstellungen · Strg+O Datei wählen · Strg+Enter Hauptaktion des
-Werkzeugs · F1 Kurzanleitung · Tab/Umschalt+Tab zwischen Feldern wechseln ·
+Werkzeugs · Strg+F bekannten Kunden suchen (Vertragsübersichten) ·
+F1 Kurzanleitung · Tab/Umschalt+Tab zwischen Feldern wechseln ·
 Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Listen.
 
 
 Werkzeug „Vertragsübersichten“
 ------------------------------
-Oben wechselt „Übersicht erstellen“ / „Darstellung“ zwischen den beiden
-Ansichten des Werkzeugs.
+Oben wechselt die Umschaltleiste zwischen den Ansichten „Übersicht
+erstellen“, „Darstellung“, „Vorschau“ und „Kunden“.
 
-1. „Übersicht erstellen“: Firmenname und Kundennummer eintragen oder unter
-   „Zuletzt verwendet“ einen Kunden wählen.
-2. Excel-Liste wählen (Strg+O) oder die Datei in das Fenster ziehen.
-   Die Prüfung zeigt aktive und ausgeblendete Verträge, den oder die
-   Rechnungsempfänger, fehlende Spalten sowie Kundennummer und Firmenname,
-   sofern sie in der Datei stehen. Bei mehreren Empfängern einen auswählen.
-3. Optional Logo und Zielordner ändern.
+1. „Übersicht erstellen“: Excel-Liste wählen (Strg+O) oder die Datei in das
+   Fenster ziehen. Die Prüfung zeigt aktive und ausgeblendete Verträge, den
+   oder die Rechnungsempfänger, fehlende Spalten sowie Kundennummer und
+   Firmenname, sofern sie in der Datei stehen. Bei mehreren Empfängern
+   einen auswählen.
+2. Ist ein Rechnungsempfänger als Kunde bekannt, erscheint „Bekannter Kunde
+   gefunden“: „Übernehmen“ füllt die Kundendaten, „Kundenakte“ öffnet sie,
+   „Ignorieren“ blendet den Hinweis für diese Excel aus. Sonst Firmenname
+   und Kundennummer eintragen oder „Bekannten Kunden auswählen“ (Strg+F).
+3. Optional Logo und Zielordner ändern; „Vorschau“ zeigt die PDF vorab.
 4. Sobald „Bereit zum Erstellen“ erscheint: „PDF erstellen“ klicken oder
    Strg+Enter drücken. Fehlt etwas, nennt die Anzeige den Grund; ein Klick
    darauf führt zum passenden Feld. Der Schalter daneben legt fest, ob die
@@ -150,7 +181,7 @@ Schriftgrößen, Rahmen) werden bewusst nicht übernommen.
 
 „Darstellung“: Vorlagen, Titel, Dateiname, Logo-Breite, Hoch- oder
 Querformat, Kopfzeile, Fußzeile mit Textbausteinen, Zyklus-Regeln und
-„Verlauf löschen“ (zuletzt verwendete Kunden und PDFs).
+„Verlauf löschen“ (Liste der zuletzt erstellten PDFs).
 Kopf- und Fußzeile haben eine Formatierungsleiste: Schriftart (Helvetica,
 Times, Courier sowie – falls installiert – Arial, Calibri, Segoe UI und
 Times New Roman), Größe 6–18 pt, fett (Strg+B), kursiv (Strg+I),
@@ -160,6 +191,61 @@ Strg+Z/Strg+Y machen Text- und Formatänderungen rückgängig bzw. wieder.
 Die Fußzeile ist mit einem Standardtext vorbelegt; „Standard wiederherstellen“
 setzt Text und Formatierung zurück. Kopf- und Fußzeile, Vorlagen,
 Textbausteine und die Kundenakte speichern die Formatierung mit.
+
+„Vorschau“: zeigt die PDF so, wie „PDF erstellen“ sie erzeugt – Seiten mit
+den Pfeilen oder Bild ↑/↓ blättern, mit +/− zoomen, „An Breite anpassen“,
+breite Seiten mit der Maus verschieben. Die Vorschau aktualisiert sich nach
+jeder Änderung von selbst; „Aktualisieren“ erzeugt sie neu (z. B. nachdem
+die Excel-Datei geändert wurde). Eine fehlende Kundennummer steht in der
+Vorschau als „–“. Vorschau-Dateien landen nie im Zielordner.
+
+
+Kundenakten (Vertragsübersichten → „Kunden“)
+--------------------------------------------
+Eine Kundenakte enthält Firmenname, Kundennummer, die E-Mail-Adressen der
+Rechnungsempfänger (die erste ist primär), eine Notiz und Einstellungen für
+Vertragsübersichten: bevorzugtes Logo, bevorzugter Zielordner, bevorzugte
+Vorlage („Vorlage automatisch verwenden“) sowie eigene Kopf- und Fußzeile.
+Dazu die letzte Aktivität: zuletzt verwendet, letzte Excel-Liste und
+zuletzt erstellte Übersicht (nur als Pfad – Dateien werden nie kopiert).
+
+So entstehen Kundenakten – immer bewusst:
+- „Als Kundenakte speichern“ unter den Kundendaten (auch nach dem
+  Erstellen einer PDF angeboten). Mit „Zuordnung merken“ wird die
+  Rechnungsempfänger-E-Mail künftig diesem Kunden zugeordnet.
+- „Neue Kundenakte“ in der Ansicht „Kunden“.
+- Ist ein bekannter Kunde aktiv und steht eine neue Adresse in der Excel,
+  fragt PDF Tool: „Diese E-Mail künftig diesem Kunden zuordnen?“
+
+Übernehmen füllt nur die aktuelle Übersicht (Arbeitskopie). Wer danach
+etwas ändert, ändert nicht die Kundenakte; „Kundenakte aktualisieren“
+zeigt die Abweichungen und speichert nur die gewählten. Fehlt das
+gespeicherte Logo oder der Zielordner, bleibt der aktuelle Wert
+(„Gespeichertes Logo wurde nicht gefunden.“). Kopf- und Fußzeile der
+Kundenakte ersetzen nur Texte, die in dieser Übersicht noch nicht geändert
+wurden; eine leere Fußzeile ersetzt nie die gültige. „Neue Übersicht“ löst
+die Kundenakte wieder.
+
+Gehört eine E-Mail-Adresse schon einem anderen Kunden, entscheiden Sie:
+„Bestehende Zuordnung verwenden“, „Zuordnung verschieben“ oder
+„Abbrechen“. Enthält eine Excel Adressen verschiedener bekannter Kunden,
+wählen Sie den passenden Kunden selbst.
+
+In „Kunden“: Suche nach Firma, Kundennummer oder E-Mail (Strg+F),
+Sortierung „Zuletzt verwendet“, „Firma A–Z“ oder „Kundennummer“,
+Detailansicht mit Bearbeiten (wird automatisch gespeichert), E-Mail-Adressen
+hinzufügen oder entfernen, „Zusammenführen …“ für Doppelungen (nur auf
+Wunsch) und „Kundenakte löschen“ (entfernt nur die Kundenakte und ihre
+Zuordnungen – erstellte PDF-Dateien und Excel-Listen bleiben erhalten).
+„Bekannte Kunden automatisch übernehmen“ (Standard: aus) übernimmt einen
+eindeutig erkannten Kunden ohne Nachfrage, solange noch keine anderen
+Kundendaten eingetragen sind – rückgängig machbar.
+
+Datenschutz: Kundenakten und E-Mail-Zuordnungen werden ausschließlich lokal
+auf diesem PC gespeichert (%APPDATA%\PDF-Tool\kundenakten.json). Es gibt
+keine Cloud, keine Synchronisierung, keine Telemetrie, keine E-Mail-Abfrage
+und keine Internetsuche; aus einer E-Mail-Adresse wird nie ein Firmenname
+abgeleitet.
 
 
 Werkzeug „PDF reparieren“
@@ -295,6 +381,7 @@ Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypd
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Push auf windows-latest
-(.github/workflows/windows-setup.yml), prüft es (auch das Update vom
-Übersichten-Ersteller 2.2.0) und stellt es als Artefakt bereit; bei einem
-veröffentlichten Release wird es zusätzlich angehängt.
+(.github/workflows/windows-setup.yml), prüft es (auch die Updates vom
+Übersichten-Ersteller 2.2.0 und von PDF Tool 2.3.0 mit Beispieldaten) und
+stellt es als Artefakt bereit; bei einem veröffentlichten Release wird es
+zusätzlich angehängt.

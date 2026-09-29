@@ -29,7 +29,7 @@ const STEPS = [
 const TOOLS = [
   {
     title: "Vertragsübersichten",
-    body: "Erstellt professionelle Vertragsübersichten aus Excel-Dateien – mit Vorlagen, Kopf- und Fußzeile, Textbausteinen und Kundenverlauf.",
+    body: "Erstellt professionelle Vertragsübersichten aus Excel-Dateien – mit Vorlagen, Kopf- und Fußzeile, Textbausteinen, Live-Vorschau und Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen.",
   },
   {
     title: "PDF reparieren",
@@ -43,7 +43,7 @@ const RULES = [
   "„x “ und „SW-Pflege“ am Anfang der Beschreibung werden entfernt",
   "Hotline = Supportvertrag, alle anderen = Softwarepflegevertrag",
   "Lastschr wird als Lastschrift ausgegeben",
-  "Kundennummer und Firmenname tragen Sie selbst ein",
+  "Kundennummer und Firmenname stammen aus Ihrer Eingabe, der Excel oder Ihrer Kundenakte – nie geraten",
 ];
 
 export function LandingPage() {

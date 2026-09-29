@@ -45,6 +45,7 @@ class ContentDialog:
     ) -> None:
         self.parent = parent
         self.result = CLOSE
+        self.focus_widget: tk.Misc | None = None  # Fokus beim Öffnen (sonst die Standardschaltfläche)
         self.c = ctx()
         c = self.c
         root = parent.winfo_toplevel()
@@ -164,7 +165,7 @@ class ContentDialog:
             win.grab_set()
         except tk.TclError:
             pass
-        target = self.buttons.get(self.default)
+        target = self.focus_widget or self.buttons.get(self.default)
         if target is not None:
             target.focus_set()
         else:
