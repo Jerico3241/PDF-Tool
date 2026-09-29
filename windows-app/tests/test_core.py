@@ -105,10 +105,14 @@ def test_footer_migration_rules(eintrag: dict, erwartet: str) -> None:
 
 
 def test_customer_footer_keeps_current_for_empty_values() -> None:
-    assert appstate.customer_footer({"fusszeile": ""}) is None
-    assert appstate.customer_footer({"fusszeile": None}) is None
-    assert appstate.customer_footer({}) is None
-    assert appstate.customer_footer({"fusszeile": "Kunde A\n\nGruß"}) == "Kunde A\n\nGruß"
+    from tools.contract_overview.customer_flow import footer_of
+    from tools.contract_overview.customers.migration import customer_from_legacy
+
+    for leer in ({"fusszeile": ""}, {"fusszeile": None}, {}, {"fusszeile": "  \n "}):
+        kunde = customer_from_legacy({"firmenname": "A", **leer}, "")
+        assert kunde.footer is None and footer_of(kunde) is None
+    kunde = customer_from_legacy({"firmenname": "A", "fusszeile": "Kunde A\n\nGruß"}, "")
+    assert footer_of(kunde).text == "Kunde A\n\nGruß"
 
 
 def _textzeilen(page) -> list[tuple[float, str]]:
@@ -190,7 +194,7 @@ def test_state_reads_205_config() -> None:
         "accent": "#c42b1e",
     }
     state = appstate.State(cfg)
-    assert state.kunden == [{"firmenname": "A", "kundennummer": "1"}]
+    assert not hasattr(state, "kunden")  # übernimmt die Kundenakte 2.0 (siehe test_customers.py)
     assert [b["name"] for b in state.bausteine] == ["B1"]
     assert state.regeln == [{"enthaelt": "X", "zyklus": "Y"}]
     assert state.pdfs == ["/nicht/da.pdf"]
@@ -203,15 +207,13 @@ def test_state_default_rules_when_missing() -> None:
     assert appstate.State({"regeln": []}).regeln == []
 
 
-def test_customer_history_upsert_and_limit() -> None:
-    state = appstate.State({})
-    for number in range(15):
-        state.remember_customer(f"Firma {number}", str(number), "", "", "", "", "")
-    assert len(state.kunden) == appstate.MAX_KUNDEN
-    state.remember_customer("firma 3", "3", "neu@x.de", "", "", "", "", pdf="/tmp/x.pdf")
-    assert state.kunden[0]["rechnungsempfaenger"] == "neu@x.de"
-    assert sum(1 for k in state.kunden if k["kundennummer"] == "3") == 1
-    assert not state.remember_customer("", "", "", "", "", "", "")
+def test_legacy_history_entries_become_customers() -> None:
+    from tools.contract_overview.customers.migration import customers_from_legacy
+
+    eintraege = [{"firmenname": f"Firma {n}", "kundennummer": str(n), "rechnungsempfaenger": f"r{n}@x.de"} for n in range(12)]
+    kunden, skipped = customers_from_legacy(eintraege + [{"firmenname": "", "kundennummer": ""}, "müll"])
+    assert len(kunden) == 12 and skipped == 2
+    assert len({k.id for k in kunden}) == 12 and kunden[3].emails == ["r3@x.de"]
 
 
 def test_templates_blocks_rules() -> None:
@@ -236,7 +238,7 @@ def test_versions_are_consistent() -> None:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "2.3.0"
+    assert appstate.VERSION == version == "2.4.0"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]

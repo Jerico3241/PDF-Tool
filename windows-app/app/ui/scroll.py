@@ -223,10 +223,14 @@ class ScrollArea(tk.Frame):
 
     def scroll_to_widget(self, widget: tk.Misc) -> None:
         """Bringt ein Widget in den sichtbaren Bereich."""
+        self.scroll_into_view(widget)
+
+    def scroll_into_view(self, widget: tk.Misc, top: int = 0, height: int | None = None) -> None:
+        """Bringt einen Bereich eines Widgets (``top``/``height`` relativ zum Widget) in den sichtbaren Bereich."""
         try:
             self.update_idletasks()
-            y = widget.winfo_rooty() - self.body.winfo_rooty()
-            h = widget.winfo_height()
+            y = widget.winfo_rooty() - self.body.winfo_rooty() + int(top)
+            h = widget.winfo_height() if height is None else int(height)
         except tk.TclError:
             return
         total = max(1, self.body.winfo_reqheight())
