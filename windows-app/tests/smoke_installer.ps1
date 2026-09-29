@@ -1,23 +1,26 @@
 # Prueft das fertige Setup auf einem Windows-Rechner ohne eigenes Python:
 #   0. nur mit -Previous: Vorversion installieren und Benutzerdaten anlegen –
-#      Uebersichten-Ersteller 2.2.0 oder PDF Tool 2.3.0 (mit Kundenverlauf samt formatierter
-#      Fusszeile, Vorlagen, Textbausteinen und Regeln)
+#      Uebersichten-Ersteller 2.2.0, PDF Tool 2.3.0 (mit Kundenverlauf samt formatierter
+#      Fusszeile, Vorlagen, Textbausteinen und Regeln) oder PDF Tool 2.4.0 (Kundenakten mit
+#      formatierter Fusszeile und Vorlage, formatierte Kopfzeile, Einstellungen von "PDF reparieren")
 #   1. still installieren (bzw. aktualisieren) und Installation pruefen:
 #      Ordner, Verknuepfungen, genau ein Eintrag unter "Installierte Apps"
 #   2. nur mit -Previous: 2.2.0 – alter Programmordner und alte Verknuepfungen entfernt,
 #      Benutzerdaten mit Sicherung nach %APPDATA%\PDF-Tool uebernommen, alte Daten unveraendert;
-#      2.3.0 – das Setup laesst die Benutzerdaten unangetastet
+#      2.3.0/2.4.0 – das Setup laesst die Benutzerdaten unangetastet
 #   3. installierte Laufzeit pruefen (Module, Vertragsuebersicht, Kundenakte, Vorschau,
 #      PDF-Reparatur, Programmstart)
 #   4. echter Start wie ueber die Verknuepfung (pythonw.exe start.py); nach einem Update von
 #      2.3.0: Kundenverlauf mit Sicherung zu Kundenakten uebernommen, Formatierung,
-#      Standard-Fusszeile, Vorlagen und Textbausteine erhalten
+#      Standard-Fusszeile, Vorlagen und Textbausteine erhalten; von 2.4.0: Einstellungen,
+#      Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen unveraendert
 #   5. still deinstallieren
 #
 # Aufruf:
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup windows-app\dist\PDF-Tool-Setup-<Version>.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\Uebersichten-Ersteller-Setup-2.2.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.3.0.exe
+#   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.4.0.exe
 #
 # Der Update-Test (-Previous) braucht einen Rechner ohne vorhandene Installation und ohne
 # Benutzerdaten der App. Ordner, die das Skript selbst angelegt hat, entfernt es am Ende wieder.
@@ -80,6 +83,21 @@ if ($Previous) {
         [IO.File]::WriteAllBytes((Join-Path $oldData "logos\kunde.png"), [byte[]](0..255))
         $oldHashes = @{}
         Get-ChildItem $oldData -Recurse -File | ForEach-Object { $oldHashes[$_.FullName.Substring($oldData.Length)] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
+    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $oldEntry.DisplayVersion -like "2.4*") {
+        $previousKind = "2.4"
+        if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
+        Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
+        # Benutzerdaten wie von PDF Tool 2.4: Kundenakte mit formatierter eigener Fusszeile und Vorlage,
+        # formatierte Kopfzeile, Vorlagen, Textbausteine, Regeln, Einstellungen von "PDF reparieren"
+        New-Item -ItemType Directory -Path $data -Force | Out-Null
+        $json = '{"gesehen": "2.4.0", "theme": "dark", "vorlagen": [{"name": "Quer", "format": "quer", "titel": "Vertragsübersicht"}], "bausteine": [{"name": "Gruß", "text": "Mit freundlichen Grüßen"}], "regeln": [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}, {"enthaelt": "Cloud", "zyklus": "monatlich"}], "kopfzeile": "Kopf fett", "kopfzeile_format": {"version": 1, "text": "Kopf fett", "spans": [{"start": 0, "end": 9, "font": "Helvetica", "size": 10, "color": "#B51F1F", "bold": true, "italic": false, "underline": false, "strike": false}], "paragraphs": [{"start": 0, "end": 9, "alignment": "left"}]}, "reparatur_ausgabe": "ordner", "reparatur_ordner": "C:\\Reparatur", "ordner_reparatur": "C:\\Quelle", "kunden_sortierung": "company", "kunden_auto_uebernehmen": false}'
+        $seedFile = Join-Path $data "gui-config.json"
+        [IO.File]::WriteAllText($seedFile, $json, (New-Object Text.UTF8Encoding $false))
+        $akten = '{"schema_version": 2, "customers": [{"id": "6f1c1d2e-0000-4000-8000-000000000024", "company": "Muster GmbH", "number": "10042", "emails": ["rechnung@muster.de", "buchhaltung@muster.de"], "note": "Stammkunde", "logo": "", "target_dir": "", "template": "Quer", "template_auto": true, "header": null, "footer": {"text": "Kunde Muster\nZeile 2", "format": {"version": 1, "text": "Kunde Muster\nZeile 2", "spans": [{"start": 0, "end": 12, "font": "Helvetica", "size": 8, "color": "#333333", "bold": false, "italic": true, "underline": false, "strike": false}, {"start": 12, "end": 20, "font": "Helvetica", "size": 8, "color": "#333333", "bold": false, "italic": false, "underline": false, "strike": false}], "paragraphs": [{"start": 0, "end": 12, "alignment": "center"}, {"start": 13, "end": 20, "alignment": "center"}]}}, "last_excel": "", "last_pdf": "", "last_used_at": "2026-09-01T10:00:00.000000+02:00", "created_at": "2026-08-01T10:00:00.000000+02:00", "updated_at": "2026-08-01T10:00:00.000000+02:00", "origin": ""}]}'
+        $storeFile = Join-Path $data "kundenakten.json"
+        [IO.File]::WriteAllText($storeFile, $akten, (New-Object Text.UTF8Encoding $false))
+        $seedHash = (Get-FileHash $seedFile -Algorithm SHA256).Hash
+        $storeHash = (Get-FileHash $storeFile -Algorithm SHA256).Hash
     } elseif (Test-Path (Join-Path $target "app\start.py")) {
         $previousKind = "2.3"
         if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
@@ -119,6 +137,14 @@ if ($Previous -and $previousKind -eq "2.3") {
     if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Benutzerdaten veraendert" }
     if (Test-Path (Join-Path $data "kundenakten.json")) { throw "kundenakten.json vor dem ersten Start vorhanden" }
     Write-Host "   Programmdateien ersetzt, Benutzerdaten unveraendert"
+}
+
+if ($Previous -and $previousKind -eq "2.4") {
+    Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
+    if ($oldEntry.DisplayName -ne $appName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
+    if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Einstellungen veraendert" }
+    if ((Get-FileHash $storeFile -Algorithm SHA256).Hash -ne $storeHash) { throw "Das Setup hat die Kundenakten veraendert" }
+    Write-Host "   Programmdateien ersetzt, Einstellungen und Kundenakten unveraendert"
 }
 
 if ($Previous -and $previousKind -eq "2.2") {
@@ -180,6 +206,23 @@ if ($Previous -and $previousKind -eq "2.3") {
     if (@($cfg.bausteine)[0].text -ne "Mit freundlichen $([char]0x0047)r$([char]0x00FC)$([char]0x00DF)en") { throw "Textbausteine gingen verloren" }
     if (-not ([string]$cfg.fusszeile).StartsWith("Die oben aufgef$([char]0x00FC)hrte Auflistung")) { throw "Standard-Fusszeile fehlt: $($cfg.fusszeile)" }
     Write-Host "   2 Kundenakten mit Sicherung $($backup[0].Name) uebernommen; Formatierung, Standard-Fusszeile, Vorlagen und Textbausteine erhalten"
+}
+
+if ($Previous -and $previousKind -eq "2.4") {
+    Write-Host "   Update von 2.4: Einstellungen, Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen pruefen"
+    if ((Get-FileHash $storeFile -Algorithm SHA256).Hash -ne $storeHash) { throw "Kundenakten wurden beim Start veraendert" }
+    $akten = Get-Content $storeFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $muster = @($akten.customers)[0]
+    if ($muster.company -ne "Muster GmbH" -or $muster.template -ne "Quer" -or (@($muster.emails) -join ",") -ne "rechnung@muster.de,buchhaltung@muster.de") { throw "Kundenakte veraendert" }
+    if (-not (@($muster.footer.format.spans) | Where-Object { $_.italic -eq $true })) { throw "Formatierung der Fusszeile der Kundenakte ging verloren" }
+    $cfg = Get-Content (Join-Path $data "gui-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (@($cfg.vorlagen)[0].name -ne "Quer" -or @($cfg.vorlagen)[0].format -ne "quer") { throw "Vorlagen gingen verloren" }
+    if (@($cfg.bausteine)[0].text -ne "Mit freundlichen $([char]0x0047)r$([char]0x00FC)$([char]0x00DF)en") { throw "Textbausteine gingen verloren" }
+    if (@($cfg.regeln).Count -ne 2) { throw "Zyklus-Regeln gingen verloren" }
+    if ($cfg.kopfzeile -ne "Kopf fett" -or -not (@($cfg.kopfzeile_format.spans) | Where-Object { $_.bold -eq $true })) { throw "Formatierte Kopfzeile ging verloren" }
+    if ($cfg.reparatur_ausgabe -ne "ordner" -or $cfg.reparatur_ordner -ne "C:\Reparatur" -or $cfg.ordner_reparatur -ne "C:\Quelle") { throw "Einstellungen von 'PDF reparieren' gingen verloren" }
+    if ($cfg.kunden_sortierung -ne "company") { throw "Sortierung der Kundenliste ging verloren" }
+    Write-Host "   Kundenakte, Vorlagen, Textbausteine, Regeln, formatierte Kopfzeile und Reparatur-Einstellungen erhalten"
 }
 
 Write-Host "5. Stille Deinstallation"

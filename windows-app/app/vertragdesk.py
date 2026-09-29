@@ -40,6 +40,8 @@ from appstate import (  # noqa: E402
     save_config,
 )
 from tools.contract_overview import page_create, page_customers, page_layout, page_preview  # noqa: E402
+from tools.contract_overview.batch import page as page_batch  # noqa: E402
+from tools.contract_overview.controller import BATCH_HINT  # noqa: E402
 from tools.contract_overview.controller import HINT as CONTRACT_HINT  # noqa: E402
 from tools.contract_overview.controller import ContractOverviewTool  # noqa: E402
 from tools.pdf_repair import page as page_repair  # noqa: E402
@@ -104,6 +106,9 @@ class App(ContractOverviewTool, tk.Tk):
     def __init__(self) -> None:
         super().__init__(className="PDF-Tool")
         self.withdraw()
+        # Excel-Prüfung, PDF-Erstellung und Vorschau laufen in Threads. Mit einem kürzeren Wechselintervall
+        # kommt die Oberfläche nach jedem Tk-Aufruf schneller wieder an die Reihe und bleibt flüssig.
+        sys.setswitchinterval(0.001)
         # Rahmenfenster jetzt anlegen (noch unsichtbar und leer): Titelleiste und Mica
         # lassen sich so vor dem ersten Anzeigen einstellen.
         self.update_idletasks()
@@ -157,6 +162,7 @@ class App(ContractOverviewTool, tk.Tk):
             {
                 "home": lambda host: page_home.build(self, host),
                 "create": lambda host: page_create.build(self, host),
+                "batch": lambda host: page_batch.build(self, host),
                 "layout": lambda host: page_layout.build(self, host),
                 "preview": lambda host: page_preview.build(self, host),
                 "customers": lambda host: page_customers.build(self, host),
@@ -410,7 +416,7 @@ class App(ContractOverviewTool, tk.Tk):
             page_settings.refresh(self)
         tool = tool_for_page(key)
         hint = {CONTRACTS.key: CONTRACT_HINT, REPAIR.key: page_repair.HINT}.get(tool.key if tool else "", HOME_HINT)
-        self.nav.status.set_hint(hint)
+        self.nav.status.set_hint(BATCH_HINT if key == "batch" else hint)
         # Die Auswahlleisten aller Ansichten von »Vertragsübersichten« zeigen dieselbe Ansicht.
         if key in CONTRACTS.pages:
             for view in CONTRACTS.pages:
@@ -419,6 +425,10 @@ class App(ContractOverviewTool, tk.Tk):
                     selector.select(key)
         if previous == "customers" and key != "customers" and self.customer_page is not None:
             self.customer_page.flush()
+        if previous == "batch" and key != "batch" and self.batch_page is not None:
+            self.batch_page.flush()
+        if previous == "preview" and key != "preview":
+            self.preview_left()
         if key == "preview":
             self.preview_shown()
 
@@ -436,20 +446,28 @@ class App(ContractOverviewTool, tk.Tk):
     def _primary_action(self) -> None:
         """Strg+Enter: Hauptaktion des sichtbaren Werkzeugs."""
         tool = self.current_tool()
-        if tool == CONTRACTS.key:
+        if self.nav.current == "batch":
+            self.batch_start()
+        elif tool == CONTRACTS.key:
             self.start_pdf()
         elif tool == REPAIR.key:
             self.repair.start_repair()
 
     def _find_action(self) -> None:
         """Strg+F: in »Vertragsübersichten« einen bekannten Kunden suchen."""
-        if self.current_tool() == CONTRACTS.key:
+        if self.nav.current == "batch":
+            # Im Stapel: Kunden für den geöffneten Eintrag wählen
+            if self.batch_page is not None and self.batch_page.item_id:
+                self.batch_choose_customer(self.batch_page.item_id)
+        elif self.current_tool() == CONTRACTS.key:
             self.find_customer()
 
     def _open_action(self) -> None:
         """Strg+O: Datei für das sichtbare Werkzeug wählen."""
         tool = self.current_tool()
-        if tool == CONTRACTS.key:
+        if self.nav.current == "batch":
+            self.pick_batch_files()
+        elif tool == CONTRACTS.key:
             self.pick_excel()
         elif tool == REPAIR.key:
             self.repair.pick()
@@ -720,6 +738,8 @@ class App(ContractOverviewTool, tk.Tk):
 
     def _on_close(self) -> None:
         if self._closing:
+            return
+        if not self.batch_confirm_close():
             return
         self._closing = True
         self.ctx.anim.cancel_later("autosave")

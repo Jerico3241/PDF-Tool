@@ -7,6 +7,7 @@ liefert die Schicht ``excelstyle``, formatierte Kopf- und Fußzeilen das Modell
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import tempfile
@@ -287,6 +288,13 @@ def _col(df: pd.DataFrame, *namen: str, required: bool = True) -> str:
     return ""
 
 
+class Abgebrochen(Exception):
+    """Die Erstellung wurde auf Wunsch abgebrochen – es bleibt keine (halbe) PDF zurück."""
+
+    def __init__(self) -> None:
+        super().__init__("Die Erstellung wurde abgebrochen.")
+
+
 @dataclass
 class PdfAuftrag:
     excel: Path
@@ -308,6 +316,96 @@ class PdfAuftrag:
     regeln: list | None = None
     pdf_oeffnen: bool = False
     status: Callable[[str], None] | None = None
+    # Genaue Ausgabedatei (statt Zielordner + Dateiname), z. B. nach einer Namenskonflikt-Prüfung
+    ausgabe: Path | None = None
+    # False: eine vorhandene Datei nie ersetzen (FileExistsError) – True wie bisher: ersetzen
+    ueberschreiben: bool = True
+    # Wird an festen Stellen gefragt; True bricht ab (Abgebrochen), bevor die PDF entsteht
+    abbrechen: Callable[[], bool] | None = None
+
+
+DEFAULT_DATEINAME = "Vertragsuebersicht_Kd{kd}.pdf"
+_UNGUELTIG_IM_NAMEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def platzhalter(kundennummer: str, firmenname: str = "", jetzt: datetime | None = None) -> dict[str, str]:
+    """Werte der Platzhalter {kd}, {kundennummer}, {kunde}, {firma}, {datum}, {datumkurz} im Dateinamen."""
+    jetzt = jetzt or datetime.now()
+    kundennummer = str(kundennummer or "").strip()
+    name = re.sub(r"[^\w\-]+", "_", str(firmenname or "").strip(), flags=re.UNICODE).strip("_") or kundennummer
+    return {
+        "kd": kundennummer,
+        "kundennummer": kundennummer,
+        "datum": jetzt.strftime("%Y-%m-%d"),
+        "datumkurz": jetzt.strftime("%d.%m.%Y"),
+        "kunde": name,
+        "firma": name,
+    }
+
+
+def dateiname_fuer(muster: str, kundennummer: str, firmenname: str = "", jetzt: datetime | None = None) -> str:
+    """Dateiname der PDF aus dem Muster – dieselbe Regel für Einzel- und Stapelerstellung.
+
+    Zeichen, die Windows in Dateinamen nicht erlaubt (z. B. »/« in einer Kundennummer),
+    werden durch »_« ersetzt, damit nie ein unbeabsichtigter Unterordner entsteht.
+    """
+    muster = str(muster or "").strip() or DEFAULT_DATEINAME
+    if not muster.lower().endswith(".pdf"):
+        muster += ".pdf"
+    kundennummer = str(kundennummer or "").strip()
+    name = muster.format(**platzhalter(kundennummer, firmenname, jetzt))
+    if "{kd}" not in muster and "{kundennummer}" not in muster:
+        # Muster mit fest eingetragener Nummer (z. B. »…_Kd10042.pdf«): aktuelle Kundennummer einsetzen
+        name = re.sub(r"(?i)(?<=Kd)\d+", lambda _treffer: kundennummer, name)
+    return _UNGUELTIG_IM_NAMEN.sub("_", name)
+
+
+def zielordner_fuer(auftrag: "PdfAuftrag") -> Path:
+    ordner = Path(auftrag.zielordner) if auftrag.zielordner else Path(auftrag.excel).parent
+    if ordner.suffix.lower() == ".pdf":
+        ordner = ordner.parent
+    return ordner
+
+
+def ausgabe_pfad(auftrag: "PdfAuftrag", jetzt: datetime | None = None) -> Path:
+    """Die Datei, die ``erstelle_pdf`` für diesen Auftrag schreibt (ohne Ordner anzulegen)."""
+    if auftrag.ausgabe:
+        return Path(auftrag.ausgabe)
+    return zielordner_fuer(auftrag) / dateiname_fuer(auftrag.dateiname, auftrag.kundennummer, auftrag.firmenname, jetzt)
+
+
+def _pruefe_abbruch(auftrag: "PdfAuftrag") -> None:
+    if auftrag.abbrechen is not None and auftrag.abbrechen():
+        raise Abgebrochen()
+
+
+def _veroeffentlichen(temp: Path, ziel: Path, ueberschreiben: bool) -> None:
+    """Fertige PDF an ihren Platz bringen – in einem Schritt, nie als halbe Datei.
+
+    ``ueberschreiben=False`` ersetzt eine vorhandene Datei nie (FileExistsError), auch
+    wenn sie erst während der Erstellung entstanden ist.
+    """
+    try:
+        if ueberschreiben:
+            os.replace(temp, ziel)
+        elif os.name == "nt":
+            os.rename(temp, ziel)  # Windows: schlägt fehl, wenn das Ziel existiert
+        else:
+            try:
+                os.link(temp, ziel)  # schlägt fehl, wenn das Ziel existiert
+            except FileExistsError:
+                raise
+            except OSError:
+                # Dateisystem ohne feste Verknüpfungen: prüfen und umbenennen
+                if ziel.exists():
+                    raise FileExistsError(errno.EEXIST, "Datei existiert bereits", str(ziel)) from None
+                os.rename(temp, ziel)
+            else:
+                os.unlink(temp)
+    except FileExistsError:
+        raise
+    except PermissionError as exc:
+        raise PermissionError(f"Die PDF-Datei ist geöffnet oder schreibgeschützt und kann nicht ersetzt werden:\n{ziel}") from exc
 
 
 def _zelltext(value) -> str:
@@ -577,6 +675,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     if not kundennummer:
         raise ValueError("Bitte eine Kundennummer eintragen.")
 
+    _pruefe_abbruch(auftrag)
     _status(auftrag, "Excel wird gelesen …")
     tabelle = lies_tabelle(excel)
     df = tabelle.df
@@ -596,6 +695,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     df[col_beginn] = pd.to_datetime(df[col_beginn], errors="coerce")
     df = df.sort_values(col_beginn, kind="stable").reset_index(drop=True)
 
+    _pruefe_abbruch(auftrag)
     _status(auftrag, "Formatierung wird gelesen …")
     stile = excel_stile(tabelle, df, [col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung], col_vertrag)
     excel_spalte = {name: tabelle.excel_spalte(name) for name in (col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung)}
@@ -616,28 +716,15 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
 
     firmenname = auftrag.firmenname.strip()
     jetzt = datetime.now()
-    tokens = {
-        "kd": kundennummer,
-        "kundennummer": kundennummer,
-        "datum": jetzt.strftime("%Y-%m-%d"),
-        "datumkurz": jetzt.strftime("%d.%m.%Y"),
-        "kunde": re.sub(r"[^\w\-]+", "_", firmenname, flags=re.UNICODE).strip("_") or kundennummer,
-        "firma": re.sub(r"[^\w\-]+", "_", firmenname, flags=re.UNICODE).strip("_") or kundennummer,
-    }
     # In Kopf- und Fußzeile erscheint der Firmenname wie eingetragen (nicht dateinamentauglich umgeschrieben).
-    text_werte = {**tokens, "kunde": firmenname or kundennummer, "firma": firmenname or kundennummer}
-    muster = auftrag.dateiname.strip() or "Vertragsuebersicht_Kd{kd}.pdf"
-    if not muster.lower().endswith(".pdf"):
-        muster += ".pdf"
-    dateiname = muster.format(**tokens)
-    dateiname = re.sub(r"(?i)(?<=Kd)\d+", kundennummer, dateiname)
-
-    ordner = Path(auftrag.zielordner) if auftrag.zielordner else excel.parent
-    if ordner.suffix.lower() == ".pdf":
-        ordner = ordner.parent
+    text_werte = {**platzhalter(kundennummer, firmenname, jetzt), "kunde": firmenname or kundennummer, "firma": firmenname or kundennummer}
+    ausgabe_pdf = ausgabe_pfad(auftrag, jetzt)
+    ordner = ausgabe_pdf.parent
     ordner.mkdir(parents=True, exist_ok=True)
-    ausgabe_pdf = ordner / dateiname
+    if not auftrag.ueberschreiben and ausgabe_pdf.exists():
+        raise FileExistsError(errno.EEXIST, "Datei existiert bereits", str(ausgabe_pdf))
 
+    _pruefe_abbruch(auftrag)
     _status(auftrag, "Logo wird vorbereitet …")
     img = PILImage.open(logo_datei)
     if img.mode in ("RGBA", "LA"):
@@ -649,9 +736,15 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     logo_path = tmp.name
     tmp.close()
-    prepared.save(logo_path, "PNG")
+    temp_pdf: Path | None = None
 
     try:
+        prepared.save(logo_path, "PNG")
+        # Die PDF entsteht zuerst als temporäre Datei im Zielordner und wird erst fertig an ihren
+        # Platz gebracht: Ein Fehler oder Abbruch hinterlässt nie eine halbe PDF.
+        handle, temp_name = tempfile.mkstemp(prefix="~pdf-tool-", suffix=".tmp", dir=str(ordner))
+        os.close(handle)
+        temp_pdf = Path(temp_name)
         _status(auftrag, "PDF wird gesetzt …")
         quer = str(auftrag.seitenformat).lower() in {"quer", "querformat", "landscape", "q"}
         logo_mm = float(auftrag.logo_breite)
@@ -727,7 +820,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         if seitenmass[1] - oben - unten < 60 * mm:
             raise ValueError("Kopf- und Fußzeile sind zusammen zu hoch für die Seite. Bitte den Text kürzen oder eine kleinere Schrift wählen.")
         doc = SimpleDocTemplate(
-            str(ausgabe_pdf),
+            str(temp_pdf),
             pagesize=seitenmass,
             leftMargin=14 * mm,
             rightMargin=14 * mm,
@@ -837,6 +930,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         story.append(tbl)
 
         def _seite(canvas, _doc) -> None:
+            _pruefe_abbruch(auftrag)
             if kopf_teile:
                 canvas.saveState()
                 oben_kopf = _doc.pagesize[1] - 8 * mm
@@ -856,10 +950,18 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
             _zeichne_block(canvas, fuss_teile, _doc.leftMargin, y + fuss_h)
             canvas.restoreState()
 
+        _pruefe_abbruch(auftrag)
         doc.build(story, onFirstPage=_seite, onLaterPages=_seite, canvasmaker=_NummernCanvas)
+        _pruefe_abbruch(auftrag)
+        _veroeffentlichen(temp_pdf, ausgabe_pdf, auftrag.ueberschreiben)
     finally:
         if os.path.exists(logo_path):
             os.remove(logo_path)
+        if temp_pdf is not None and temp_pdf.exists():
+            try:
+                temp_pdf.unlink()
+            except OSError:
+                pass
 
     _status(auftrag, f"PDF gespeichert: {ausgabe_pdf}")
     if auftrag.pdf_oeffnen:

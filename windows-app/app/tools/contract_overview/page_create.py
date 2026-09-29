@@ -18,8 +18,9 @@ if TYPE_CHECKING:
     from vertragdesk import App
 
 TITLE = "Vertragsübersichten"
-VIEWS = [("create", "Übersicht erstellen"), ("layout", "Darstellung"), ("preview", "Vorschau"), ("customers", "Kunden")]
+VIEWS = [("create", "Übersicht erstellen"), ("batch", "Stapel"), ("layout", "Darstellung"), ("preview", "Vorschau"), ("customers", "Kunden")]
 EXCEL_EMPTY = "Excel-Datei wählen oder in das Fenster ziehen – sie wird sofort geprüft."
+DETAIL_LABEL_WIDTH = 150  # Beschriftungsspalte unter der Excel-Prüfung (»Rechnungsempfänger« passt)
 
 
 def build(app: "App", host) -> Page:
@@ -71,15 +72,6 @@ def build(app: "App", host) -> Page:
     field_label(body, "Rechnungsempfänger (optional)")
     ui.field_mail = TextField(body, app.var_mail, placeholder="E-Mail-Adresse")
     ui.field_mail.pack(fill="x")
-    ui.mail_area = Collapsible(body)
-    ui.mail_area.pack(fill="x")
-    mail_inner = ui.mail_area.content
-    field_label(mail_inner, "Mehrere Rechnungsempfänger in der Excel")
-    ui.mail_combo = ComboBox(mail_inner, placeholder="Empfänger wählen", command=app.on_mail_pick, width=240, tooltip="Übernimmt die Adresse als Rechnungsempfänger")
-    ui.mail_combo.pack(fill="x")
-    # Wiedererkennung nach der Excel-Prüfung (Schließen = Ignorieren)
-    ui.kunde_match = InfoBar(body, on_close=app.ignore_match)
-    ui.kunde_match.pack(fill="x", pady=(px(8), 0))
     ui.kunde_info = InfoBar(body)
     ui.kunde_info.pack(fill="x", pady=(px(8), 0))
     save_row = frame(body)
@@ -96,14 +88,30 @@ def build(app: "App", host) -> Page:
     ui.row_excel.pack(fill="x")
     Button(ui.row_excel.buttons, "Durchsuchen", app.pick_excel, icon=icons.OPEN_FILE, tooltip="Excel-Datei wählen (Strg+O)").pack(side="right")
     IconButton(ui.row_excel.buttons, icons.COPY, lambda: app.copy_path(app.var_excel.get()), tooltip="Pfad der Excel-Datei kopieren").pack(side="right", padx=(0, px(4)))
+    # Status der Prüfung: die einzige Stelle mit den Vertragszahlen (»Excel geprüft · 5 aktive Verträge«)
     ui.info_excel = InfoBar(body, closable=False)
-    ui.info_excel.pack(fill="x", pady=(px(8), px(4)))
+    ui.info_excel.pack(fill="x", pady=(px(8), 0))
     ui.info_excel.show("neutral", EXCEL_EMPTY, animate=False)
-    # Ergebnis der Excel-Prüfung im Detail (nur was tatsächlich in der Datei steht)
+    # Darunter nur, was die Statuszeile nicht schon sagt: Rechnungsempfänger, Kunde, Hinweise
     ui.excel_details = Collapsible(body)
     ui.excel_details.pack(fill="x")
-    ui.excel_facts = FactList(ui.excel_details.content)
-    ui.excel_facts.pack(fill="x", pady=(px(4), px(2)))
+    details = frame(ui.excel_details.content)
+    details.pack(fill="x", pady=(px(8), 0))
+    ui.mail_row = frame(details)
+    ui.mail_row.columnconfigure(0, minsize=px(DETAIL_LABEL_WIDTH))
+    ui.mail_row.columnconfigure(1, weight=1)
+    Text(ui.mail_row, "Rechnungsempfänger", style="caption", color="text2").grid(row=0, column=0, sticky="w", padx=(0, px(12)))
+    ui.mail_value = Text(ui.mail_row, "", style="body", width=1)
+    ui.mail_value.grid(row=0, column=1, sticky="ew")
+    # Mehrere Empfänger: Auswahl direkt daneben (übernimmt die Adresse in die Kundendaten)
+    ui.mail_combo = ComboBox(ui.mail_row, placeholder="Empfänger wählen", command=app.on_mail_pick, width=210, tooltip="Übernimmt die Adresse als Rechnungsempfänger")
+    ui.mail_combo.grid(row=0, column=2, sticky="e", padx=(px(8), 0))
+    ui.mail_combo.grid_remove()
+    ui.excel_facts = FactList(details, label_width=DETAIL_LABEL_WIDTH)
+    ui.excel_facts.pack(fill="x")
+    # Wiedererkennung nach der Excel-Prüfung (Schließen = Ignorieren)
+    ui.kunde_match = InfoBar(body, on_close=app.ignore_match)
+    ui.kunde_match.pack(fill="x", pady=(px(8), 0))
     Divider(body).pack(fill="x", pady=px(10))
     ui.row_logo = FileRow(body, icons.PICTURE, "Logo")
     ui.row_logo.pack(fill="x")

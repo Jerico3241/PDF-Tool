@@ -11,11 +11,13 @@ Geprüft wird:
 2. Vertragsübersichten: eine echte PDF aus einer Excel mit fett formatierter Zelle und
    formatierter Fußzeile; Kundenakte 2.0 (Übernahme einer Kundenhistorie aus 2.3 mit
    Sicherung, Wiedererkennung per E-Mail, Speichern) und Live-Vorschau (PDF im
-   Hintergrund erzeugen, Seite mit PDFium zeichnen, temporäre Dateien löschen)
+   Hintergrund erzeugen, Seite mit PDFium zeichnen, temporäre Dateien löschen);
+   Stapel: zwei Excel-Listen prüfen, Kunden erkennen bzw. ergänzen und mit derselben
+   Engine nacheinander erstellen – eine vorhandene PDF wird nicht überschrieben
 3. PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen
 4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge und die Ansichten
-   »Vorschau« und »Kunden« öffnen, Einstellungen werden gespeichert)
+   »Stapel«, »Vorschau« und »Kunden« öffnen, Einstellungen werden gespeichert)
 
 Endet mit Code 0 und »OK«, sonst mit einer Fehlermeldung und Code 1.
 """
@@ -78,7 +80,12 @@ def main() -> int:
     import richtext
     import vertragdesk
     from tools import registry
-    from tools.contract_overview import controller, customer_flow, page_customers, page_preview, preview
+    from tools.contract_overview import controller, customer_flow, overview, page_customers, page_preview, preview
+    from tools.contract_overview.batch import analyzer as batch_analyzer
+    from tools.contract_overview.batch import models as batch_models
+    from tools.contract_overview.batch import page as batch_page
+    from tools.contract_overview.batch import processor as batch_processor
+    from tools.contract_overview.batch import resolver as batch_resolver
     from tools.contract_overview.customers import matching, migration, repository
     from tools.pdf_repair import engine as repair_engine
     from tools.pdf_repair import process as repair_process
@@ -86,8 +93,9 @@ def main() -> int:
 
     check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(controller, "ContractOverviewTool"), "Werkzeug Vertragsübersichten fehlt")
-    check(registry.CONTRACTS.pages == ("create", "layout", "preview", "customers"), "Ansichten von Vertragsübersichten fehlen")
-    check(hasattr(page_customers, "CustomerPage") and hasattr(page_preview, "PreviewView"), "Ansichten »Kunden« bzw. »Vorschau« fehlen")
+    check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "customers"), "Ansichten von Vertragsübersichten fehlen")
+    check(hasattr(page_customers, "CustomerPage") and hasattr(page_preview, "PreviewView") and hasattr(batch_page, "BatchPage"), "Ansichten »Kunden«, »Vorschau« bzw. »Stapel« fehlen")
+    check(overview.contract_summary(5, 3) == "5 aktive Verträge · 3 inaktiv ausgeblendet" and overview.contract_summary(1) == "1 aktiver Vertrag", "Statuszeile der Excel-Prüfung")
     print(f"App {vertragdesk.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
 
     # 2. PDF mit Excel-Fettschrift und formatierter Fußzeile
@@ -155,6 +163,53 @@ def main() -> int:
     check(not doc.folder.exists(), "Vorschau-Dateien wurden nicht gelöscht")
     print(f"Vorschau: {doc.pages} Seite(n), erste Seite {breite}×{hoehe} Pixel")
 
+    # Stapel: zwei Listen – ein bekannter Kunde, ein unbekannter mit eigenen Angaben – mit derselben Engine
+    import appstate
+
+    stapel = work / "stapel"
+    stapel.mkdir()
+    for name, mail in (("bekannt.xlsx", "Rechnung@Mueller.de"), ("neu.xlsx", "info@neu.de")):
+        liste = openpyxl.Workbook()
+        blatt = liste.active
+        blatt.append(["Vertrag-Nr.", "Beginnt am", "Abrechnungszyklus", "Netto [€]", "Zahlungsart", "Bemerkung", "Rechnungsempfänger Email", "Anwenderstatus"])
+        blatt.append(["V-1", datetime(2021, 1, 1), "jährlich", 10.0, "Sofort", "Alpha", mail, "Aktiv"])
+        blatt.append(["V-2", datetime(2022, 1, 1), "jährlich", 20.0, "Sofort", "Beta", mail, "Inaktiv"])
+        liste.save(stapel / name)
+    ausgabe = stapel / "ausgabe"
+    settings = batch_models.BatchSettings(target_dir=str(ausgabe))
+    defaults = batch_resolver.Defaults(
+        dateiname=appstate.DEFAULT_DATEINAME, seitenformat="hoch", logo_breite="62", titel=appstate.DEFAULT_TITEL, untertitel=appstate.DEFAULT_UNTERTITEL,
+        header=richtext.RichText.plain("", richtext.HEADER_STYLE), footer=appstate.default_footer_rich(), regeln=tuple(appstate.DEFAULT_REGELN), logo=str(logo),
+    )
+    items = {}
+    for name in ("bekannt.xlsx", "neu.xlsx"):
+        item = batch_models.BatchItem(str(stapel / name))
+        item.analysis, item.stamp = batch_analyzer.analyze_file(item.path)
+        items[item.id] = item
+    bekannt, neu = items.values()
+    check(bekannt.analysis.active == 1 and bekannt.analysis.inactive == 1, "Stapel: Prüfung der Excel")
+    check(batch_resolver.resolve(bekannt, store, lambda _n: None, settings, defaults).ready, "Stapel: bekannter Kunde nicht bereit")
+    offen = batch_resolver.resolve(neu, store, lambda _n: None, settings, defaults)
+    check(batch_resolver.status_for(offen.issues) is batch_models.ItemStatus.NEEDS_INPUT, "Stapel: unbekannter Kunde sollte Angaben brauchen")
+    neu.overrides = batch_models.Overrides(company="Neu GmbH", number="4712")
+    ausgabe.mkdir()
+    (ausgabe / "Vertragsuebersicht_Kd4712.pdf").write_bytes(b"%PDF-1.4 vorhanden")
+
+    def job(item_id, created):
+        res = batch_resolver.resolve(items[item_id], store, lambda _n: None, settings, defaults)
+        return batch_processor.Job(item_id, res.company, items[item_id].path, items[item_id].stamp, batch_processor.identity_of(items[item_id].analysis), res.fields, res.folder, settings.conflict, created)
+
+    fertig = {}
+    runner = batch_processor.BatchRunner(list(items), job, lambda func, done, fail: done(func()), lambda *_a: None, lambda r: fertig.setdefault(r.item_id, r), lambda summary, _rest: fertig.setdefault("summary", summary))
+    runner.start()
+    summary = fertig["summary"]
+    check(summary.created == 2 and summary.failed == 0, f"Stapel: {summary}")
+    check((ausgabe / "Vertragsuebersicht_Kd0815.pdf").is_file(), "Stapel: PDF des bekannten Kunden fehlt")
+    check((ausgabe / "Vertragsuebersicht_Kd4712.pdf").read_bytes() == b"%PDF-1.4 vorhanden", "Stapel: vorhandene PDF wurde überschrieben")
+    check((ausgabe / "Vertragsuebersicht_Kd4712_2.pdf").is_file(), "Stapel: nummerierte PDF fehlt")
+    check(not any(path.suffix == ".tmp" for path in ausgabe.iterdir()), "Stapel: temporäre Dateien blieben zurück")
+    print(f"Stapel: {summary.created} Übersichten erstellt ({', '.join(sorted(p.name for p in ausgabe.iterdir()))})")
+
     # 3. PDF reparieren – im eigenen Arbeitsprozess wie in der App
     import re
 
@@ -204,7 +259,7 @@ def main() -> int:
             app.open_tool("contracts")
             app.update()
             shown["contracts"] = app.nav.current
-            for view in ("preview", "customers"):
+            for view in ("batch", "preview", "customers"):
                 app.nav.navigate(view)
                 app.update()
                 shown[view] = app.nav.current
@@ -216,7 +271,7 @@ def main() -> int:
         check(shown.get("page") == "home", "Startseite fehlt")
         check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
         check(shown.get("repair") == "repair" and shown.get("contracts") == "create", "Werkzeuge lassen sich nicht öffnen")
-        check(shown.get("preview") == "preview" and shown.get("customers") == "customers", "Ansichten »Vorschau« und »Kunden« lassen sich nicht öffnen")
+        check(shown.get("preview") == "preview" and shown.get("customers") == "customers" and shown.get("batch") == "batch", "Ansichten »Stapel«, »Vorschau« und »Kunden« lassen sich nicht öffnen")
         config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
         check(config.is_file(), "Einstellungen wurden beim Beenden nicht gespeichert")
         print(f"Programmstart: Fenster sichtbar, beendet nach {time.monotonic() - started:.1f} s")

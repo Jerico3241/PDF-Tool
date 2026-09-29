@@ -150,6 +150,7 @@ class PreviewFlow:
         self._preview_view: tuple | None = None  # (Dokument, Seite, Maßstab) der laufenden Anzeige
         self._preview_images: dict[tuple[int, int, float], tuple[bytes, int, int]] = {}
         self._preview_problem = ""
+        self._preview_item: str | None = None  # Stapel-Eintrag, dessen Vorschau gezeigt wird (sonst die Übersicht)
         self.preview_runs = 0  # erzeugte Vorschauen (Tests, Diagnose)
         threading.Thread(target=sweep_stale_folders, name="vorschau-aufraeumen", daemon=True).start()
 
@@ -165,11 +166,52 @@ class PreviewFlow:
     def preview_shown(self) -> None:
         """Ansicht »Vorschau« geöffnet: sofort prüfen, ob die Vorschau noch aktuell ist."""
         self.ctx.anim.cancel_later("preview:refresh")
+        self._show_preview_source()
+        self.refresh_preview()
+
+    def preview_left(self) -> None:
+        """Ansicht »Vorschau« verlassen: beim nächsten Öffnen wieder die Übersicht (nicht den Stapel-Eintrag)."""
+        if self._preview_item is not None:
+            self._preview_item = None
+            self._show_preview_source()
+
+    def _show_preview_source(self) -> None:
+        item = self.batch_by_id.get(self._preview_item) if self._preview_item else None
+        if item is None:
+            self._preview_item = None
+            self.hide_notice("preview_source")
+            return
+        res = self.batch_resolution(item.id)
+        who = f" – {res.customer.label}" if res is not None and res.customer is not None else (f" – {res.company or res.number}" if res is not None and (res.company or res.number) else "")
+        self.notify(
+            "preview_source",
+            "info",
+            f"„{item.name}“{who}. Die Vorschau zeigt diesen Eintrag genau so, wie der Stapel ihn erstellt.",
+            title="Stapel-Eintrag",
+            actions=(("Zurück zum Stapel", self._preview_back_to_batch), ("Übersicht anzeigen", self._preview_single)),
+            status=False,
+            animate=False,
+        )
+
+    def _preview_back_to_batch(self) -> None:
+        item_id = self._preview_item
+        self.nav.navigate("batch")
+        if item_id and self.batch_page is not None:
+            self.batch_page.show_detail(item_id)
+
+    def _preview_single(self) -> None:
+        self._preview_item = None
+        self._show_preview_source()
         self.refresh_preview()
 
     # Erzeugen --------------------------------------------------------------------------------
     def _preview_fields(self) -> tuple[dict | None, str]:
-        """Eingaben der Vorschau – dieselben wie für »PDF erstellen«. Ohne Voraussetzung: Grund."""
+        """Eingaben der Vorschau – dieselben wie für »PDF erstellen«. Ohne Voraussetzung: Grund.
+
+        Aus dem Stapel geöffnet (``_preview_item``): der Auftrag dieses Eintrags – dieselbe Pipeline.
+        """
+        if getattr(self, "_preview_item", None) is not None:
+            return self.batch_preview_fields(self._preview_item)
         blocking = [(area, text) for area, text in self.readiness() if area in ("excel", "busy", "logo", "breite")]
         if blocking:
             return None, blocking[0][1]

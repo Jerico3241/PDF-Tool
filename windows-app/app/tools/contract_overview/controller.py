@@ -13,7 +13,6 @@ auf andere Werkzeuge greift es nicht zu.
 
 from __future__ import annotations
 
-import os
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
@@ -36,17 +35,48 @@ from appstate import (
 )
 from richtext import RichText
 from ui import dialogs, windows
+from ui.theme import px
 
 from . import page_layout
+from .batch.flow import BatchFlow
 from .customer_flow import CustomerFlow
+from .customers.matching import MatchKind
+from .overview import (
+    ExcelAnalysis,
+    contract_summary,
+    excel_files,
+    excel_issues,
+    output_issues,
+    parse_width,
+    pdf_fields,
+    target_reachable,
+    template_layout,
+    template_rules,
+    valid_width,
+)
 from .preview import RENDER_LOCK, PreviewFlow
 
 # Tastenhinweis in der Statuszeile, solange eine Seite des Werkzeugs sichtbar ist
 HINT = "Strg+Enter  PDF erstellen   ·   Strg+O  Excel öffnen   ·   Strg+F  Kunde suchen"
+BATCH_HINT = "Strg+Enter  Bereite Übersichten erstellen   ·   Strg+O  Excel-Dateien hinzufügen   ·   Leertaste  auswählen"
+BATCH_HELP_STEPS = (
+    "Excel-Dateien hinzufügen (Strg+O), einen Ordner hinzufügen oder mehrere Dateien in das Fenster ziehen – jede Datei wird sofort geprüft.",
+    "Bekannte Kunden werden am Rechnungsempfänger erkannt. Bei »Angaben erforderlich« den Eintrag öffnen und Firmenname und Kundennummer eintragen oder einen Kunden auswählen.",
+    "Zielordner, Standardvorlage und den Umgang mit vorhandenen PDFs unter »Ausgabe und Standards« festlegen.",
+    "Auf »Bereite Übersichten erstellen« klicken oder Strg+Enter drücken – erstellt werden nur bereite Einträge.",
+    "Im Ergebnis den Ausgabeordner öffnen; fehlgeschlagene Einträge lassen sich erneut versuchen.",
+)
+BATCH_HELP_NOTES = (
+    "Vorrang für Vorlage und Logo: im Eintrag gewählt → Kundenakte → Standard des Stapels → globaler Standard.",
+    "Vorhandene PDFs werden standardmäßig nicht überschrieben, sondern nummeriert (…_2.pdf).",
+    "Neue E-Mail-Zuordnungen entstehen nur mit »Zuordnung merken«.",
+    "»Stapel abbrechen« beendet die laufende PDF sauber; fertige PDFs bleiben erhalten.",
+    "Alles bleibt lokal auf diesem PC. Gespeichert werden nur Pfade und Ihre Angaben, keine Kopien der Excel-Dateien.",
+)
 
 
-class ContractOverviewTool(CustomerFlow, PreviewFlow):
-    """Vertragsübersichten als Werkzeug von PDF Tool."""
+class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow):
+    """Vertragsübersichten als Werkzeug von PDF Tool (Einzelmodus, Stapel, Vorschau, Kunden)."""
 
     # Einrichtung --------------------------------------------------------------------
     def _init_contract_overview(self, cfg: dict) -> None:
@@ -86,10 +116,12 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         self._initial_check = False
         self._init_customers(cfg)
         self._init_preview()
+        self._init_batch(cfg)
 
     def _start_contract_overview(self) -> None:
         """Nach dem Aufbau der Seiten: automatisches Speichern und Bereitschaft verbinden."""
         self._start_customers()
+        self._start_batch()
         # Eingaben automatisch speichern – verzögert, nicht bei jedem Tastendruck.
         for var in (
             self.var_firma, self.var_kd, self.var_mail, self.var_excel, self.var_logo, self.var_ziel,
@@ -137,6 +169,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             "staende": self.state.staende,
             "pdf_oeffnen": bool(self.var_open.get()),
             **self.customer_config(),
+            **self.batch_config(),
         }
 
     def _contract_autosave(self) -> None:
@@ -148,14 +181,20 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         # Kundenakten werden nie automatisch angelegt – nur eine offene Eingabe in »Kunden« sichern.
         if self.customer_page is not None:
             self.customer_page.flush()
+        if self.batch_page is not None:
+            self.batch_page.flush()
+        self._batch_close()
         self._close_preview()
 
     def _contract_changed(self) -> None:
         """Eine Eingabe hat sich geändert (über das verzögerte Speichern gemeldet)."""
         self.mark_preview_dirty()
+        self.batch_mark_stale()  # »Darstellung« ist der Standard des Stapels
 
     def contract_accepts(self, files: list[str]) -> bool:
-        return bool(_excel_in(files))
+        if getattr(self, "nav", None) is not None and self.nav.current == "batch":
+            return self.batch_accepts(files)
+        return bool(excel_files(files))
 
     def refresh_files(self) -> None:
         from ui.components import path_caption
@@ -240,6 +279,10 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         """Datei wird über das Fenster gezogen: Excel-Bereich hervorheben."""
         if not accepted:
             return
+        if self.nav.current == "batch":
+            # Stapel: mehrere Dateien bzw. Ordner – der Einzelmodus bleibt unberührt
+            self.notify("batch_info", "info", "Loslassen, um die Excel-Dateien zum Stapel hinzuzufügen.", status=False, animate=False)
+            return
         card = getattr(self.ui, "dateien_card", None)
         bar = getattr(self.ui, "info_excel", None)
         if self._drag_saved is None and bar is not None:
@@ -252,6 +295,9 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             self.set_status("Excel-Datei loslassen – sie wird in »Vertragsübersichten« geprüft.", "info")
 
     def _contract_drag_leave(self) -> None:
+        bar = getattr(self.ui, "batch_info", None)
+        if bar is not None and bar.message.startswith("Loslassen"):
+            self.hide_notice("batch_info")
         card = getattr(self.ui, "dateien_card", None)
         if card is not None:
             card.set_fill("card", stroke="card_stroke")
@@ -263,7 +309,10 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
 
     def _contract_drop(self, dateien: list[str]) -> None:
         self._drag_leave()
-        excel = next(iter(_excel_in(dateien)), "")
+        if self.nav.current == "batch":
+            self.batch_drop(dateien)
+            return
+        excel = next(iter(excel_files(dateien)), "")
         if not excel:
             self.notify("info_excel", "warning", "Bitte eine Excel-Datei (.xlsx oder .xls) in das Fenster ziehen.")
             return
@@ -302,8 +351,8 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         if not result.get("ok"):
             self.notify("info_excel", "error", text or "Die Datei konnte nicht gelesen werden.", title="Excel-Prüfung fehlgeschlagen", animate=animate)
             self._set_mails([], animate=animate)
-            self._show_facts([], animate)
             self._recognize_customer(path, result, animate)
+            self.refresh_excel_details(animate)
             self.update_readiness()
             self.mark_preview_dirty()
             return
@@ -311,9 +360,8 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         aktiv = int(result.get("aktiv", 0) or 0)
         inaktiv = int(result.get("inaktiv", 0) or 0)
         fehlend = [str(name) for name in result.get("fehlend") or []]
-        vertraege = "1 aktiver Vertrag" if aktiv == 1 else f"{aktiv} aktive Verträge"
-        if inaktiv:
-            vertraege += f" · {inaktiv} inaktiv ausgeblendet"
+        # Die Statuszeile nennt die Vertragszahlen – darunter stehen sie nicht noch einmal.
+        vertraege = contract_summary(aktiv, inaktiv)
         if fehlend:
             spalten = ", ".join(f"»{name}«" for name in fehlend)
             self.notify("info_excel", "error", f"Für die PDF fehlt {'die Spalte' if len(fehlend) == 1 else 'die Spalten'} {spalten}.", title="Spalten fehlen", status=False, animate=animate)
@@ -322,7 +370,6 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         else:
             self.notify("info_excel", "success", vertraege, title="Excel geprüft", status=False, animate=animate)
         self.set_status(f"Excel geprüft: {text}", "success" if aktiv and not fehlend else "warning")
-        self._show_facts(self._facts_for(result), animate)
         self._set_mails(mails, animate=animate)
         # Bekannte Kunden über die Rechnungsempfänger erkennen – vor dem Füllen aus der Datei,
         # damit »automatisch übernehmen« den unveränderten Stand des Formulars sieht.
@@ -332,70 +379,101 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             self.var_kd.set(result["kunden"][0])
         if not self.var_firma.get().strip() and len(result.get("firmen") or []) == 1:
             self.var_firma.set(result["firmen"][0])
+        self.refresh_excel_details(animate)
         self.update_readiness()
         self.mark_preview_dirty()
 
-    @staticmethod
-    def _facts_for(result: dict) -> list[tuple[str, str, str]]:
-        """Übersicht der Excel-Prüfung: nur Angaben, die tatsächlich in der Datei stehen."""
+    def _excel_facts(self) -> list[tuple[str, str, str]]:
+        """Angaben unter der Statuszeile – nur, was sie nicht schon nennt und was weiterhilft.
+
+        Keine Vertragszahlen (stehen in der Statuszeile), keine leeren Zeilen und nichts,
+        was die Kundendaten ohnehin zeigen. Nie etwas aus der E-Mail-Adresse erraten.
+        """
+        result = self._analysis
+        if result is None or not result.get("ok") or self._analysis_path != self.var_excel.get().strip():
+            return []
         facts: list[tuple[str, str, str]] = []
-        aktiv = int(result.get("aktiv", 0) or 0)
-        inaktiv = int(result.get("inaktiv", 0) or 0)
-        facts.append(("Aktive Verträge", str(aktiv), "" if aktiv else "caution"))
-        facts.append(("Ausgeblendet (inaktiv)", str(inaktiv), "muted"))
-        mails = [str(mail) for mail in result.get("mails") or []]
-        if len(mails) == 1:
-            facts.append(("Rechnungsempfänger", mails[0], ""))
-        elif len(mails) > 1:
-            facts.append(("Rechnungsempfänger", f"{len(mails)} verschiedene – bitte bei den Kundendaten auswählen: " + ", ".join(mails), "caution"))
-        else:
-            facts.append(("Rechnungsempfänger", "keine Angabe in der Datei", "muted"))
+        customer = self._customer_fact()
+        if customer is not None:
+            facts.append(customer)
         kunden = [str(kd) for kd in result.get("kunden") or []]
-        if len(kunden) == 1:
-            facts.append(("Kundennummer", f"{kunden[0]} (aus der Datei)", ""))
-        elif len(kunden) > 1:
+        if len(kunden) > 1:
             facts.append(("Kundennummer", f"{len(kunden)} verschiedene in der Datei: " + ", ".join(kunden), "caution"))
+        elif len(kunden) == 1 and self.active_customer() is None:
+            eingetragen = self.var_kd.get().strip()
+            if eingetragen and eingetragen != kunden[0]:
+                facts.append(("Kundennummer", f"{kunden[0]} laut Datei – eingetragen ist {eingetragen}", "caution"))
         firmen = [str(firma) for firma in result.get("firmen") or []]
-        if len(firmen) == 1:
-            facts.append(("Firmenname", f"{firmen[0]} (aus der Datei)", ""))
-        elif len(firmen) > 1:
+        if len(firmen) > 1:
             facts.append(("Firmenname", f"{len(firmen)} verschiedene in der Datei: " + ", ".join(firmen), "caution"))
         fett = int(result.get("fett", 0) or 0)
         if fett:
-            facts.append(("Fettschrift", f"{fett} {'Zelle wird' if fett == 1 else 'Zellen werden'} fett in die PDF übernommen", "muted"))
-        fehlend = [str(name) for name in result.get("fehlend") or []]
-        if fehlend:
-            facts.append(("Fehlende Spalten", ", ".join(fehlend), "critical"))
+            facts.append(("Fettschrift", f"{fett} {'Zelle' if fett == 1 else 'Zellen'} in der PDF fett", "muted"))
         for hinweis in result.get("hinweise") or []:
+            if "Rechnungsempfänger" in str(hinweis):
+                continue  # der Empfänger ist optional – ohne Spalte ist das kein Hinweis wert
             facts.append(("Hinweis", str(hinweis), "muted"))
         return facts
 
-    def _show_facts(self, facts: list[tuple[str, str, str]], animate: bool = True) -> None:
+    def _customer_fact(self) -> tuple[str, str, str] | None:
+        """»Kunde · Nicht zugeordnet« – nur, wenn es weiterhilft.
+
+        Ein erkannter Kunde steht mit seinen Aktionen in der Leiste darunter, eine aktive
+        Kundenakte bei den Kundendaten: beides wird hier nicht wiederholt.
+        """
+        match = self._match
+        if match is None or self._match_path != self.var_excel.get().strip() or self.active_customer() is not None:
+            return None
+        if match.kind is MatchKind.NONE and match.emails and len(self.customers):
+            return ("Kunde", "Nicht zugeordnet", "muted")
+        return None
+
+    def refresh_excel_details(self, animate: bool = False) -> None:
+        """Zeilen unter der Excel-Prüfung neu bestimmen (nach Prüfung, Übernahme, Lösen …)."""
         details = getattr(self.ui, "excel_details", None)
         facts_list = getattr(self.ui, "excel_facts", None)
-        if details is None or facts_list is None:
+        row = getattr(self.ui, "mail_row", None)
+        if details is None or facts_list is None or row is None:
             return
+        facts = self._excel_facts()
         facts_list.set(facts)
-        if facts:
-            details.expand(animate=animate)
-        else:
+        mails = self._excel_mails if self._excel_facts_allowed() else []
+        if mails:
+            if not row.winfo_manager():
+                row.pack(fill="x", before=facts_list, pady=(0, px(4) if facts else 0))
+            else:
+                row.pack_configure(pady=(0, px(4) if facts else 0))
+        elif row.winfo_manager():
+            row.pack_forget()
+        if facts or mails:
+            if not details.expanded:
+                details.expand(animate=animate)
+        elif details.expanded:
             details.collapse(animate=animate)
 
+    def _excel_facts_allowed(self) -> bool:
+        result = self._analysis
+        return result is not None and bool(result.get("ok")) and self._analysis_path == self.var_excel.get().strip()
+
     def _set_mails(self, mails: list[str], animate: bool = True) -> None:
+        """Rechnungsempfänger der Excel: eine Adresse als Wert, mehrere als »3 erkannt« mit Auswahl."""
         self._excel_mails = mails
         combo = getattr(self.ui, "mail_combo", None)
-        area = getattr(self.ui, "mail_area", None)
-        if combo is None or area is None:
+        value = getattr(self.ui, "mail_value", None)
+        if combo is None or value is None:
             return
         if len(mails) > 1:
+            value.configure(text=f"{len(mails)} erkannt")
             combo.set_values(mails, keep=True)
             current = self.var_mail.get().strip()
             if current in mails:
                 combo.set(current)
-            area.expand(animate=animate)
+            combo.grid()
         else:
+            value.configure(text=mails[0] if mails else "")
             combo.set_values([], keep=False)
-            area.collapse(animate=animate)
+            combo.grid_remove()
+        self.refresh_excel_details(animate)
 
     def on_mail_pick(self, mail: str) -> None:
         """Empfänger aus der Excel wählen: übernimmt die Adresse in das Feld Rechnungsempfänger."""
@@ -406,37 +484,14 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
     def readiness(self) -> list[tuple[str, str]]:
         """Offene Punkte vor dem Erstellen als (Bereich, Text); leer = bereit.
 
-        Bereich ``busy`` bedeutet: Die Excel-Prüfung läuft noch.
+        Bereich ``busy`` bedeutet: Die Excel-Prüfung läuft noch. Dieselben Prüfungen
+        verwendet die Stapelerstellung (``overview``).
         """
-        issues: list[tuple[str, str]] = []
         excel = self.var_excel.get().strip()
-        if not excel:
-            issues.append(("excel", "Excel-Datei fehlt"))
-        elif not Path(excel).is_file():
-            issues.append(("excel", "Excel-Datei nicht gefunden"))
-        elif self._analysis_path != excel or self._analysis is None:
-            issues.append(("busy", "Excel wird geprüft …"))
-        elif not self._analysis.get("ok"):
-            issues.append(("excel", "Excel-Datei konnte nicht gelesen werden"))
-        elif self._analysis.get("fehlend"):
-            fehlend = list(self._analysis.get("fehlend") or [])
-            issues.append(("excel", f"Spalte »{fehlend[0]}« fehlt in der Excel" if len(fehlend) == 1 else f"{len(fehlend)} Spalten fehlen in der Excel"))
-        elif not int(self._analysis.get("aktiv", 0) or 0):
-            issues.append(("excel", "Keine aktiven Verträge in der Excel"))
-        if not self.var_kd.get().strip():
-            issues.append(("kd", "Kundennummer fehlt"))
-        if len(self._excel_mails) > 1 and not self.var_mail.get().strip():
-            issues.append(("mail", "Bitte Rechnungsempfänger auswählen"))
-        logo = self.var_logo.get().strip()
-        if not logo:
-            issues.append(("logo", "Logo fehlt"))
-        elif not Path(logo).is_file():
-            issues.append(("logo", "Logo-Datei nicht gefunden"))
-        if not _valid_width(self.var_breite.get()):
-            issues.append(("breite", "Logo-Breite ungültig"))
-        if not _target_reachable(self.target_folder()):
-            issues.append(("ziel", "Zielordner nicht erreichbar"))
-        return issues
+        analysis = ExcelAnalysis.from_result(self._analysis) if self._analysis_path == excel else None
+        issues = excel_issues(excel, analysis)
+        issues += output_issues(self.var_kd.get(), self._excel_mails, self.var_mail.get(), self.var_logo.get(), self.var_breite.get(), self.target_folder())
+        return [(issue.area, issue.text) for issue in issues]
 
     def update_readiness(self, now: bool = False) -> None:
         """Anzeige »Bereit zum Erstellen« aktualisieren – gesammelt im Leerlauf."""
@@ -687,20 +742,13 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
     def _apply_vorlage(self, eintrag: dict, texts: bool = True, quiet: bool = False) -> None:
         """Vorlage anwenden. ``texts=False`` lässt Kopf- und Fußzeile unverändert (vom Benutzer geändert)."""
         self.var_vorlage.set(str(eintrag.get("name", "")))
-        logo = str(eintrag.get("logo") or "").strip()
-        if logo and Path(logo).is_file():
-            self.var_logo.set(logo)
+        # Dieselben Werte übernimmt der Stapel aus einer Vorlage (``overview.template_layout``).
+        werte = template_layout(eintrag)
+        for key, var in (("logo", self.var_logo), ("format", self.var_format), ("dateiname", self.var_name), ("logo_breite", self.var_breite), ("titel", self.var_titel), ("untertitel", self.var_untertitel)):
+            if key in werte:
+                var.set(werte[key])
+        if "logo" in werte:
             self.refresh_files()
-        if eintrag.get("format") in ("hoch", "quer"):
-            self.var_format.set(str(eintrag.get("format")))
-        if eintrag.get("dateiname"):
-            self.var_name.set(str(eintrag.get("dateiname")))
-        if eintrag.get("logo_breite"):
-            self.var_breite.set(str(eintrag.get("logo_breite")))
-        if eintrag.get("titel"):
-            self.var_titel.set(str(eintrag.get("titel")))
-        if eintrag.get("untertitel"):
-            self.var_untertitel.set(str(eintrag.get("untertitel")))
         if texts:
             self._set_rich("txt_kopf", "_kopf_start", header_rich_from(eintrag))
             # Vorlage mit eigener Fußzeile: diese (mit Formatierung); alte Vorlage ohne gültigen Wert:
@@ -710,9 +758,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             self._customer_texts = False
             self._base_texts = None
             self._mark_text_baseline()
-        from appstate import normalize_regeln
-
-        regeln = normalize_regeln(eintrag.get("regeln") or [])
+        regeln = template_rules(eintrag)
         changed = regeln != self.state.regeln
         self.state.regeln = regeln
         self.reload_regeln()
@@ -754,6 +800,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         )
         self.reload_vorlagen()
         self.persist()
+        self.batch_mark_stale()
         self.notify("vorlagen_info", "success", f"Die Vorlage „{name}“ wurde gespeichert.", auto_hide=5000)
 
     def delete_vorlage(self) -> None:
@@ -767,6 +814,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         self.var_vorlage.set("")
         self.reload_vorlagen()
         self.persist()
+        self.batch_mark_stale()
         self.notify("vorlagen_info", "success", f"Vorlage „{name}“ gelöscht.", auto_hide=5000)
 
     def reset_pdf_settings(self) -> None:
@@ -831,6 +879,9 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             self.inspect_excel(excel)
 
     def show_contract_help(self) -> None:
+        if self.nav.current == "batch":
+            self.show_steps("Kurzanleitung – Stapel", BATCH_HELP_STEPS, BATCH_HELP_NOTES)
+            return
         schritte = (
             "Die Excel-Datei wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort geprüft.",
             "Ist der Rechnungsempfänger als Kunde bekannt, bietet PDF Tool die Kundenakte an: »Übernehmen«.",
@@ -842,6 +893,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             "Kundenakten entstehen nur bewusst: »Als Kundenakte speichern« – auf Wunsch mit »Zuordnung merken« für die E-Mail-Adresse.",
             "Kundenakten verwalten, bearbeiten, zusammenführen oder löschen: Ansicht »Kunden«. Alle Daten bleiben lokal auf diesem PC.",
             "Stehen mehrere Rechnungsempfänger in der Excel, bitte einen auswählen.",
+            "Viele Excel-Listen auf einmal erstellen: Ansicht »Stapel«.",
             "Zyklus-Regeln und Vorlagen stehen in der Ansicht »Darstellung«. Hott-KI wird standardmäßig jährlich ausgegeben.",
             "Hotline-Zeilen werden als Supportvertrag ausgegeben. Nur Netto, kein Brutto.",
         )
@@ -874,11 +926,8 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             return
         if not self._require(bool(logo) and Path(logo).is_file(), "Bitte eine Logo-Datei wählen.", actions=(("Logo wählen", self.pick_logo), ("Standardlogo", self.use_default_logo))):
             return
-        try:
-            breite = float(self.var_breite.get().replace(",", "."))
-            if breite <= 0:
-                raise ValueError
-        except ValueError:
+        breite = parse_width(self.var_breite.get())
+        if breite is None:
             self.nav.navigate("layout")
             self.after(50, lambda: self._require(False, "Die Logo-Breite muss eine Zahl sein (z. B. 62).", getattr(self.ui, "field_breite", None), page="layout"))
             return
@@ -913,24 +962,20 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
 
     def _pdf_fields(self, kd: str, empfaenger: str, breite: float) -> dict:
         """Auftrag für ``engine.erstelle_pdf`` aus dem Formular – gemeinsam für PDF und Vorschau."""
-        fuss = self.footer_rich()
-        kopf = self.header_rich()
-        return dict(
-            excel=Path(self.var_excel.get().strip()),
-            logo=Path(self.var_logo.get().strip()),
-            kundennummer=kd,
-            firmenname=self.var_firma.get().strip(),
-            rechnungsempfaenger=empfaenger,
-            dateiname=self.var_name.get().strip(),
+        return pdf_fields(
+            excel=self.var_excel.get().strip(),
+            logo=self.var_logo.get().strip(),
+            kd=kd,
+            firma=self.var_firma.get(),
+            mail=empfaenger,
+            dateiname=self.var_name.get(),
             seitenformat=self.var_format.get(),
-            logo_breite=breite,
-            titel=self.var_titel.get().strip() or DEFAULT_TITEL,
-            untertitel=self.var_untertitel.get().strip() or DEFAULT_UNTERTITEL,
-            fusszeile=fuss.text,
-            fusszeile_format=fuss.to_dict(),
-            kopfzeile=kopf.text,
-            kopfzeile_format=kopf.to_dict(),
-            regeln=[dict(eintrag) for eintrag in self.state.regeln],
+            breite=breite,
+            titel=self.var_titel.get(),
+            untertitel=self.var_untertitel.get(),
+            header=self.header_rich(),
+            footer=self.footer_rich(),
+            regeln=self.state.regeln,
         )
 
     def _finish_busy(self) -> None:
@@ -1000,7 +1045,6 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
             self._analysis = None
             self._analysis_path = ""
             self._set_mails([])
-            self._show_facts([])
             bar = getattr(self.ui, "info_excel", None)
             if bar is not None:
                 from .page_create import EXCEL_EMPTY
@@ -1024,27 +1068,7 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow):
         self.notify("pdf_info", "error", str(exc) or exc.__class__.__name__, title="PDF konnte nicht erstellt werden")
 
 
-def _valid_width(value: str) -> bool:
-    try:
-        width = float(str(value).replace(",", "."))
-    except ValueError:
-        return False
-    return 0 < width <= 400
-
-
-def _excel_in(files: list[str]) -> list[str]:
-    return [path for path in files if str(path).lower().endswith((".xlsx", ".xlsm", ".xls"))]
-
-
-def _target_reachable(path: str) -> bool:
-    """Zielordner vorhanden und beschreibbar – oder anlegbar (nächster vorhandener Ordner beschreibbar)."""
-    folder = Path(path)
-    if folder.is_dir():
-        return os.access(folder, os.W_OK)
-    if folder.exists():
-        return False
-    parent = folder.parent
-    while not parent.exists() and parent.parent != parent:
-        parent = parent.parent
-    return parent.is_dir() and os.access(parent, os.W_OK)
-
+# Frühere Namen (die Prüfungen liegen jetzt gemeinsam in ``overview``)
+_valid_width = valid_width
+_excel_in = excel_files
+_target_reachable = target_reachable

@@ -184,6 +184,9 @@ class CustomerFlow:
                 page.refresh_list()
         self.refresh_customer_line()
         self._rematch()
+        # Der Stapel erkennt Kunden mit denselben Zuordnungen – geänderte Akten gelten sofort.
+        if getattr(self, "batch_page", None) is not None:
+            self.batch_customers_changed()
 
     def _current_emails(self) -> list[str]:
         """Rechnungsempfänger der aktuellen Übersicht: eingetragene Adresse und Adressen der geprüften Excel."""
@@ -260,10 +263,12 @@ class CustomerFlow:
                 self.apply_customer(customer.id, automatic=True)
                 return
             via = ", ".join(match.emails_of(customer.id))
+            # Steht genau eine Adresse in der Excel, zeigt die Zeile »Rechnungsempfänger« sie schon.
+            known = "erkannt am Rechnungsempfänger der Excel" if len(self._excel_mails) == 1 else f"erkannt an {via}"
             self.notify(
                 "kunde_match",
                 "info",
-                f"{customer.label} – erkannt an {via}.",
+                f"{customer.label} – {known}.",
                 title="Bekannter Kunde gefunden",
                 actions=(
                     ("Übernehmen", lambda: self.apply_customer(customer.id)),
@@ -897,8 +902,12 @@ class CustomerFlow:
         customer = self.active_customer()
         picker = getattr(ui, "kunde_picker", None)
         if picker is not None:
-            picker.show_label(customer.label if customer else None)
-            picker.set_placeholder("Firma, Kundennummer oder E-Mail suchen" if len(self.customers) else "Noch keine Kundenakten")
+            # Die aktive Kundenakte steht darüber – das Auswahlfeld bleibt eine Aktion (keine dritte Anzeige).
+            picker.show_label(None)
+            if customer is not None:
+                picker.set_placeholder("Anderen Kunden auswählen …")
+            else:
+                picker.set_placeholder("Firma, Kundennummer oder E-Mail suchen" if len(self.customers) else "Noch keine Kundenakten")
         area = getattr(ui, "kunde_active_area", None)
         if area is not None:
             if customer is None:
@@ -921,6 +930,8 @@ class CustomerFlow:
             enabled = customer is not None or bool(self.var_firma.get().strip() or self.var_kd.get().strip())
             if button.enabled() != enabled:
                 button.set_enabled(enabled)
+        # »Kunde · Nicht zugeordnet« unter der Excel-Prüfung folgt der aktiven Kundenakte.
+        self.refresh_excel_details()
 
     def find_customer(self) -> None:
         """Strg+F: in »Kunden« die Suche, sonst »Bekannten Kunden auswählen«."""

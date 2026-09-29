@@ -159,7 +159,9 @@ class StatusLine(tk.Frame):
         self._icon_glyph = self._icon.create_text(size / 2, size / 2, text="", anchor="center")
         self._icon_img = None
         self._spinner = None
-        self._label = Text(self, "", style="body_strong")
+        # width=1 und Umbruch: Lange Texte brechen um, statt abgeschnitten zu werden – und die
+        # Beschriftung bestimmt nie die Breite der Zeile (keine Rückkopplung beim Umbruch).
+        self._label = Text(self, "", style="body_strong", wrap=True, width=1)
         self._label.pack(side="left", fill="x", expand=True)
         for widget in (self, self._icon, self._label):
             widget.bind("<Button-1>", self._clicked, add="+")
@@ -389,6 +391,17 @@ class SelectorBar(tk.Canvas):
 
     def select(self, key: str) -> None:
         self.selected = self.focus_key = key
+        self.redraw()
+
+    def set_labels(self, labels: dict[str, str]) -> None:
+        """Beschriftungen ändern (z. B. Anzahlen in einem Filter) – nur bei echter Änderung."""
+        items = [(key, labels.get(key, label)) for key, label in self.items]
+        if items == self.items:
+            return
+        self.items = items
+        for key, label in items:
+            self.itemconfigure(self._texts[key], text=label)
+        self._layout()
         self.redraw()
 
     def redraw(self) -> None:

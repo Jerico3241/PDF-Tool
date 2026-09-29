@@ -29,7 +29,7 @@ const STEPS = [
 const TOOLS = [
   {
     title: "Vertragsübersichten",
-    body: "Erstellt professionelle Vertragsübersichten aus Excel-Dateien – mit Vorlagen, Kopf- und Fußzeile, Textbausteinen, Live-Vorschau und Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen.",
+    body: "Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel aus vielen Excel-Listen in einem Durchlauf, mit Vorlagen, Kopf- und Fußzeile, Textbausteinen, Live-Vorschau und Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen.",
   },
   {
     title: "PDF reparieren",
