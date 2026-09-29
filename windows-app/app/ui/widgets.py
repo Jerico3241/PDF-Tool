@@ -1188,7 +1188,10 @@ class InfoBar(tk.Frame):
         texts.pack(side="left", fill="x", expand=True, padx=(pad, px(8)), pady=(px(7), px(7)))
         self._texts = texts
         self._title = tk.Label(texts, text="", font=c.fonts.body_strong, anchor="w", justify="left", bd=0)
-        self._message = tk.Label(texts, text="", font=c.fonts.body, anchor="w", justify="left", bd=0)
+        # width=1: Die Meldung bestimmt nicht die Breite der Leiste – sie bricht nur in der
+        # zugewiesenen Breite um. Sonst ändert jeder Umbruch die angeforderte Breite, damit die
+        # zugewiesene Breite und wieder den Umbruch: je nach Text und Schriftmetrik endlos.
+        self._message = tk.Label(texts, text="", font=c.fonts.body, anchor="w", justify="left", bd=0, width=1)
         self._mode = None
         # Aktionen stehen neben dem Text – bei mehr als zwei Aktionen darunter (wie in WinUI).
         # Das Kind der Box lässt sich in beide Bereiche einordnen (pack -in).

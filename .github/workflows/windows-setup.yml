@@ -48,6 +48,7 @@ jobs:
         run: python -m pytest windows-app/tests/test_pdf_repair.py -q -p no:cacheprovider
 
       - name: Tests (Oberfläche)
+        timeout-minutes: 30 # normal etwa 6 Minuten – ein hängender Test bricht so früh ab
         run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py windows-app/tests/test_app_v23.py windows-app/tests/test_app_v24.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen

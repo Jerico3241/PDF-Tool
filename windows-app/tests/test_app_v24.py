@@ -368,6 +368,25 @@ def test_email_conflict_is_decided_by_the_user(kunden_app, monkeypatch, antwort:
     assert (a.emails == ["x@x.de"]) == (besitzer == "A")
 
 
+def test_info_bar_width_does_not_follow_its_message(kunden_app) -> None:
+    """Die Meldung einer Hinweisleiste fordert keine textabhängige Breite an.
+
+    Sonst schaukeln sich Umbruch und Breite gegenseitig auf – unter Windows entstand mit
+    bestimmten Texten eine endlose Folge von Configure-Ereignissen.
+    """
+    from ui.theme import px
+
+    app = kunden_app
+    bar = app.ui.kunde_info
+    for title in ("", "Zuordnung gemerkt"):
+        for text in ("kurz", "neu@k.de wird künftig als Rechnungsempfänger von „K GmbH · 5“ erkannt. " * 4):
+            bar.show("success", text, title=title, animate=False)
+            pump(app, 0.1)
+            assert bar._message.winfo_reqwidth() < px(40)  # unabhängig von der Textlänge
+            assert int(bar._message.cget("wraplength")) <= bar._texts.winfo_width()
+            assert bar._message.winfo_width() >= int(bar._message.cget("wraplength")) - px(2)  # volle Breite
+
+
 # --- Ansicht »Kunden« ----------------------------------------------------------------------------------
 
 
