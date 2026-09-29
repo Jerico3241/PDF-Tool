@@ -141,12 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Kundenakte 2.0 in »Vertragsübersichten«: Kunden mit Kundennummer, mehreren E-Mail-Adressen, bevorzugtem Logo, Zielordner, Vorlage sowie Kopf- und Fußzeile.",
-    "Bekannte Kunden werden nach der Excel-Prüfung an der Rechnungsempfänger-E-Mail wiedererkannt – »Übernehmen«, »Kundenakte« oder »Ignorieren«.",
-    "Neue Ansicht »Kunden«: suchen, sortieren, bearbeiten, E-Mail-Adressen zuordnen, Doppelungen zusammenführen und Kundenakten löschen.",
-    "Neue Ansicht »Vorschau«: die PDF vor dem Erstellen sehen – mit Seiten und Zoom, aktualisiert bei jeder Änderung.",
-    "Der bisherige Kundenverlauf wurde einmalig als Kundenakten übernommen (mit Sicherung).",
-    "Kundendaten bleiben ausschließlich lokal auf diesem PC – keine Cloud, keine Internetabfrage.",
+    "Neue Stapelverarbeitung in »Vertragsübersichten« (Ansicht »Stapel«): mehrere Excel-Dateien gleichzeitig vorbereiten und in einem Durchlauf als PDF erstellen.",
+    "Jede Datei wird sofort geprüft; bekannte Kunden werden über die gespeicherten E-Mail-Zuordnungen erkannt – wie im Einzelmodus.",
+    "Status je Datei, Filter, Massenaktionen und Fortschritt; ein Fehler bei einer Datei unterbricht den Stapel nicht.",
+    "»Fehlgeschlagene erneut versuchen«, »Stapel abbrechen« ohne halbe PDFs und vorhandene PDFs werden nie unbeabsichtigt überschrieben.",
+    "Kompaktere Excel-Karte: Die Vertragszahlen stehen nur noch in der Statuszeile, darunter nur zusätzliche Angaben.",
+    "Alles bleibt lokal auf diesem PC – keine Cloud, keine Uploads.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]

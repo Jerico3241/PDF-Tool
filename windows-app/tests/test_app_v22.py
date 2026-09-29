@@ -310,8 +310,10 @@ def test_excel_analysis_shows_only_real_values(app, tmp_path: Path) -> None:
     assert wait_until(app, lambda: app.ui.info_excel.severity == "success", 60)
     pump(app, 0.3)
     fakten = {label: wert for label, wert, _ton in app.ui.excel_facts.facts()}
-    assert fakten["Aktive Verträge"] == "1" and fakten["Ausgeblendet (inaktiv)"] == "1"
-    assert fakten["Rechnungsempfänger"] == "rechnung@firma-mueller.de"
+    # Vertragszahlen nur in der Statuszeile (2.5), darunter nur zusätzliche Angaben
+    assert app.ui.info_excel.message == "1 aktiver Vertrag · 1 inaktiv ausgeblendet"
+    assert "Aktive Verträge" not in fakten and "Ausgeblendet (inaktiv)" not in fakten
+    assert app.ui.mail_value.cget("text") == "rechnung@firma-mueller.de"
     # nichts aus der E-Mail-Adresse erraten
     assert "Kundennummer" not in fakten and "Firmenname" not in fakten
     assert app.var_kd.get() == "" and app.var_firma.get() == ""
@@ -378,8 +380,7 @@ def test_multiple_recipients_readiness_and_choice(app, tmp_path: Path) -> None:
     assert wait_until(app, lambda: app.ui.info_excel.severity == "success", 60)
     pump(app, 0.3)
     assert app.ui.ready.text == "Bitte Rechnungsempfänger auswählen"
-    fakten = {label: wert for label, wert, _ton in app.ui.excel_facts.facts()}
-    assert "2 verschiedene" in fakten["Rechnungsempfänger"]
+    assert app.ui.mail_value.cget("text") == "2 erkannt" and app.ui.mail_combo.winfo_ismapped()
     app.ui.mail_combo.select_index(1)
     pump(app, 0.1)
     assert app.var_mail.get() == "b@x.de"

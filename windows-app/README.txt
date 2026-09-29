@@ -2,13 +2,13 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.4.0
+Version 2.5.0
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
-  Excel-Listen und speichert sie als PDF – mit Live-Vorschau und
-  Kundenakten, die bekannte Kunden an der Rechnungsempfänger-E-Mail
-  wiedererkennen.
+  Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
+  vielen Excel-Dateien, mit Live-Vorschau und Kundenakten, die bekannte
+  Kunden an der Rechnungsempfänger-E-Mail wiedererkennen.
 - PDF reparieren: analysiert beschädigte PDF-Dateien und versucht, lesbare
   Inhalte in eine neue PDF zu übertragen.
 
@@ -17,13 +17,33 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.4.0.exe
+PDF-Tool-Setup-2.5.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit qpdf, pypdfium2 mit
 PDFium). Eine eigene Python-Installation, qpdf, Ghostscript oder andere
 Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.5
+------------------
+- Neue Stapelverarbeitung in „Vertragsübersichten“ (Ansicht „Stapel“):
+  mehrere Excel-Dateien oder einen ganzen Ordner hinzufügen und daraus in
+  einem Durchlauf Vertragsübersichten erstellen.
+- Jede Datei wird sofort geprüft; bekannte Kunden werden über die
+  gespeicherten E-Mail-Zuordnungen erkannt – genau wie im Einzelmodus.
+- Status je Datei („Bereit“, „Angaben erforderlich“, „Fehler“, „Erstellt“),
+  Filter, Massenaktionen (z. B. Vorlage für mehrere Einträge setzen) und
+  Fortschritt mit „Stapel abbrechen“.
+- Nur bereite Dateien werden verarbeitet; ein Fehler bei einer Datei
+  unterbricht den Stapel nicht. „Fehlgeschlagene erneut versuchen“
+  verarbeitet nur die fehlgeschlagenen erneut.
+- Vorhandene PDFs werden nie unbeabsichtigt überschrieben (Standard:
+  automatisch nummerieren, z. B. …_2.pdf).
+- Kompaktere Excel-Karte in „Übersicht erstellen“: Die Vertragszahlen
+  stehen nur noch in der Statuszeile („Excel geprüft · 5 aktive Verträge ·
+  3 inaktiv ausgeblendet“), darunter nur zusätzliche Angaben wie der
+  Rechnungsempfänger – bei mehreren „3 erkannt“ mit Auswahl.
 
 Neu in Version 2.4
 ------------------
@@ -76,7 +96,8 @@ Programmdateien:  %LOCALAPPDATA%\PDF-Tool
 Ihre Daten:       %APPDATA%\PDF-Tool
                   (Einstellungen, Kundenakten kundenakten.json, Vorlagen,
                   Textbausteine, Kopf- und Fußzeile, Zyklus-Regeln, Design,
-                  Akzentfarbe, Protokoll pdf-repair.log)
+                  Akzentfarbe, aktueller Stapel stapel.json, Protokolle
+                  pdf-repair.log und stapel.log)
 
 Die App erscheint im Startmenü unter „PDF Tool“ und unter
 Einstellungen → Apps → Installierte Apps.
@@ -113,6 +134,11 @@ und sie wird beim nächsten Start erneut versucht. Vorlagen, Textbausteine,
 Regeln sowie Kopf- und Fußzeile (auch die Standard-Fußzeile) bleiben wie
 sie sind.
 
+Update von PDF Tool 2.4: Das Setup ersetzt nur die Programmdateien.
+Einstellungen, Kundenakten, Vorlagen, Textbausteine, formatierte Kopf- und
+Fußzeilen, Zyklus-Regeln und die Einstellungen von „PDF reparieren“
+bleiben unverändert.
+
 Update von 2.0.5 oder älter: Das Setup übernimmt die gespeicherten
 Einstellungen (gui-config.json) und entfernt die alten Programmdateien,
 Verknüpfungen und den alten Eintrag in „Installierte Apps“.
@@ -124,8 +150,8 @@ erneut ausführen repariert die Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   PDF-Tool-Setup-2.4.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   PDF-Tool-Setup-2.4.0.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.5.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.5.0.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -154,13 +180,14 @@ Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Liste
 Werkzeug „Vertragsübersichten“
 ------------------------------
 Oben wechselt die Umschaltleiste zwischen den Ansichten „Übersicht
-erstellen“, „Darstellung“, „Vorschau“ und „Kunden“.
+erstellen“, „Stapel“, „Darstellung“, „Vorschau“ und „Kunden“.
 
 1. „Übersicht erstellen“: Excel-Liste wählen (Strg+O) oder die Datei in das
-   Fenster ziehen. Die Prüfung zeigt aktive und ausgeblendete Verträge, den
-   oder die Rechnungsempfänger, fehlende Spalten sowie Kundennummer und
-   Firmenname, sofern sie in der Datei stehen. Bei mehreren Empfängern
-   einen auswählen.
+   Fenster ziehen. Die Statuszeile nennt das Ergebnis, z. B. „Excel geprüft ·
+   5 aktive Verträge · 3 inaktiv ausgeblendet“. Darunter stehen nur
+   zusätzliche Angaben: der Rechnungsempfänger (bei mehreren „3 erkannt“
+   mit Auswahl daneben) und Hinweise. Kundennummer und Firmenname aus der
+   Datei werden übernommen, sofern sie darin stehen.
 2. Ist ein Rechnungsempfänger als Kunde bekannt, erscheint „Bekannter Kunde
    gefunden“: „Übernehmen“ füllt die Kundendaten, „Kundenakte“ öffnet sie,
    „Ignorieren“ blendet den Hinweis für diese Excel aus. Sonst Firmenname
@@ -198,6 +225,61 @@ breite Seiten mit der Maus verschieben. Die Vorschau aktualisiert sich nach
 jeder Änderung von selbst; „Aktualisieren“ erzeugt sie neu (z. B. nachdem
 die Excel-Datei geändert wurde). Eine fehlende Kundennummer steht in der
 Vorschau als „–“. Vorschau-Dateien landen nie im Zielordner.
+
+
+Stapelverarbeitung (Vertragsübersichten → „Stapel“)
+---------------------------------------------------
+Mit „Stapel“ entstehen viele Vertragsübersichten in einem Durchlauf – der
+Einzelmodus „Übersicht erstellen“ bleibt unverändert.
+
+1. „Excel-Dateien hinzufügen“ (Mehrfachauswahl, Strg+O), „Ordner
+   hinzufügen“ (alle Excel-Dateien des Ordners, ohne Unterordner) oder
+   mehrere Dateien in das Fenster ziehen. Dieselbe Datei wird nie doppelt
+   aufgenommen; andere Dateien werden mit Hinweis übergangen.
+2. Jede Datei wird sofort im Hintergrund geprüft – mit derselben Prüfung
+   wie im Einzelmodus. Die Liste zeigt je Datei den Status, kurz die
+   Vertragszahlen und den Rechnungsempfänger sowie den erkannten Kunden.
+3. Bekannte Kunden werden über die gespeicherten E-Mail-Zuordnungen
+   erkannt. Ist ein Kunde eindeutig erkannt und alles vorhanden, ist der
+   Eintrag „Bereit“. Unbekannte Kunden sind „Angaben erforderlich“:
+   Firmenname und Kundennummer eintragen oder „Kunden auswählen …“.
+   Gehören die Empfänger verschiedenen Kunden, entscheiden Sie selbst.
+4. Ein Klick auf einen Eintrag öffnet ihn: Kunde, Firmenname, Kundennummer,
+   Rechnungsempfänger, Vorlage, Logo und Zielordner lassen sich hier nur
+   für diesen Eintrag setzen („Zurücksetzen“ übernimmt wieder Kundenakte
+   bzw. Stapel). „Vorschau“ zeigt genau diesen Eintrag, „Einzeln
+   bearbeiten“ übernimmt ihn in „Übersicht erstellen“. Wird einem Eintrag
+   bewusst ein Kunde zugeordnet, bietet PDF Tool „Zuordnung merken“ für
+   neue E-Mail-Adressen an – nie automatisch.
+5. „Bereite Übersichten erstellen“ (Strg+Enter) verarbeitet nacheinander
+   nur die bereiten Einträge; die Anzeige nennt den Fortschritt und die
+   Datei, die gerade entsteht. Einträge mit fehlenden Angaben werden
+   übersprungen, ein Fehler bei einer Datei hält die übrigen nicht auf.
+   „Stapel abbrechen“ beendet die laufende PDF sauber; fertige PDFs
+   bleiben, halbe Dateien entstehen nie.
+6. Danach: „Ausgabeordner öffnen“, „Fehler anzeigen“,
+   „Fehlgeschlagene erneut versuchen“ oder „Neuer Stapel“ (leert nur die
+   Liste – Kundenakten, Vorlagen und Einstellungen bleiben).
+
+Welche Angaben gelten (von oben nach unten, die erste vorhandene zählt):
+- Vorlage: im Eintrag gewählt → bevorzugte Vorlage der Kundenakte →
+  Standardvorlage des Stapels → keine (aktuelle „Darstellung“).
+- Logo: im Eintrag gewählt → Logo der Kundenakte → Standardlogo des
+  Stapels → installiertes Standardlogo.
+- Zielordner: im Eintrag gewählt → Zielordner der Kundenakte (abschaltbar)
+  → Zielordner des Stapels (auf Wunsch mit Unterordner je Kunde, z. B.
+  „123456 Beispiel GmbH“).
+- Kopf- und Fußzeile: aus einer im Eintrag gewählten Vorlage, sonst die
+  eigenen Texte der Kundenakte, sonst Vorlage bzw. „Darstellung“. Eine
+  leere Fußzeile ersetzt nie die gültige.
+Gibt es die PDF schon, wird standardmäßig nummeriert (…_2.pdf); alternativ
+„Überspringen“ oder „Überschreiben“ (nie eine im selben Stapel erstellte
+Datei). Nach dem Erstellen werden in der Kundenakte nur „zuletzt
+verwendet“, letzte Excel und letzte PDF fortgeschrieben.
+Der aktuelle Stapel wird lokal gesichert (stapel.json: nur Pfade,
+Zuordnungen und eigene Angaben – keine Kopien der Excel-Dateien); nach
+einem Neustart ist er wieder da. Technische Fehler stehen in stapel.log
+(ohne Inhalte der Excel-Dateien und ohne vollständige Pfade).
 
 
 Kundenakten (Vertragsübersichten → „Kunden“)

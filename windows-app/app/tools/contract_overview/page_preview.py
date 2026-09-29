@@ -198,6 +198,9 @@ class PreviewView:
     def __init__(self, app: "App", page: Page) -> None:
         self.app = app
         ui = app.ui
+        # Aus dem Stapel geöffnet: welcher Eintrag gezeigt wird (sonst unsichtbar)
+        ui.preview_source = InfoBar(page.content, closable=False)
+        page.add_section(ui.preview_source, pady=(0, px(8)))
         self.tools = PreviewTools(page.content, app)
         page.add_section(self.tools.row)
         ui.preview_tools = self.tools

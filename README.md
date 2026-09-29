@@ -1,6 +1,6 @@
 # PDF Tool
 
-Quellcode von **PDF Tool 2.4.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
+Quellcode von **PDF Tool 2.5.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
 Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Das Repository enthält:
@@ -18,7 +18,7 @@ werden: eine PDF öffnet „PDF reparieren“, eine Excel-Liste „Vertragsüber
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
-| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau und Kundenakte mit Wiedererkennung bekannter Kunden | `app/tools/contract_overview/` (Ablauf, Seiten, `customers/` für die Kundenakte), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
+| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau und Kundenakte mit Wiedererkennung bekannter Kunden | `app/tools/contract_overview/` (Ablauf, Seiten, `overview.py` als gemeinsame Fachlogik, `customers/` für die Kundenakte, `batch/` für den Stapel), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
 | **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen | `app/tools/pdf_repair/` |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
@@ -28,9 +28,16 @@ Neue Werkzeuge bekommen ein eigenes Paket unter `app/tools/` und einen Eintrag i
 
 ### Vertragsübersichten: Kundenakte und Kundenwiedererkennung
 
-Das Werkzeug hat vier Ansichten: **Übersicht erstellen**, **Darstellung**, **Vorschau** und
-**Kunden**. Die Kundenakte gehört ausschließlich zu „Vertragsübersichten“; „PDF reparieren“ bleibt
-davon unberührt.
+Das Werkzeug hat fünf Ansichten: **Übersicht erstellen**, **Stapel**, **Darstellung**, **Vorschau**
+und **Kunden**. Die Kundenakte gehört ausschließlich zu „Vertragsübersichten“; „PDF reparieren“
+bleibt davon unberührt.
+
+**Excel-Prüfung ohne Doppelungen:** Die Statuszeile ist die einzige Stelle mit den Vertragszahlen
+(„Excel geprüft · 5 aktive Verträge · 3 inaktiv ausgeblendet“, Einzahl „1 aktiver Vertrag“, ohne
+„0 inaktiv“). Darunter stehen nur zusätzliche Angaben: der Rechnungsempfänger (bei mehreren
+„3 erkannt“ mit Auswahl daneben), „Kunde · Nicht zugeordnet“, wenn das weiterhilft, Fettschrift und
+Hinweise. Ein erkannter Kunde erscheint einmal – als Hinweis mit Aktionen in der Dateikarte, nach dem
+Übernehmen als aktive Kundenakte in den Kundendaten.
 
 - **Kundenakte 2.0:** stabile ID (UUID), Firmenname, Kundennummer, mehrere
   Rechnungsempfänger-E-Mails (die erste ist primär), optionale Notiz, bevorzugtes Logo, bevorzugter
@@ -71,11 +78,63 @@ davon unberührt.
 - **Speicher:** `%APPDATA%\PDF-Tool\kundenakten.json` mit `schema_version: 2`, atomar geschrieben
   (temporäre Datei, dann Ersetzen) mit `.bak` als vorigem Stand; eine unlesbare Datei wird
   beiseitegelegt statt überschrieben. Bewusst ohne Datenbank, Server oder Konto.
-- **Übernahme aus 2.3:** Beim ersten Start mit 2.4 wird der bisherige Kundenverlauf
+- **Übernahme aus 2.3:** Beim ersten Start mit 2.4 (oder neuer) wird der bisherige Kundenverlauf
   (`kunden` in `gui-config.json`) einmalig zu Kundenakten – vorher sichert die App die
   Konfiguration byte-genau nach `sicherungen\gui-config-vor-kundenakte-<Zeit>.json`. Schlägt die
   Übernahme fehl, bleibt der alte Verlauf unverändert und die App versucht es beim nächsten Start
   erneut. Code: `app/tools/contract_overview/customers/migration.py`.
+
+### Vertragsübersichten: Stapelverarbeitung
+
+Die Ansicht **Stapel** erstellt viele Vertragsübersichten in einem Durchlauf – als eigene
+Arbeitsweise neben dem unveränderten Einzelmodus. Code: `app/tools/contract_overview/batch/`.
+
+- **Mehrere Excel-Dateien:** „Excel-Dateien hinzufügen“ (Mehrfachauswahl), „Ordner hinzufügen“
+  (nicht rekursiv) oder mehrere Dateien in das Fenster ziehen (nur auf der Ansicht „Stapel“; im
+  Einzelmodus bleibt es bei einer Excel). Doppelte Dateien werden über normalisierte Pfade erkannt.
+- **Automatische Analyse** im Hintergrund (`batch/analyzer.py`): dieselbe Prüfung wie im
+  Einzelmodus (`engine.pruefe_excel`), nacheinander in genau einem Thread, Ergebnisse gebündelt an
+  die Oberfläche. Innerhalb der Sitzung wird eine unveränderte Datei (Größe und Änderungszeit)
+  nicht erneut gelesen; eine geänderte wird vor der Verarbeitung neu geprüft – ändert sich dabei,
+  was die Kundenzuordnung bestimmt, wird der Eintrag nicht verarbeitet.
+- **Kundenerkennung:** dieselbe Zuordnung wie im Einzelmodus (`CustomerStore.match`). Eindeutig
+  erkannt → „Bereit“, sofern alles andere vorhanden ist; unbekannt → „Angaben erforderlich“
+  (Firmenname und Kundennummer eintragen oder Kunden wählen); Empfänger verschiedener Kunden,
+  mehrdeutige Zuordnung oder eine abweichende Kundennummer in der Excel → der Benutzer entscheidet.
+  Neue E-Mail-Zuordnungen nur mit „Zuordnung merken“.
+- **Datenmodell** (`batch/models.py`): `BatchItem` mit ID, Pfad, Prüfergebnis und Dateistand,
+  Kundenzuordnung (automatisch, gewählt, keine), eigenen Angaben (`Overrides`), Status
+  (`ItemStatus`: pending, analyzing, ready, needs_input, processing, success, warning, failed,
+  skipped), Hinweisen, Ausgabe und Fehler. Die geltenden Werte bestimmt `batch/resolver.py` jedes
+  Mal neu – geänderte Kundenakten gelten sofort, eigene Angaben bleiben.
+- **Vorrang:** Vorlage: Eintrag → Kundenakte → Standardvorlage des Stapels → „Darstellung“. Logo:
+  Eintrag → Kundenakte → Standardlogo des Stapels → installiertes Standardlogo (ein Vorlagenlogo gilt
+  auf der Stufe, auf der die Vorlage gewählt wurde). Zielordner: Eintrag → Kundenakte (abschaltbar) →
+  Stapel, optional mit Unterordner je Kunde. Kopf-/Fußzeile: im Eintrag gewählte Vorlage → eigene
+  Texte der Kundenakte → Vorlage → „Darstellung“; eine leere Fußzeile ersetzt nie die gültige.
+- **Verarbeitung** (`batch/processor.py`): nur bereite Einträge, nacheinander (Stabilität vor
+  Tempo), mit derselben PDF-Engine wie der Einzelmodus. Die Werte eines Eintrags werden unmittelbar
+  vor seiner Verarbeitung bestimmt. Jeder Fehler bleibt beim Eintrag – ein Fehler bei Datei 4 hält
+  Datei 5 nicht auf. Fortschritt „7 von 20 Übersichten erstellt“ samt aktuellem Eintrag,
+  „Stapel abbrechen“ (die laufende PDF endet am nächsten sicheren Punkt), „Fehlgeschlagene erneut
+  versuchen“ (nur fehlgeschlagene; Datei-Probleme werden neu geprüft), Ergebnis „Stapel
+  abgeschlossen“ mit „Ausgabeordner öffnen“, „Fehler anzeigen“ und „Neuer Stapel“.
+- **Sichere Ausgabe:** Die Engine schreibt jede PDF zuerst als temporäre Datei in den Zielordner und
+  bringt sie erst fertig an ihren Platz (auch im Einzelmodus) – ein Abbruch oder Fehler hinterlässt
+  nie eine halbe PDF. Dateinamen wie im Einzelmodus (`Vertragsuebersicht_Kd{kd}.pdf`); gibt es die
+  Datei schon: automatisch nummerieren (Standard, `…_2.pdf`), überspringen oder überschreiben – nie
+  eine im selben Lauf erstellte Datei.
+- **Vorschau eines Eintrags:** dieselbe Vorschau-Pipeline wie im Einzelmodus, nur mit dem Auftrag des
+  Eintrags; es wird nie für alle Einträge gleichzeitig gerendert.
+- **Kundenakte:** Nach einer Erstellung werden nur „zuletzt verwendet“, letzte Excel und letzte PDF
+  fortgeschrieben – nie Darstellungswerte des Stapels.
+- **Sicherung:** Der Stapel wird in `stapel.json` gesichert (nur Pfade, Zuordnungen, eigene Angaben
+  und Ergebnisse – keine Kopien); technische Fehler stehen in `stapel.log` (ohne Excel-Inhalte und
+  ohne vollständige Pfade).
+
+Gemeinsame Fachlogik von Einzel- und Stapelmodus liegt in `app/tools/contract_overview/overview.py`
+(Excel-Analyse als Datentyp, Statuszeile, Validierung, PDF-Auftrag, Vorlagenwerte) – es gibt keinen
+zweiten PDF-Generator und keine zweite Kundenerkennung.
 
 ### Vertragsübersichten: Live-Vorschau
 
@@ -129,6 +188,8 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
   (`migration-backup-<Version>.zip`), dann Kopie mit Prüfung jeder Datei (Größe und SHA-256).
   Der alte Datenordner bleibt unverändert erhalten; schlägt die Übernahme fehl, arbeitet die App mit
   ihm weiter.
+- **Update von 2.4:** Das Setup ersetzt nur Programmdateien; Einstellungen, Kundenakten, Vorlagen,
+  Rich-Text-Kopf- und Fußzeilen und die Einstellungen von „PDF reparieren“ bleiben unverändert.
 - **Update von 2.3:** Das Setup ersetzt nur Programmdateien. Beim ersten Start übernimmt die App den
   Kundenverlauf als Kundenakten (siehe oben, mit Sicherung); Einstellungen, Vorlagen,
   Textbausteine, Regeln sowie Kopf- und Fußzeile bleiben unverändert.
@@ -138,7 +199,9 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
 
 Alle Dateien werden vollständig lokal auf dem PC verarbeitet; es wird nichts hochgeladen und keine
 Verbindung zu einem Dienst aufgebaut. PDF Tool schreibt Einstellungen, die Kundenakten
-(`kundenakten.json`) und das technische Protokoll `pdf-repair.log` in den Datenordner.
+(`kundenakten.json`), den aktuellen Stapel (`stapel.json`) und die technischen Protokolle
+`pdf-repair.log` und `stapel.log` in den Datenordner. Auch die Stapelverarbeitung arbeitet
+vollständig lokal – keine Cloud, keine Uploads.
 
 **Kundenakten und E-Mail-Zuordnungen** sind ausschließlich lokal gespeicherte Nutzerdaten: keine
 Cloud, keine Telemetrie, keine Synchronisierung, keine E-Mail-Abfrage, keine Internetsuche und
@@ -169,11 +232,12 @@ PDFium enthält.
 
 Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) baut das Setup auf
 `windows-latest`, führt alle Tests aus, prüft die eingebettete Laufzeit (Module, Vertragsübersicht,
-PDF-Reparatur im Arbeitsprozess, Kundenakte, Vorschau, Programmstart) und das installierte Setup:
-stille Installation, Programmstart, stille Deinstallation, das Update vom Übersichten-Ersteller
-2.2.0 (ein Eintrag unter „Installierte Apps“, Ordner, Verknüpfungen, Datenübernahme) und das Update
+PDF-Reparatur im Arbeitsprozess, Kundenakte, Vorschau, Stapel, Programmstart) und das installierte
+Setup: stille Installation, Programmstart, stille Deinstallation, das Update vom Übersichten-Ersteller
+2.2.0 (ein Eintrag unter „Installierte Apps“, Ordner, Verknüpfungen, Datenübernahme), das Update
 von PDF Tool 2.3.0 mit Beispieldaten (Kundenverlauf wird mit Sicherung zu Kundenakten,
-Formatierung, Standard-Fußzeile und Vorlagen bleiben). Manuell gestartet mit
+Formatierung, Standard-Fußzeile und Vorlagen bleiben) und das Update von PDF Tool 2.4.0 mit
+Beispieldaten (Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten). Manuell gestartet mit
 `release: true` veröffentlicht sie danach das Release `v<Version>` („PDF Tool <Version>“) mit Setup
 und Prüfsumme – nur wenn alle Prüfungen bestanden sind.
 

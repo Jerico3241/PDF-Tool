@@ -18,7 +18,7 @@ def test_start_and_version(app) -> None:
     import appstate
 
     assert app.title() == appstate.APP_NAME == "PDF Tool"
-    assert app.version == appstate.VERSION == "2.4.0"
+    assert app.version == appstate.VERSION == "2.5.0"
     assert app.nav.current == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert app.ui.btn_pdf.text() == "PDF erstellen"
 
@@ -104,7 +104,8 @@ def test_multiple_recipients_need_choice(app, tmp_path: Path) -> None:
     app.inspect_excel(str(path))
     assert wait_until(app, lambda: app.ui.info_excel.severity == "success", 60)
     pump(app, 0.4)
-    assert app.ui.mail_area.expanded
+    # Mehrere Empfänger: »2 erkannt« mit Auswahl direkt daneben (Excel-Karte)
+    assert app.ui.mail_value.cget("text") == "2 erkannt" and app.ui.mail_combo.winfo_ismapped()
     assert app.ui.mail_combo.values() == ["a@x.de", "b@x.de"]
     app.var_mail.set("")
     app.start_pdf()
@@ -420,7 +421,7 @@ def test_pdf_uses_visible_footer(app, excel_file: Path, tmp_path: Path) -> None:
 def test_all_pages_prepared_at_startup(app) -> None:
     from ui.navigation import PARK_X
 
-    assert set(app.nav.pages) == {"home", "create", "layout", "preview", "customers", "repair", "settings"}
+    assert set(app.nav.pages) == {"home", "create", "batch", "layout", "preview", "customers", "repair", "settings"}
     assert app.ctx.ready and not app.ctx.anim.is_resizing
     host_w = app.nav.host.winfo_width()
     for key, page in app.nav.pages.items():
@@ -549,7 +550,9 @@ def test_tab_skips_parked_pages_and_collapsed_areas(app) -> None:
         visited.append(str(widget))
     for key in ("layout", "settings"):
         assert not any(path.startswith(str(app.nav.pages[key])) for path in visited), key
-    assert not any(path.startswith(str(app.ui.mail_area.content)) for path in visited)
+    # Die Empfänger-Auswahl erscheint erst bei mehreren Empfängern – vorher kein Tab-Ziel
+    assert not app.ui.mail_combo.winfo_ismapped()
+    assert str(app.ui.mail_combo) not in visited
 
 
 def _descendants(widget):

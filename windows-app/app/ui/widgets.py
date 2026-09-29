@@ -536,6 +536,153 @@ class ProgressRing(CanvasControl):
         self.spinner.place(self._size / 2, self._size / 2, self.pal.accent, self.surface())
 
 
+class ProgressBar(CanvasControl):
+    """WinUI-ProgressBar (bestimmt): feine Spur und Akzentbalken mit runden Enden.
+
+    ``set(value)`` mit 0…1. Die Breite folgt dem Layout (``pack(fill="x")``); gezeichnet wird
+    nur bei einer Änderung von Wert, Größe oder Design.
+    """
+
+    HEIGHT = 12
+
+    def __init__(self, master, width: int = 240) -> None:
+        super().__init__(master, px(width), px(self.HEIGHT), focusable=False)
+        self._value = 0.0
+        self._error = False
+        self._track = self.create_image(0, 0, anchor="w")
+        self._bar = self.create_image(0, 0, anchor="w", state="hidden")
+        self._drawn: tuple | None = None
+        self.redraw()
+
+    def set(self, value: float, error: bool = False) -> None:
+        value = max(0.0, min(1.0, float(value)))
+        if (value, error) != (self._value, self._error):
+            self._value, self._error = value, error
+            self.redraw()
+
+    def value(self) -> float:
+        return self._value
+
+    def redraw(self, animate: bool = True) -> None:
+        try:
+            width = max(self.winfo_width(), 1) if self.winfo_ismapped() else int(self.cget("width"))
+            height = int(self.cget("height"))
+        except tk.TclError:
+            return
+        pal = self.pal
+        surface = self.surface()
+        color = pal.critical if self._error else pal.accent
+        state = (width, height, self._value, color, pal.strong_stroke, surface)
+        if state == self._drawn:
+            return
+        self._drawn = state
+        c = self.c
+        cy = height / 2
+        track = c.images.box(max(2, width), px(1), 0, pal.strong_stroke, background=surface)
+        self._image("track", track)
+        self.itemconfigure(self._track, image=track)
+        self.coords(self._track, 0, cy)
+        bar_w = int(round(width * self._value))
+        if bar_w >= px(3):
+            bar = c.images.box(bar_w, px(3), px(1.5), color, background=surface)
+            self._image("bar", bar)
+            self.itemconfigure(self._bar, image=bar, state="normal")
+            self.coords(self._bar, 0, cy)
+        else:
+            self.itemconfigure(self._bar, state="hidden")
+
+
+class CheckBox(CanvasControl):
+    """Windows-11-Kontrollkästchen mit Beschriftung; ``state`` True, False oder None (gemischt).
+
+    Ein Klick ruft nur ``command`` auf – den neuen Zustand setzt der Besitzer (``set_state``),
+    z. B. »Alle auswählen« über einer Liste.
+    """
+
+    SIZE = 20
+
+    def __init__(self, master, text: str, command: Callable[[], None] | None = None, state: bool | None = False) -> None:
+        c = ctx()
+        self._text = text
+        self._command = command
+        self._state: bool | None = state
+        self._fp = px(FOCUS_PAD)
+        self._d = px(self.SIZE)
+        width = self._d + 2 * self._fp + (px(8) + c.fonts.body.measure(text) if text else 0) + self._fp
+        height = max(px(32), self._d + 2 * self._fp)
+        super().__init__(master, width, height)
+        self._box = self.create_image(0, 0, anchor="center")
+        self._glyph = self.create_text(0, 0, text="", anchor="center")
+        self._ring = self.create_image(0, 0, anchor="nw", state="hidden")
+        self._label = self.create_text(0, 0, text=text, anchor="w", font=c.fonts.body)
+        self.bind("<KeyPress-space>", lambda _e: (self.activate(), "break")[1], add="+")
+        self.redraw()
+
+    def activate(self) -> None:
+        if self._enabled and self._command:
+            self._command()
+
+    def set_state(self, state: bool | None) -> None:
+        if state != self._state:
+            self._state = state
+            self.redraw()
+
+    def state(self) -> bool | None:
+        return self._state
+
+    def set_text(self, text: str) -> None:
+        if text != self._text:
+            self._text = text
+            width = self._d + 2 * self._fp + (px(8) + self.c.fonts.body.measure(text) if text else 0) + self._fp
+            self.configure(width=width)
+            self.itemconfigure(self._label, text=text)
+            self.redraw()
+
+    def redraw(self, animate: bool = True) -> None:
+        c = self.c
+        pal = self.pal
+        surface = self.surface()
+        try:
+            height = int(self.cget("height"))
+        except tk.TclError:
+            return
+        fp, d = self._fp, self._d
+        cx, cy = fp + d / 2, height / 2
+        on = self._state is not False
+        if not self._enabled:
+            fill, stroke = (pal.accent_disabled, None) if on else (surface, pal.text_disabled)
+        elif on:
+            fill = pal.accent_pressed if self._pressed else pal.accent_hover if self._hover else pal.accent
+            stroke = None
+        else:
+            fill = pal.subtle_pressed(surface) if self._pressed else pal.subtle_hover(surface) if self._hover else pal.control
+            stroke = pal.strong_stroke
+        box = c.images.box(d, d, px(CONTROL_RADIUS), fill, stroke, background=surface)
+        self._image("box", box)
+        self.itemconfigure(self._box, image=box)
+        self.coords(self._box, cx, cy)
+        if on:
+            if self._state is None:
+                glyph, font = "–", (c.fonts.families.get("text_semibold") or c.fonts.families["text"], -px(12), "bold")
+            else:
+                glyph = icons.CHECK_MARK if c.icons_available else "✓"
+                font = (c.fonts.families["icons"], -px(12)) if c.icons_available else c.fonts.caption
+            self.itemconfigure(self._glyph, text=glyph, fill=pal.on_accent if self._enabled else pal.on_accent_disabled, font=font)
+            self.coords(self._glyph, cx, cy)
+        else:
+            self.itemconfigure(self._glyph, text="")
+        if self.show_focus():
+            width = int(self.cget("width"))
+            ring = c.images.ring(width, height, px(CONTROL_RADIUS) + fp, pal.focus_outer, pal.focus_inner)
+            self._image("ring", ring)
+            self.itemconfigure(self._ring, image=ring, state="normal")
+            self.coords(self._ring, 0, 0)
+        else:
+            self.itemconfigure(self._ring, state="hidden")
+        self.itemconfigure(self._label, fill=pal.text if self._enabled else pal.text_disabled)
+        self.coords(self._label, fp + d + px(8), cy)
+
+
 # ---------------------------------------------------------------------------
 # Schaltflächen
 # ---------------------------------------------------------------------------
@@ -1531,8 +1678,25 @@ class FlowRow(tk.Frame):
         self._height = 0
         self._width = 0
         self._sizes: dict[str, tuple[int, int]] = {}
+        self._hidden: set[str] = set()
         self._pending = False
         self.bind("<Configure>", self._configured, add="+")
+
+    def set_visible(self, widget: tk.Widget, visible: bool) -> None:
+        """Element ein- oder ausblenden, ohne die übrige Reihenfolge zu ändern."""
+        key = str(widget)
+        if visible == (key not in self._hidden):
+            return
+        if visible:
+            self._hidden.discard(key)
+        else:
+            self._hidden.add(key)
+            widget.place_forget()
+        self._placed = ()
+        self._schedule()
+
+    def is_visible(self, widget: tk.Widget) -> bool:
+        return str(widget) not in self._hidden
 
     def _configured(self, event) -> None:
         if event.width != self._width:
@@ -1567,12 +1731,12 @@ class FlowRow(tk.Frame):
         except tk.TclError:
             return
         if width <= 1:
-            width = sum(w.winfo_reqwidth() for w, _ in self._items) + self._gap * len(self._items)
+            width = sum(w.winfo_reqwidth() for w, _ in self._items if str(w) not in self._hidden) + self._gap * len(self._items)
         x = y = 0
         line_h = 0
         rows: list[list[tuple[tk.Widget, int, int]]] = [[]]
         for widget, _align in self._items:
-            if not widget.winfo_exists():
+            if not widget.winfo_exists() or str(widget) in self._hidden:
                 continue
             w, h = widget.winfo_reqwidth(), widget.winfo_reqheight()
             if x > 0 and x + w > width:
