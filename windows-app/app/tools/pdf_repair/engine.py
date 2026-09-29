@@ -7,6 +7,14 @@ Engines
 * **PDFium** über pypdfium2: zweite Meinung beim Öffnen, Übertragen lesbarer
   Seiten, wenn qpdf eine Datei nicht verarbeiten kann, und – nur nach
   ausdrücklicher Bestätigung – der Rettungsmodus (Seiten als Bilder).
+* **pypdf** (``recovery.lenient``): dritte, tolerante Engine mit eigenen Regeln.
+* **Rohrekonstruktion** (``recovery.scanner``/``recovery.rebuild``): Objekte direkt in
+  den Bytes finden, Querverweise, Trailer, ``startxref`` und ``%%EOF`` neu schreiben,
+  bei Bedarf den Seitenbaum neu aufbauen – danach mit qpdf normalisiert.
+
+Ablauf im Modus AUTO: qpdf neu schreiben → Seiten einzeln (qpdf) → Seiten über PDFium →
+pypdf → Rohrekonstruktion. Jeder Kandidat wird geprüft; der beste gewinnt (vollständige
+Seitenzahl vor Struktur vor Methode). Ein vollständiges Ergebnis beendet die Suche.
 
 Grundsätze
 ----------
@@ -30,7 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from .models import Check, Condition, Method, PdfAnalysis, PdfRepairResult, RepairMode, RepairStatus
+from .models import Check, Condition, Method, PdfAnalysis, PdfRepairResult, RawStructure, RepairMode, RepairStatus
+from .recovery import lenient, rebuild, scanner
 
 Progress = Callable[..., None]
 
@@ -49,6 +58,7 @@ FINDINGS = {
     "streams": "Datenströme sind beschädigt oder unvollständig.",
     "content": "Seiteninhalte sind teilweise fehlerhaft.",
     "pages": "Der Seitenbaum ist fehlerhaft.",
+    "eof": "Das Dateiende (%%EOF) fehlt – die Datei ist möglicherweise abgeschnitten.",
     "objects": "Objekte der Dateistruktur sind fehlerhaft.",
     "other": "Weitere Unstimmigkeiten in der Dateistruktur.",
 }
@@ -59,6 +69,17 @@ ACTIONS = {
     "content": "Seiteninhalte übernommen, soweit lesbar",
     "pages": "Seitenbaum neu aufgebaut",
     "objects": "Objektstruktur rekonstruiert",
+    "eof": "Dateiende (%%EOF) neu geschrieben",
+}
+# Reihenfolge bei sonst gleichwertigen Kandidaten (höher = bevorzugt)
+PRIORITY = {
+    Method.REWRITE: 6,
+    Method.PAGES: 5,
+    Method.LENIENT: 4,
+    Method.RAW_REBUILD: 3,
+    Method.PAGE_TREE_REBUILD: 2,
+    Method.PDFIUM: 1,
+    Method.RASTER: 0,
 }
 _RULES = (
     ("trailer", re.compile(r"trailer", re.I)),
@@ -68,6 +89,7 @@ _RULES = (
     ("pages", re.compile(r"\bpages?\b", re.I)),
     ("objects", re.compile(r"object|\bobj\b|endobj|expected|unexpected|token|dictionary|array|reference|offset", re.I)),
 )
+LOST_ENCRYPTION = "Die PDF ist verschlüsselt, ihre Verschlüsselungsangaben sind aber beschädigt. Ohne sie lässt sich der Inhalt nicht wiederherstellen – ein Passwortschutz wird nie umgangen."
 _OBJECT_RE = re.compile(r"\bobject (\d+) (\d+)\b")
 _PAGE_RE = re.compile(r"\bpage (\d+)\b", re.I)
 _GENERIC = ("file is damaged",)
@@ -490,6 +512,56 @@ def _pdfium_probe(path: Path, password: str | None, load_pages: bool) -> _Second
         doc.close()
 
 
+# --- Rohanalyse --------------------------------------------------------------------------
+
+
+def _raw_findings(raw: RawStructure) -> list[str]:
+    keys = []
+    if not (raw.xref_table or raw.xref_stream) or not raw.startxref_valid:
+        keys.append("xref")
+    if not raw.trailer:
+        keys.append("trailer")
+    if not raw.eof:
+        keys.append("eof")
+    if raw.pages and (not raw.page_nodes or not raw.catalog):
+        keys.append("pages")
+    return keys or ["pages"]
+
+
+def _tree_damage(raw: scanner.RawScan | None, pages: int | None) -> list[str]:
+    """Schäden am Seitenbaum laut Rohdaten (qpdf entfernt Verweise ins Leere beim Öffnen
+    stillschweigend). Zählt nur, wenn außerhalb des lesbaren Baums noch Seitenobjekte liegen –
+    sonst fehlt keine Seite."""
+    if raw is None or not pages or raw.stats.encrypted:
+        return []
+    _reachable, damage = rebuild.raw_tree(raw)
+    return damage if damage and raw.stats.pages > pages else []
+
+
+def _raw_checks(raw: RawStructure) -> list[Check]:
+    """Befunde der Rohanalyse für die technischen Details."""
+    found = f"{raw.candidates} gefunden, {raw.objects} gültig"
+    if raw.superseded:
+        found += f", {raw.superseded} ältere Fassungen"
+    if raw.rejected:
+        found += f", {raw.rejected} verworfen"
+    checks = [
+        Check("raw_objects", "Objektkandidaten", raw.objects > 0, found),
+        Check("raw_catalog", "Dokumentkatalog (/Catalog)", raw.catalog, "gefunden" if raw.catalog else "nicht gefunden"),
+        Check("raw_pages", "Seitenobjekte (/Page)", raw.pages > 0, str(raw.pages)),
+        Check("raw_nodes", "Seitenbaum-Knoten (/Pages)", raw.page_nodes > 0, str(raw.page_nodes)),
+        Check("raw_xref", "xref-Abschnitt", raw.xref_table or raw.xref_stream, "vorhanden" if raw.xref_table else ("als Datenstrom (PDF 1.5+)" if raw.xref_stream else "fehlt")),
+        Check("raw_trailer", "Trailer-Wörterbuch", raw.trailer, "vorhanden" if raw.trailer else "fehlt"),
+        Check("raw_startxref", "startxref", raw.startxref_valid, "gültig" if raw.startxref_valid else ("verweist ins Leere" if raw.startxref else "fehlt")),
+        Check("raw_eof", "%%EOF", raw.eof, "vorhanden" if raw.eof else "fehlt"),
+    ]
+    if raw.object_streams:
+        checks.append(Check("raw_objstm", "Objektströme", None, str(raw.object_streams)))
+    if raw.encrypted:
+        checks.append(Check("raw_encrypted", "Verschlüsselung", None, "erkannt – Wiederherstellung nur mit vollständigen Verschlüsselungsdaten"))
+    return checks
+
+
 # --- Analyse ----------------------------------------------------------------------------
 
 
@@ -559,20 +631,40 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
     qpdf_ok = pdf is not None and bool(page_count)
     progress("second")
     second = _pdfium_probe(path, password, load_pages=not qpdf_ok or bool(findings))
+    # Rohanalyse nur bei beschädigten Dateien: Was steckt noch an Struktur in den Bytes?
+    raw_scan: scanner.RawScan | None = None
+    if not qpdf_ok or findings or not scan.eof:
+        progress("raw_scan")
+        try:
+            raw_scan = scanner.scan(path, progress)
+        except (OSError, ValueError, MemoryError) as exc:
+            technical.append(f"Rohanalyse: {_clean(str(exc), path)}")
+    raw = raw_scan.stats if raw_scan is not None else None
+    result.raw = raw
+    tree_damage = _tree_damage(raw_scan, page_count)
+    if tree_damage:
+        technical += [f"Seitenbaum: {reason}" for reason in tree_damage]
+        if "pages" not in findings:
+            findings.append("pages")
     if second.error:
         technical.append(f"PDFium: {second.error}")
     result.pdfium_pages = second.pages
     result.rasterizable_pages = second.loadable
     result.page_count = page_count
     known = [n for n in (page_count, second.pages) if n]
+    tree_broken = bool(tree_damage)
+    if (not qpdf_ok or tree_broken) and raw is not None and raw.pages:
+        known.append(raw.pages)  # Seitenbaum nicht (vollständig) lesbar: die gefundenen Seitenobjekte zählen
     result.pages_expected = max(known) if known else None
     if qpdf_ok and page_count is not None:
         result.readable_pages = page_count - len(incomplete)
 
+    if scan.header and not scan.eof and "eof" not in findings:
+        findings.append("eof")  # fehlendes Dateiende ist ein Befund – die Reparatur schreibt es neu
     if qpdf_ok:
         if not findings and not incomplete and scan.header:
             result.condition = Condition.HEALTHY
-        elif not incomplete and (second.pages is None or second.pages <= page_count):
+        elif not incomplete and (second.pages is None or second.pages <= page_count) and page_count >= (result.pages_expected or 0):
             result.condition = Condition.REPAIRABLE
         else:
             result.condition = Condition.DAMAGED
@@ -580,10 +672,22 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
         result.condition = Condition.DAMAGED
         if not findings:
             findings.append("pages")
+    elif scan.header and raw is not None and raw.recoverable:
+        # Parser scheitern, die Rohdaten tragen aber noch: erweiterte Wiederherstellung möglich
+        result.condition = Condition.RAW_RECOVERABLE
+        findings.extend(key for key in _raw_findings(raw) if key not in findings)
     else:
         result.condition = Condition.UNREADABLE
-        result.error = "Keine der Engines kann die Datei öffnen." if scan.header else "Die Datei ist keine lesbare PDF."
-    result.repairable = result.condition in (Condition.REPAIRABLE, Condition.DAMAGED)
+        if raw is not None and raw.encrypted and raw.objects:
+            result.error = "Die PDF ist verschlüsselt und ihre Struktur ist beschädigt. Ohne vollständige Verschlüsselungsdaten ist keine Wiederherstellung möglich."
+        else:
+            result.error = "Keine der Engines kann die Datei öffnen, und es wurde keine verwertbare PDF-Struktur gefunden." if scan.header else "Die Datei ist keine lesbare PDF."
+    if raw is not None and raw.encrypted and not result.encrypted:
+        # Verschlüsselt, aber die Verschlüsselungsangaben (Trailer) fehlen: Der Inhalt ist nicht
+        # lesbar, und ein Passwortschutz wird nie umgangen.
+        result.condition = Condition.UNREADABLE
+        result.error = LOST_ENCRYPTION
+    result.repairable = result.condition in (Condition.REPAIRABLE, Condition.DAMAGED, Condition.RAW_RECOVERABLE)
 
     # Befunde und Diagnose
     result.structural_errors = [FINDINGS[key] for key in findings]
@@ -595,16 +699,29 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
     trailer_ok = "trailer" not in findings
     result.checks.append(Check("trailer", "Trailer", trailer_ok if pdf is not None else False, "vorhanden" if trailer_ok and pdf is not None else "fehlt oder beschädigt"))
     objects_ok = "objects" not in findings
-    result.checks.append(Check("objects", "Objekte", objects_ok if pdf is not None else None, "in Ordnung" if objects_ok else "fehlerhafte Objekte gefunden"))
+    if pdf is None and raw is not None:
+        # Ohne qpdf zählen die Rohdaten – nie »in Ordnung« ohne Prüfung
+        result.checks.append(Check("objects", "Objekte", raw.objects > 0, f"{raw.objects} gefunden" if raw.objects else "keine gefunden"))
+    else:
+        result.checks.append(Check("objects", "Objekte", objects_ok if pdf is not None else None, "in Ordnung" if objects_ok else "fehlerhafte Objekte gefunden"))
     if page_count:
         result.checks.append(Check("pages", "Seitenbaum", "pages" not in findings, f"{page_count} Seiten"))
+    elif raw is not None and raw.pages:
+        result.checks.append(Check("pages", "Seitenbaum", False, f"nicht lesbar – {raw.pages} Seitenobjekte gefunden"))
     else:
         result.checks.append(Check("pages", "Seitenbaum", False, "nicht lesbar"))
     streams_ok = "streams" not in findings and "content" not in findings and not incomplete
-    result.checks.append(Check("streams", "Datenströme", streams_ok if pdf is not None else None, "lesbar" if streams_ok else ("Inhalte von %d Seiten beschädigt" % len(incomplete) if incomplete else "teilweise nicht lesbar")))
+    if pdf is None and raw is not None:
+        result.checks.append(Check("streams", "Datenströme", raw.streams > 0 or None, f"{raw.streams} gefunden" if raw.streams else "keine gefunden"))
+    else:
+        result.checks.append(Check("streams", "Datenströme", streams_ok if pdf is not None else None, "lesbar" if streams_ok else ("Inhalte von %d Seiten beschädigt" % len(incomplete) if incomplete else "teilweise nicht lesbar")))
     result.checks.append(Check("metadata", "Metadaten", result.metadata_ok, {True: "lesbar", False: "beschädigt", None: "keine vorhanden"}[result.metadata_ok]))
     result.checks.append(Check("encryption", "Verschlüsselung", True, "verschlüsselt, Passwort korrekt" if result.encrypted else "nicht verschlüsselt"))
     result.checks.append(Check("second", "Zweite Engine (PDFium)", second.pages is not None, f"{second.pages} Seiten" if second.pages is not None else "kann die Datei nicht öffnen"))
+    if raw is not None:
+        result.checks += _raw_checks(raw)
+        if not result.signatures and raw.signatures:
+            result.signatures = raw.signatures  # Signaturen auch ohne lesbare Formularstruktur erkennen
 
     if result.signatures:
         result.warnings.append("Die PDF enthält digitale Signaturen. Eine Reparatur kann deren Gültigkeit aufheben.")
@@ -627,14 +744,15 @@ class _Candidate:
     lost: list[str] = field(default_factory=list)  # nicht übernommene Bestandteile
     critical_loss: bool = False  # z. B. Anhänge verloren
     problems: list[str] = field(default_factory=list)
+    doubtful: bool = False  # z. B. Ressourcen fehlten beim Neuaufbau – höchstens »teilweise«
 
     @property
     def complete(self) -> int:
         return self.pages - len(self.incomplete)
 
     def score(self) -> tuple:
-        priority = {Method.REWRITE: 3, Method.PAGES: 2, Method.PDFIUM: 1, Method.RASTER: 0}[self.method]
-        return (self.complete, self.pages, not self.critical_loss, priority)
+        """Vollständige Seiten vor Seitenzahl vor Struktur (nie Bilder) vor Verlusten vor Methode."""
+        return (self.complete, self.pages, self.method is not Method.RASTER, not self.critical_loss, -len(self.lost), PRIORITY[self.method])
 
 
 @dataclass
@@ -650,6 +768,8 @@ class _Source:
     signatures: int = 0
     incomplete: list[int] = field(default_factory=list)
     findings: list[str] = field(default_factory=list)
+    raw: scanner.RawScan | None = None  # Rohanalyse, wenn qpdf den Seitenbaum nicht liest
+    tree_damaged: bool = False  # Seitenbaum mit Verweisen ins Leere (qpdf überspringt sie)
 
 
 @dataclass
@@ -665,6 +785,9 @@ def validate(path: Path, password: str | None = None) -> Validation:
     Strukturprüfung (Datenströme und Seiteninhalte) und Gegenprobe mit PDFium."""
     if not path.is_file() or path.stat().st_size == 0:
         return Validation(False, problems=["Ausgabedatei fehlt oder ist leer"])
+    edges = _scan(path, path.stat().st_size)
+    if not edges.header or not edges.eof:
+        return Validation(False, problems=["Ausgabe ohne gültige PDF-Kennung" if not edges.header else "Ausgabe ohne Dateiende (%%EOF)"])
     opened = _open_qpdf(path, password, recovery=False)
     if opened.pdf is None:
         return Validation(False, problems=[f"Ausgabe lässt sich nicht öffnen: {opened.error or 'Passwort'}"])
@@ -720,6 +843,14 @@ def _source_info(path: Path, password: str | None) -> _Source:
     info.findings = _findings(technical)
     second = _pdfium_probe(path, password, load_pages=False)
     info.pdfium_pages = second.pages
+    if not info.pages or info.findings:
+        try:
+            info.raw = scanner.scan(path)
+        except (OSError, ValueError, MemoryError) as exc:
+            technical.append(f"Rohanalyse: {_clean(str(exc), path)}")
+    info.tree_damaged = bool(_tree_damage(info.raw, info.pages))
+    if info.tree_damaged and "pages" not in info.findings:
+        info.findings.append("pages")
     return info
 
 
@@ -958,6 +1089,140 @@ def _stage_raster(path: Path, work: Path, password: str | None, source: _Source,
     return _Candidate(Method.RASTER, out, drawn, [], actions, lost, True)
 
 
+def _normalize(source: Path, target: Path, progress: Progress, technical: list[str], label: str) -> bool:
+    """Kandidat mit qpdf öffnen und neu schreiben – erst die normalisierte Datei wird geprüft."""
+    progress("normalize")
+    opened = _open_qpdf(source, None)
+    if opened.pdf is None:
+        technical.append(f"{label}: Normalisierung nicht möglich: {opened.error or 'Passwort'}")
+        return False
+    pdf = opened.pdf
+    try:
+        if len(pdf.pages) == 0:
+            technical.append(f"{label}: keine Seiten nach der Normalisierung")
+            return False
+        _save_qpdf(pdf, target, progress, "normalize")
+        _collect(pdf, source, technical)
+    except Exception as exc:  # noqa: BLE001
+        technical.append(f"{label}: Normalisierung fehlgeschlagen: {_clean(str(exc), source)}")
+        return False
+    finally:
+        pdf.close()
+    return True
+
+
+def _stage_lenient(path: Path, work: Path, password: str | None, source: _Source, progress: Progress, technical: list[str]) -> _Candidate | None:
+    """Stufe 4: dritte, tolerante Engine (pypdf) – das Ergebnis wird mit qpdf normalisiert."""
+    progress("lenient")
+    raw_out = work / "stufe4-pypdf-roh.pdf"
+    found = lenient.recover(path, raw_out, password, technical)
+    if found is None:
+        raw_out.unlink(missing_ok=True)
+        return None
+    out = work / "stufe4-pypdf.pdf"
+    ok = _normalize(raw_out, out, progress, technical, "Stufe 4 (pypdf)")
+    raw_out.unlink(missing_ok=True)
+    if not ok:
+        return None
+    lost = list(found.lost)
+    critical = False
+    if source.attachments and not found.whole_document:
+        lost.append(f"{source.attachments} Dateianhänge konnten nicht übernommen werden.")
+        critical = True
+    actions = ["Dritte Engine (pypdf) hat die Datei mit toleranteren Regeln gelesen", f"{found.pages} von {found.total} Seiten übertragen", "Ergebnis mit qpdf normalisiert"]
+    return _Candidate(Method.LENIENT, out, found.pages, [], actions, lost, critical)
+
+
+def _stage_raw(path: Path, work: Path, password: str | None, source: _Source, progress: Progress, technical: list[str]) -> _Candidate | None:
+    """Stufe 5: Rohrekonstruktion – Objekte aus den Bytes, neue xref, neuer Trailer, startxref und
+    %%EOF, bei Bedarf ein neuer Seitenbaum, fehlende Schriften ersetzt. Verschlüsselte Dateien
+    werden nicht angefasst (kein Umgehen eines Passwortschutzes)."""
+    progress("raw_scan")
+    try:
+        raw = source.raw or scanner.scan(path, progress)
+    except (OSError, ValueError, MemoryError) as exc:
+        technical.append(f"Stufe 5: Rohanalyse nicht möglich: {_clean(str(exc), path)}")
+        return None
+    stats = raw.stats
+    technical.append(
+        f"Stufe 5: Rohanalyse – {stats.candidates} Objektköpfe, {stats.objects} gültige Objekte, {stats.streams} Datenströme, "
+        f"{stats.pages} Seitenobjekte, {stats.page_nodes} Seitenbaum-Knoten, {stats.rejected} verworfen, {stats.superseded} ältere Fassungen"
+    )
+    if stats.encrypted:
+        technical.append("Stufe 5: übersprungen – die Datei ist verschlüsselt (kein Umgehen des Passwortschutzes)")
+        return None
+    if not stats.recoverable:
+        technical.append("Stufe 5: keine verwertbare Dokumentstruktur gefunden")
+        return None
+    progress("xref_rebuild")
+    classic_path = work / "stufe5-roh.pdf"
+    finished_path = work / "stufe5-seiten.pdf"
+    out = work / "stufe5-rekonstruiert.pdf"
+    try:
+        classic = rebuild.write_classic(raw, path, classic_path, progress)
+        if classic is None:
+            return None
+        actions = [
+            f"PDF-Objekte direkt in der Datei gesucht: {stats.objects} Objekte, {stats.streams} Datenströme",
+            "Querverweistabelle (xref) mit neuen Offsets aufgebaut",
+            "Trailer neu geschrieben" + (" – Dokumentkatalog neu angelegt" if classic.catalog_created else ""),
+            "startxref und Dateiende (%%EOF) neu geschrieben",
+        ]
+        if stats.superseded:
+            actions.append(f"Bei {stats.superseded} mehrfach gespeicherten Objekten die neueste Fassung verwendet")
+        if stats.object_streams:
+            actions.append(f"{stats.object_streams} Objektströme entpackt")
+        broken, _count, messages = rebuild.tree_is_broken(classic_path, stats.pages)
+        technical.extend(messages[:20])
+        if broken:
+            progress("page_tree_rebuild")
+        done = rebuild.finish(classic_path, finished_path, raw, technical, broken, _page_status, classic.truncated)
+        if done is None:
+            return None
+        lost: list[str] = []
+        doubtful = False
+        method = Method.RAW_REBUILD
+        if done.tree is not None:
+            method = Method.PAGE_TREE_REBUILD
+            actions.append(f"Seitenbaum aus {done.tree.pages} Seitenobjekten neu aufgebaut, Eltern-Verweise gesetzt")
+            if done.tree.appended == done.tree.pages:
+                actions.append("Seitenreihenfolge nach der Reihenfolge der Objekte in der Datei bestimmt")
+            elif done.tree.appended:
+                kept = done.tree.pages - done.tree.appended
+                actions.append(f"Reihenfolge von {kept} Seiten aus dem erhaltenen Seitenbaum übernommen, {done.tree.appended} weitere angefügt")
+            if done.tree.inherited:
+                actions.append("Geerbte Seiteneigenschaften übernommen: " + ", ".join(done.tree.inherited))
+            lost += done.tree.notes
+            doubtful = done.tree.doubtful
+        if done.fonts.replaced:
+            fonts = len(done.fonts.replaced)
+            actions.append(f"{fonts} fehlende {'Schrift' if fonts == 1 else 'Schriften'} durch die Standardschrift Helvetica ersetzt")
+            lost.insert(
+                0,
+                f"Alle {done.pages} Seiten wurden übernommen. "
+                + ("Eine Schrift fehlte in der Datei und wurde" if fonts == 1 else f"{fonts} Schriften fehlten in der Datei und wurden")
+                + " durch eine Standardschrift ersetzt – das Schriftbild kann vom Original abweichen.",
+            )
+            doubtful = True
+        if done.fonts.skipped:
+            technical.append(f"Stufe 5: Schriften mit Zwei-Byte-Codes nicht ersetzt: {', '.join(done.fonts.skipped)}")
+        if not _normalize(finished_path, out, progress, technical, "Stufe 5"):
+            return None
+    except (OSError, ValueError, MemoryError) as exc:
+        technical.append(f"Stufe 5: Neuaufbau fehlgeschlagen: {_clean(str(exc), path)}")
+        return None
+    except Exception as exc:  # noqa: BLE001 - Fehler der PDF-Bibliothek: diese Stufe liefert nichts
+        technical.append(f"Stufe 5: Neuaufbau fehlgeschlagen: {type(exc).__name__}: {_clean(str(exc), path)}")
+        return None
+    finally:
+        classic_path.unlink(missing_ok=True)
+        finished_path.unlink(missing_ok=True)
+    actions.append("Ergebnis mit qpdf normalisiert")
+    candidate = _Candidate(method, out, done.pages, done.incomplete, actions, lost, False)
+    candidate.doubtful = doubtful
+    return candidate
+
+
 def _encrypt_like_source(candidate: _Candidate, password: str | None, technical: list[str]) -> bool:
     """Ausgaben der zweiten Engine sind unverschlüsselt – mit dem eingegebenen Passwort schützen."""
     import pikepdf
@@ -1030,7 +1295,14 @@ def repair(
         result.status = RepairStatus.ENCRYPTED
         result.error = "Das Passwort fehlt oder ist falsch."
         return result
+    if source.raw is not None and source.raw.stats.encrypted and not source.encrypted:
+        result.error = LOST_ENCRYPTION
+        technical.append("Reparatur abgelehnt: verschlüsselte Datei ohne Verschlüsselungsangaben")
+        result.technical = technical[:MAX_TECHNICAL]
+        return result
     known = [n for n in (source.pages, source.pdfium_pages) if n]
+    if (not source.pages or source.tree_damaged) and source.raw is not None and source.raw.stats.pages:
+        known.append(source.raw.stats.pages)  # Seitenbaum nicht lesbar: gefundene Seitenobjekte zählen
     expected = max(known) if known else None
     result.pages_before = expected
 
@@ -1040,12 +1312,12 @@ def repair(
     elif mode is RepairMode.REBUILD:
         stages = (_stage_rewrite,)
     else:
-        stages = (_stage_rewrite, _stage_pages, _stage_pdfium)
+        stages = (_stage_rewrite, _stage_pages, _stage_pdfium, _stage_lenient, _stage_raw)
     for stage in stages:
         candidate = stage(path, work, password, source, progress, technical)
         if candidate is None:
             continue
-        if source.encrypted and candidate.method in (Method.PDFIUM, Method.RASTER):
+        if source.encrypted and candidate.method in (Method.PDFIUM, Method.RASTER, Method.LENIENT):
             _encrypt_like_source(candidate, password, technical)
         progress("validate")
         check = validate(candidate.path, password)
@@ -1059,8 +1331,8 @@ def repair(
         candidate.incomplete = sorted(set(candidate.incomplete) | set(check.incomplete))
         candidates.append(candidate)
         best_possible = expected or check.pages
-        if candidate.method is Method.REWRITE and candidate.complete >= best_possible and not candidate.critical_loss:
-            break  # vollständig – weitere Stufen nicht nötig
+        if candidate.complete >= best_possible and not candidate.critical_loss and not candidate.lost and not candidate.doubtful:
+            break  # vollständig ohne Verluste – weitere Stufen nicht nötig
 
     # Original unverändert? (nur gelesen – geprüft wird trotzdem)
     try:
@@ -1105,7 +1377,7 @@ def repair(
         result.warnings.append("Digitale Signaturen sind nach der Reparatur möglicherweise ungültig.")
     if best.problems:
         result.warnings.append("Einzelne Datenströme waren schon im Original nicht lesbar und wurden unverändert übernommen.")
-    complete = best.complete >= expected and not best.critical_loss and best.method is not Method.RASTER
+    complete = best.complete >= expected and not best.critical_loss and not best.doubtful and best.method is not Method.RASTER
     result.status = RepairStatus.REPAIRED if complete else RepairStatus.PARTIALLY_RECOVERED
     result.technical = technical[:MAX_TECHNICAL]
     return result

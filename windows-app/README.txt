@@ -2,28 +2,49 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.5.0
+Version 2.6.0
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
-  vielen Excel-Dateien, mit Live-Vorschau und Kundenakten, die bekannte
-  Kunden an der Rechnungsempfänger-E-Mail wiedererkennen.
+  vielen Excel-Dateien, mit Live-Vorschau, Kundenakten, die bekannte
+  Kunden an der Rechnungsempfänger-E-Mail wiedererkennen, und einem
+  Vergleich mit dem letzten Vertragsstand des Kunden.
 - PDF reparieren: analysiert beschädigte PDF-Dateien und versucht, lesbare
-  Inhalte in eine neue PDF zu übertragen.
+  Inhalte in eine neue PDF zu übertragen – bei Bedarf baut es die
+  Dokumentstruktur aus den noch vorhandenen Objekten neu auf.
 
 Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.5.0.exe
+PDF-Tool-Setup-2.6.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit qpdf, pypdfium2 mit
-PDFium). Eine eigene Python-Installation, qpdf, Ghostscript oder andere
-Zusatzprogramme sind nicht nötig.
+PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
+andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.6
+------------------
+- Vertragsvergleich in „Übersicht erstellen“: Nach der Excel-Prüfung zeigt
+  die Karte „Vertragsänderungen“, welche Verträge seit dem letzten Stand
+  des Kunden neu, entfernt oder geändert sind – z. B. „Seit 12.08.2026 ·
+  2 neu · 1 entfernt · 1 geändert · 4 unverändert“.
+- Ein Vertragsstand wird nur nach einer erfolgreich erstellten PDF
+  gespeichert – je Kundenakte, nie für die Vorschau, einen Abbruch oder
+  einen Fehler. Alte PDF- oder Excel-Dateien werden dafür nicht gebraucht.
+- Im Stapel stehen die Änderungen kompakt in der Liste („+2 neu ·
+  ~1 geändert“), die Einzelheiten in der Detailansicht.
+- „PDF reparieren“ rettet deutlich mehr: Öffnet keine PDF-Engine die Datei,
+  heißt es „Erweiterte Wiederherstellung möglich“, und „PDF-Struktur
+  rekonstruieren“ baut Querverweise, Trailer und Seitenbaum aus den noch
+  vorhandenen Objekten neu auf.
+- Neue dritte, tolerante PDF-Engine (pypdf). Jede reparierte Datei wird
+  normalisiert und streng geprüft; teilweise gerettete Dateien sind
+  deutlich gekennzeichnet.
 
 Neu in Version 2.5
 ------------------
@@ -94,7 +115,8 @@ Installation
 
 Programmdateien:  %LOCALAPPDATA%\PDF-Tool
 Ihre Daten:       %APPDATA%\PDF-Tool
-                  (Einstellungen, Kundenakten kundenakten.json, Vorlagen,
+                  (Einstellungen, Kundenakten kundenakten.json,
+                  Vertragsstände im Ordner contract-history, Vorlagen,
                   Textbausteine, Kopf- und Fußzeile, Zyklus-Regeln, Design,
                   Akzentfarbe, aktueller Stapel stapel.json, Protokolle
                   pdf-repair.log und stapel.log)
@@ -134,6 +156,14 @@ und sie wird beim nächsten Start erneut versucht. Vorlagen, Textbausteine,
 Regeln sowie Kopf- und Fußzeile (auch die Standard-Fußzeile) bleiben wie
 sie sind.
 
+Update von PDF Tool 2.5: Das Setup ersetzt nur die Programmdateien.
+Einstellungen, Kundenakten, Vorlagen, Textbausteine, formatierte Kopf- und
+Fußzeilen, Zyklus-Regeln, der gespeicherte Stapel mit seinen Einstellungen
+und die Einstellungen von „PDF reparieren“ bleiben unverändert. Frühere
+Vertragsstände gibt es noch nicht – es werden keine künstlich angelegt.
+Der erste Export mit Kundenakte meldet „Erster Vertragsstand gespeichert“,
+ab dem nächsten Excel-Import erscheint der Vergleich.
+
 Update von PDF Tool 2.4: Das Setup ersetzt nur die Programmdateien.
 Einstellungen, Kundenakten, Vorlagen, Textbausteine, formatierte Kopf- und
 Fußzeilen, Zyklus-Regeln und die Einstellungen von „PDF reparieren“
@@ -150,8 +180,8 @@ erneut ausführen repariert die Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   PDF-Tool-Setup-2.5.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   PDF-Tool-Setup-2.5.0.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.6.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.6.0.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -282,6 +312,50 @@ einem Neustart ist er wieder da. Technische Fehler stehen in stapel.log
 (ohne Inhalte der Excel-Dateien und ohne vollständige Pfade).
 
 
+Vertragsänderungen (Vertragsübersichten → „Übersicht erstellen“)
+-----------------------------------------------------------------
+Ist eine Kundenakte aktiv, vergleicht PDF Tool nach der Excel-Prüfung die
+Verträge mit dem zuletzt gespeicherten Stand dieses Kunden. Die Karte
+„Vertragsänderungen“ zeigt z. B. „Seit 12.08.2026“ und „2 neu · 1 entfernt
+· 1 geändert · 4 unverändert“ in Farben (neu grün, entfernt rot, geändert
+gelb, unverändert grau). Aufgeführt werden nur die Änderungen:
+- Neu: z. B. „10006 Cloud-Speicher – 19,00 €“
+- Entfernt: „nicht mehr in der Excel“
+- Geändert: ein Klick klappt die geänderten Felder auf, z. B.
+  „Netto: 250,00 € → 270,00 €“.
+„4 unveränderte anzeigen“ blendet die übrigen Verträge ein. „Vergleichen
+mit“ wählt einen früheren Stand (Standard: „Letzter Stand“), „Änderungen
+kopieren“ legt den Vergleich als Text in die Zwischenablage. Darunter
+stehen Datum und Uhrzeit des Stands sowie die damalige Excel- und PDF-Datei
+(„nicht mehr vorhanden“, wenn sie gelöscht wurde – für den Vergleich wird
+sie nicht gebraucht).
+
+Wann wird ein Stand gespeichert?
+- Nur nach einer erfolgreich erstellten PDF und nur mit Kundenakte – nie
+  für die Vorschau, die Excel-Prüfung, einen Abbruch oder einen Fehler.
+- Gespeichert werden die Verträge so, wie sie in der PDF stehen
+  (Vertragsnummer, Art, Beschreibung, Beginn, Abrechnungszyklus, Netto,
+  Zahlungsart) – keine Kopie der PDF oder der Excel.
+- Ist der Stand unverändert, entsteht kein zweiter Eintrag; es wird nur
+  mitgezählt („2× erstellt, zuletzt …“).
+- Der Vergleich gehört immer zur Kundenakte, nie zu einem ähnlichen
+  Firmennamen. Eine geänderte Vertragsnummer zählt als „entfernt“ und
+  „neu“. Formatierung (z. B. Fettschrift) zählt nicht als Änderung.
+- Der Vergleich ändert die PDF nicht und wird nicht in die Übersicht
+  gedruckt.
+
+Im Stapel speichert jeder erfolgreich erstellte Eintrag mit Kundenakte
+seinen eigenen Stand (übersprungene und fehlgeschlagene nicht). Die Liste
+zeigt kurz „+2 neu · ~1 geändert“, die Detailansicht den ganzen Vergleich.
+
+Ablage: %APPDATA%\PDF-Tool\contract-history\<Kunden-ID>\ – je Stand eine
+kleine Datei. Je Kunde bleiben die letzten 50 unterschiedlichen Stände
+erhalten; ältere werden beim Speichern eines neuen Stands entfernt. Beim
+Zusammenführen von Kundenakten gehören beide Verläufe zum Ziel. Die
+Vertragsstände bleiben bei Updates erhalten und liegen nur auf diesem PC.
+Wer seine Daten sichert, sichert den ganzen Ordner %APPDATA%\PDF-Tool.
+
+
 Kundenakten (Vertragsübersichten → „Kunden“)
 --------------------------------------------
 Eine Kundenakte enthält Firmenname, Kundennummer, die E-Mail-Adressen der
@@ -342,10 +416,17 @@ Werkzeug „PDF reparieren“
      möglicherweise repariert werden können.
    - „Schwer beschädigt“ – Teile der PDF können nicht gelesen werden;
      PDF Tool versucht, so viele Seiten und Inhalte wie möglich zu retten.
+   - „Erweiterte Wiederherstellung möglich“ – keine PDF-Engine öffnet die
+     Datei, es wurden aber noch PDF-Objekte (und Datenströme) gefunden.
+     „PDF-Struktur rekonstruieren“ versucht, die noch vorhandenen Inhalte
+     wiederherzustellen.
    - „Keine Reparatur möglich“ – die Datei lässt sich mit keiner der
-     eingebauten Engines lesen.
+     eingebauten Engines lesen, und es ist keine verwertbare Struktur mehr
+     vorhanden.
    „Technische Details anzeigen“ listet Querverweistabelle, Objekte,
-   Trailer, Seitenbaum, Metadaten, Datenströme und alle Befunde.
+   Trailer, Seitenbaum, Metadaten, Datenströme und alle Befunde – bei
+   beschädigten Dateien auch die Rohanalyse (Objektkandidaten, Katalog,
+   Seitenobjekte, Seitenbaum-Knoten, xref, Trailer, startxref, %%EOF).
 3. Verschlüsselte PDF: Passwort eingeben und „Entsperren“ wählen. Das
    Passwort wird nur für diesen Vorgang verwendet und nirgends gespeichert.
    Die reparierte Kopie bleibt mit demselben Passwort geschützt.
@@ -368,6 +449,18 @@ Nicht jede beschädigte Datei lässt sich vollständig wiederherstellen.
 
 Die Originaldatei wird nie verändert oder überschrieben. Die neue Datei
 heißt <Name>_repariert.pdf (bei Bedarf <Name>_repariert_2.pdf usw.).
+
+Erweiterte Wiederherstellung: PDF Tool versucht nacheinander qpdf, die
+Übertragung einzelner Seiten, PDFium und die tolerante Engine pypdf. Reicht
+das nicht, sucht es die noch vorhandenen PDF-Objekte direkt in der Datei,
+schreibt eine neue Querverweistabelle, einen neuen Trailer und das
+Dateiende und baut bei Bedarf den Seitenbaum neu auf – mit Seitengröße,
+Schriften und Bildern, die die Seiten vorher über den Seitenbaum geerbt
+haben. Fehlt eine Schrift ganz, wird sie durch eine Standardschrift
+ersetzt; das Ergebnis heißt dann ehrlich „teilweise wiederhergestellt“.
+Jede reparierte Datei wird vor dem Speichern mit zwei Engines geprüft.
+Verschlüsselte Dateien ohne Verschlüsselungsangaben werden nicht
+rekonstruiert – ein Passwortschutz wird nie umgangen.
 
 Digitale Signaturen: Eine Reparatur kann die Gültigkeit von Signaturen
 aufheben. Die App fragt deshalb vorher nach.
@@ -417,8 +510,9 @@ Einstellungen → Apps → Installierte Apps → „PDF Tool“ → Deinstallier
 Entfernt werden Programmdateien, Verknüpfungen und der Eintrag in den
 Windows-Einstellungen. Anschließend fragt die Deinstallation, ob auch Ihre
 gespeicherten Einstellungen gelöscht werden sollen (Standard: Nein) – dazu
-gehören auch die bei der Übernahme erhaltenen Daten des Übersichten-
-Erstellers. Erstellte und reparierte PDF-Dateien bleiben in jedem Fall
+gehören Kundenakten, Vertragsstände, der gespeicherte Stapel und die bei
+der Übernahme erhaltenen Daten des Übersichten-Erstellers. Erstellte und
+reparierte PDF-Dateien und Ihre Excel-Listen bleiben in jedem Fall
 erhalten.
 
 
@@ -426,7 +520,8 @@ Lizenzen
 --------
 PDF Tool nutzt freie Bibliotheken, u. a. Python (PSF), pikepdf (MPL-2.0)
 mit qpdf (Apache-2.0), pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium
-(BSD-3-Clause), ReportLab (BSD), pandas, NumPy, openpyxl, xlrd und Pillow.
+(BSD-3-Clause), pypdf (BSD-3-Clause), ReportLab (BSD), pandas, NumPy,
+openpyxl, xlrd und Pillow.
 Die Übersicht steht im Programmordner in THIRD_PARTY_LICENSES.md, die
 Lizenztexte unter runtime\LICENSE.txt und
 runtime\Lib\site-packages\<Paket>.dist-info. Portions of this software are
@@ -464,6 +559,7 @@ Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypd
 
 GitHub Actions baut das Setup bei jedem Push auf windows-latest
 (.github/workflows/windows-setup.yml), prüft es (auch die Updates vom
-Übersichten-Ersteller 2.2.0 und von PDF Tool 2.3.0 mit Beispieldaten) und
+Übersichten-Ersteller 2.2.0 und von PDF Tool 2.3.0, 2.4.0 und 2.5.0 mit
+Beispieldaten) und
 stellt es als Artefakt bereit; bei einem veröffentlichten Release wird es
 zusätzlich angehängt.

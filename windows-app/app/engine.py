@@ -11,7 +11,7 @@ import errno
 import os
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -262,11 +262,106 @@ def fmt_zahlungsart(v) -> str:
     return ZAHLUNGSART_MAP.get(raw, raw)
 
 
-def vertrag_art(bemerkung) -> str:
+ART_SUPPORT = "Supportvertrag"
+ART_PFLEGE = "Softwarepflegevertrag"
+_ART_MARKUP = {ART_SUPPORT: "Supportvertrag", ART_PFLEGE: "Software-<br/>pflegevertrag"}
+
+
+def vertrag_art_name(bemerkung) -> str:
+    """Vertragsart aus der Bemerkung: Hotline-Zeilen sind Supportverträge."""
     text = "" if pd.isna(bemerkung) else str(bemerkung).lower()
-    if "hotline" in text:
-        return "Supportvertrag"
-    return "Software-<br/>pflegevertrag"
+    return ART_SUPPORT if "hotline" in text else ART_PFLEGE
+
+
+def vertrag_art(bemerkung) -> str:
+    """Vertragsart für die Tabelle der PDF (mit Umbruch im langen Wort)."""
+    return _ART_MARKUP[vertrag_art_name(bemerkung)]
+
+
+@dataclass(frozen=True)
+class Vertragsdaten:
+    """Ein aktiver Vertrag, wie er in der Excel steht (Rohwerte).
+
+    Daraus entstehen die Zeile der PDF (``anzeige``) und der gespeicherte Vertragsstand
+    für den Vertragsvergleich – beide mit denselben Regeln, keine zweite Logik.
+    """
+
+    nummer: str
+    bemerkung: str | None = None
+    beginn: str | None = None  # ISO-Datum JJJJ-MM-TT (leer oder ungültig: None)
+    beginn_roh: str = ""
+    zyklus: str | None = None
+    netto: float | str | None = None
+    zahlungsart: str | None = None
+    zeile: int | None = None  # Excel-Zeile – nur zur Information, nie Identität
+
+    def anzeige(self, regeln=None) -> dict[str, str]:
+        """Die Werte genau so, wie sie in der Vertragsübersicht erscheinen."""
+        _lade_pandas()
+        return {
+            "art": vertrag_art_name(self.bemerkung),
+            "nummer": self.nummer,
+            "beschreibung": clean_bemerkung(self.bemerkung),
+            "beginn": fmt_date(self.beginn),
+            "zyklus": fmt_zyklus(self.zyklus, self.bemerkung, regeln),
+            "netto": fmt_euro(self.netto),
+            "zahlungsart": fmt_zahlungsart(self.zahlungsart),
+        }
+
+
+def _rohtext(value) -> str | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return str(value)
+
+
+def _rohbetrag(value) -> float | str | None:
+    if value is None or isinstance(value, str):
+        return value
+    try:
+        if pd.isna(value):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _iso_datum(value) -> str | None:
+    if value is None:
+        return None
+    stamp = pd.to_datetime(value, errors="coerce")
+    return None if pd.isna(stamp) else stamp.strftime("%Y-%m-%d")
+
+
+def vertragsdaten(df: "pd.DataFrame", col_vertrag: str, col_bemerkung: str = "", col_beginn: str = "", col_zyklus: str = "", col_netto: str = "", col_zahlung: str = "", col_beginn_roh: str = "") -> list[Vertragsdaten]:
+    """Rohwerte je Vertrag in der Reihenfolge von ``df`` (bereits gefiltert und sortiert).
+
+    ``col_beginn`` enthält die als Datum gelesenen Werte (wie für Sortierung und PDF),
+    ``col_beginn_roh`` optional den ursprünglichen Zellinhalt.
+    """
+    liste: list[Vertragsdaten] = []
+    for _, row in df.iterrows():
+        beginn = row[col_beginn] if col_beginn else None
+        roh = row[col_beginn_roh] if col_beginn_roh else beginn
+        quelle = row[SOURCE_ROW] if SOURCE_ROW in row.index else None
+        liste.append(
+            Vertragsdaten(
+                nummer=_zelltext(row[col_vertrag]),
+                bemerkung=_rohtext(row[col_bemerkung]) if col_bemerkung else None,
+                beginn=_iso_datum(beginn),
+                beginn_roh=_rohtext(roh) or "",
+                zyklus=_rohtext(row[col_zyklus]) if col_zyklus else None,
+                netto=_rohbetrag(row[col_netto]) if col_netto else None,
+                zahlungsart=_rohtext(row[col_zahlung]) if col_zahlung else None,
+                zeile=None if quelle is None or pd.isna(quelle) else int(quelle),
+            )
+        )
+    return liste
 
 
 def _schluessel(name) -> str:
@@ -322,6 +417,8 @@ class PdfAuftrag:
     ueberschreiben: bool = True
     # Wird an festen Stellen gefragt; True bricht ab (Abgebrochen), bevor die PDF entsteht
     abbrechen: Callable[[], bool] | None = None
+    # Ergebnis: die Verträge der erstellten PDF (Rohwerte) – Grundlage des Vertragsstands
+    vertraege: tuple = field(default=(), repr=False)
 
 
 DEFAULT_DATEINAME = "Vertragsuebersicht_Kd{kd}.pdf"
@@ -452,12 +549,14 @@ def lies_tabelle(pfad: Path) -> ExcelTabelle:
     DataFrame-Zeile i entspricht damit der Excel-Zeile ``Überschrift + 1 + i``."""
     _lade_pandas()
     pfad = Path(pfad)
-    df = pd.read_excel(pfad)
+    # dtype=object: Werte bleiben, wie sie in der Excel stehen – eine Vertragsnummer »001234«
+    # wird nicht zur Zahl 1234 (pandas würde Spalten sonst nach ihrem Inhalt umwandeln).
+    df = pd.read_excel(pfad, dtype=object)
     kopf = 1
     if not _col(df, *SPALTE_VERTRAG, required=False):
         gefunden = _finde_kopfzeile(pfad)
         if gefunden is not None and gefunden > 0:
-            df = pd.read_excel(pfad, header=gefunden)
+            df = pd.read_excel(pfad, header=gefunden, dtype=object)
             kopf = gefunden + 1
     df[SOURCE_ROW] = range(kopf + 1, kopf + 1 + len(df))
     return ExcelTabelle(pfad, df, kopf)
@@ -515,7 +614,7 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
     Zellen, die übernommen werden) und ``zeilen`` (Vorschau).
     """
     _lade_pandas()
-    leer = {"ok": False, "text": "", "kunden": [], "mails": [], "firmen": [], "zeilen": [], "aktiv": 0, "inaktiv": 0, "fehlend": [], "hinweise": [], "fett": 0}
+    leer = {"ok": False, "text": "", "kunden": [], "mails": [], "firmen": [], "zeilen": [], "vertraege": [], "aktiv": 0, "inaktiv": 0, "fehlend": [], "hinweise": [], "fett": 0}
     pfad = Path(pfad)
     if not pfad.is_file():
         return {**leer, "text": "Datei nicht gefunden."}
@@ -553,18 +652,11 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
         stile = excel_stile(tabelle, daten, [col_vertrag, col_bem, col_beginn, col_zyk, col_netto, col_zahlung], col_vertrag)
         spalten = [tabelle.excel_spalte(name) for name in (col_vertrag, col_bem, col_beginn, col_zyk, col_netto, col_zahlung) if name]
         fett = sum(1 for row in daten[SOURCE_ROW].tolist() for col in spalten if stile.bold(row, col))
+    vertraege = vertragsdaten(daten, col_vertrag, col_bem, "_sort" if col_beginn else "", col_zyk, col_netto, col_zahlung, col_beginn)
     zeilen = []
-    for _, row in daten.iterrows():
-        bem = row[col_bem] if col_bem else ""
-        zyk = row[col_zyk] if col_zyk else ""
-        zeilen.append(
-            {
-                "nr": _zelltext(row[col_vertrag]),
-                "text": clean_bemerkung(bem),
-                "zyklus": fmt_zyklus(zyk, bem, regeln),
-                "netto": fmt_euro(row[col_netto]) if col_netto else "–",
-            }
-        )
+    for vertrag in vertraege:
+        werte = vertrag.anzeige(regeln)
+        zeilen.append({"nr": vertrag.nummer, "text": werte["beschreibung"], "zyklus": werte["zyklus"], "netto": werte["netto"] if col_netto else "–"})
     if anzahl == 0:
         text = "Keine aktiven Verträge"
     elif anzahl == 1:
@@ -592,6 +684,7 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
         "mails": mails,
         "firmen": firmen,
         "zeilen": zeilen,
+        "vertraege": vertraege,
         "aktiv": anzahl,
         "inaktiv": int(ausgeblendet),
         "fehlend": fehlend,
@@ -692,8 +785,10 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     df, _ausgeblendet = nur_aktive(df)
     if df.empty:
         raise ValueError("Die Excel enthält keine aktiven Verträge.")
+    df["_beginn_roh"] = df[col_beginn]
     df[col_beginn] = pd.to_datetime(df[col_beginn], errors="coerce")
     df = df.sort_values(col_beginn, kind="stable").reset_index(drop=True)
+    vertraege = vertragsdaten(df, col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung, "_beginn_roh")
 
     _pruefe_abbruch(auftrag)
     _status(auftrag, "Formatierung wird gelesen …")
@@ -879,25 +974,25 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
             Paragraph("<b>Zahlungsart</b>", cell_style_bold),
         ]
         table_data = [header]
-        for _, row in df.iterrows():
-            quelle = row[SOURCE_ROW]
+        for vertrag in vertraege:
+            quelle = vertrag.zeile
 
             def zelle(markup: str, spalte: str) -> object:
                 # Zellweise: fett nur, wenn genau diese Excel-Zelle fett ist.
                 fett = stile.bold(quelle, excel_spalte.get(spalte))
                 return Paragraph(markup, cell_style_strong if fett else cell_style)
 
-            bemerkung = row[col_bemerkung]
+            werte = vertrag.anzeige(zyklus_regeln)
             table_data.append(
                 [
                     # Art wird aus der Bemerkung abgeleitet und übernimmt deren Formatierung.
-                    zelle(vertrag_art(bemerkung), col_bemerkung),
-                    zelle(escape_markup(_zelltext(row[col_vertrag])), col_vertrag),
-                    zelle(escape_markup(clean_bemerkung(bemerkung)), col_bemerkung),
-                    zelle(fmt_date(row[col_beginn]), col_beginn),
-                    zelle(escape_markup(fmt_zyklus(row[col_zyklus], bemerkung, zyklus_regeln)), col_zyklus),
-                    zelle(escape_markup(fmt_euro(row[col_netto])), col_netto),
-                    zelle(escape_markup(fmt_zahlungsart(row[col_zahlung])), col_zahlung),
+                    zelle(_ART_MARKUP[werte["art"]], col_bemerkung),
+                    zelle(escape_markup(werte["nummer"]), col_vertrag),
+                    zelle(escape_markup(werte["beschreibung"]), col_bemerkung),
+                    zelle(werte["beginn"], col_beginn),
+                    zelle(escape_markup(werte["zyklus"]), col_zyklus),
+                    zelle(escape_markup(werte["netto"]), col_netto),
+                    zelle(escape_markup(werte["zahlungsart"]), col_zahlung),
                 ]
             )
 
@@ -954,6 +1049,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         doc.build(story, onFirstPage=_seite, onLaterPages=_seite, canvasmaker=_NummernCanvas)
         _pruefe_abbruch(auftrag)
         _veroeffentlichen(temp_pdf, ausgabe_pdf, auftrag.ueberschreiben)
+        auftrag.vertraege = tuple(vertraege)
     finally:
         if os.path.exists(logo_path):
             os.remove(logo_path)

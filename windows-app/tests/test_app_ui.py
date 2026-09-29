@@ -18,7 +18,7 @@ def test_start_and_version(app) -> None:
     import appstate
 
     assert app.title() == appstate.APP_NAME == "PDF Tool"
-    assert app.version == appstate.VERSION == "2.5.0"
+    assert app.version == appstate.VERSION == "2.6.0"
     assert app.nav.current == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert app.ui.btn_pdf.text() == "PDF erstellen"
 

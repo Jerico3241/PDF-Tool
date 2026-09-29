@@ -28,7 +28,7 @@ from ui.theme import px
 from ui.widgets import Button, Card, Collapsible, Divider, FlowRow, Icon, IconButton, InfoBar, RadioGroup, Text, frame
 
 from . import process
-from .models import STAGES, Condition, PdfAnalysis, PdfRepairResult, RepairMode, RepairStatus
+from .models import STAGES, Condition, Method, PdfAnalysis, PdfRepairResult, RepairMode, RepairStatus
 
 if TYPE_CHECKING:
     from vertragdesk import App
@@ -43,7 +43,7 @@ OUT_ORIGINAL = "original"
 OUT_FOLDER = "ordner"
 HELP_STEPS = (
     "Eine PDF wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort analysiert.",
-    "Die Analyse lesen: Keine Fehler, reparierbare Probleme oder schwer beschädigt.",
+    "Die Analyse lesen: Keine Fehler, reparierbare Probleme, schwer beschädigt oder erweiterte Wiederherstellung möglich.",
     "Verschlüsselte PDFs erst mit dem richtigen Passwort entsperren.",
     "Auf »PDF reparieren« klicken oder Strg+Enter drücken. Ein laufender Vorgang lässt sich abbrechen.",
     "Das Ergebnis öffnen, den Ordner anzeigen oder den Pfad kopieren.",
@@ -51,6 +51,7 @@ HELP_STEPS = (
 HELP_NOTES = (
     "Die Originaldatei wird nie verändert. Die reparierte Datei heißt »<Name>_repariert.pdf« (bei Bedarf »_2«, »_3« …).",
     "Nicht jede Datei lässt sich vollständig wiederherstellen; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
+    "Öffnet keine PDF-Engine die Datei, sucht PDF Tool die noch vorhandenen PDF-Objekte direkt in der Datei und baut Querverweise, Trailer und Seitenbaum neu auf (»PDF-Struktur rekonstruieren«).",
     "Der Rettungsmodus überträgt lesbare Seiten als Bilder – nur nach Bestätigung, weil Text- und Vektorinformationen verloren gehen.",
     "Passwörter werden nicht gespeichert. Technische Details stehen im Protokoll pdf-repair.log im Datenordner.",
 )
@@ -59,10 +60,16 @@ CONDITION_TEXT = {
     Condition.HEALTHY: ("success", "Keine Fehler gefunden", "Die PDF scheint strukturell in Ordnung zu sein. Eine Reparatur ist nicht nötig."),
     Condition.REPAIRABLE: ("warning", "Reparierbare Probleme erkannt", "PDF Tool hat beschädigte Strukturen gefunden, die möglicherweise repariert werden können."),
     Condition.DAMAGED: ("warning", "Schwer beschädigt", "Teile der PDF können nicht gelesen werden. PDF Tool versucht, so viele Seiten und Inhalte wie möglich wiederherzustellen."),
+    Condition.RAW_RECOVERABLE: (
+        "warning",
+        "Erweiterte Wiederherstellung möglich",
+        "Die Standard-PDF-Engines können die Datei nicht öffnen. Es wurden jedoch noch PDF-Objekte gefunden. PDF Tool versucht, die noch vorhandenen Inhalte wiederherzustellen.",
+    ),
     Condition.UNREADABLE: ("error", "Keine Reparatur möglich", "Die Datei lässt sich mit keiner der eingebauten Engines lesen."),
     Condition.ENCRYPTED: ("info", "Die PDF ist verschlüsselt", "Zum Öffnen wird ein Passwort benötigt."),
 }
 STATUS_TONE = {"success": "success", "warning": "caution", "error": "critical", "info": "", "neutral": ""}
+REBUILD_METHODS = (Method.RAW_REBUILD, Method.PAGE_TREE_REBUILD)
 
 
 def size_text(size: int | None) -> str:
@@ -342,16 +349,24 @@ class RepairTool:
         self.app.notify("repair_info", "error", message, title="Vorgang fehlgeschlagen")
 
     # Ergebnisse -------------------------------------------------------------------------------
+    @staticmethod
+    def condition_text(analysis: PdfAnalysis) -> tuple[str, str, str]:
+        """(Schweregrad, Titel, Meldung) für den Zustand einer Analyse."""
+        severity, title, message = CONDITION_TEXT[analysis.condition]
+        if analysis.condition is Condition.ENCRYPTED and analysis.password_rejected:
+            severity, message = "error", "Das Passwort ist falsch. Bitte erneut eingeben."
+        elif analysis.condition is Condition.UNREADABLE and analysis.error:
+            message = f"{analysis.error} {message}"
+        elif analysis.condition is Condition.RAW_RECOVERABLE and analysis.raw is not None and analysis.raw.streams:
+            message = message.replace("noch PDF-Objekte gefunden", "noch PDF-Objekte und Datenströme gefunden")
+        return severity, title, message
+
     def _analysis_done(self, analysis: PdfAnalysis) -> None:
         self.analysis = analysis
         name = Path(analysis.path).name
         self.log.write([f"Analyse {name} ({size_text(analysis.size)}): {analysis.condition.value}, Engine {analysis.engine}"] + [f"  {line}" for line in analysis.technical[:80]])
         self._render_analysis()
-        severity, title, message = CONDITION_TEXT[analysis.condition]
-        if analysis.condition is Condition.ENCRYPTED and analysis.password_rejected:
-            severity, message = "error", "Das Passwort ist falsch. Bitte erneut eingeben."
-        if analysis.error and analysis.condition is Condition.UNREADABLE:
-            message = f"{analysis.error} {message}" if not message.startswith(analysis.error) else message
+        severity, title, _message = self.condition_text(analysis)
         self.app.set_status(f"{title}: {name}", {"success": "success", "warning": "warning", "error": "error"}.get(severity, "info"))
         self.app.hide_notice("repair_info")
         if analysis.condition is Condition.ENCRYPTED:
@@ -472,17 +487,17 @@ class RepairTool:
         analysis = self.analysis
         if analysis is None or not hasattr(ui, "analysis_facts"):
             return
-        severity, title, message = CONDITION_TEXT[analysis.condition]
-        if analysis.condition is Condition.ENCRYPTED and analysis.password_rejected:
-            severity, message = "error", "Das Passwort ist falsch. Bitte erneut eingeben."
-        if analysis.condition is Condition.UNREADABLE and analysis.error:
-            message = f"{analysis.error} {message}"
+        severity, title, message = self.condition_text(analysis)
         facts = [("Größe", size_text(analysis.size), "")]
         if analysis.page_count or analysis.pages_expected:
             pages = analysis.page_count or analysis.pages_expected
             text = f"{pages}"
             if analysis.readable_pages is not None and analysis.readable_pages < pages:
                 text += f" (davon {analysis.readable_pages} vollständig lesbar)"
+            elif analysis.page_count and analysis.pages_expected and analysis.pages_expected > analysis.page_count:
+                text = f"{analysis.page_count} lesbar, {analysis.pages_expected} gefunden"
+            elif not analysis.page_count:
+                text = f"{pages} gefunden"
             facts.append(("Seiten", text, ""))
         if analysis.pdf_version:
             facts.append(("PDF-Version", analysis.pdf_version, ""))
@@ -505,8 +520,12 @@ class RepairTool:
         details.append(("Engine", analysis.engine, "muted"))
         ui.details_facts.set(details)
         # Schaltfläche passend zum Zustand
-        healthy = analysis.condition is Condition.HEALTHY
-        ui.btn_repair.set_text("Trotzdem neu aufbauen" if healthy else "PDF reparieren")
+        if analysis.condition is Condition.HEALTHY:
+            ui.btn_repair.set_text("Trotzdem neu aufbauen")
+        elif analysis.condition is Condition.RAW_RECOVERABLE:
+            ui.btn_repair.set_text("PDF-Struktur rekonstruieren")
+        else:
+            ui.btn_repair.set_text("PDF reparieren")
         ui.btn_repair.set_enabled(self._can_repair() and not self.busy)
         if analysis.condition is Condition.UNREADABLE and analysis.rasterizable_pages:
             ui.analysis_info.show(severity, message, title, actions=(("Lesbare Seiten retten", lambda: self.start_repair(RepairMode.RASTER)),), animate=False)
@@ -521,8 +540,12 @@ class RepairTool:
             return
         status = result.status
         if status is RepairStatus.REPAIRED and self.output is not None:
-            rebuilt = self.analysis is not None and self.analysis.condition is Condition.HEALTHY
-            ui.result_info.show("success", "Die reparierte Datei wurde geprüft und gespeichert." if not rebuilt else "Die PDF wurde neu aufgebaut, geprüft und gespeichert.", "PDF wurde repariert." if not rebuilt else "PDF wurde neu aufgebaut.", animate=False)
+            if self.analysis is not None and self.analysis.condition is Condition.HEALTHY:
+                ui.result_info.show("success", "Die PDF wurde neu aufgebaut, geprüft und gespeichert.", "PDF wurde neu aufgebaut.", animate=False)
+            elif result.method in REBUILD_METHODS:
+                ui.result_info.show("success", "Die Dokumentstruktur wurde aus den noch vorhandenen PDF-Objekten neu aufgebaut, geprüft und gespeichert.", "PDF-Struktur wurde rekonstruiert.", animate=False)
+            else:
+                ui.result_info.show("success", "Die reparierte Datei wurde geprüft und gespeichert.", "PDF wurde repariert.", animate=False)
         elif status is RepairStatus.PARTIALLY_RECOVERED and self.output is not None:
             first = result.warnings[0] if result.warnings else "Nicht alle Inhalte konnten wiederhergestellt werden."
             ui.result_info.show("warning", first, "PDF teilweise wiederhergestellt", animate=False)

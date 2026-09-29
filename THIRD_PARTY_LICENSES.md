@@ -26,6 +26,7 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | pypdfium2 | 5.13.0 | Apache-2.0 oder BSD-3-Clause | PDF reparieren (zweite Engine, Rettungsmodus) | https://github.com/pypdfium2-team/pypdfium2 |
 | ↳ PDFium (in pypdfium2 enthalten) | 153.0.7999.0 | BSD-3-Clause | PDF-Engine 2 | https://pdfium.googlesource.com/pdfium |
 | ↳ Bibliotheken von PDFium | – | Apache-2.0 (abseil, llvm-libc mit LLVM-Exception), FTL (FreeType), Unicode-3.0 (ICU), MIT (lcms, simdutf), BSD (agg, OpenJPEG, libjpeg-turbo), libpng, libtiff, Zlib, MIT/Apache-2.0 (fast_float) | Schriften, Bilder, Farbprofile | https://github.com/bblanchon/pdfium-binaries |
+| pypdf | 6.19.0 | BSD-3-Clause | PDF reparieren (dritte, tolerante Engine der erweiterten Wiederherstellung) | https://github.com/py-pdf/pypdf |
 | packaging | 26.3 | Apache-2.0 oder BSD-2-Clause | von pikepdf benötigt | https://github.com/pypa/packaging |
 | pandas | 2.3.3 | BSD-3-Clause | Vertragsübersichten (Excel lesen) | https://pandas.pydata.org |
 | NumPy | 2.5.3 | BSD-3-Clause (enthält OpenBLAS: BSD-3-Clause, LAPACK: BSD, GCC-Laufzeit: GPL-3.0 mit GCC Runtime Library Exception 3.1) | von pandas benötigt | https://numpy.org |
@@ -42,7 +43,22 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 
 Nicht mitgeliefert: lxml (von pikepdf nur für XMP-Metadaten benötigt – PDF Tool schreibt
 Metadaten unverändert und braucht es nicht), qpdf- oder Ghostscript-Programme, Kommandozeilen-
-werkzeuge.
+werkzeuge. pypdf wird ohne optionale Zusatzpakete (cryptography, PyCryptodome, fontTools)
+ausgeliefert; Verschlüsselung übernimmt weiterhin qpdf.
+
+## Geprüfte, aber nicht verwendete Engines (erweiterte PDF-Wiederherstellung, 2.6.0)
+
+Für die dritte, tolerante Engine wurden Lizenz und Eignung geprüft:
+
+| Kandidat | Lizenz | Entscheidung |
+| --- | --- | --- |
+| **pypdf** | BSD-3-Clause | **verwendet** – freizügig, reines Python ohne Abhängigkeiten, eigene tolerante Leseregeln (`strict=False`) |
+| PyMuPDF / MuPDF | AGPL-3.0 (oder kommerzielle Lizenz von Artifex) | abgelehnt – die AGPL würde die Offenlegung von PDF Tool unter AGPL verlangen |
+| Ghostscript | AGPL-3.0 (oder kommerzielle Lizenz von Artifex) | abgelehnt – gleiche Lizenzfolgen, zudem ein externes Programm |
+| pdf.js | Apache-2.0 | nicht geeignet – braucht eine JavaScript-Laufzeit |
+
+Die Rohrekonstruktion (Objekte suchen, Querverweise, Trailer und Seitenbaum neu aufbauen) ist
+eigener Code von PDF Tool; das Ergebnis wird mit qpdf (pikepdf) normalisiert und geprüft.
 
 ## Hinweise zu einzelnen Lizenzen
 

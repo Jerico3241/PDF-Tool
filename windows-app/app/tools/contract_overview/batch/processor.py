@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..customers.matching import normalize_email
+from ..history.models import records_from
 from ..overview import ExcelAnalysis
 from .analyzer import analyze_file
 from .models import CREATED, ConflictMode, FileStamp, ItemStatus, RunSummary, path_key
@@ -60,6 +61,8 @@ class JobResult:
     analysis: ExcelAnalysis | None = None
     stamp: FileStamp | None = None
     duration: float = 0.0
+    # Verträge der erstellten PDF (history.ContractRecord) – Grundlage des Vertragsstands
+    contracts: tuple = ()
 
 
 def identity_of(analysis: ExcelAnalysis | None) -> tuple:
@@ -160,8 +163,9 @@ def run_job(job: Job, cancelled: Callable[[], bool], analyze: Callable = analyze
         notes += conflict_notes
         for attempt in range(3):
             try:
+                auftrag = PdfAuftrag(**job.fields, zielordner=Path(job.folder), ausgabe=target, ueberschreiben=overwrite, abbrechen=cancelled)
                 with RENDER_LOCK:  # nie parallel zu Vorschau oder Einzel-PDF
-                    path = erstelle_pdf(PdfAuftrag(**job.fields, zielordner=Path(job.folder), ausgabe=target, ueberschreiben=overwrite, abbrechen=cancelled))
+                    path = erstelle_pdf(auftrag)
                 break
             except FileExistsError:
                 # Inzwischen von außen angelegt: nächsten freien Namen nehmen (nie ersetzen)
@@ -170,7 +174,8 @@ def run_job(job: Job, cancelled: Callable[[], bool], analyze: Callable = analyze
                 target = unique_path(planned, job.created)
                 notes = [note for note in notes if not note.startswith(f"»{planned.name}«")]
                 notes.append(f"»{planned.name}« gab es schon – gespeichert als »{target.name}«.")
-        return result(ItemStatus.WARNING if notes else ItemStatus.SUCCESS, output=str(path), notes=tuple(notes))
+        contracts = records_from(auftrag.vertraege, job.fields.get("regeln"))
+        return result(ItemStatus.WARNING if notes else ItemStatus.SUCCESS, output=str(path), notes=tuple(notes), contracts=contracts)
     except Abgebrochen:
         return result(ItemStatus.READY, cancelled=True)
     except Exception as exc:  # noqa: BLE001 - jeder Fehler bleibt bei diesem Eintrag
