@@ -2,7 +2,8 @@ name: Windows-Setup
 
 # Normaler Lauf (Push, Pull Request, Release):
 #   1. Tests – Kernlogik, Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.6.1),
-#      PDF reparieren, Qt-Oberfläche
+#      PDF reparieren; die Qt-Oberflächentests laufen gleichzeitig in drei eigenen Jobs
+#      (je ein eigener Rechner – keine gegenseitige Last, gleiche Bedingungen wie bisher)
 #   2. Setup bauen
 #   3. Clean-Install-Test der neuen Version
 #   4. Upgrade-Test: unmittelbar vorherige stabile Version → neue Version (nach SemVer ermittelt,
@@ -46,12 +47,78 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  qt-tests:
+    name: "1. Qt-Tests (${{ matrix.gruppe }})"
+    runs-on: windows-latest
+    timeout-minutes: 30 # je Gruppe normal 6–8 Minuten; ein hängender Test bricht früh ab
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gruppe: Start, Navigation, Einstellungen, Verlauf, optionale Kundenakte
+            dateien: resources bridge shell history optional
+          - gruppe: Vertragsübersichten, Kopf- und Fußzeile, PDF reparieren
+            dateien: contracts richtext repair
+          - gruppe: Kundenakte, Stapel
+            dateien: customers batch
+    env:
+      DATEIEN: ${{ matrix.dateien }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: x64
+
+      - name: Testpakete
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+
+      - name: Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, Abläufe)
+        timeout-minutes: 25
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          # Jede Testdatei in einem eigenen Prozess: jede meldet ihre Fehler vollständig, und ein
+          # Absturz zeigt den laufenden Test (-v) – alle Dateien laufen, auch nach einem Fehler.
+          $failed = @()
+          foreach ($name in $env:DATEIEN -split '\s+') {
+            python -m pytest "windows-app/tests/test_qt_$name.py" -v -rfE -p no:cacheprovider
+            if ($LASTEXITCODE -ne 0) { $failed += $name }
+          }
+          "QT_FEHLGESCHLAGEN=$($failed -join ' ')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($failed.Count -gt 0) { throw "Qt-Tests fehlgeschlagen: $(($failed | ForEach-Object { "test_qt_$_.py" }) -join ', ')" }
+
+      - name: Absturzanalyse der Qt-Tests (nur nach einem Fehler – nativer Aufrufstapel mit cdb)
+        if: failure()
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QSG_INFO: "1" # Grafik-API und Render-Schleife ausgeben
+          PDFTOOL_QML_DEBUG: "1" # alle Qt-Meldungen ausgeben
+        run: |
+          $cdb = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Debuggers\x64\cdb.exe"
+          if (-not (Test-Path $cdb)) { Write-Host "cdb.exe nicht vorhanden – keine Absturzanalyse"; exit 0 }
+          $script = Join-Path $env:RUNNER_TEMP "absturz.cdb"
+          @(
+            '.symfix+ C:\symbols',
+            'sxe -c ".echo === Zugriffsverletzung (erste Chance) ===; kn 40; g" -c2 ".echo === Zugriffsverletzung (unbehandelt) ===; .ecxr; kn 80; q" av',
+            'g'
+          ) | Set-Content -Path $script -Encoding ascii
+          # fehlgeschlagene Dateien; brach der Testschritt ab (z. B. Zeitlimit), alle Dateien der Gruppe
+          $names = if ("$env:QT_FEHLGESCHLAGEN".Trim()) { $env:QT_FEHLGESCHLAGEN } else { $env:DATEIEN }
+          foreach ($name in $names -split '\s+' | Where-Object { $_ }) {
+            Write-Host "=== test_qt_$name.py unter cdb ==="
+            & $cdb -G -lines -cf $script python -m pytest "windows-app/tests/test_qt_$name.py" -x -v -s -p no:cacheprovider -p no:faulthandler
+          }
+          exit 0
+
   setup:
     name: Setup bauen und prüfen (Inno Setup)
     runs-on: windows-latest
-    timeout-minutes: 60 # normal etwa 20 Minuten
-    permissions:
-      contents: write # nur für das Anhängen an ein Release
+    timeout-minutes: 40 # normal etwa 7 Minuten
     steps:
       - uses: actions/checkout@v4
 
@@ -73,44 +140,6 @@ jobs:
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py -q -p no:cacheprovider
-
-      - name: 1. Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, alle Abläufe)
-        timeout-minutes: 40 # ein hängender Test bricht so früh ab
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          # Jede Testdatei in einem eigenen Prozess: jede meldet ihre Fehler vollständig, und ein
-          # Absturz zeigt den laufenden Test (-v) – alle Dateien laufen, auch nach einem Fehler.
-          $failed = @()
-          foreach ($name in "resources", "bridge", "shell", "contracts", "richtext", "customers", "batch", "repair", "history", "optional") {
-            python -m pytest "windows-app/tests/test_qt_$name.py" -v -rfE -p no:cacheprovider
-            if ($LASTEXITCODE -ne 0) { $failed += "test_qt_$name.py" }
-          }
-          if ($failed.Count -gt 0) { throw "Qt-Tests fehlgeschlagen: $($failed -join ', ')" }
-
-      - name: Absturzanalyse der Qt-Tests (nur nach einem Fehler – nativer Aufrufstapel mit cdb)
-        if: failure()
-        timeout-minutes: 20
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QSG_INFO: "1" # Grafik-API und Render-Schleife ausgeben
-          PDFTOOL_QML_DEBUG: "1" # alle Qt-Meldungen ausgeben
-        run: |
-          $cdb = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Debuggers\x64\cdb.exe"
-          if (-not (Test-Path $cdb)) { Write-Host "cdb.exe nicht vorhanden – keine Absturzanalyse"; exit 0 }
-          $script = Join-Path $env:RUNNER_TEMP "absturz.cdb"
-          @(
-            '.symfix+ C:\symbols',
-            'sxe -c ".echo === Zugriffsverletzung (erste Chance) ===; kn 40; g" -c2 ".echo === Zugriffsverletzung (unbehandelt) ===; .ecxr; kn 80; q" av',
-            'g'
-          ) | Set-Content -Path $script -Encoding ascii
-          foreach ($name in "customers", "history") {
-            Write-Host "=== test_qt_$name.py unter cdb ==="
-            & $cdb -G -lines -cf $script python -m pytest "windows-app/tests/test_qt_$name.py" -x -v -s -p no:cacheprovider -p no:faulthandler
-          }
-          exit 0
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -212,16 +241,29 @@ jobs:
             windows-app/dist/*.sha256
           if-no-files-found: error
 
-      - name: An Release anhängen
-        if: github.event_name == 'release'
-        shell: pwsh
+  attach:
+    name: An Release anhängen
+    needs: [qt-tests, setup]
+    # ein auf GitHub veröffentlichtes Release erhält das Setup erst, wenn alle Tests bestanden sind
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PDF-Tool-Setup
+          path: dist
+
+      - name: Setup und Prüfsumme anhängen
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" (Get-ChildItem windows-app/dist/*.exe, windows-app/dist/*.sha256) --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.exe dist/*.sha256 --clobber --repo "${{ github.repository }}"
 
   release:
     name: 7. Release veröffentlichen
-    needs: setup
+    needs: [qt-tests, setup]
     # nur manuell auf main und nur, wenn alle Tests, der Build und die Setup-Prüfungen bestanden sind
     if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

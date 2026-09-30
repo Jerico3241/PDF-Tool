@@ -142,7 +142,8 @@ fertigen Bild → weitere Seiten laden.
 
 ## CI
 
-- **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Push/PR/Release): Tests → Setup bauen →
+- **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Push/PR/Release): Tests (die Qt-Tests in
+  drei gleichzeitig laufenden Jobs auf eigenen Rechnern; Release und Anhängen erst nach allen Jobs) → Setup bauen →
   Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen stabilen Version
   (`windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test

@@ -423,10 +423,10 @@ früheren Tk-Oberfläche.
 Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) baut das Setup auf
 `windows-latest` in dieser Reihenfolge:
 
-1. **Tests:** Kernlogik, Qt-Oberfläche (ohne Bildschirm) und die **Datenmigration älterer
-   Einstellungen** – `tests/test_config_migration.py` lädt Fixtures im Format von 2.2.0, 2.3.0, 2.4.0,
-   2.5.0, 2.6.0 und 2.6.1 (Einstellungen, Kundenakten, Vertragsstand) in die aktuelle Version. Dafür
-   wird kein altes Setup installiert.
+1. **Tests:** Kernlogik, Qt-Oberfläche (ohne Bildschirm; in drei gleichzeitig laufenden Jobs auf
+   eigenen Rechnern) und die **Datenmigration älterer Einstellungen** – `tests/test_config_migration.py`
+   lädt Fixtures im Format von 2.2.0, 2.3.0, 2.4.0, 2.5.0, 2.6.0 und 2.6.1 (Einstellungen, Kundenakten,
+   Vertragsstand) in die aktuelle Version. Dafür wird kein altes Setup installiert.
 2. **Setup bauen.**
 3. **Clean-Install-Test** der neuen Version: stille Installation, Prüfung, Programmstart, stille
    Deinstallation.
