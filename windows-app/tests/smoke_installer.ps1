@@ -4,9 +4,11 @@
 #      Fusszeile, Vorlagen, Textbausteinen und Regeln), PDF Tool 2.4.0 (Kundenakten mit
 #      formatierter Fusszeile und Vorlage, formatierte Kopfzeile, Einstellungen von "PDF reparieren"),
 #      PDF Tool 2.5.0 (wie 2.4.0, dazu Stapel-Einstellungen und ein gespeicherter Vertragsstand)
-#      oder PDF Tool 2.6.0 (wie 2.5.0, dazu eine aktive Kundenakte)
+#      oder PDF Tool 2.6.0/2.6.1 (wie 2.5.0, dazu eine aktive Kundenakte und die Fensterlage der
+#      Tk-Oberflaeche, die seit 2.7.0 nur noch gelesen wird)
 #   1. still installieren (bzw. aktualisieren) und Installation pruefen:
-#      Ordner, Verknuepfungen, genau ein Eintrag unter "Installierte Apps"
+#      Ordner, Verknuepfungen, genau ein Eintrag unter "Installierte Apps"; Qt-Oberflaeche
+#      (PySide6, QML als Ressource), keine Reste der Tk-Oberflaeche (tkinter, Tcl/Tk, lose QML)
 #   2. nur mit -Previous: 2.2.0 – alter Programmordner und alte Verknuepfungen entfernt,
 #      Benutzerdaten mit Sicherung nach %APPDATA%\PDF-Tool uebernommen, alte Daten unveraendert;
 #      2.3.0/2.4.0/2.5.0/2.6.0 – das Setup laesst die Benutzerdaten unangetastet
@@ -29,6 +31,7 @@
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.4.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.5.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.6.0.exe
+#   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.6.1.exe
 #
 # Der Update-Test (-Previous) braucht einen Rechner ohne vorhandene Installation und ohne
 # Benutzerdaten der App. Ordner, die das Skript selbst angelegt hat, entfernt es am Ende wieder.
@@ -99,8 +102,8 @@ if ($Previous) {
         # gespeicherter Vertragsstand (Benutzerdaten von 2.6 – ein Update darf ihn nie loeschen).
         # Von 2.6.0 zusaetzlich: eine aktive Kundenakte.
         New-Item -ItemType Directory -Path $data -Force | Out-Null
-        $seen = if ($previousKind -eq "2.6") { "2.6.0" } else { "2.5.0" }
-        $active = if ($previousKind -eq "2.6") { ', "kunde_aktiv": "6f1c1d2e-0000-4000-8000-000000000024"' } else { "" }
+        $seen = if ($previousKind -eq "2.6") { $oldEntry.DisplayVersion } else { "2.5.0" }
+        $active = if ($previousKind -eq "2.6") { ', "kunde_aktiv": "6f1c1d2e-0000-4000-8000-000000000024", "fenster": {"w": 1200, "h": 800, "x": 40, "y": 30, "max": false}' } else { "" }
         $json = '{"gesehen": "' + $seen + '", "theme": "dark", "vorlagen": [{"name": "Quer", "format": "quer", "titel": "Vertragsübersicht"}], "bausteine": [{"name": "Gruß", "text": "Mit freundlichen Grüßen"}], "regeln": [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}, {"enthaelt": "Cloud", "zyklus": "monatlich"}], "kopfzeile": "Kopf fett", "kopfzeile_format": {"version": 1, "text": "Kopf fett", "spans": [{"start": 0, "end": 9, "font": "Helvetica", "size": 10, "color": "#B51F1F", "bold": true, "italic": false, "underline": false, "strike": false}], "paragraphs": [{"start": 0, "end": 9, "alignment": "left"}]}, "reparatur_ausgabe": "ordner", "reparatur_ordner": "C:\\Reparatur", "ordner_reparatur": "C:\\Quelle", "kunden_sortierung": "company", "kunden_auto_uebernehmen": false, "stapel_zielordner": "C:\\Stapel", "stapel_vorlage": "Quer", "stapel_logo": "", "stapel_unterordner": true, "stapel_kunden_zielordner": false, "stapel_konflikt": "skip"' + $active + '}'
         $seedFile = Join-Path $data "gui-config.json"
         [IO.File]::WriteAllText($seedFile, $json, (New-Object Text.UTF8Encoding $false))
@@ -148,8 +151,12 @@ if ($Previous) {
 
 Write-Host "1. Stille Installation: $Setup"
 $log = Install $Setup "installation"
-foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\vertragdesk.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\ui\richtext.py", "app\ui\pages\home.py", "app\tools\registry.py", "app\tools\contract_overview\controller.py", "app\tools\contract_overview\history_flow.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\page.py", "app\tools\pdf_repair\recovery\rebuild.py", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
+foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
     if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
+}
+# Seit 2.7.0 ohne Tk-Oberflaeche: auch bei einem Update bleiben keine alten Programmteile zurueck
+foreach ($file in "app\vertragdesk.py", "app\ui", "app\qml", "runtime\tcl", "runtime\DLLs\_tkinter.pyd", "runtime\DLLs\tk86t.dll", "runtime\Lib\tkinter", "runtime\Lib\site-packages\PySide6\opengl32sw.dll", "runtime\Lib\site-packages\PySide6\designer.exe") {
+    if (Test-Path (Join-Path $target $file)) { throw "Nach der Installation noch vorhanden: $file" }
 }
 if (-not (Get-ChildItem (Join-Path $target "runtime\Lib\site-packages\pikepdf.libs") -Filter "qpdf*.dll")) { throw "qpdf-Bibliothek fehlt" }
 if (-not (Test-Path $shortcut)) { throw "Startmenue-Verknuepfung fehlt: $shortcut" }
@@ -282,6 +289,7 @@ if ($Previous -and ($previousKind -eq "2.5" -or $previousKind -eq "2.6")) {
     if ($cfg.reparatur_ausgabe -ne "ordner" -or $cfg.reparatur_ordner -ne "C:\Reparatur" -or $cfg.ordner_reparatur -ne "C:\Quelle") { throw "Einstellungen von 'PDF reparieren' gingen verloren" }
     if ($cfg.stapel_zielordner -ne "C:\Stapel" -or $cfg.stapel_vorlage -ne "Quer" -or $cfg.stapel_unterordner -ne $true -or $cfg.stapel_kunden_zielordner -ne $false -or $cfg.stapel_konflikt -ne "skip") { throw "Stapel-Einstellungen gingen verloren" }
     if ($cfg.kunden_sortierung -ne "company") { throw "Sortierung der Kundenliste ging verloren" }
+    if ($previousKind -eq "2.6" -and ($cfg.fenster.w -ne 1200 -or $cfg.fenster.h -ne 800)) { throw "Fensterlage der Vorversion wurde veraendert" }
     # Kundenakte zunaechst aus (Opt-in) – die Kundenakten bleiben unveraendert und lesbar
     if ($cfg.kundenakte_verwenden -eq $true) { throw "Kundenakte nach dem Update eingeschaltet" }
     $akten = & (Join-Path $target "runtime\python.exe") -s -c "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import appstate; from tools.contract_overview.customers.repository import CustomerStore; store = CustomerStore.load(pathlib.Path(appstate.CONFIG_FILE).parent / 'kundenakten.json'); print(len(store), store.get(sys.argv[2]).company)" (Join-Path $target "app") "6f1c1d2e-0000-4000-8000-000000000024"

@@ -1,11 +1,12 @@
 # PDF Tool
 
-Quellcode von **PDF Tool 2.6.1** – einer Windows-App mit Werkzeugen für PDF-Dateien.
+Quellcode von **PDF Tool 2.7.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
 Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Das Repository enthält:
 
-- die Windows-App (Python/Tkinter, Fluent-Oberfläche für Windows 10 und 11) unter `windows-app/app/`
+- die Windows-App für Windows 10 und 11 unter `windows-app/app/` – Oberfläche **PySide6 + Qt Quick/QML**
+  (seit 2.7.0), Fachlogik in **Python**
 - das Inno-Setup-Skript für den Windows-Installer unter `windows-app/installer/PDF-Tool.iss`
 - das Build-Skript `windows-app/build.py`
 - die Web-/Downloadseite auf Basis von React, TanStack Start und Vite
@@ -18,13 +19,15 @@ werden: eine PDF öffnet „PDF reparieren“, eine Excel-Liste „Vertragsüber
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
-| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | `app/tools/contract_overview/` (Ablauf, Seiten, `overview.py` als gemeinsame Fachlogik, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
-| **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen – bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten | `app/tools/pdf_repair/` (`recovery/` für die erweiterte Wiederherstellung) |
+| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | Fachlogik: `app/tools/contract_overview/` (`overview.py`, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` · Controller: `app/qtapp/contracts/` · Seiten: `app/qml/PdfTool/Pages/` |
+| **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen – bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten | Fachlogik: `app/tools/pdf_repair/` (`recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seite: `app/qml/PdfTool/Pages/RepairPage.qml` |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
-Logik; gemeinsam sind nur Fenster, Navigation, Design und Dialoge (`app/vertragdesk.py`, `app/ui/`).
-Neue Werkzeuge bekommen ein eigenes Paket unter `app/tools/` und einen Eintrag in
-`app/tools/registry.py`.
+Logik; gemeinsam sind nur Fenster, Navigation, Design und Dialoge (`app/qtapp/app.py`,
+`app/qml/PdfTool/Shell/`, `app/qml/PdfTool/Controls/`). Neue Werkzeuge bekommen ein eigenes Paket
+unter `app/tools/` (Fachlogik ohne Oberfläche), einen Controller unter `app/qtapp/`, eine Seite
+unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – siehe
+[`windows-app/ARCHITECTURE.md`](windows-app/ARCHITECTURE.md).
 
 ### Vertragsübersichten: Kundenakte und Kundenwiedererkennung
 
@@ -99,9 +102,9 @@ Hinweise. Ein erkannter Kunde erscheint einmal – als Hinweis mit Aktionen in d
 - **Ansicht „Kunden“:** Liste mit Suche (Firma, Kundennummer, E-Mail), Sortierung (zuletzt
   verwendet, Firma A–Z, Kundennummer), Detailansicht zum Bearbeiten, E-Mail-Adressen hinzufügen
   und entfernen, Hinweis auf mögliche Doppelungen, Zusammenführen nur auf Wunsch und Löschen mit
-  Rückfrage (entfernt nur Kundenakte und Zuordnungen, nie Dateien). Die Liste zeichnet auch
-  hunderte Kundenakten flüssig (Canvas statt vieler Widgets); Tastatur: Pfeiltasten, Eingabe,
-  Strg+F.
+  Rückfrage (entfernt nur Kundenakte und Zuordnungen, nie Dateien). Die Liste bleibt auch mit
+  hunderten Kundenakten flüssig (virtualisierte QML-Liste, Suche entprellt); Tastatur: Pfeiltasten,
+  Eingabe, Strg+F.
 - **Speicher:** `%APPDATA%\PDF-Tool\kundenakten.json` mit `schema_version: 2`, atomar geschrieben
   (temporäre Datei, dann Ersetzen) mit `.bak` als vorigem Stand; eine unlesbare Datei wird
   beiseitegelegt statt überschrieben. Bewusst ohne Datenbank, Server oder Konto.
@@ -228,40 +231,36 @@ entsteht (A4 hoch oder quer laut „Darstellung“) –, damit das Bild ohne Lay
 Seitenzahl und Zoomstufe haben eine feste Breite, der Zustand („Vorschau wird erstellt …“,
 „Aktuell · …“) eine eigene Zeile: Die Werkzeugleiste bricht nicht je nach Zustand um.
 
-### Oberfläche: Rendering, Navigation und Animationen
+### Technik: Oberfläche und Architektur (seit 2.7.0)
 
-Die Oberfläche soll nie zeigen, wie Tkinter sie zusammensetzt (`app/ui/`):
+- **UI:** PySide6 6.11.2 (Qt 6, Qt Quick/QML), eigene Windows-11-nahe Steuerelemente auf Basis von
+  Qt Quick Templates (`app/qml/PdfTool/Controls/`), Design-Tokens für Farben, Abstände, Radien,
+  Schrift (Segoe UI Variable) und Animationsdauern (`app/qml/PdfTool/Style/`).
+- **Backend:** Python – die Fachlogik ist dieselbe wie bis 2.6.1 und enthält keinen Oberflächencode.
+- **Qt-Brücke:** `QObject`-Controller je Bereich (`app/qtapp/`: `App`, `Settings`, `Contracts`,
+  `Customers`, `Preview`, `Batch`, `Comparison`, `Repair`) sind die einzige Verbindung zwischen QML
+  und Fachlogik; Listen (Stapel, Kunden, Vertragsänderungen, Vorlagen …) sind
+  `QAbstractListModel`s mit gezielten Änderungen (`insertRows`/`removeRows`/`moveRows`/`dataChanged`)
+  statt Neuaufbau.
+- **Hintergrundarbeit:** Excel-Prüfung, PDF, Vorschau und Stapel laufen in Threads, „PDF reparieren“
+  in einem eigenen Prozess; Ergebnisse kommen über Qt-Signale in den GUI-Thread – Hintergrund-Threads
+  berühren nie QML.
+- **Start:** Konfiguration → Qt-Anwendung → Design → Controller → QML-Engine → verborgenes Fenster
+  (DWM-Cloaking) → Startseite; das Fenster erscheint mit dem ersten fertig gezeichneten Bild, weitere
+  Seiten laden danach im Hintergrund. Die QML-Oberfläche kommt im Setup aus einer eingebauten
+  Qt-Ressource (`qrc:/qml`, unabhängig vom Arbeitsverzeichnis).
+- **Animationen:** Profil „Vollständig“, „Reduziert“ oder „Aus“ (Einstellungen → Verhalten →
+  Animationen); ist in
+  Windows „Animationseffekte“ aus, gilt mindestens „Reduziert“. Seitenwechsel (Aus-/Einblenden mit
+  leichter Bewegung), Navigationsindikator, Menüs, Tooltips, Aufklappbereiche, InfoBars, Dialoge,
+  Schaltflächen, Schalter und Statuswechsel sind animiert; alle Dauern stehen zentral in
+  `Style/Motion.qml` und gelten sofort ohne Neustart.
+- **Anzeige:** Hell/Dunkel/„Wie Windows“ und Windows-Akzentfarbe live, Mica (nur wenn Windows es
+  zuverlässig unterstützt), Skalierung 100–200 % (Qt High-DPI), Layout mit einer oder zwei Spalten
+  je nach Breite.
 
-- **Start:** Das Hauptfenster entsteht zurückgezogen (`withdraw`); Design, Schriften, Palette,
-  Titelleiste (DWM) und Mica stehen fest, bevor das erste Widget entsteht. Alle Seiten werden
-  verdeckt aufgebaut und angeordnet und erst dann in einem Zug gezeigt (DWM-Cloaking bzw. außerhalb
-  des Bildschirms) – kein weißes oder halbfertiges Fenster.
-- **Seiten bleiben bestehen** und haben einen Lebenszyklus: *create* (einmal) → *prepare* (vor dem
-  Zeigen, noch verdeckt: Inhalte aktualisieren, fertig anordnen) → *activate* → *deactivate*. Ein
-  Wechsel baut nichts neu auf; nicht sichtbare Seiten liegen fertig angeordnet außerhalb des
-  Sichtbereichs. Ein Übergang bewegt nur die ganze, fertige Seite (16 px, 180 ms) und wird beim
-  nächsten Wechsel abgebrochen – es gibt keine Warteschlange.
-- **Größenereignisse:** Bindungen an das Hauptfenster erhalten in Tk über die Bindtags die
-  Ereignisse *aller* Widgets. `<Configure>`, `<Activate>` und `<Deactivate>` des Fensters werden
-  deshalb schon in Tcl gefiltert (`ui/context.py`); Größen-Handler erhalten nur Breite und Höhe ohne
-  die teure Umwandlung in ein Ereignisobjekt (`bind_size`).
-- **Resize:** Während des Ziehens laufen keine Layoutanimationen; das Ende wird nach 80 ms Ruhe
-  erkannt. Layoutzustände (breit, mittel, kompakt) wechseln nur an Breakpoints mit Hysterese.
-- **Animationen** sind zeitbasiert (`time.perf_counter`), zentral verwaltet
-  (`ui/animations.py`: `animations_enabled`, `reduce_motion`, `is_resizing`, `is_navigating`,
-  `active_animations`) und abbrechbar: Hover 83 ms (Verlassen 100 ms), Drücken 67 ms, InfoBar und
-  Ein-/Ausklappen 167 ms, Seitenwechsel und Navigationsindikator 180 ms, Dialoge 167 ms (Schließen
-  120 ms). Ist in Windows „Animationseffekte“ aus, entfallen alle Bewegungen; ohne aktive Animation
-  läuft kein Zeitgeber (Leerlauf ohne CPU-Last). Unsichtbare Ladeanimationen zeichnen nicht.
-- **Neuzeichnen nur bei Änderung:** Canvas-Steuerelemente behalten ihre Elemente und zeichnen nur
-  bei geänderter Größe, geändertem Zustand oder Design; Listen (Stapel, Kunden) zeichnen nur
-  geänderte Zeilen. Der Vertragsvergleich wird nur bei geänderten Daten, anderem Ausgangsstand oder
-  anderem Kunden neu berechnet; Designwechsel werden gebündelt in einem Schritt angewendet;
-  Systemmeldungen von Windows färben nur bei echter Änderung neu ein.
-- **Messpunkte für die Entwicklung** (`ui/diagnostics.py`): Startzeiten (`root`, `theme`, `pages`,
-  `navigation`, `visible`, `interactive`) und Zähler (`page_create`, `canvas_redraw`,
-  `preview_render`, `preview_decode`, `customer_list_rebuild`, `comparison`). Ausgegeben wird nur mit
-  `PDF_TOOL_PROFILE=1` auf der Konsole – nie in ein Protokoll.
+Details für Mitwirkende: [`windows-app/ARCHITECTURE.md`](windows-app/ARCHITECTURE.md) und
+[`windows-app/QML_STYLE.md`](windows-app/QML_STYLE.md).
 
 ### PDF reparieren
 
@@ -349,6 +348,12 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
   (`migration-backup-<Version>.zip`), dann Kopie mit Prüfung jeder Datei (Größe und SHA-256).
   Der alte Datenordner bleibt unverändert erhalten; schlägt die Übernahme fehl, arbeitet die App mit
   ihm weiter.
+- **Update von 2.6.1 (Tk-Oberfläche) auf 2.7.0:** Das Setup ersetzt die Programmdateien vollständig –
+  die frühere Tk-Oberfläche und Tcl/Tk bleiben nicht zurück. Einstellungen, Kundenakten,
+  Zuordnungen, Vorlagen, Regeln, Textbausteine, Kopf- und Fußzeilen, Stapel- und
+  Reparatur-Einstellungen und Vertragsstände werden unverändert weiterverwendet – **keine manuelle
+  Migration**. Die Fensterlage der alten Oberfläche wird nur gelesen (neue Lage: `fenster_qt`), die
+  frühere Einstellung „Animationen“ wird zum Animationsprofil.
 - **Update von 2.6.0:** Das Setup ersetzt nur Programmdateien. Die Kundenakte ist danach zunächst
   aus (Opt-in); Kundenakten, Zuordnungen und Vertragsstände bleiben unverändert erhalten und stehen
   nach dem Einschalten sofort wieder bereit. Alle übrigen Einstellungen bleiben unverändert.
@@ -397,7 +402,8 @@ entstehen nur im temporären Ordner von Windows und werden nach jedem Vorgang ge
 
 Voraussetzungen unter Windows 10/11 (64 Bit):
 
-- Python 3.13 (64 Bit) mit pip und Pillow (`py -3.13 -m pip install pillow`)
+- Python 3.13 (64 Bit) mit pip, Pillow und PySide6-Essentials in derselben Version wie das Setup
+  (`py -3.13 -m pip install pillow PySide6-Essentials==6.11.2` – liefert `rcc` für die QML-Ressource)
 - [Inno Setup 6.6 oder neuer](https://jrsoftware.org/isdl.php)
 - Internetzugang (eingebettete Python-Laufzeit von python.org, Pakete aus
   `windows-app/runtime-requirements.txt`, jeweils mit SHA-256-Prüfsumme)
@@ -407,8 +413,11 @@ py -3.13 windows-app\build.py
 ```
 
 Ergebnis: `windows-app\dist\PDF-Tool-Setup-<Version>.exe` und die zugehörige `.sha256`-Datei.
-Das Build-Skript prüft, dass die Laufzeit alle Module und die nativen Bibliotheken von qpdf und
-PDFium enthält.
+Das Build-Skript bündelt die QML-Oberfläche als Qt-Ressource (`windows-app/qmlres.py`), übernimmt
+von PySide6 nur die benötigten Module, Plugins und QML-Module (`windows-app/qtruntime.py`, anhand
+der Importtabellen der DLLs), entfernt tkinter/Tcl/Tk aus der Laufzeit und prüft, dass alle Module,
+die nativen Bibliotheken von qpdf und PDFium sowie Qt Quick enthalten sind – und keine Reste der
+früheren Tk-Oberfläche.
 
 Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) baut das Setup auf
 `windows-latest`, führt alle Tests aus, prüft die eingebettete Laufzeit (Module, Vertragsübersicht,
@@ -420,7 +429,9 @@ unverändert und wird nach dem Einschalten mit Sicherung zu Kundenakten; Formati
 Standard-Fußzeile und Vorlagen bleiben), das Update von PDF Tool 2.4.0 mit Beispieldaten
 (Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten), das Update von
 PDF Tool 2.5.0 (zusätzlich Stapel-Einstellungen und Vertragsstände) und das Update von PDF Tool
-2.6.0 (Kundenakte zunächst aus, Kundenakten und Vertragsstände unverändert und lesbar).
+2.6.0 (Kundenakte zunächst aus, Kundenakten und Vertragsstände unverändert und lesbar) sowie das
+Update von PDF Tool 2.6.1 mit der früheren Tk-Oberfläche (keine Reste von Tk, alle Benutzerdaten
+und Einstellungen erhalten).
 Der Runtime-Smoke-Test prüft außerdem pypdf, die Rohrekonstruktion einer beschädigten PDF und das
 Speichern und Vergleichen eines Vertragsstands. Manuell gestartet mit
 `release: true` veröffentlicht sie danach das Release `v<Version>` („PDF Tool <Version>“) mit Setup
@@ -429,7 +440,8 @@ und Prüfsumme – nur wenn alle Prüfungen bestanden sind.
 ### Tests
 
 ```powershell
-py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0
+py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+$env:QT_QPA_PLATFORM = "offscreen"   # Oberflächentests ohne Bildschirm (so läuft auch die CI)
 py -3.13 -m pytest windows-app\tests
 ```
 
@@ -442,18 +454,20 @@ Objektköpfen, inkrementelle Updates, Objektströme und eine Nachbildung einer r
 abgeschnittenen Datei. Echte Kundendateien liegen nie im Repository; eine lokale Beispieldatei lässt
 sich mit `PDF_TOOL_REAL_SAMPLE=<Pfad>` zusätzlich prüfen.
 
-Die Oberflächentests (`test_app_*.py`) prüfen neben den Funktionen auch das Rendering: Seiten
-entstehen genau einmal, die Vorschau wird ohne Änderung nicht neu erzeugt oder dekodiert, ein
-schneller Seitenwechsel lässt nur den letzten Übergang laufen, „Animationseffekte aus“ unterdrückt
-Bewegungen, Statusänderungen im Stapel zeichnen nur die betroffene Zeile, beim Beenden bleibt kein
-Zeitgeber offen – und die optionale Kundenakte (Standard aus, kein Abgleich und kein Speichern bei
-ausgeschalteter Kundenakte, Umschalten ohne Neustart, Daten bleiben erhalten).
+Die Oberflächentests (`test_qt_*.py`) starten die App wie beim echten Start – Controller, QML und
+Fenster (`tests/qtutil.py`) – und schlagen fehl, sobald die QML-Engine eine Warnung meldet
+(Bindungsschleifen, fehlende Properties …). Sie prüfen alle Abläufe von 2.6.1 an den Controllern
+(Excel-Prüfung, PDF, Rich Text mit Rückgängig/Wiederholen, Vorlagen, Kundenakte, Vorschau, Stapel
+mit 100 Dateien, Kundenliste mit Hunderten Einträgen, Vertragsvergleich, PDF reparieren) sowie
+Qt-Spezifisches: Listenmodelle ändern nur betroffene Zeilen, alle Seiten entstehen genau einmal,
+Animationsprofile, Hell/Dunkel, Fenstergrößen, das Laden der Oberfläche aus der eingebauten
+Ressource und dass kein Code mehr tkinter verwendet.
 
 **Manuelle Prüfung vor einem Release (Windows 10/11):**
 
-1. Skalierung 100 %, 125 %, 150 % und 175 % (Einstellungen → Anzeige): Start ohne weißes oder
-   halbfertiges Fenster, keine abgeschnittenen Texte, Navigation breit/mittel/kompakt, Einstellungen
-   vollständig lesbar. Unter Linux lässt sich die Skalierung mit `UE_SCALE=1.5` nachbilden.
+1. Skalierung 100 %, 125 %, 150 %, 175 % und 200 % (Einstellungen → Anzeige): Start ohne weißes
+   oder halbfertiges Fenster, keine abgeschnittenen Texte, Navigation breit/kompakt, Einstellungen
+   vollständig lesbar. Zum Nachbilden eignet sich `QT_SCALE_FACTOR=1.5`.
 2. Hell/Dunkel mehrfach wechseln (auch „Wie Windows“ und über die Windows-Einstellung): Wechsel in
    einem Schritt, Titelleiste und Mica passend.
 3. „Animationseffekte“ in Windows aus: Seitenwechsel, Navigation und Bereiche ohne Bewegung.
@@ -463,17 +477,17 @@ ausgeschalteter Kundenakte, Umschalten ohne Neustart, Daten bleiben erhalten).
    „Kunden“ wechseln: keine leeren oder halb aufgebauten Seiten.
 6. Kundenakte aus → ein → aus → ein: Daten bleiben, keine doppelten Einträge; Stapel und PDF ohne
    Kundenakte.
-7. `set PDF_TOOL_PROFILE=1` und Start mit `runtime\python.exe app\start.py`: Die Konsole zeigt die
-   Startmesspunkte.
+7. Animationsprofil „Vollständig“ → „Reduziert“ → „Aus“: wirkt sofort, ohne Neustart.
 
 Das App-Symbol entsteht mit `python windows-app/scripts/make_icons.py` (Windows-Symbol, Favicons
 und Logo der Downloadseite).
 
 ## Lizenzen
 
-PDF Tool nutzt ausschließlich Bibliotheken mit freien Lizenzen, darunter pikepdf (MPL-2.0) mit
-qpdf (Apache-2.0), pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium (BSD-3-Clause) und pypdf
-(BSD-3-Clause). Die vollständige
+PDF Tool nutzt ausschließlich Bibliotheken mit freien Lizenzen, darunter PySide6/Qt (LGPL-3.0,
+dynamisch geladen und ersetzbar), pikepdf (MPL-2.0) mit qpdf (Apache-2.0), pypdfium2
+(Apache-2.0/BSD-3-Clause) mit PDFium (BSD-3-Clause) und pypdf (BSD-3-Clause); die Symbole der
+Oberfläche stammen aus Fluent UI System Icons (MIT). Die vollständige
 Übersicht steht in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md); die Lizenztexte liegen im
 Setup bei den jeweiligen Paketen (`runtime\Lib\site-packages\*.dist-info`).
 

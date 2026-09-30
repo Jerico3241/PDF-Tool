@@ -105,6 +105,7 @@ class AppController(Observable):
         self.closing = False
         self._tools: dict[str, ToolHooks] = {}
         self._config_parts: list[Callable[[], dict]] = []
+        self._at_shutdown: list[Callable[[], None]] = []
         self._last_page: dict[str, str] = {}
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
         self.set_quietly("navCompact", bool(cfg.get("nav_kompakt", False)))
@@ -140,6 +141,10 @@ class AppController(Observable):
     def register_config(self, part: Callable[[], dict]) -> None:
         """Weitere Einstellungen, die beim Speichern gesammelt werden (Design, Kundenakte …)."""
         self._config_parts.append(part)
+
+    def at_shutdown(self, callback: Callable[[], None]) -> None:
+        """Beim Beenden aufräumen (z. B. Beobachtung der Windows-Einstellungen beenden)."""
+        self._at_shutdown.append(callback)
 
     def tool(self, key: str) -> ToolHooks | None:
         return self._tools.get(key)
@@ -474,6 +479,11 @@ class AppController(Observable):
                     self.write_error_log(traceback.format_exc())
             self.persist()
         finally:
+            for callback in self._at_shutdown:
+                try:
+                    callback()
+                except Exception:  # noqa: BLE001
+                    self.write_error_log(traceback.format_exc())
             self.dialogs.shutdown()
             self.timers.shutdown()
             self.worker.shutdown()

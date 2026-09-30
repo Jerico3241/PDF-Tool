@@ -25,7 +25,7 @@
 ; Feste AppId – darf sich in künftigen Versionen NIE ändern, sonst entsteht eine zweite Installation.
 #define AppGuid        "59C40061-D5E5-446D-ACB4-E077D3C71E1A"
 #define AppId          "{{" + AppGuid + "}"
-; Muss zu ui/windows.py passen (Taskleisten-Gruppierung und Erkennung der laufenden App)
+; Muss zu app/winsys.py passen (Taskleisten-Gruppierung und Erkennung der laufenden App)
 #define AppUserModelID "Jerico.PDFTool"
 #define AppMutexName   "Jerico.PDFTool.Instanz"
 ; Name, Ordner und Mutex bis Version 2.2 (»Übersichten-Ersteller«)

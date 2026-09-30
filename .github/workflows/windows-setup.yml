@@ -46,7 +46,7 @@ jobs:
           architecture: x64
 
       - name: Build- und Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
 
       - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich)
         run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py -q -p no:cacheprovider
@@ -54,9 +54,11 @@ jobs:
       - name: Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py -q -p no:cacheprovider
 
-      - name: Tests (Oberfläche, optionale Kundenakte, Rendering)
-        timeout-minutes: 45 # normal etwa 12 Minuten – ein hängender Test bricht so früh ab
-        run: python -m pytest windows-app/tests/test_app_ui.py windows-app/tests/test_app_v22.py windows-app/tests/test_app_v23.py windows-app/tests/test_app_v24.py windows-app/tests/test_app_v25.py windows-app/tests/test_app_v26.py windows-app/tests/test_app_v261.py -q -p no:cacheprovider
+      - name: Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, alle Abläufe)
+        timeout-minutes: 60 # ein hängender Test bricht so früh ab
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest windows-app/tests/test_qt_resources.py windows-app/tests/test_qt_bridge.py windows-app/tests/test_qt_shell.py windows-app/tests/test_qt_contracts.py windows-app/tests/test_qt_customers.py windows-app/tests/test_qt_batch.py windows-app/tests/test_qt_repair.py windows-app/tests/test_qt_history.py windows-app/tests/test_qt_optional.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -169,6 +171,24 @@ jobs:
       - name: Update von 2.6.0 prüfen (Kundenakte zunächst aus, Kundenakten und Vertragsstände unverändert, alle Einstellungen erhalten)
         shell: pwsh
         run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_26
+
+      - name: Vorversion 2.6.1 laden (PDF Tool, Tk-Oberfläche)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.6.1"
+          $name = "PDF-Tool-Setup-2.6.1.exe"
+          gh release download v2.6.1 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.6.1 konnte nicht geladen werden" }
+          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.6.1 stimmt nicht: $actual" }
+          "PREVIOUS_SETUP_261=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Update von 2.6.1 prüfen (Tk → Qt ohne Reste, alle Benutzerdaten und Einstellungen erhalten, Kundenakte aus)
+        shell: pwsh
+        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_261
 
       - uses: actions/upload-artifact@v4
         with:

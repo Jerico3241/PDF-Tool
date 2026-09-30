@@ -1,4 +1,4 @@
-"""Tests ohne Oberfläche: PDF-Engine, Einstellungen, Farben, Easing, Mica-Rezept."""
+"""Tests ohne Oberfläche: PDF-Engine, Einstellungen, Farben (Design-Tokens), Mica-Rezept."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 import appstate
+import design as theme
 import engine
-from ui import animations, mica, theme
+import mica
 
 
 # --- Engine ------------------------------------------------------------------------
@@ -238,7 +239,7 @@ def test_versions_are_consistent() -> None:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "2.6.1"
+    assert appstate.VERSION == version == "2.7.0"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]
@@ -248,8 +249,9 @@ def test_versions_are_consistent() -> None:
     assert not (root / "installer" / "go.mod").exists()
     # Die aktuelle Version steht nirgends hart codiert – weder im App-Code noch auf der Downloadseite
     # (Hinweise auf frühere Versionen wie »bis 2.0.5« sind Geschichte, keine Versionsanzeige).
-    for datei in (root / "app").rglob("*.py"):
-        assert version not in datei.read_text(encoding="utf-8"), datei.name
+    for datei in list((root / "app").rglob("*.py")) + list((root / "app" / "qml").rglob("*.qml")):
+        if "__pycache__" not in datei.parts:
+            assert version not in datei.read_text(encoding="utf-8"), datei.name
     seite = (root.parent / "src" / "components" / "landing-page.tsx").read_text(encoding="utf-8")
     assert "windows-app/VERSION?raw" in seite and version not in seite
     haupt = (root.parent / "README.md").read_text(encoding="utf-8")
@@ -264,7 +266,7 @@ HOTT_LOGO_SHA256 = "a1564c62fe01caa4cb041d8178578da051449d87db187b3cd7de2b667d20
 def test_branding_is_consistent() -> None:
     import hashlib
 
-    from ui import windows
+    import winsys as windows
 
     root = Path(__file__).resolve().parents[1]
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
@@ -279,7 +281,9 @@ def test_branding_is_consistent() -> None:
     assert appstate.APP_NAME == "PDF Tool" and appstate.DATA_FOLDER == "PDF-Tool"
     assert appstate.LEGACY_DATA_FOLDER == "Uebersichten-Ersteller"
     # Alte Produktnamen stehen nur noch dort, wo die Vorversion übernommen wird.
-    for datei in (root / "app").rglob("*.py"):
+    for datei in list((root / "app").rglob("*.py")) + list((root / "app" / "qml").rglob("*.qml")):
+        if "__pycache__" in datei.parts:
+            continue
         text = datei.read_text(encoding="utf-8")
         for alt in ("PDF Multi Tool", "Vertragsübersichten-Ersteller", "VertraView"):
             assert alt not in text, datei
@@ -309,13 +313,6 @@ def test_palettes_text_contrast() -> None:
         assert theme.contrast(pal.text, pal.card) >= 7
         assert theme.contrast(pal.text2, pal.card) >= 4.5
         assert pal.card != pal.layer != pal.mica
-
-
-def test_easing_bounds_and_monotonic() -> None:
-    for ease in (animations.DECELERATE, animations.EASE_OUT, animations.POINT_TO_POINT, animations.EASE_IN_OUT):
-        values = [ease(i / 50) for i in range(51)]
-        assert abs(values[0]) < 1e-6 and abs(values[-1] - 1) < 1e-6
-        assert all(b >= a - 1e-6 for a, b in zip(values, values[1:]))
 
 
 def test_mica_tint_is_subtle() -> None:

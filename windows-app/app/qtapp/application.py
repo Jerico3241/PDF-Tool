@@ -90,6 +90,11 @@ class Runtime(QObject):
         }
         self.preview_lookup: Callable[[str], object] = lambda _ident: None
         self._build_tools()
+        # Windows-Einstellungen (Design, Akzentfarbe, Animationseffekte) sofort übernehmen
+        from . import system
+
+        self.system_watcher = system.watch(self.app, self.theme)
+        self.app.at_shutdown(lambda: system.unwatch(self.system_watcher))
         # Nach dem Start zeigt PDF Tool die Startseite mit allen Werkzeugen (fertig im ersten Bild).
         self.app.navigate("home")
 

@@ -207,3 +207,46 @@ def test_closing_saves_and_leaves_nothing_running(app, config_file: Path) -> Non
     data = json.loads(config_file.read_text(encoding="utf-8"))
     assert data["firmenname"] == "Schließen GmbH"
     assert app.app.timers.count() == 0
+
+
+def _motion(app) -> dict:
+    """Werte des QML-Singletons ``Motion`` (wie die Oberfläche sie sieht)."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtQml import QQmlComponent
+
+    component = QQmlComponent(app.engine)
+    component.setData(
+        b"import QtQuick\nimport PdfTool.Style\nQtObject {\n"
+        b"  property var values: ({ enabled: Motion.enabled, moves: Motion.moves, pageOut: Motion.pageOut, pageIn: Motion.pageIn,"
+        b" pageShift: Motion.pageShift, menu: Motion.menu, menuShift: Motion.menuShift, dialog: Motion.dialog, dialogScale: Motion.dialogScale,"
+        b" expand: Motion.expand, infoBar: Motion.infoBar, fast: Motion.fast, fade: Motion.fade, tooltip: Motion.tooltip, scroll: Motion.scroll })\n}\n",
+        QUrl.fromLocalFile(str(app.appmod.QML_DIR / "motion-probe.qml")),
+    )
+    probe = component.create()
+    assert probe is not None, component.errorString()
+    values = probe.property("values")
+    values = values.toVariant() if hasattr(values, "toVariant") else dict(values)
+    probe.deleteLater()
+    return values
+
+
+def test_animation_profiles_follow_the_design_rules(app) -> None:
+    app.settings.setProfile("full")
+    pump(0.1)
+    full = _motion(app)
+    assert full["enabled"] and full["moves"]
+    assert 140 <= full["pageOut"] + full["pageIn"] <= 200  # Seitenwechsel: aus- und einblenden
+    assert 120 <= full["menu"] <= 160 and full["menuShift"] > 0  # Menüs: Deckkraft + leichte Bewegung
+    assert full["dialog"] > 0 and full["dialogScale"] < 1  # Dialoge: Einblenden + leichtes Skalieren
+    assert full["expand"] > 0 and full["infoBar"] > 0 and full["tooltip"] > 0
+    app.settings.setProfile("reduced")
+    pump(0.1)
+    reduced = _motion(app)
+    assert reduced["enabled"] and not reduced["moves"]
+    assert reduced["pageShift"] == 0 and reduced["menuShift"] == 0 and reduced["dialogScale"] == 1  # keine Bewegung
+    assert reduced["expand"] == 0 and reduced["scroll"] == 0 and 0 < reduced["fade"] <= full["fade"]
+    app.settings.setProfile("off")
+    pump(0.1)
+    off = _motion(app)
+    assert not off["enabled"] and all(off[key] == 0 for key in ("pageOut", "pageIn", "menu", "dialog", "expand", "infoBar", "fast", "fade", "tooltip"))
+    app.settings.setProfile("full")
