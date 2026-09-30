@@ -1328,6 +1328,7 @@ class InfoBar(tk.Frame):
         self.collapsible.pack(fill="x")
         self.box = RoundedFrame(self.collapsible.content, fill="info_bg", stroke="card_stroke", radius=CONTROL_RADIUS)
         self.box.pack(fill="x")
+        self._gap = 0  # Abstand nach oben – Teil der Leiste (siehe pack_configure)
         self.severity = "neutral"
         self.title = ""
         self.message = ""
@@ -1366,6 +1367,21 @@ class InfoBar(tk.Frame):
         bind_size(texts, self._texts_configured)
         c.theme.subscribe(self._repaint, owner=self)
         self._repaint()
+
+    def pack_configure(self, cnf=None, **kw):
+        """Wie ``pack``. Der Abstand nach oben gehört zur Leiste selbst: Er klappt mit ihr ein und
+        aus – eine verborgene Leiste hinterlässt keinen Leerraum, eine sichtbare sieht aus wie bisher."""
+        options = dict(cnf or {}, **kw)
+        pady = options.get("pady")
+        if pady is not None:
+            top, bottom = pady if isinstance(pady, (tuple, list)) else (pady, pady)
+            if int(top) != self._gap:
+                self._gap = int(top)
+                self.box.pack_configure(pady=(self._gap, 0))
+            options["pady"] = (0, bottom)
+        return super().pack_configure(**options)
+
+    pack = pack_configure
 
     def _close_clicked(self) -> None:
         self.hide()

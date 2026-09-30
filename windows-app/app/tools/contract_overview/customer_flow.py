@@ -107,7 +107,10 @@ class CustomerFlow:
     def customers(self) -> CustomerStore:
         store = self.__dict__.get("_customer_store")
         if store is None or not self.__dict__.get("_customers_enabled", False):
-            return self.__dict__.setdefault("_no_customers", CustomerStore(None))
+            empty = self.__dict__.get("_no_customers")
+            if empty is None:
+                empty = self.__dict__["_no_customers"] = CustomerStore(None)
+            return empty
         return store
 
     @customers.setter

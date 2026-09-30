@@ -446,6 +446,23 @@ Bewegungen, Statusänderungen im Stapel zeichnen nur die betroffene Zeile, beim 
 Zeitgeber offen – und die optionale Kundenakte (Standard aus, kein Abgleich und kein Speichern bei
 ausgeschalteter Kundenakte, Umschalten ohne Neustart, Daten bleiben erhalten).
 
+**Manuelle Prüfung vor einem Release (Windows 10/11):**
+
+1. Skalierung 100 %, 125 %, 150 % und 175 % (Einstellungen → Anzeige): Start ohne weißes oder
+   halbfertiges Fenster, keine abgeschnittenen Texte, Navigation breit/mittel/kompakt, Einstellungen
+   vollständig lesbar. Unter Linux lässt sich die Skalierung mit `UE_SCALE=1.5` nachbilden.
+2. Hell/Dunkel mehrfach wechseln (auch „Wie Windows“ und über die Windows-Einstellung): Wechsel in
+   einem Schritt, Titelleiste und Mica passend.
+3. „Animationseffekte“ in Windows aus: Seitenwechsel, Navigation und Bereiche ohne Bewegung.
+4. Fenstergröße langsam und schnell ziehen, maximieren, wiederherstellen, Navigation ein- und
+   ausklappen: keine springenden Karten, kein Flackern.
+5. Schnell zwischen „Übersicht erstellen“, „Darstellung“, „Vorschau“, „Stapel“ und (mit Kundenakte)
+   „Kunden“ wechseln: keine leeren oder halb aufgebauten Seiten.
+6. Kundenakte aus → ein → aus → ein: Daten bleiben, keine doppelten Einträge; Stapel und PDF ohne
+   Kundenakte.
+7. `set PDF_TOOL_PROFILE=1` und Start mit `runtime\python.exe app\start.py`: Die Konsole zeigt die
+   Startmesspunkte.
+
 Das App-Symbol entsteht mit `python windows-app/scripts/make_icons.py` (Windows-Symbol, Favicons
 und Logo der Downloadseite).
 

@@ -107,21 +107,26 @@ class ChangeList(tk.Canvas):
         self.focus_index: int | None = None
         self.hover: int | None = None
         self._tops: list[int] = []
+        self._heights: list[int] = []
         self._width = 0
         self._images: dict = {}
+        # Hover und Fokus liegen als eigene Elemente über den Zeilen: Sie werden nur verschoben,
+        # die Zeilen selbst werden nur bei geänderten Daten, Breite oder Design neu gezeichnet.
+        self._hover_item = self.create_image(0, 0, anchor="nw", state="hidden")
+        self._ring_item = self.create_image(0, 0, anchor="nw", state="hidden")
         bind_size(self, self._configured)
         self.bind("<Motion>", lambda e: self._set_hover(self._index_at(e.y)), add="+")
         self.bind("<Leave>", lambda _e: self._set_hover(None), add="+")
         self.bind("<ButtonRelease-1>", self._click, add="+")
-        self.bind("<FocusIn>", lambda _e: self._draw(), add="+")
-        self.bind("<FocusOut>", lambda _e: self._draw(), add="+")
+        self.bind("<FocusIn>", lambda _e: self._paint_state(), add="+")
+        self.bind("<FocusOut>", lambda _e: self._paint_state(), add="+")
         self.bind("<KeyPress-Down>", lambda _e: (self._move(1), "break")[1], add="+")
         self.bind("<KeyPress-Up>", lambda _e: (self._move(-1), "break")[1], add="+")
         for key in ("Return", "KP_Enter", "space"):
             self.bind(f"<KeyPress-{key}>", lambda _e: (self._toggle_focus(), "break")[1], add="+")
         c = ctx()
         c.theme.subscribe(self._draw, owner=self)
-        c.on_focus_mode(self, self._draw)
+        c.on_focus_mode(self, self._paint_state)
 
     # Daten ---------------------------------------------------------------------------------------
     def set_rows(self, rows: Sequence[ChangeRow]) -> None:
@@ -162,7 +167,7 @@ class ChangeList(tk.Canvas):
         pal = c.pal
         surface = surface_color(self.master)
         self.configure(bg=surface)
-        self.delete("all")
+        self.delete("row")
         width = max(self._width, self.winfo_width(), px(260))
         row_h, detail_h = px(self.ROW), px(self.DETAIL)
         pad = px(4)
@@ -170,48 +175,68 @@ class ChangeList(tk.Canvas):
         chevron_w = px(22)
         y = 0
         self._tops = []
-        try:
-            focused = self.focus_get() is self
-        except (tk.TclError, KeyError):
-            focused = False
+        self._heights = []
+        tags = ("row",)
         for index, row in enumerate(self.rows):
             open_ = row.key in self.expanded
             height = row_h + (len(row.details) * detail_h + px(6) if open_ else 0)
             self._tops.append(y)
-            if index == self.hover:
-                img = c.images.box(width - px(2), height - px(2), px(4), pal.subtle_color, alpha=pal.subtle_hover_alpha)
-                self._images[("hover", index)] = img
-                self.create_image(px(1), y + px(1), image=img, anchor="nw")
+            self._heights.append(height)
             if index:
-                self.create_line(pad, y, width - pad, y, fill=pal.divider)
+                self.create_line(pad, y, width - pad, y, fill=pal.divider, tags=tags)
             mid = y + row_h / 2
             dot = c.images.circle(px(8), _tone(TONES[row.kind]), background=surface)
             self._images[("dot", index)] = dot
-            self.create_image(pad + px(6), mid, image=dot, anchor="center")
-            self.create_text(pad + px(16), mid, text=report.KIND_LABELS[row.kind], anchor="w", font=c.fonts.caption, fill=pal.text2)
+            self.create_image(pad + px(6), mid, image=dot, anchor="center", tags=tags)
+            self.create_text(pad + px(16), mid, text=report.KIND_LABELS[row.kind], anchor="w", font=c.fonts.caption, fill=pal.text2, tags=tags)
             summary_w = min(c.fonts.caption.measure(row.summary), int(width * 0.45)) if row.summary else 0
             right = width - pad - (chevron_w if row.details else 0)
             title_w = max(px(60), right - title_x - summary_w - px(16))
-            self.create_text(title_x, mid, text=elide_middle(c.fonts.body, row.title, title_w), anchor="w", font=c.fonts.body, fill=pal.text)
+            self.create_text(title_x, mid, text=elide_middle(c.fonts.body, row.title, title_w), anchor="w", font=c.fonts.body, fill=pal.text, tags=tags)
             if row.summary:
-                self.create_text(right - px(4), mid, text=elide_middle(c.fonts.caption, row.summary, summary_w), anchor="e", font=c.fonts.caption, fill=pal.text2)
+                self.create_text(right - px(4), mid, text=elide_middle(c.fonts.caption, row.summary, summary_w), anchor="e", font=c.fonts.caption, fill=pal.text2, tags=tags)
             if row.details:
                 glyph = (icons.CHEVRON_UP if open_ else icons.CHEVRON_DOWN) if c.icons_available else ("▴" if open_ else "▾")
-                self.create_text(width - pad - chevron_w / 2, mid, text=glyph, anchor="center", font=c.fonts.icon_small or c.fonts.caption, fill=pal.text2)
+                self.create_text(width - pad - chevron_w / 2, mid, text=glyph, anchor="center", font=c.fonts.icon_small or c.fonts.caption, fill=pal.text2, tags=tags)
             if open_:
                 line_y = y + row_h
                 for label, value in row.details:
-                    self.create_text(title_x, line_y + detail_h / 2, text=label, anchor="w", font=c.fonts.caption, fill=pal.text2)
-                    self.create_text(title_x + px(140), line_y + detail_h / 2, text=elide_middle(c.fonts.body, value, max(px(60), width - title_x - px(150))), anchor="w", font=c.fonts.body, fill=pal.text)
+                    self.create_text(title_x, line_y + detail_h / 2, text=label, anchor="w", font=c.fonts.caption, fill=pal.text2, tags=tags)
+                    self.create_text(title_x + px(140), line_y + detail_h / 2, text=elide_middle(c.fonts.body, value, max(px(60), width - title_x - px(150))), anchor="w", font=c.fonts.body, fill=pal.text, tags=tags)
                     line_y += detail_h
-            if focused and c.keyboard_mode and index == self.focus_index:
-                ring = c.images.ring(width - px(2), height - px(2), px(5), pal.focus_outer, pal.focus_inner)
-                self._images["ring"] = ring
-                self.create_image(px(1), y + px(1), image=ring, anchor="nw")
             y += height
         total = max(1, y)
         if int(self.cget("height")) != total:
             self.configure(height=total)
+        self._paint_state()
+
+    def _paint_state(self) -> None:
+        """Nur Hover und Fokusrahmen – die Zeilen bleiben unverändert."""
+        c = ctx()
+        pal = c.pal
+        width = max(self._width, self.winfo_width(), px(260))
+        hover = self.hover
+        if hover is not None and hover < len(self._tops):
+            img = c.images.box(width - px(2), self._heights[hover] - px(2), px(4), pal.subtle_color, alpha=pal.subtle_hover_alpha)
+            self._images["hover"] = img
+            self.itemconfigure(self._hover_item, image=img, state="normal")
+            self.coords(self._hover_item, px(1), self._tops[hover] + px(1))
+            self.tag_lower(self._hover_item)
+        else:
+            self.itemconfigure(self._hover_item, state="hidden")
+        try:
+            focused = self.focus_get() is self
+        except (tk.TclError, KeyError):
+            focused = False
+        index = self.focus_index
+        if focused and c.keyboard_mode and index is not None and index < len(self._tops):
+            ring = c.images.ring(width - px(2), self._heights[index] - px(2), px(5), pal.focus_outer, pal.focus_inner)
+            self._images["ring"] = ring
+            self.itemconfigure(self._ring_item, image=ring, state="normal")
+            self.coords(self._ring_item, px(1), self._tops[index] + px(1))
+            self.tag_raise(self._ring_item)
+        else:
+            self.itemconfigure(self._ring_item, state="hidden")
 
     # Bedienung ----------------------------------------------------------------------------------------
     def _index_at(self, y: int) -> int | None:
@@ -225,7 +250,7 @@ class ChangeList(tk.Canvas):
             self.hover = index
             row = self.rows[index] if index is not None else None
             self.configure(cursor="hand2" if row is not None and row.details else "")
-            self._draw()
+            self._paint_state()  # nur die Hervorhebung – kein Neuzeichnen der Zeilen
 
     def _click(self, event) -> None:
         index = self._index_at(event.y)
@@ -233,15 +258,15 @@ class ChangeList(tk.Canvas):
             return
         self.focus_set()
         self.focus_index = index
-        self.toggle(self.rows[index].key)
-        self._draw()
+        self.toggle(self.rows[index].key)  # zeichnet neu, wenn sich die Zeile öffnet oder schließt
+        self._paint_state()
 
     def _move(self, delta: int) -> None:
         if not self.rows:
             return
         start = -1 if self.focus_index is None else self.focus_index
         self.focus_index = max(0, min(len(self.rows) - 1, start + delta))
-        self._draw()
+        self._paint_state()
 
     def _toggle_focus(self) -> None:
         if self.focus_index is not None and self.focus_index < len(self.rows):
