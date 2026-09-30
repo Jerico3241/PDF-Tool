@@ -27,6 +27,9 @@ Geprüft wird:
    Kundenakte standardmäßig aus, »Kunden« erst nach dem Einschalten – ohne Neustart;
    Einstellungen werden gespeichert). ``--offscreen`` prüft ohne sichtbares Fenster.
 
+``--part runtime`` prüft nur 1–3 (Laufzeit), ``--part ui`` nur 1 und 4 (QML und Programmstart) –
+so zeigt die CI beide Prüfungen als eigene Schritte, ohne etwas doppelt zu tun.
+
 Endet mit Code 0 und »OK«, sonst mit einer Fehlermeldung und Code 1.
 """
 
@@ -57,6 +60,12 @@ def main() -> int:
     parser.add_argument("--app", required=True, help="app-Ordner der zu prüfenden Installation bzw. des Pakets")
     parser.add_argument("--ui", action="store_true", help="zusätzlich das Hauptfenster starten und schließen")
     parser.add_argument("--offscreen", action="store_true", help="Qt ohne sichtbares Fenster (Plattform »offscreen«)")
+    parser.add_argument(
+        "--part",
+        choices=("all", "runtime", "ui"),
+        default="all",
+        help="runtime: Module, PDF, Kundenakte, Vorschau, Stapel, Vergleich, Reparatur (ohne Fenster); ui: Oberfläche aus der Ressource und Programmstart; all: beides",
+    )
     args = parser.parse_args()
 
     app_dir = Path(args.app).resolve()
@@ -125,6 +134,10 @@ def main() -> int:
     check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
     check(overview.contract_summary(5, 3) == "5 aktive Verträge · 3 inaktiv ausgeblendet" and overview.contract_summary(1) == "1 aktiver Vertrag", "Statuszeile der Excel-Prüfung")
     print(f"App {appstate.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
+    if args.part == "ui":
+        qml_check(app_dir, qt_application, full=args.ui)
+        print("OK")
+        return 0
 
     # 2. PDF mit Excel-Fettschrift und formatierter Fußzeile
     from datetime import datetime
@@ -311,15 +324,23 @@ def main() -> int:
         check(rebuilt.get_warnings() == [] and len(rebuilt.pages) == 3, "rekonstruierte PDF öffnet nicht ohne Wiederherstellung")
     print(f"Erweiterte Wiederherstellung: {output.name} ({result.method.value}, {result.pages_after} Seiten)")
 
-    # 4. Oberfläche: QML aus der eingebauten Ressource, ohne Meldungen der QML-Engine
+    if args.part == "runtime":
+        print("OK")
+        return 0
+    # 4. Oberfläche
+    qml_check(app_dir, qt_application, full=args.ui)
+
+    print("OK")
+    return 0
+
+
+def qml_check(app_dir: Path, qt_application, full: bool) -> None:
+    """QML aus der eingebauten Ressource laden, ohne Meldungen der QML-Engine; dann Programmstart."""
     source, _import_path = qt_application.qml_source()
     if (app_dir / "qml_rc.py").is_file():
         check(source.toString() == "qrc:/qml/Main.qml", f"Oberfläche nicht aus der Ressource: {source.toString()}")
         check(not (app_dir / "qml").exists(), "lose QML-Dateien im Programmordner")
-    ui_probe(qt_application, full=args.ui)
-
-    print("OK")
-    return 0
+    ui_probe(qt_application, full=full)
 
 
 def ui_probe(qt_application, full: bool) -> None:

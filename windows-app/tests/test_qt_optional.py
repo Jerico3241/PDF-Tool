@@ -333,7 +333,8 @@ def test_toggle_without_restart_keeps_data_and_builds_the_page_once(config_file:
     assert h.customers.customers.get(KUNDE_ID).company == "Muster GmbH"
     # Die Ansichten erscheinen – »Kunden« entsteht jetzt (im Hintergrund, vor dem ersten Zeigen)
     assert not set(h.app.unavailablePages) & KUNDEN_SEITEN
-    assert all(keys == IMMER + ["comparison", "customers"] for keys in ansichten(h))
+    # die Einträge blenden ein – auf einem ausgelasteten Rechner nicht zwingend nach 100 ms
+    assert wait_until(lambda: all(keys == IMMER + ["comparison", "customers"] for keys in ansichten(h)), 5)
     assert wait_until(lambda: h.item("page_customers").property("item") is not None and h.item("page_comparison").property("item") is not None, 20)
     pump(0.3)
     page = h.item("customersPage")

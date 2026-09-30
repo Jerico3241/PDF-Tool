@@ -30,10 +30,10 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 1
         contentWidth: width
-        contentHeight: area.implicitHeight
+        contentHeight: area.height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        interactive: contentHeight > height
+        interactive: area.implicitHeight > height
         T.ScrollBar.vertical: PScrollBar {}
         function ensureVisible(rect) {
             if (contentY >= rect.y) contentY = rect.y
@@ -42,6 +42,11 @@ Rectangle {
         T.TextArea {
             id: area
             width: flick.width
+            // Größe aus dem Inhalt (die Vorlage »T.TextArea« tut das nicht selbst, siehe
+            // PRichTextEditor); das Feld füllt die ganze Fläche, damit jeder Klick es erreicht.
+            implicitWidth: contentWidth + leftPadding + rightPadding
+            implicitHeight: contentHeight + topPadding + bottomPadding
+            height: Math.max(implicitHeight, flick.height)
             leftPadding: 10
             rightPadding: 10
             topPadding: 6

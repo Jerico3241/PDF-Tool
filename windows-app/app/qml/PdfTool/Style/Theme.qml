@@ -76,6 +76,7 @@ QtObject {
     // Papier der Kopf-/Fußzeilen-Editoren (wie in der PDF – auch im dunklen Design weiß)
     readonly property color paper: "#FFFFFF"
     readonly property color paperText: "#333333"
+    readonly property color paperPlaceholder: "#767676"  // Hinweis im leeren Feld (Kontrast 4,5:1 auf Weiß)
 
     // Hilfen ---------------------------------------------------------------------------
     // Farbe eines Status (»success«, »warning«/»caution«, »error«/»critical«, »info«, »neutral«)

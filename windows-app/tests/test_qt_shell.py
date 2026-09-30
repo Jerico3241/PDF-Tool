@@ -49,6 +49,93 @@ def test_start_page_shows_tool_cards(app) -> None:
     assert tools[0]["shortcut"] == "Strg+2" and tools[1]["shortcut"] == "Strg+3"
 
 
+def _szene(item) -> tuple[float, float, float, float]:
+    from PySide6.QtCore import QPointF
+
+    p = item.mapToScene(QPointF(0, 0))
+    return (p.x(), p.y(), item.width(), item.height())
+
+
+def _teil(karte, name: str) -> tuple[float, float, float, float]:
+    """Lage eines Kartenteils relativ zur Karte (Symbol, Titel, Fußzeile, Tastenkürzel …)."""
+    stapel = [karte]
+    while stapel:
+        aktuell = stapel.pop()
+        if aktuell.objectName() == name:
+            x, y, w, h = _szene(aktuell)
+            kx, ky, _kw, _kh = _szene(karte)
+            return (x - kx, y - ky, w, h)
+        stapel.extend(aktuell.childItems())
+    raise AssertionError(name)
+
+
+def _pruefe_startseite(h) -> int:
+    """Symmetrie der Startseite; liefert die Zahl der Spalten."""
+    karten = [h.item("toolCard_contracts"), h.item("toolCard_repair")]
+    raster, hinweis = h.item("homeGrid"), h.item("homePrivacy")
+    a, b = (_szene(k) for k in karten)
+    # exakt gleich groß (ganzzahlig), gleicher Innenaufbau
+    assert (a[2], a[3]) == (b[2], b[3]) and float(a[2]).is_integer() and float(a[3]).is_integer()
+    for teil in ("toolIcon", "toolTitle", "toolFooter", "toolOpen", "toolShortcut"):
+        assert _teil(karten[0], teil) == _teil(karten[1], teil), teil
+    assert _teil(karten[0], "toolIcon")[2:] == (48, 48)
+    # Fußzeile unten in der Karte, Tastenkürzel am rechten Rand
+    fx, fy, fw, fh = _teil(karten[0], "toolFooter")
+    assert fy + fh == pytest.approx(a[3] - 20, abs=0.5)
+    sx, _sy, sw, _sh = _teil(karten[0], "toolShortcut")
+    assert sx + sw == pytest.approx(a[2] - 20, abs=0.5)
+    # Gruppe mittig im Inhaltsbereich: gleicher Abstand links und rechts (± 1 px Rundung)
+    flaeche = raster.parentItem()
+    while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
+        flaeche = flaeche.parentItem()
+    fx0, _fy0, fbreite, _fh0 = _szene(flaeche)
+    gx, gy, gbreite, _gh = _szene(raster)
+    links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
+    assert abs(links - rechts) <= 1, (links, rechts)
+    # Titel und Datenschutzhinweis an der linken Kante der Karten
+    assert _szene(hinweis)[0] == gx and min(a[0], b[0]) == gx
+    titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
+    assert _szene(titel)[0] == gx
+    if a[1] == b[1]:  # zwei Spalten: gleiche Oberkante, Abstand = Token, Gruppe voll genutzt
+        assert b[0] - (a[0] + a[2]) == 16
+        assert b[0] + b[2] == pytest.approx(gx + gbreite, abs=0.5)
+        return 2
+    assert a[0] == b[0] and b[1] - (a[1] + a[3]) == 16  # eine Spalte: untereinander, gleich breit
+    return 1
+
+
+def _alle(wurzel) -> list:
+    alle, stapel = [], [wurzel]
+    while stapel:
+        aktuell = stapel.pop()
+        alle.append(aktuell)
+        stapel.extend(aktuell.childItems())
+    return alle
+
+
+@pytest.mark.parametrize("groesse,spalten", [((1366, 768), 2), ((1920, 1080), 2), ((2560, 1440), 2), ((1093, 614), 2), ((760, 700), 1)])
+def test_start_page_is_symmetric(ui_app, groesse, spalten) -> None:
+    h = ui_app
+    h.window.resize(*groesse)
+    pump(0.6)
+    assert _pruefe_startseite(h) == spalten
+    breite = _szene(h.item("toolCard_contracts"))[2]
+    assert breite <= 512 or spalten == 1  # Gruppe höchstens 1040 px: nebeneinander nie übermäßig breit
+    assert breite >= 360 or spalten == 1  # nie schmaler als die Mindestbreite nebeneinander
+
+
+def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
+    h = ui_app
+    h.window.resize(1366, 768)
+    pump(0.4)
+    karten = [h.item("toolCard_contracts"), h.item("toolCard_repair")]
+    vorher = _szene(karten[0])[3]
+    karten[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und die Karte höher macht, als sie es sonst wäre.")
+    pump(0.3)
+    assert _szene(karten[0])[3] > vorher  # beide Karten wachsen gemeinsam …
+    assert _pruefe_startseite(h) == 2  # … Fußzeile und Tastenkürzel bleiben auf einer Linie
+
+
 def test_shortcuts_open_tools(app) -> None:
     app.app.openShortcut(2)
     pump(0.2)

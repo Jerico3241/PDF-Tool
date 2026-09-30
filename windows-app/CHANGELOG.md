@@ -46,6 +46,26 @@ Verbesserte Darstellung auf hochauflösenden Displays (100–200 %), Symbole als
 Alle Funktionen aus 2.6.1 wurden übernommen. Keine manuelle Migration: Einstellungen, Kunden,
 Vorlagen, Regeln und Vertragsstände werden weiterverwendet.
 
+## Korrekturen und Qualitätssicherung
+
+- RichText-Kopf-/Fußzeilenintegration für Qt/QML korrigiert
+  – gespeicherte Kopf- und Fußzeilen erscheinen wieder vollständig im Editor (das Textfeld blieb
+  eine Zeile hoch und zeigte nichts an), Klicken, Markieren mit der Maus und Scrollen funktionieren
+  in jeder Zeile, Umschalt+Eingabe beginnt wieder einen Absatz; der Inhalt wird nach jeder Änderung
+  sofort ins Python-Modell übernommen (gespeichert wird weiterhin verzögert), »Kopfzeile speichern«
+  und »Fußzeile speichern« aktualisieren die Vorschau. Dasselbe gilt für das Notizfeld der Kundenakte.
+- Startseite visuell symmetrisch überarbeitet
+  – beide Werkzeugkarten exakt gleich breit und hoch, gleicher Innenaufbau, »Öffnen« und
+  Tastenkürzel auf einer Linie, Gruppe mittig mit gleichem Abstand links und rechts, Titel und
+  Datenschutzhinweis an der Kante der Karten, unter 736 px Gruppenbreite eine Spalte.
+- Installer-/Upgrade-Tests deutlich effizienter gestaltet
+  – ältere Einstellungen (2.2.0 bis 2.6.1) prüfen schnelle Migrationstests mit Fixtures statt
+  alter Setups; die vollständige historische Prüfung gibt es nur noch als manuellen Workflow
+  »Deep Compatibility Test«.
+- normaler Upgrade-Test beschränkt sich auf vorherige stabile Version → aktuelle Version
+  – für 2.7.0: Clean Install 2.7.0 und Update 2.6.1 → 2.7.0; die Vorversion wird nach SemVer
+  aus den veröffentlichten Releases bestimmt und ihr Setup zwischengespeichert, nie neu gebaut.
+
 # PDF Tool 2.6.1
 
 Qualitäts-Update: flüssigere Oberfläche, optimiertes Rendering, optionale Kundenakte (Standard aus).

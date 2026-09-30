@@ -1,5 +1,17 @@
 name: Windows-Setup
 
+# Normaler Lauf (Push, Pull Request, Release):
+#   1. Tests – Kernlogik, Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.6.1),
+#      PDF reparieren; die Qt-Oberflächentests laufen gleichzeitig in drei eigenen Jobs
+#      (je ein eigener Rechner – keine gegenseitige Last, gleiche Bedingungen wie bisher)
+#   2. Setup bauen
+#   3. Clean-Install-Test der neuen Version
+#   4. Upgrade-Test: unmittelbar vorherige stabile Version → neue Version (nach SemVer ermittelt,
+#      veröffentlichtes Setup, zwischengespeichert – nie ein altes Setup neu bauen)
+#   5. Runtime-Smoke-Test  6. QML-Smoke-Test  7. Release (nur manuell)
+# Keine historische Update-Matrix: ältere Versionen prüft nur der manuelle Workflow
+# »Deep Compatibility Test« (deep-compatibility.yml).
+
 on:
   push:
     branches: [main]
@@ -20,6 +32,10 @@ on:
         description: "Nach bestandenen Prüfungen das Release v<Version> (»PDF Tool <Version>«) mit Setup und SHA-256 veröffentlichen"
         type: boolean
         default: false
+      ersetzen:
+        description: "Nur mit »release«: ein bereits veröffentlichtes Release derselben Version aktualisieren (Tag auf diesen Commit, Setup, Prüfsumme und Release Notes ersetzen)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,12 +47,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  setup:
-    name: Setup bauen (Inno Setup)
+  qt-tests:
+    name: "1. Qt-Tests (${{ matrix.gruppe }})"
     runs-on: windows-latest
-    timeout-minutes: 90 # normal etwa 25 Minuten
-    permissions:
-      contents: write # nur für das Anhängen an ein Release
+    timeout-minutes: 30 # je Gruppe normal 6–8 Minuten; ein hängender Test bricht früh ab
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gruppe: Start, Navigation, Einstellungen, Verlauf, optionale Kundenakte
+            dateien: resources bridge shell history optional
+          - gruppe: Vertragsübersichten, Kopf- und Fußzeile, PDF reparieren
+            dateien: contracts richtext repair
+          - gruppe: Kundenakte, Stapel
+            dateien: customers batch
+    env:
+      DATEIEN: ${{ matrix.dateien }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,17 +71,11 @@ jobs:
           python-version: "3.13"
           architecture: x64
 
-      - name: Build- und Testpakete
+      - name: Testpakete
         run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
 
-      - name: Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich)
-        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py -q -p no:cacheprovider
-
-      - name: Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
-        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py -q -p no:cacheprovider
-
-      - name: Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, alle Abläufe)
-        timeout-minutes: 60 # ein hängender Test bricht so früh ab
+      - name: Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, Abläufe)
+        timeout-minutes: 25
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
@@ -63,11 +83,12 @@ jobs:
           # Jede Testdatei in einem eigenen Prozess: jede meldet ihre Fehler vollständig, und ein
           # Absturz zeigt den laufenden Test (-v) – alle Dateien laufen, auch nach einem Fehler.
           $failed = @()
-          foreach ($name in "resources", "bridge", "shell", "contracts", "customers", "batch", "repair", "history", "optional") {
+          foreach ($name in $env:DATEIEN -split '\s+') {
             python -m pytest "windows-app/tests/test_qt_$name.py" -v -rfE -p no:cacheprovider
-            if ($LASTEXITCODE -ne 0) { $failed += "test_qt_$name.py" }
+            if ($LASTEXITCODE -ne 0) { $failed += $name }
           }
-          if ($failed.Count -gt 0) { throw "Qt-Tests fehlgeschlagen: $($failed -join ', ')" }
+          "QT_FEHLGESCHLAGEN=$($failed -join ' ')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($failed.Count -gt 0) { throw "Qt-Tests fehlgeschlagen: $(($failed | ForEach-Object { "test_qt_$_.py" }) -join ', ')" }
 
       - name: Absturzanalyse der Qt-Tests (nur nach einem Fehler – nativer Aufrufstapel mit cdb)
         if: failure()
@@ -86,11 +107,39 @@ jobs:
             'sxe -c ".echo === Zugriffsverletzung (erste Chance) ===; kn 40; g" -c2 ".echo === Zugriffsverletzung (unbehandelt) ===; .ecxr; kn 80; q" av',
             'g'
           ) | Set-Content -Path $script -Encoding ascii
-          foreach ($name in "customers", "history") {
+          # fehlgeschlagene Dateien; brach der Testschritt ab (z. B. Zeitlimit), alle Dateien der Gruppe
+          $names = if ("$env:QT_FEHLGESCHLAGEN".Trim()) { $env:QT_FEHLGESCHLAGEN } else { $env:DATEIEN }
+          foreach ($name in $names -split '\s+' | Where-Object { $_ }) {
             Write-Host "=== test_qt_$name.py unter cdb ==="
             & $cdb -G -lines -cf $script python -m pytest "windows-app/tests/test_qt_$name.py" -x -v -s -p no:cacheprovider -p no:faulthandler
           }
           exit 0
+
+  setup:
+    name: Setup bauen und prüfen (Inno Setup)
+    runs-on: windows-latest
+    timeout-minutes: 40 # normal etwa 7 Minuten
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: x64
+
+      - name: Build- und Testpakete
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+
+      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py -q -p no:cacheprovider
+
+      - name: 1. Tests (Datenmigration älterer Einstellungen 2.2.0 … 2.6.1 – Fixtures statt alter Setups)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest windows-app/tests/test_config_migration.py -v -p no:cacheprovider
+
+      - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
+        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -101,126 +150,88 @@ jobs:
           (Get-Item $iscc).VersionInfo.ProductVersion
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Setup bauen
+      - name: 2. Setup bauen
         run: python windows-app/build.py
 
-      - name: Eingebettete Laufzeit prüfen (Module, PDF, Programmstart)
-        shell: pwsh
-        run: |
-          & ./windows-app/build/payload/runtime/python.exe -s windows-app/tests/smoke_runtime.py --app windows-app/build/payload/app --ui
-          if ($LASTEXITCODE -ne 0) { throw "Prüfung der eingebetteten Laufzeit fehlgeschlagen" }
-
-      - name: Setup still installieren, prüfen und deinstallieren
-        shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName
-
-      - name: Vorversion 2.2.0 laden (Übersichten-Ersteller)
+      - name: Versionen des Update-Tests ermitteln (vorherige stabile Version nach SemVer)
+        id: versions
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+        run: |
+          $current = (Get-Content windows-app/VERSION -Raw).Trim()
+          $previous = python windows-app/releases.py previous --repo "${{ github.repository }}"
+          if ($LASTEXITCODE -ne 0 -or -not $previous) { throw "Keine vorherige stabile Version gefunden" }
+          $previous = "$previous".Trim()
+          $setup = (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName
+          Write-Host "Clean install: PDF Tool $current"
+          Write-Host "Upgrade test: PDF Tool $previous → PDF Tool $current"
+          "current=$current" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "previous=$previous" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "SETUP=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          @(
+            "### Installer-Tests",
+            "- Clean Install: **PDF Tool $current**",
+            "- Upgrade test: **PDF Tool $previous → PDF Tool $current**",
+            "- Ältere Versionen: Datenmigration über Fixtures (test_config_migration.py); historische Setups nur im manuellen Workflow »Deep Compatibility Test«"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: "3. Clean-Install-Test: PDF Tool ${{ steps.versions.outputs.current }} (still installieren, prüfen, deinstallieren)"
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          Write-Host "Clean install: PDF Tool ${{ steps.versions.outputs.current }}"
+          ./windows-app/tests/smoke_installer.ps1 -Setup $env:SETUP
+
+      - name: "Setup von PDF Tool ${{ steps.versions.outputs.previous }} aus dem Zwischenspeicher"
+        id: previous-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vorversion
+          key: pdf-tool-setup-${{ steps.versions.outputs.previous }}
+
+      - name: "Setup von PDF Tool ${{ steps.versions.outputs.previous }} laden (veröffentlichtes Release, nie neu gebaut)"
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS: ${{ steps.versions.outputs.previous }}
+          CACHE_HIT: ${{ steps.previous-cache.outputs.cache-hit }}
         run: |
           $dir = Join-Path $env:RUNNER_TEMP "vorversion"
-          $name = "Uebersichten-Ersteller-Setup-2.2.0.exe"
-          gh release download v2.2.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
-          if ($LASTEXITCODE -ne 0) { throw "Vorversion konnte nicht geladen werden" }
-          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
-          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion stimmt nicht: $actual" }
-          "PREVIOUS_SETUP=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($env:CACHE_HIT -ne "true") {
+            gh release download "v$env:PREVIOUS" --repo "${{ github.repository }}" --pattern "*Setup-$env:PREVIOUS.exe*" --dir $dir
+            if ($LASTEXITCODE -ne 0) { throw "Setup von PDF Tool $env:PREVIOUS konnte nicht geladen werden" }
+          } else {
+            Write-Host "Aus dem Zwischenspeicher: $(Get-ChildItem $dir -Name)"
+          }
+          $setup = Get-ChildItem $dir -Filter "*Setup-$env:PREVIOUS.exe" | Select-Object -First 1
+          if (-not $setup) { throw "Setup von PDF Tool $env:PREVIOUS fehlt" }
+          $expected = ((Get-Content "$($setup.FullName).sha256" -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Prüfsumme des Setups von PDF Tool $env:PREVIOUS stimmt nicht: $actual" }
+          "PREVIOUS_SETUP=$($setup.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Update von 2.2.0 prüfen (ein App-Eintrag, Ordner, Verknüpfungen, Datenübernahme)
+      - name: "4. Upgrade-Test: PDF Tool ${{ steps.versions.outputs.previous }} → PDF Tool ${{ steps.versions.outputs.current }} (ein App-Eintrag, Benutzerdaten erhalten)"
+        timeout-minutes: 15 # kein automatischer Neuversuch: ein Fehler wird gemeldet
         shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP
-
-      - name: Vorversion 2.3.0 laden (PDF Tool)
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.3"
-          $name = "PDF-Tool-Setup-2.3.0.exe"
-          gh release download v2.3.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
-          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.3.0 konnte nicht geladen werden" }
-          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
-          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.3.0 stimmt nicht: $actual" }
-          "PREVIOUS_SETUP_23=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Upgrade test: PDF Tool ${{ steps.versions.outputs.previous }} → PDF Tool ${{ steps.versions.outputs.current }}"
+          ./windows-app/tests/smoke_installer.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
 
-      - name: Update von 2.3.0 prüfen (Kundenverlauf bleibt bei ausgeschalteter Kundenakte; nach dem Einschalten Kundenakten mit Sicherung, Formatierung, Standard-Fußzeile, Vorlagen)
+      - name: 5. Runtime-Smoke-Test (eingebettete Laufzeit – Module, PDF, Kundenakte, Vorschau, Stapel, Vergleich, Reparatur)
+        timeout-minutes: 10
         shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_23
-
-      - name: Vorversion 2.4.0 laden (PDF Tool)
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.4"
-          $name = "PDF-Tool-Setup-2.4.0.exe"
-          gh release download v2.4.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
-          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.4.0 konnte nicht geladen werden" }
-          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
-          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.4.0 stimmt nicht: $actual" }
-          "PREVIOUS_SETUP_24=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & ./windows-app/build/payload/runtime/python.exe -s windows-app/tests/smoke_runtime.py --app windows-app/build/payload/app --part runtime
+          if ($LASTEXITCODE -ne 0) { throw "Runtime-Smoke-Test fehlgeschlagen" }
 
-      - name: Update von 2.4.0 prüfen (Einstellungen, Kundenakten, Vorlagen, Rich Text, Reparatur-Einstellungen)
+      - name: 6. QML-Smoke-Test (Oberfläche aus der Ressource, Programmstart mit Fenster, Werkzeuge und Ansichten)
+        timeout-minutes: 10
         shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_24
-
-      - name: Vorversion 2.5.0 laden (PDF Tool)
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.5"
-          $name = "PDF-Tool-Setup-2.5.0.exe"
-          gh release download v2.5.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
-          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.5.0 konnte nicht geladen werden" }
-          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
-          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.5.0 stimmt nicht: $actual" }
-          "PREVIOUS_SETUP_25=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Update von 2.5.0 prüfen (Einstellungen, Kundenakten, Vorlagen, Rich Text, Stapel- und Reparatur-Einstellungen, Vertragsstände)
-        shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_25
-
-      - name: Vorversion 2.6.0 laden (PDF Tool)
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.6"
-          $name = "PDF-Tool-Setup-2.6.0.exe"
-          gh release download v2.6.0 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
-          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.6.0 konnte nicht geladen werden" }
-          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
-          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.6.0 stimmt nicht: $actual" }
-          "PREVIOUS_SETUP_26=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Update von 2.6.0 prüfen (Kundenakte zunächst aus, Kundenakten und Vertragsstände unverändert, alle Einstellungen erhalten)
-        shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_26
-
-      - name: Vorversion 2.6.1 laden (PDF Tool, Tk-Oberfläche)
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $dir = Join-Path $env:RUNNER_TEMP "vorversion-2.6.1"
-          $name = "PDF-Tool-Setup-2.6.1.exe"
-          gh release download v2.6.1 --repo "${{ github.repository }}" --pattern "$name*" --dir $dir
-          if ($LASTEXITCODE -ne 0) { throw "Vorversion 2.6.1 konnte nicht geladen werden" }
-          $expected = ((Get-Content (Join-Path $dir "$name.sha256") -Raw).Trim() -split '\s+')[0]
-          $actual = (Get-FileHash (Join-Path $dir $name) -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw "Prüfsumme der Vorversion 2.6.1 stimmt nicht: $actual" }
-          "PREVIOUS_SETUP_261=$(Join-Path $dir $name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Update von 2.6.1 prüfen (Tk → Qt ohne Reste, alle Benutzerdaten und Einstellungen erhalten, Kundenakte aus)
-        shell: pwsh
-        run: ./windows-app/tests/smoke_installer.ps1 -Setup (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName -Previous $env:PREVIOUS_SETUP_261
+          & ./windows-app/build/payload/runtime/python.exe -s windows-app/tests/smoke_runtime.py --app windows-app/build/payload/app --part ui --ui
+          if ($LASTEXITCODE -ne 0) { throw "QML-Smoke-Test fehlgeschlagen" }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -230,19 +241,33 @@ jobs:
             windows-app/dist/*.sha256
           if-no-files-found: error
 
-      - name: An Release anhängen
-        if: github.event_name == 'release'
-        shell: pwsh
+  attach:
+    name: An Release anhängen
+    needs: [qt-tests, setup]
+    # ein auf GitHub veröffentlichtes Release erhält das Setup erst, wenn alle Tests bestanden sind
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PDF-Tool-Setup
+          path: dist
+
+      - name: Setup und Prüfsumme anhängen
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" (Get-ChildItem windows-app/dist/*.exe, windows-app/dist/*.sha256) --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.exe dist/*.sha256 --clobber --repo "${{ github.repository }}"
 
   release:
-    name: Release veröffentlichen
-    needs: setup
+    name: 7. Release veröffentlichen
+    needs: [qt-tests, setup]
     # nur manuell auf main und nur, wenn alle Tests, der Build und die Setup-Prüfungen bestanden sind
     if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -253,9 +278,10 @@ jobs:
           name: PDF-Tool-Setup
           path: dist
 
-      - name: Tag und Release v<Version> erstellen
+      - name: Tag und Release v<Version> erstellen (bzw. mit »ersetzen« aktualisieren)
         env:
           GH_TOKEN: ${{ github.token }}
+          ERSETZEN: ${{ inputs.ersetzen }}
         run: |
           set -euo pipefail
           version="$(tr -d '[:space:]' < windows-app/VERSION)"
@@ -267,9 +293,17 @@ jobs:
           test -f "${notes}" || { echo "Release Notes fehlen: ${notes}" >&2; exit 1; }
           (cd dist && sha256sum -c "${setup}.sha256")
           if gh release view "${tag}" >/dev/null 2>&1; then
-            echo "Release ${tag} existiert bereits – nichts verändert." >&2
-            exit 1
+            if [ "${ERSETZEN}" != "true" ]; then
+              echo "Release ${tag} existiert bereits – nichts verändert (zum Aktualisieren »ersetzen« wählen)." >&2
+              exit 1
+            fi
+            echo "Release ${tag} wird aktualisiert: Tag → ${GITHUB_SHA}, Setup, Prüfsumme und Release Notes neu"
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" -f sha="${GITHUB_SHA}" -F force=true >/dev/null
+            gh release upload "${tag}" "dist/${setup}" "dist/${setup}.sha256" --clobber
+            gh release edit "${tag}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
+          else
+            gh release create "${tag}" "dist/${setup}" "dist/${setup}.sha256" \
+              --target "${GITHUB_SHA}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
           fi
-          gh release create "${tag}" "dist/${setup}" "dist/${setup}.sha256" \
-            --target "${GITHUB_SHA}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag}" --jq .sha)" = "${GITHUB_SHA}" || { echo "Tag ${tag} zeigt nicht auf ${GITHUB_SHA}" >&2; exit 1; }
           gh release view "${tag}"

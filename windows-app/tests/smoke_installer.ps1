@@ -4,8 +4,9 @@
 #      Fusszeile, Vorlagen, Textbausteinen und Regeln), PDF Tool 2.4.0 (Kundenakten mit
 #      formatierter Fusszeile und Vorlage, formatierte Kopfzeile, Einstellungen von "PDF reparieren"),
 #      PDF Tool 2.5.0 (wie 2.4.0, dazu Stapel-Einstellungen und ein gespeicherter Vertragsstand)
-#      oder PDF Tool 2.6.0/2.6.1 (wie 2.5.0, dazu eine aktive Kundenakte und die Fensterlage der
-#      Tk-Oberflaeche, die seit 2.7.0 nur noch gelesen wird)
+#      oder PDF Tool 2.6.0 und neuer, z. B. 2.6.1 (wie 2.5.0, dazu eine aktive Kundenakte und die
+#      Fensterlage der Tk-Oberflaeche, die seit 2.7.0 nur noch gelesen wird). Die Vorversion wird
+#      nach ihrer Versionsnummer eingeordnet (Vergleich als Version, nicht als Text).
 #   1. still installieren (bzw. aktualisieren) und Installation pruefen:
 #      Ordner, Verknuepfungen, genau ein Eintrag unter "Installierte Apps"; Qt-Oberflaeche
 #      (PySide6, QML als Ressource), keine Reste der Tk-Oberflaeche (tkinter, Tcl/Tk, lose QML)
@@ -32,6 +33,10 @@
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.5.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.6.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.6.1.exe
+#
+# Der normale Workflow (windows-setup.yml) ruft das Skript zweimal auf: ohne -Previous (Clean
+# Install) und mit dem Setup der unmittelbar vorherigen stabilen Version. Aeltere Vorversionen
+# prueft nur der manuelle Workflow "Deep Compatibility Test" (deep-compatibility.yml).
 #
 # Der Update-Test (-Previous) braucht einen Rechner ohne vorhandene Installation und ohne
 # Benutzerdaten der App. Ordner, die das Skript selbst angelegt hat, entfernt es am Ende wieder.
@@ -83,6 +88,9 @@ if ($Previous) {
     Write-Host "0. Vorversion installieren: $Previous"
     Install $Previous "vorversion" | Out-Null
     $oldEntry = Get-ItemProperty -LiteralPath $appKey
+    # Version nach SemVer vergleichen (nie per Textmuster): 2.6.0 und neuer legen dieselben Daten an
+    $previousVersion = [version]"0.0"
+    if (-not [version]::TryParse([string]$oldEntry.DisplayVersion, [ref]$previousVersion)) { throw "Version der Vorversion unbekannt: $($oldEntry.DisplayVersion)" }
     if (Test-Path (Join-Path $oldTarget "app\start.py")) {
         $previousKind = "2.2"
         if (-not (Test-Path $oldShortcut)) { throw "Verknuepfung der Vorversion fehlt: $oldShortcut" }
@@ -94,8 +102,8 @@ if ($Previous) {
         [IO.File]::WriteAllBytes((Join-Path $oldData "logos\kunde.png"), [byte[]](0..255))
         $oldHashes = @{}
         Get-ChildItem $oldData -Recurse -File | ForEach-Object { $oldHashes[$_.FullName.Substring($oldData.Length)] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
-    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and ($oldEntry.DisplayVersion -like "2.5*" -or $oldEntry.DisplayVersion -like "2.6*")) {
-        $previousKind = if ($oldEntry.DisplayVersion -like "2.6*") { "2.6" } else { "2.5" }
+    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $previousVersion -ge [version]"2.5") {
+        $previousKind = if ($previousVersion -ge [version]"2.6") { "2.6" } else { "2.5" }
         if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
         # Benutzerdaten wie von PDF Tool 2.5: wie 2.4, dazu Stapel-Einstellungen; ausserdem ein
@@ -118,7 +126,7 @@ if ($Previous) {
         $seedHash = (Get-FileHash $seedFile -Algorithm SHA256).Hash
         $storeHash = (Get-FileHash $storeFile -Algorithm SHA256).Hash
         $historyHash = (Get-FileHash $historyFile -Algorithm SHA256).Hash
-    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $oldEntry.DisplayVersion -like "2.4*") {
+    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $previousVersion -ge [version]"2.4") {
         $previousKind = "2.4"
         if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
