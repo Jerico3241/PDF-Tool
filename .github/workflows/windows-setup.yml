@@ -69,6 +69,29 @@ jobs:
           }
           if ($failed.Count -gt 0) { throw "Qt-Tests fehlgeschlagen: $($failed -join ', ')" }
 
+      - name: Absturzanalyse der Qt-Tests (nur nach einem Fehler – nativer Aufrufstapel mit cdb)
+        if: failure()
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QSG_INFO: "1" # Grafik-API und Render-Schleife ausgeben
+          PDFTOOL_QML_DEBUG: "1" # alle Qt-Meldungen ausgeben
+        run: |
+          $cdb = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Debuggers\x64\cdb.exe"
+          if (-not (Test-Path $cdb)) { Write-Host "cdb.exe nicht vorhanden – keine Absturzanalyse"; exit 0 }
+          $script = Join-Path $env:RUNNER_TEMP "absturz.cdb"
+          @(
+            '.symfix+ C:\symbols',
+            'sxe -c ".echo === Zugriffsverletzung (erste Chance) ===; kn 40; g" -c2 ".echo === Zugriffsverletzung (unbehandelt) ===; .ecxr; kn 80; q" av',
+            'g'
+          ) | Set-Content -Path $script -Encoding ascii
+          foreach ($name in "customers", "history") {
+            Write-Host "=== test_qt_$name.py unter cdb ==="
+            & $cdb -G -lines -cf $script python -m pytest "windows-app/tests/test_qt_$name.py" -x -v -s -p no:cacheprovider -p no:faulthandler
+          }
+          exit 0
+
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
         run: |

@@ -60,7 +60,8 @@ Item {
             }
         }
         Text {
-            Layout.maximumWidth: bar.width * 0.55
+            // Tastenhinweise behalten ihren Platz (wie 2.6.1) – gekürzt wird die Meldung links
+            Layout.minimumWidth: implicitWidth
             text: App.hint
             font: Typography.caption
             color: Theme.textTertiary

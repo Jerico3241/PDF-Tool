@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -76,7 +77,8 @@ def copy_text(text: str) -> None:
 
 
 def local_paths(urls: Sequence) -> list[str]:
-    """Aus QML (Drag & Drop): URLs bzw. Pfade als lokale Pfade."""
+    """Aus QML (Drag & Drop): URLs bzw. Pfade als lokale Pfade – in der Schreibweise des Systems
+    (unter Windows ``C:\\Ordner\\Datei.xlsx`` statt ``C:/Ordner/Datei.xlsx`` aus der URL)."""
     from PySide6.QtCore import QUrl
 
     paths: list[str] = []
@@ -87,7 +89,7 @@ def local_paths(urls: Sequence) -> list[str]:
             text = str(url)
             local = QUrl(text).toLocalFile() if text.startswith("file:") else text
         if local:
-            paths.append(local)
+            paths.append(os.path.normpath(local))
     return paths
 
 
