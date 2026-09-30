@@ -10,11 +10,12 @@ import PdfTool.Controls
 FocusScope {
     id: pane
     property bool expanded: true
+    property bool animated: true  // aus bei Breakpoints: dann sofort umstellen
     property real amount: expanded ? 1 : 0
     signal toggleRequested()
 
     width: Metrics.paneCompact + (Metrics.paneExpanded - Metrics.paneCompact) * amount
-    Behavior on amount { enabled: Motion.moves; NumberAnimation { duration: Motion.pane; easing.type: Motion.decelerate } }
+    Behavior on amount { enabled: Motion.moves && pane.animated; NumberAnimation { duration: Motion.pane; easing.type: Motion.decelerate } }
     Accessible.role: Accessible.Pane
     Accessible.name: "Navigation"
 

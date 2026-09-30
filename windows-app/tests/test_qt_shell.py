@@ -158,6 +158,25 @@ def test_nav_compact_toggle_persists(app, config_file: Path) -> None:
     assert neu.app.navCompact is True
 
 
+def test_breakpoint_hysteresis_and_toggle(app) -> None:
+    """Knapp unter einem Breakpoint bleibt der bisherige Zustand (8 px Hysterese wie 2.6.1); die
+    Menüschaltfläche klappt die Navigation auch im schmalen Fenster aus, ein Breakpoint setzt das
+    zurück und stellt sofort um – ohne Animation."""
+    shell = app.item("shell")
+    for width, mode in ((1010, "wide"), (1004, "wide"), (998, "medium"), (1004, "medium"), (1008, "wide"), (814, "medium"), (810, "compact"), (818, "compact"), (820, "medium")):
+        app.window.resize(width, 700)
+        pump(0.02)
+        assert shell.property("mode") == mode, width
+    assert shell.property("paneExpanded") is False
+    shell.togglePane()
+    pump(0.4)
+    assert shell.property("paneExpanded") is True and shell.property("userExpanded") is True
+    app.window.resize(1100, 700)
+    pump(0.02)
+    assert shell.property("mode") == "wide" and shell.property("userExpanded") is False
+    assert not shell.property("paneAnimated")
+
+
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)

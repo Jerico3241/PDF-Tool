@@ -47,5 +47,6 @@ QtObject {
     // Responsive Zustände (Fensterbreite in geräteunabhängigen Pixeln)
     readonly property int wideFrom: 1008
     readonly property int mediumFrom: 820
+    readonly property int breakpointHysteresis: 8
     readonly property int twoColumnsFrom: 740
 }

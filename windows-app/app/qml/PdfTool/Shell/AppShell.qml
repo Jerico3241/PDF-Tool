@@ -8,12 +8,31 @@ import PdfTool.Controls
 FocusScope {
     id: shell
     property alias pages: host
-    // Breakpoints: breit (Navigation ausgeklappt), mittel und kompakt (Navigation eingeklappt)
-    readonly property string mode: width >= Metrics.wideFrom ? "wide" : (width >= Metrics.mediumFrom ? "medium" : "compact")
+    // Breakpoints: breit (Navigation ausgeklappt), mittel und kompakt (Navigation eingeklappt) – mit
+    // kleiner Hysterese, damit ein Fenster an der Grenze nicht hin- und herspringt (wie 2.6.1).
+    // Ein Breakpoint stellt sofort um; animiert wird nur das Ein- und Ausklappen per Schaltfläche.
+    property string mode: "wide"
     property bool userExpanded: false
+    property bool paneAnimated: false
     readonly property bool paneExpanded: App.navCompact ? false : (mode === "wide" ? true : userExpanded)
 
+    function modeFor(w) {
+        var hysteresis = Metrics.breakpointHysteresis
+        if (w >= Metrics.wideFrom - (mode === "wide" ? hysteresis : 0)) return "wide"
+        if (w >= Metrics.mediumFrom - (mode !== "compact" ? hysteresis : 0)) return "medium"
+        return "compact"
+    }
+    function updateMode() {
+        var next = modeFor(width)
+        if (next === mode) return
+        paneAnimated = false
+        if (next === "wide" || mode === "wide") userExpanded = false
+        mode = next
+    }
+    onWidthChanged: updateMode()
+
     function togglePane() {
+        paneAnimated = true
         if (paneExpanded) {
             App.setNavCompact(true)
             userExpanded = false
@@ -76,6 +95,7 @@ FocusScope {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             expanded: shell.paneExpanded
+            animated: shell.paneAnimated
             onToggleRequested: shell.togglePane()
         }
 
