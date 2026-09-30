@@ -704,6 +704,43 @@ def test_detail_edit_emails_and_persistence(ui_app, config_file: Path) -> None:
     assert data["schema_version"] == 2 and data["customers"][0]["company"] == "A GmbH & Co."
 
 
+def test_note_field_shows_every_line_and_takes_clicks(ui_app) -> None:
+    """Die Notiz (mehrzeiliges Feld): jede Zeile ist gezeichnet, ein Klick unter den Text setzt den Cursor.
+
+    Bis zur Korrektur blieb das Textfeld (``T.TextArea``) eine Zeile hoch – weitere Zeilen waren
+    abgeschnitten und nur die erste Zeile nahm Klicks an (siehe test_qt_richtext.py).
+    """
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtTest import QTest
+
+    h = ui_app
+    kunde = akten(h).create("Notiz GmbH", "7", note="Zeile eins\nZeile zwei\nZeile drei\nZeile vier")
+    h.customers.customers_changed()
+    h.navigate("customers")
+    h.customers.show_detail(kunde.id)
+    pump(0.5)
+    feld = next(e for e in elemente(seite(h, "customers")) if e.inherits("QQuickTextEdit") and merkmal(e, "text") == kunde.note)
+    flaeche = feld.parentItem().parentItem()
+    assert feld.height() >= feld.implicitHeight() - 0.5 and feld.height() >= flaeche.height() - 0.5
+    bild = h.window.grabWindow()
+    faktor = bild.devicePixelRatio()
+    unten = feld.mapToScene(QPointF(0, feld.implicitHeight() - feld.property("bottomPadding") - 8))
+    dunkel = sum(
+        1
+        for px in range(int(feld.mapToScene(QPointF(8, 0)).x() * faktor), int(feld.mapToScene(QPointF(90, 0)).x() * faktor))
+        for py in range(int((unten.y() - 4) * faktor), int((unten.y() + 4) * faktor))
+        if sum(bild.pixelColor(px, py).getRgb()[:3]) / 3 < 140
+    )
+    assert dunkel > 10  # »Zeile vier« ist gezeichnet
+    ziel = feld.mapToScene(QPointF(feld.width() / 2, flaeche.height() - 4))
+    QTest.mouseClick(h.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(round(ziel.x()), round(ziel.y())))
+    pump(0.1)
+    assert feld.hasActiveFocus() and feld.property("cursorPosition") == len(kunde.note)
+    QTest.keyClick(h.window, "!")
+    pump(0.1)
+    assert h.customers.note.endswith("vier!")
+
+
 def test_delete_removes_record_but_never_files(ui_app, tmp_path: Path) -> None:
     h = ui_app
     pdf = tmp_path / "alt.pdf"

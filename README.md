@@ -421,22 +421,31 @@ die nativen Bibliotheken von qpdf und PDFium sowie Qt Quick enthalten sind – u
 früheren Tk-Oberfläche.
 
 Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) baut das Setup auf
-`windows-latest`, führt alle Tests aus, prüft die eingebettete Laufzeit (Module, Vertragsübersicht,
-PDF-Reparatur im Arbeitsprozess, Kundenakte, Vorschau, Stapel, Programmstart) und das installierte
-Setup: stille Installation, Programmstart, stille Deinstallation, das Update vom Übersichten-Ersteller
-2.2.0 (ein Eintrag unter „Installierte Apps“, Ordner, Verknüpfungen, Datenübernahme), das Update
-von PDF Tool 2.3.0 mit Beispieldaten (der Kundenverlauf bleibt bei ausgeschalteter Kundenakte
-unverändert und wird nach dem Einschalten mit Sicherung zu Kundenakten; Formatierung,
-Standard-Fußzeile und Vorlagen bleiben), das Update von PDF Tool 2.4.0 mit Beispieldaten
-(Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten), das Update von
-PDF Tool 2.5.0 (zusätzlich Stapel-Einstellungen und Vertragsstände) und das Update von PDF Tool
-2.6.0 (Kundenakte zunächst aus, Kundenakten und Vertragsstände unverändert und lesbar) sowie das
-Update von PDF Tool 2.6.1 mit der früheren Tk-Oberfläche (keine Reste von Tk, alle Benutzerdaten
-und Einstellungen erhalten).
-Der Runtime-Smoke-Test prüft außerdem pypdf, die Rohrekonstruktion einer beschädigten PDF und das
-Speichern und Vergleichen eines Vertragsstands. Manuell gestartet mit
-`release: true` veröffentlicht sie danach das Release `v<Version>` („PDF Tool <Version>“) mit Setup
-und Prüfsumme – nur wenn alle Prüfungen bestanden sind.
+`windows-latest` in dieser Reihenfolge:
+
+1. **Tests:** Kernlogik, Qt-Oberfläche (ohne Bildschirm) und die **Datenmigration älterer
+   Einstellungen** – `tests/test_config_migration.py` lädt Fixtures im Format von 2.2.0, 2.3.0, 2.4.0,
+   2.5.0, 2.6.0 und 2.6.1 (Einstellungen, Kundenakten, Vertragsstand) in die aktuelle Version. Dafür
+   wird kein altes Setup installiert.
+2. **Setup bauen.**
+3. **Clean-Install-Test** der neuen Version: stille Installation, Prüfung, Programmstart, stille
+   Deinstallation.
+4. **Upgrade-Test** nur von der unmittelbar vorherigen stabilen Version (für 2.7.0: **2.6.1 → 2.7.0**).
+   `windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
+   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert – nie neu gebaut.
+   Das Protokoll nennt den Pfad ausdrücklich („Upgrade test: PDF Tool 2.6.1 → PDF Tool 2.7.0“).
+5. **Runtime-Smoke-Test** der eingebetteten Laufzeit (Module, Vertragsübersicht, Kundenakte, Vorschau,
+   Stapel, Vertragsvergleich, PDF-Reparatur im Arbeitsprozess, Rohrekonstruktion).
+6. **QML-Smoke-Test** (Oberfläche aus der Ressource, Programmstart mit Fenster, Werkzeuge und Ansichten).
+7. **Release:** Manuell gestartet mit `release: true` veröffentlicht sie danach das Release
+   `v<Version>` („PDF Tool <Version>“) mit Setup und Prüfsumme – nur wenn alle Prüfungen bestanden
+   sind. `ersetzen: true` aktualisiert ein bereits veröffentlichtes Release derselben Version (Tag,
+   Setup, Prüfsumme, Release Notes).
+
+Die vollständige historische Installer-Prüfung (Update vom Übersichten-Ersteller 2.2.0 und von
+PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1 mit Beispieldaten) läuft nur noch auf ausdrückliche
+Anforderung im manuellen Workflow [`deep-compatibility.yml`](.github/workflows/deep-compatibility.yml)
+(„Deep Compatibility Test“, je Vorversion ein frischer Windows-Rechner).
 
 ### Tests
 

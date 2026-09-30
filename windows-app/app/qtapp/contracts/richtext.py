@@ -1,11 +1,22 @@
 """Kopf- und Fußzeile bearbeiten: Brücke zwischen dem QML-Textfeld und ``richtext.RichText``.
 
 Das Datenmodell (Formatierung je Zeichen, Ausrichtung je Absatz), die Speicherung und die
-Umwandlung für ReportLab bleiben unverändert in ``richtext``. Diese Klasse überträgt nur
-zwischen dem ``QTextDocument`` des Textfelds und ``RichText``:
+Umwandlung für ReportLab bleiben unverändert in ``richtext`` – es gibt kein zweites Format
+für QML. Das Textfeld arbeitet direkt auf seinem ``QTextDocument``; HTML, Markdown oder der
+``text`` des Textfelds werden nie gelesen oder geschrieben. Umgewandelt wird ausschließlich hier:
+
+* ``RichText`` → Dokument (``load_document``): je Absatz ein Block mit Ausrichtung
+  (``QTextBlockFormat``), je Abschnitt gleicher Formatierung ein Zeichenformat
+  (``QTextCharFormat``: Schrift, Größe, Farbe, Fett, Kursiv, Unterstrichen, Durchgestrichen)
+* Dokument → ``RichText`` (``document_rich``): dieselben Angaben zurück, exakt mit allen
+  Absätzen und Leerzeilen
+
+Maßgeblich ist das Python-Modell: ``RichTextDocument`` liest nach *jeder* Änderung im
+Textfeld (Tippen, Formatleiste, Rückgängig) den Inhalt sofort zurück. ``rich()`` liefert
+daher immer den aktuellen Stand – auch bevor das Textfeld existiert oder nachdem es entfernt
+wurde. Gespeichert wird davon unabhängig verzögert (``on_change`` → automatisches Speichern).
 
 * Laden (``set_rich``) und bewusstes Ersetzen (``replace_rich`` – rückgängig machbar)
-* Lesen (``rich``) – exakt mit allen Zeilenumbrüchen, zwischengespeichert bis zur nächsten Änderung
 * Formatleiste: Schrift, Größe, Fett, Kursiv, Unterstrichen, Durchgestrichen, Farbe, Ausrichtung
 * Ohne Markierung gilt eine gewählte Formatierung für den als Nächstes eingegebenen Text
 * Rückgängig/Wiederholen übernimmt das Dokument selbst (Text *und* Formatierung)
@@ -200,11 +211,10 @@ class RichTextDocument(Observable):
         super().__init__(parent)
         self.default = default
         self.default_align = align if align in ALIGNMENTS else "left"
-        self._start = initial
+        self._model = initial  # maßgeblicher Inhalt (immer aktuell, siehe Moduldokumentation)
         self._doc: QTextDocument | None = None
         self._quick: QObject | None = None
         self._on_change = on_change
-        self._cache: RichText | None = None
         self._loading = False
         self._cursor = (0, 0, 0)  # Position, Markierungsanfang, Markierungsende
         self.pending: CharStyle | None = None  # Format für den als Nächstes eingegebenen Text
@@ -221,7 +231,7 @@ class RichTextDocument(Observable):
         doc = document.textDocument() if isinstance(document, QQuickTextDocument) else document
         if not isinstance(doc, QTextDocument) or doc is self._doc:
             return
-        start = self.rich()
+        start = self._model
         # PySide bindet die Lebensdauer des zurückgegebenen Dokuments an das QQuickTextDocument-
         # Objekt: Beide Verweise halten, solange das Textfeld verbunden ist.
         self._quick = document
@@ -238,48 +248,40 @@ class RichTextDocument(Observable):
 
     @Slot()
     def detach(self) -> None:
-        """Das Textfeld wird entfernt: den aktuellen Stand behalten (das Dokument gehört QML)."""
+        """Das Textfeld wird entfernt: Das Modell ist bereits aktuell (das Dokument gehört QML)."""
         if self._doc is not None:
             try:
-                self._start = self.rich()
                 self._doc.contentsChange.disconnect(self._contents_change)
             except (RuntimeError, TypeError):
-                if self._cache is not None:
-                    self._start = self._cache
+                pass
         self._doc = None
         self._quick = None
-        self._cache = None
         self.attached = False
 
     # Lesen und Schreiben (Python) ----------------------------------------------------------
     def rich(self) -> RichText:
         """Aktueller Inhalt samt Formatierung – exakt mit allen Zeilenumbrüchen."""
-        if self._doc is None:
-            return self._start
-        if self._cache is None:
-            self._cache = document_rich(self._doc, self.default, self.default_align)
-        return self._cache
+        return self._model
 
     def text(self) -> str:
-        return self.rich().text
+        return self._model.text
 
     def set_rich(self, rich: RichText) -> None:
         """Inhalt setzen (Laden, Vorlage, Kundenakte) – der Rückgängig-Verlauf beginnt neu."""
-        self._start = rich
+        self._model = rich
         if self._doc is not None:
             self._set_document(rich, undoable=False)
         else:
-            self._cache = None
             self.revision = self.revision + 1
         self._refresh_state()
 
     def replace_rich(self, rich: RichText) -> None:
         """Inhalt ersetzen (z. B. »Standard wiederherstellen«) – mit Strg+Z rückgängig machbar."""
-        self._start = rich
+        self._model = rich
         if self._doc is not None:
             self._set_document(rich, undoable=True)
         else:
-            self._cache = None
+            self.revision = self.revision + 1
         self._refresh_state()
 
     def _set_document(self, rich: RichText, undoable: bool) -> None:
@@ -289,14 +291,17 @@ class RichTextDocument(Observable):
             load_document(self._doc, rich, undoable)
         finally:
             self._loading = False
-        self._cache = None
         self.pending = None
         self.revision = self.revision + 1
+
+    def _sync(self) -> None:
+        """Inhalt des Textfelds in das Modell übernehmen (nach jeder Änderung, ohne Speichern)."""
+        if self._doc is not None:
+            self._model = document_rich(self._doc, self.default, self.default_align)
 
     def _contents_change(self, position: int, removed: int, added: int) -> None:
         if self._loading:
             return
-        self._cache = None
         if added and self.pending is not None and self._doc is not None:
             # Gewählte Formatierung für neu eingegebenen Text (ohne Markierung gewählt)
             style, self.pending = self.pending, None
@@ -310,7 +315,7 @@ class RichTextDocument(Observable):
                 cursor.endEditBlock()
             finally:
                 self._loading = False
-            self._cache = None
+        self._sync()
         self.revision = self.revision + 1
         if self._on_change is not None:
             self._on_change()
@@ -395,7 +400,7 @@ class RichTextDocument(Observable):
         cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
         cursor.mergeCharFormat(merge)
         cursor.endEditBlock()
-        self._cache = None
+        self._sync()
         self._refresh_state()
 
     @Slot(str)
@@ -458,7 +463,7 @@ class RichTextDocument(Observable):
         fmt.setAlignment(ALIGN_FLAGS[align])
         cursor.mergeBlockFormat(fmt)
         cursor.endEditBlock()
-        self._cache = None
+        self._sync()
         self._refresh_state()
 
     @Slot(int, int)
@@ -483,6 +488,23 @@ class RichTextDocument(Observable):
             if line:
                 cursor.insertText(line, char_format(style))
         cursor.endEditBlock()
+        self._sync()
+
+    @Slot(int, int)
+    def newParagraph(self, start: int, end: int) -> None:  # noqa: N802
+        """Umschalt+Eingabe: neuer Absatz wie mit Eingabe (ein weicher Umbruch wäre kein Absatz der PDF)."""
+        if self._doc is None:
+            return
+        start, end = min(start, end), max(start, end)
+        style = self.insert_style(start)
+        cursor = QTextCursor(self._doc)
+        cursor.beginEditBlock()
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.insertBlock(cursor.blockFormat(), char_format(style))
+        cursor.endEditBlock()
+        self._sync()
 
     # Test- und Diagnosehilfen -------------------------------------------------------------------------
     def default_color(self) -> str:

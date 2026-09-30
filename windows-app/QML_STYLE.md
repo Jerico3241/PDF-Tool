@@ -49,6 +49,13 @@ alles unter `windows-app/app/qml/`.
 - Laufende Animationen nur, solange sie sichtbar sind (`running: visible && …`).
 - Bindungen ohne Schleifen; keine Property-Namen, die mit `on` + Großbuchstabe beginnen (QML hält sie
   für Signal-Handler); Flickable-Properties (`contentX`, `contentWidth`) nicht überschreiben.
+- **Größe von Template-Steuerelementen:** Elemente aus `QtQuick.Templates` (`T.Button`,
+  `T.TextField`, `T.TextArea` …) berechnen ihre Größe nicht selbst – das tut sonst ein Stil. Jede
+  `P…`-Komponente setzt `implicitWidth`/`implicitHeight`. Ein `T.TextArea` bekommt seine Höhe aus dem
+  Inhalt (`contentHeight + topPadding + bottomPadding`) und füllt seine Fläche
+  (`height: Math.max(implicitHeight, flickable.height)`): Sonst bleibt es eine Zeile hoch, Qt zeichnet
+  nur, was im Feld liegt, und Klicks darunter gehen verloren (`PRichTextEditor`, `PTextArea`;
+  geprüft in `test_qt_richtext.py` mit echten Klicks und dem gezeichneten Bild).
 - Neue Komponenten in das `qmldir` ihres Moduls eintragen – sonst fehlen sie in der Ressource des
   Setups (Test: `test_qt_resources.py`).
 

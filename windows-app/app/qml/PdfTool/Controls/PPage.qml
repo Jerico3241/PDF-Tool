@@ -5,10 +5,14 @@ import PdfTool.Style
 
 // Seite: Titel, Untertitel und Inhalt mit höchstens 1180 px Breite; natürliches Scrollen
 // (Mausrad, Touchpad) ohne künstlich träges »Smooth Scrolling«.
+// ``centered``: Inhalt mit gleichem Abstand links und rechts mittig (Startseite) – gerade Breite,
+// damit zwei Spalten mit geradem Abstand pixelgenau gleich breit sind.
 Item {
     id: page
     property string title: ""
     property string subtitle: ""
+    property bool centered: false
+    property int maxContentWidth: Metrics.pageMaxWidth
     default property alias content: column.data
     property alias flickable: flick
     property alias header: headerSlot.data
@@ -49,12 +53,17 @@ Item {
 
         ColumnLayout {
             id: column
-            x: Metrics.pagePaddingLeft + Math.max(0, (flick.width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight - Metrics.pageMaxWidth) / 2)
+            x: page.centered
+               ? Math.round((flick.width - width) / 2)
+               : Metrics.pagePaddingLeft + Math.max(0, (flick.width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight - page.maxContentWidth) / 2)
             y: Metrics.pagePaddingTop
-            width: Math.min(Metrics.pageMaxWidth, flick.width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight)
+            width: page.centered
+                   ? Math.max(0, 2 * Math.floor(Math.min(page.maxContentWidth, flick.width - 2 * Metrics.pagePaddingLeft) / 2))
+                   : Math.min(page.maxContentWidth, flick.width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight)
             spacing: 0
 
             ColumnLayout {
+                objectName: "pageHeader"
                 Layout.fillWidth: true
                 Layout.bottomMargin: 20
                 spacing: 2

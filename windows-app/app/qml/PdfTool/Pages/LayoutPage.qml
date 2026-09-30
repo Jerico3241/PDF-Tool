@@ -145,6 +145,7 @@ PPage {
             document: Contracts.headerDocument
             lines: 3
             label: "Kopfzeile"
+            placeholderText: "Keine Kopfzeile – hier Text eingeben, wenn oben auf jeder Seite etwas stehen soll"
         }
         Flow {
             Layout.fillWidth: true
@@ -198,6 +199,7 @@ PPage {
             document: Contracts.footerDocument
             lines: 5
             label: "Fußzeile"
+            placeholderText: "Text der Fußzeile"
         }
         Flow {
             Layout.fillWidth: true

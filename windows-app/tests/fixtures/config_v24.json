@@ -1,0 +1,247 @@
+{
+  "gesehen": "2.4.0",
+  "firmenname": "Muster GmbH",
+  "kundennummer": "10042",
+  "rechnungsempfaenger": "rechnung@muster.de",
+  "excel": "C:\\Listen\\muster.xlsx",
+  "logo": "C:\\Logos\\firma.png",
+  "zielordner": "C:\\PDF",
+  "dateiname": "Uebersicht_{kd}_{datum}.pdf",
+  "format": "quer",
+  "logo_breite": "55",
+  "titel": "Vertragsübersicht",
+  "untertitel": "Wartungsverträge",
+  "kopfzeile": "Kopf {kd}",
+  "kopfzeile_format": {
+    "version": 1,
+    "text": "Kopf {kd}",
+    "spans": [
+      {
+        "start": 0,
+        "end": 4,
+        "font": "Helvetica",
+        "size": 10,
+        "color": "#B51F1F",
+        "bold": true,
+        "italic": false,
+        "underline": false,
+        "strike": false
+      },
+      {
+        "start": 4,
+        "end": 9,
+        "font": "Helvetica",
+        "size": 10,
+        "color": "#333333",
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "strike": false
+      }
+    ],
+    "paragraphs": [
+      {
+        "start": 0,
+        "end": 9,
+        "alignment": "left"
+      }
+    ]
+  },
+  "baustein_name": "Gruß",
+  "bausteine": [
+    {
+      "name": "Gruß",
+      "text": "Mit freundlichen Grüßen",
+      "format": {
+        "version": 1,
+        "text": "Mit freundlichen Grüßen",
+        "spans": [
+          {
+            "start": 0,
+            "end": 4,
+            "font": "Helvetica",
+            "size": 8,
+            "color": "#333333",
+            "bold": false,
+            "italic": false,
+            "underline": false,
+            "strike": false
+          },
+          {
+            "start": 4,
+            "end": 16,
+            "font": "Helvetica",
+            "size": 8,
+            "color": "#333333",
+            "bold": true,
+            "italic": false,
+            "underline": false,
+            "strike": false
+          },
+          {
+            "start": 16,
+            "end": 23,
+            "font": "Helvetica",
+            "size": 8,
+            "color": "#333333",
+            "bold": false,
+            "italic": false,
+            "underline": false,
+            "strike": false
+          }
+        ],
+        "paragraphs": [
+          {
+            "start": 0,
+            "end": 23,
+            "alignment": "center"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Alt ohne Format",
+      "text": "Alter Baustein\n\nZweiter Absatz"
+    }
+  ],
+  "regeln": [
+    {
+      "enthaelt": "Hott-KI",
+      "zyklus": "jährlich"
+    },
+    {
+      "enthaelt": "Cloud",
+      "zyklus": "monatlich"
+    }
+  ],
+  "vorlagen": [
+    {
+      "name": "Quer",
+      "logo": "",
+      "format": "quer",
+      "dateiname": "Quer_{kd}.pdf",
+      "logo_breite": "50",
+      "titel": "Übersicht quer",
+      "untertitel": "",
+      "kopfzeile": "Kopf {kd}",
+      "kopfzeile_format": {
+        "version": 1,
+        "text": "Kopf {kd}",
+        "spans": [
+          {
+            "start": 0,
+            "end": 4,
+            "font": "Helvetica",
+            "size": 10,
+            "color": "#B51F1F",
+            "bold": true,
+            "italic": false,
+            "underline": false,
+            "strike": false
+          },
+          {
+            "start": 4,
+            "end": 9,
+            "font": "Helvetica",
+            "size": 10,
+            "color": "#333333",
+            "bold": false,
+            "italic": false,
+            "underline": false,
+            "strike": false
+          }
+        ],
+        "paragraphs": [
+          {
+            "start": 0,
+            "end": 9,
+            "alignment": "left"
+          }
+        ]
+      },
+      "fusszeile": "Eigene Fußzeile\n\nZeile 3 {firma}",
+      "fusszeile_format": {
+        "version": 1,
+        "text": "Eigene Fußzeile\n\nZeile 3 {firma}",
+        "spans": [
+          {
+            "start": 0,
+            "end": 17,
+            "font": "Helvetica",
+            "size": 8,
+            "color": "#333333",
+            "bold": false,
+            "italic": false,
+            "underline": false,
+            "strike": false
+          },
+          {
+            "start": 17,
+            "end": 24,
+            "font": "Helvetica",
+            "size": 8,
+            "color": "#333333",
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "strike": false
+          },
+          {
+            "start": 24,
+            "end": 32,
+            "font": "Helvetica",
+            "size": 8,
+            "color": "#333333",
+            "bold": true,
+            "italic": true,
+            "underline": false,
+            "strike": false
+          }
+        ],
+        "paragraphs": [
+          {
+            "start": 0,
+            "end": 15,
+            "alignment": "center"
+          },
+          {
+            "start": 16,
+            "end": 16,
+            "alignment": "center"
+          },
+          {
+            "start": 17,
+            "end": 32,
+            "alignment": "right"
+          }
+        ]
+      },
+      "regeln": [
+        {
+          "enthaelt": "Hott-KI",
+          "zyklus": "jährlich"
+        }
+      ]
+    },
+    {
+      "name": "Alt ohne Fußzeile",
+      "format": "hoch",
+      "titel": "Vertragsübersicht"
+    }
+  ],
+  "staende": {},
+  "pdf_oeffnen": false,
+  "theme": "dark",
+  "accent": "#1F5AA6",
+  "mica": false,
+  "nav_kompakt": true,
+  "ordner_excel": "C:\\Listen",
+  "ordner_logo": "C:\\Logos",
+  "reparatur_ausgabe": "ordner",
+  "reparatur_ordner": "C:\\Reparatur",
+  "ordner_reparatur": "C:\\Quelle",
+  "kunde_aktiv": "",
+  "kunden_sortierung": "company",
+  "kunden_auto_uebernehmen": false,
+  "kunde_texte_vorher": null
+}

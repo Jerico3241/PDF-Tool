@@ -70,6 +70,22 @@ Listen sind `models.KeyedListModel` (`QAbstractListModel`) mit eindeutigem Schl�
 (z. B. neue Sortierung einer langen Liste). QML-Listen (`ListView`, `reuseItems: true`) sind
 virtualisiert – auch 500 Kunden oder 100 Stapel-Einträge bleiben flüssig.
 
+## Kopf- und Fußzeile (Rich Text)
+
+Es gibt genau ein Datenmodell: `richtext.RichText` (Formatierung je Zeichen, Ausrichtung je Absatz),
+unverändert seit 2.2. QML erhält kein eigenes Format.
+
+| Schritt | Ort | Was passiert |
+| --- | --- | --- |
+| Speicher → Modell | `appstate.header_rich_from` / `footer_rich_from` / `baustein_rich` | reiner Text (`kopfzeile`, `fusszeile`, Baustein `text`) plus Formatierung (`kopfzeile_format`, `fusszeile_format`, Baustein `format`). Fehlt die Formatierung oder passt sie nicht zum Text: Standardformat. Ohne bewusst gespeicherte Fußzeile: Standard-Fußzeile. |
+| Modell → Editor | `qtapp/contracts/richtext.py`: `RichTextDocument.attach` → `load_document` | je Absatz ein Block mit Ausrichtung (`QTextBlockFormat`), je Abschnitt ein Zeichenformat (`QTextCharFormat`) im `QTextDocument` des QML-Textfelds |
+| Editor → Modell | `RichTextDocument._contents_change` → `document_rich` | nach **jeder** Änderung (Tippen, Formatleiste, Rückgängig) sofort zurück ins Modell; `rich()` liefert immer den aktuellen Stand – der Inhalt existiert nie nur in QML |
+| Modell → Speicher | `ContractOverviewController.config()` | verzögert (800 ms nach der letzten Änderung) und bei »Kopfzeile/Fußzeile speichern«, nie bei jedem Tastendruck |
+| Modell → PDF | `overview.pdf_fields(header=…, footer=…)` → `engine.erstelle_pdf` | Platzhalter mit `RichText.with_placeholders` (der Wert behält das Format des Platzhalters), ReportLab-Markup mit `richtext.paragraph_markup` – dieselbe Erzeugung für Vorschau, »PDF erstellen« und Stapel |
+
+HTML, Markdown oder die Property `text` des Textfelds werden nie gelesen oder geschrieben;
+eingefügt wird nur reiner Text (`pastePlain`). Umschalt+Eingabe beginnt einen Absatz (`newParagraph`).
+
 ## Hintergrundarbeit
 
 - `tasks.Worker.run(func, on_done, on_error)` – Excel-Prüfung, PDF-Erzeugung, Vorschau, Stapel,
@@ -118,4 +134,19 @@ fertigen Bild → weitere Seiten laden.
 - Qt-Brücke und Oberfläche: `tests/test_qt_*.py` mit `tests/qtutil.py` (`Harness`: App wie beim
   Start, ohne Bildschirm mit `QT_QPA_PLATFORM=offscreen`). Jede Meldung der QML-Engine lässt einen
   Test scheitern.
-- Laufzeit und Setup: `tests/smoke_runtime.py`, `tests/smoke_installer.ps1` (in der CI).
+- Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
+  (`tests/fixtures/config_v22.json` … `config_v261.json`, dazu Kundenakten und ein Vertragsstand)
+  in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.
+- Laufzeit und Setup: `tests/smoke_runtime.py` (`--part runtime` bzw. `--part ui`),
+  `tests/smoke_installer.ps1` (in der CI).
+
+## CI
+
+- **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Push/PR/Release): Tests → Setup bauen →
+  Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen stabilen Version
+  (`windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
+  veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test
+  → QML-Smoke-Test → Release (nur manuell; `ersetzen` aktualisiert ein vorhandenes Release derselben
+  Version).
+- **Deep Compatibility Test** (`.github/workflows/deep-compatibility.yml`, nur manuell): Upgrade von
+  allen bzw. ausgewählten älteren stabilen Versionen (ab 2.2.0), je Version ein frischer Windows-Rechner.

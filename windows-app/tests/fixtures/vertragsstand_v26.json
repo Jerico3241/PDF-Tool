@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "d35c1e20ea374713b2fbeff305bf9621",
+  "customer_id": "6f1c1d2e-0000-4000-8000-000000000024",
+  "created_at": "2026-09-01T10:00:00+02:00",
+  "last_exported_at": "2026-09-01T10:00:00+02:00",
+  "export_count": 1,
+  "content_hash": "2d2bffa9c47a778250e981b95d4bbf461f270d0e5158b29968309383eb00d9a1",
+  "customer_label": "Muster GmbH · 10042",
+  "source": {
+    "excel_path": "C:\\Listen\\muster.xlsx",
+    "excel_sha256": "",
+    "pdf_path": "C:\\PDF\\Vertragsuebersicht_Kd10042.pdf"
+  },
+  "contracts": [
+    {
+      "contract_number": "10001",
+      "effective": {
+        "contract_type": "Softwarepflegevertrag",
+        "description": "Warenwirtschaft",
+        "start_date": "2024-01-01",
+        "billing_cycle": "jährlich",
+        "net_amount": "250.00",
+        "net_text": "250,00",
+        "payment_method": "Lastschrift"
+      },
+      "raw": {
+        "Vertrag-Nr.": "10001"
+      },
+      "source_row": null
+    }
+  ]
+}

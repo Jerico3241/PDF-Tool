@@ -664,7 +664,9 @@ class ContractOverviewController(Observable):
 
     @Slot()
     def saveHeader(self) -> None:  # noqa: N802
+        """Aktuellen Inhalt samt Formatierung speichern (Einstellungen) – die Vorschau folgt."""
         kopf = self.header_rich()
+        self.tool.preview_dirty()
         self.app.persist()
         if not kopf.is_blank():
             self.notify("kopf_info", "success", "Die Kopfzeile wurde gespeichert.", auto_hide=5000)
@@ -677,6 +679,7 @@ class ContractOverviewController(Observable):
         rich = self.footer_rich()  # aktueller Inhalt des Editors samt Formatierung
         if name:
             self.state.save_baustein(name, rich.text, rich.to_dict())
+        self.tool.preview_dirty()
         self.app.persist()
         self.reload_bausteine()
         if name:
