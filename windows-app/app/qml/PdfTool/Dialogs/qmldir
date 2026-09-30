@@ -1,0 +1,9 @@
+module PdfTool.Dialogs
+StepsContent 1.0 StepsContent.qml
+AboutContent 1.0 AboutContent.qml
+ChangelogContent 1.0 ChangelogContent.qml
+ChooseCustomerContent 1.0 ChooseCustomerContent.qml
+NewCustomerContent 1.0 NewCustomerContent.qml
+CustomerUpdateContent 1.0 CustomerUpdateContent.qml
+CustomerFieldsContent 1.0 CustomerFieldsContent.qml
+ChooseTemplateContent 1.0 ChooseTemplateContent.qml

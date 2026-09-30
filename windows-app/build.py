@@ -5,18 +5,23 @@
 Ablauf:
  1. alte Build-Dateien bereinigen (build/, dist/)
  2. Version aus windows-app/VERSION lesen und prüfen
- 3. Windows-Python (python.org, inkl. tkinter/Tcl/Tk) laden und prüfen
- 4. Python-Pakete aus runtime-requirements.txt laden (win_amd64, mit Prüfsummen)
- 5. Laufzeit verschlanken und vorkompilieren, App und Assets kopieren
- 6. Assistentenbilder aus assets/icon.ico erzeugen
- 7. Inno Setup (ISCC.exe) aufrufen
- 8. Setup prüfen, SHA-256 schreiben, optional signieren
+ 3. Windows-Python (python.org) laden und prüfen
+ 4. Python-Pakete aus runtime-requirements.txt laden (win_amd64, mit Prüfsummen),
+    darunter PySide6-Essentials (Qt 6, Qt Quick) in exakt gepinnter Version
+ 5. Laufzeit verschlanken (ohne tkinter/Tcl/Tk; von PySide6 nur die benötigten Module,
+    Plugins und QML-Module – siehe qtruntime.py) und vorkompilieren
+ 6. App und Assets kopieren; die QML-Oberfläche als Qt-Ressource bündeln (app/qml_rc.py,
+    siehe qmlres.py) – lose QML-Dateien kommen nicht ins Setup
+ 7. Assistentenbilder aus assets/icon.ico erzeugen
+ 8. Inno Setup (ISCC.exe) aufrufen
+ 9. Setup prüfen, SHA-256 schreiben, optional signieren
 
 Ergebnis:  windows-app/dist/PDF-Tool-Setup-<Version>.exe (+ .sha256)
 
 Voraussetzungen (Windows):
-  * Python 3.13 (64 Bit) mit pip und Pillow – dieselbe Hauptversion wie die
-    mitgelieferte Laufzeit, damit vorkompilierte .pyc-Dateien passen
+  * Python 3.13 (64 Bit) mit pip, Pillow und PySide6-Essentials (gleiche Version wie in
+    runtime-requirements.txt; liefert rcc für die QML-Ressourcen) – dieselbe Hauptversion
+    wie die mitgelieferte Laufzeit, damit vorkompilierte .pyc-Dateien passen
   * Inno Setup 6.6 oder neuer (https://jrsoftware.org/isdl.php)
   * Internetzugang (python.org, PyPI)
 
@@ -45,6 +50,10 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import qmlres  # noqa: E402 - QML-Oberfläche als Qt-Ressource
+import qtruntime  # noqa: E402 - PySide6 verschlanken
+
 ROOT = Path(__file__).resolve().parent
 APP = ROOT / "app"
 ASSETS = ROOT / "assets"
@@ -62,15 +71,21 @@ PYTHON_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSION}/{PYTHON_ZIP}"
 PYTHON_SHA256 = "6479223746cdfb79d25865110d6f524ac98de081324e119af1dc3ae36bddc7a5"
 REQUIREMENTS = ROOT / "runtime-requirements.txt"
 
-# Was die App zur Laufzeit nicht braucht
+# Was die App zur Laufzeit nicht braucht – seit 2.7.0 auch kein tkinter/Tcl/Tk mehr (Qt-Oberfläche)
 RUNTIME_REMOVE = [
     "include", "libs", "Scripts", "Doc", "Tools", "__install__.json",
     "Lib/test", "Lib/idlelib", "Lib/turtledemo", "Lib/ensurepip", "Lib/venv",
-    "Lib/pydoc_data", "Lib/turtle.py", "tcl/tk8.6/demos",
+    "Lib/pydoc_data", "Lib/turtle.py", "Lib/tkinter", "tcl",
+    "DLLs/_tkinter.pyd", "DLLs/tcl86t.dll", "DLLs/tk86t.dll",
 ]
 RUNTIME_REMOVE_GLOBS = [
     "DLLs/_test*.pyd", "DLLs/_ctypes_test.pyd", "DLLs/xxlimited*.pyd", "**/*.pdb",
-    "tcl/*.lib", "tcl/*.sh", "Lib/site-packages/pip", "Lib/site-packages/pip-*",
+    "Lib/site-packages/pip", "Lib/site-packages/pip-*",
+]
+# Im Setup verboten: die frühere Tk-Oberfläche
+FORBIDDEN_PAYLOAD = [
+    "runtime/DLLs/_tkinter.pyd", "runtime/DLLs/tcl86t.dll", "runtime/DLLs/tk86t.dll", "runtime/tcl",
+    "runtime/Lib/tkinter", "app/vertragdesk.py", "app/ui", "app/qml",
 ]
 SITE_REMOVE_DIRS = {"tests"}  # pandas/tests, numpy/_core/tests …
 SITE_REMOVE_SUFFIXES = {".pyi", ".pxd", ".pyx", ".c", ".h", ".cpp", ".lib", ".a"}
@@ -82,11 +97,6 @@ REQUIRED_PAYLOAD = [
     "THIRD_PARTY_LICENSES.md",
     "runtime/pythonw.exe",
     "runtime/python313.dll",
-    "runtime/DLLs/_tkinter.pyd",
-    "runtime/DLLs/tcl86t.dll",
-    "runtime/DLLs/tk86t.dll",
-    "runtime/tcl/tcl8.6/init.tcl",
-    "runtime/tcl/tk8.6/tk.tcl",
     "runtime/Lib/site-packages/pandas/__init__.py",
     "runtime/Lib/site-packages/numpy/__init__.py",
     "runtime/Lib/site-packages/openpyxl/__init__.py",
@@ -98,50 +108,71 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/pypdfium2/__init__.py",
     "runtime/Lib/site-packages/pypdf/__init__.py",
     "runtime/Lib/site-packages/pypdfium2_raw/pdfium.dll",
+    "runtime/Lib/site-packages/shiboken6/__init__.py",
+    "runtime/Lib/site-packages/shiboken6/Shiboken.pyd",
+    "runtime/Lib/site-packages/PySide6/__init__.py",
+    "runtime/Lib/site-packages/PySide6/QtCore.pyd",
+    "runtime/Lib/site-packages/PySide6/QtGui.pyd",
+    "runtime/Lib/site-packages/PySide6/QtWidgets.pyd",
+    "runtime/Lib/site-packages/PySide6/QtQml.pyd",
+    "runtime/Lib/site-packages/PySide6/QtQuick.pyd",
+    "runtime/Lib/site-packages/PySide6/QtQuickControls2.pyd",
+    "runtime/Lib/site-packages/PySide6/QtSvg.pyd",
+    "runtime/Lib/site-packages/PySide6/Qt6Core.dll",
+    "runtime/Lib/site-packages/PySide6/Qt6Quick.dll",
+    "runtime/Lib/site-packages/PySide6/Qt6QuickControls2Basic.dll",
+    "runtime/Lib/site-packages/PySide6/plugins/platforms/qwindows.dll",
+    "runtime/Lib/site-packages/PySide6/plugins/imageformats/qico.dll",
+    "runtime/Lib/site-packages/PySide6/qml/QtQuick/qmldir",
+    "runtime/Lib/site-packages/PySide6/qml/QtQuick/Controls/Basic/qmldir",
+    "runtime/Lib/site-packages/PySide6/qml/QtQuick/Templates/qmldir",
+    "runtime/Lib/site-packages/PySide6/qml/QtQuick/Layouts/qmldir",
+    "runtime/Lib/site-packages/PySide6/qml/QtQuick/Shapes/qmldir",
     "app/start.py",
-    "app/vertragdesk.py",
+    "app/qml_rc.py",
     "app/engine.py",
     "app/appstate.py",
     "app/excelstyle.py",
     "app/richtext.py",
     "app/pdffonts.py",
-    "app/ui/navigation.py",
-    "app/ui/richtext.py",
-    "app/ui/pages/home.py",
+    "app/design.py",
+    "app/mica.py",
+    "app/winsys.py",
+    "app/qtapp/application.py",
+    "app/qtapp/app.py",
+    "app/qtapp/repair.py",
+    "app/qtapp/settings.py",
+    "app/qtapp/theme.py",
+    "app/qtapp/contracts/overview.py",
+    "app/qtapp/contracts/richtext.py",
+    "app/qtapp/contracts/customers.py",
+    "app/qtapp/contracts/preview.py",
+    "app/qtapp/contracts/batch.py",
+    "app/qtapp/contracts/comparison.py",
+    "app/qtapp/contracts/tool.py",
     "app/tools/__init__.py",
     "app/tools/registry.py",
-    "app/tools/contract_overview/controller.py",
-    "app/tools/contract_overview/customer_flow.py",
-    "app/tools/contract_overview/customer_widgets.py",
     "app/tools/contract_overview/preview.py",
-    "app/tools/contract_overview/page_create.py",
-    "app/tools/contract_overview/page_layout.py",
-    "app/tools/contract_overview/page_preview.py",
-    "app/tools/contract_overview/page_customers.py",
     "app/tools/contract_overview/overview.py",
     "app/tools/contract_overview/batch/__init__.py",
     "app/tools/contract_overview/batch/models.py",
     "app/tools/contract_overview/batch/analyzer.py",
     "app/tools/contract_overview/batch/resolver.py",
     "app/tools/contract_overview/batch/processor.py",
-    "app/tools/contract_overview/batch/flow.py",
-    "app/tools/contract_overview/batch/page.py",
-    "app/tools/contract_overview/batch/widgets.py",
     "app/tools/contract_overview/history/__init__.py",
     "app/tools/contract_overview/history/models.py",
     "app/tools/contract_overview/history/compare.py",
     "app/tools/contract_overview/history/repository.py",
     "app/tools/contract_overview/history/report.py",
-    "app/tools/contract_overview/history_flow.py",
-    "app/tools/contract_overview/history_widgets.py",
     "app/tools/contract_overview/customers/models.py",
     "app/tools/contract_overview/customers/matching.py",
     "app/tools/contract_overview/customers/repository.py",
     "app/tools/contract_overview/customers/migration.py",
+    "app/tools/contract_overview/customers/texts.py",
     "app/tools/pdf_repair/models.py",
     "app/tools/pdf_repair/engine.py",
     "app/tools/pdf_repair/process.py",
-    "app/tools/pdf_repair/page.py",
+    "app/tools/pdf_repair/presentation.py",
     "app/tools/pdf_repair/recovery/__init__.py",
     "app/tools/pdf_repair/recovery/lenient.py",
     "app/tools/pdf_repair/recovery/scanner.py",
@@ -317,8 +348,16 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
         log(f"  {wheel.name}")
         install_wheel(wheel, site)
     trim_runtime(runtime)
+    qtruntime.trim(site, log)
 
-    shutil.copytree(APP, PAYLOAD / "app", ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
+    shutil.copytree(APP, PAYLOAD / "app", ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "qml_rc.py"))
+    # QML-Oberfläche als Qt-Ressource (qrc:/qml/…) statt loser Dateien
+    log("Bündle die QML-Oberfläche (rcc) …")
+    try:
+        qmlres.compile_resources(PAYLOAD / "app" / "qml_rc.py", APP / "qml")
+    except (FileNotFoundError, ImportError) as exc:
+        fail(f"QML-Ressourcen konnten nicht erzeugt werden ({exc}). PySide6-Essentials im Build-Python installieren.")
+    remove(PAYLOAD / "app" / "qml")
     shutil.copytree(ASSETS, PAYLOAD / "assets")
     shutil.copy2(ROOT / "README.txt", PAYLOAD / "README.txt")
     shutil.copy2(ROOT.parent / "THIRD_PARTY_LICENSES.md", PAYLOAD / "THIRD_PARTY_LICENSES.md")
@@ -337,6 +376,9 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     missing += [pattern for pattern in REQUIRED_NATIVE if not any(path.is_file() for path in PAYLOAD.glob(pattern))]
     if missing:
         fail("Im Paket fehlen: " + ", ".join(missing))
+    forbidden = [rel for rel in FORBIDDEN_PAYLOAD if (PAYLOAD / rel).exists()]
+    if forbidden:
+        fail("Im Paket darf nicht liegen: " + ", ".join(forbidden))
 
 
 # --- Assistentenbilder -------------------------------------------------------------

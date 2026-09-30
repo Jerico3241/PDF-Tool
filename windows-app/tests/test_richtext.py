@@ -153,7 +153,7 @@ def test_text_blocks_old_and_new() -> None:
 
 
 def test_customer_record_keeps_formatting() -> None:
-    from tools.contract_overview.customer_flow import footer_of, header_of
+    from tools.contract_overview.customers.texts import footer_of, header_of
     from tools.contract_overview.customers.migration import customer_from_legacy
 
     fuss = formatiert("Kunde A", [(0, 5, {"color": BLAU})])

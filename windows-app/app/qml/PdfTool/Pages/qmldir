@@ -1,0 +1,15 @@
+module PdfTool.Pages
+HomePage 1.0 HomePage.qml
+SettingsPage 1.0 SettingsPage.qml
+ContractViews 1.0 ContractViews.qml
+ComparisonSummary 1.0 ComparisonSummary.qml
+ComparisonHead 1.0 ComparisonHead.qml
+ComparisonFoot 1.0 ComparisonFoot.qml
+ChangeRow 1.0 ChangeRow.qml
+CreatePage 1.0 CreatePage.qml
+LayoutPage 1.0 LayoutPage.qml
+PreviewPage 1.0 PreviewPage.qml
+ComparisonPage 1.0 ComparisonPage.qml
+CustomersPage 1.0 CustomersPage.qml
+BatchPage 1.0 BatchPage.qml
+RepairPage 1.0 RepairPage.qml

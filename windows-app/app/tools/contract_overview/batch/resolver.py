@@ -33,7 +33,7 @@ from typing import Callable
 from appstate import footer_rich_from, header_rich_from
 from richtext import RichText
 
-from ..customer_flow import footer_of, header_of
+from ..customers.texts import footer_of, header_of
 from ..customers.matching import MatchKind, MatchResult, normalize_email
 from ..customers.models import Customer
 from ..overview import FILE_CODES, Issue, excel_issues, output_issues, parse_width, pdf_fields, template_layout, template_rules

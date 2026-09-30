@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.6.1
+Version 2.7.0
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
@@ -19,13 +19,31 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.6.1.exe
+PDF-Tool-Setup-2.7.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
-(pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit qpdf, pypdfium2 mit
-PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
+(Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
+qpdf, pypdfium2 mit PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
 andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.7 – Next Generation UI
+---------------------------------------
+PDF Tool hat eine vollständig neue Oberfläche auf Basis von Qt 6.
+- Neues, modernes Design im Stil von Windows 11; Hell, Dunkel, „Wie
+  Windows“ und die Akzentfarbe wirken sofort.
+- Flüssigere Navigation mit sanften Seitenübergängen; echte Animationen
+  für Menüs, Dialoge, aufklappende Bereiche, Hinweise, Schaltflächen und
+  Schalter. Einstellungen → Animationen: Vollständig, Reduziert oder Aus.
+  Ist in Windows „Animationseffekte“ aus, gilt mindestens „Reduziert“.
+- Scharfe Darstellung auf hochauflösenden Bildschirmen (100–200 %).
+- Effizientere Listen im Stapel, in der Kundenliste und im Vertrags-
+  vergleich – auch mit Hunderten Einträgen flüssig.
+- Vorschau mit Seiten blättern, Zoom, „An Breite anpassen“ und „Ganze
+  Seite“; „PDF reparieren“ mit neuer, übersichtlicher Oberfläche.
+- Alle Funktionen aus 2.6.1 bleiben erhalten.
+- Keine manuelle Migration: Einstellungen, Kunden, Vorlagen, Regeln und
+  Vertragsstände werden weiterverwendet.
 
 Neu in Version 2.6.1
 --------------------
@@ -118,7 +136,8 @@ Neu in Version 2.3
 
 Voraussetzungen
 ---------------
-- Windows 10 oder Windows 11 (64 Bit)
+- Windows 10 (Version 1809 oder neuer) oder Windows 11 (64 Bit) – die
+  Oberfläche (Qt 6) setzt Windows 10 Version 1809 voraus
 - keine Administratorrechte
 - rund 300 MB freier Speicher
 
@@ -166,6 +185,14 @@ steht danach nur noch „PDF Tool“.
   erhalten. Schlägt die Übernahme fehl, arbeitet die App mit dem alten
   Ordner weiter und versucht es beim nächsten Start erneut.
 
+Update von PDF Tool 2.6.1 auf 2.7.0: Das Setup ersetzt die
+Programmdateien vollständig durch die neue Oberfläche – die frühere
+Oberfläche bleibt nicht zurück. Einstellungen, Kundenakten, E-Mail-
+Zuordnungen, Vorlagen, Textbausteine, formatierte Kopf- und Fußzeilen,
+Zyklus-Regeln, Stapel- und Reparatur-Einstellungen und Vertragsstände
+werden unverändert weiterverwendet; die Kundenakte bleibt so eingestellt,
+wie sie war. Eine manuelle Migration ist nicht nötig.
+
 Update von PDF Tool 2.6.0: Das Setup ersetzt nur die Programmdateien.
 Die Kundenakte ist jetzt optional und zunächst aus – Ihre Kundenakten,
 E-Mail-Zuordnungen und Vertragsstände bleiben unverändert erhalten. Ein
@@ -209,8 +236,8 @@ erneut ausführen repariert die Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   PDF-Tool-Setup-2.6.1.exe /VERYSILENT /SUPPRESSMSGBOXES
-   PDF-Tool-Setup-2.6.1.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.7.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.7.0.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -525,19 +552,20 @@ vollständigen Pfade und keine Passwörter.
 Einstellungen
 -------------
 Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
-(Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen und
-Informationen zur App. Einstellungen der Werkzeuge stehen im jeweiligen
-Werkzeug.
+(Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen
+(Vollständig, Reduziert, Aus), Kundenakte und Informationen zur App.
+Einstellungen der Werkzeuge stehen im jeweiligen Werkzeug.
 
 
 Windows-11-Design
 -----------------
-Die Oberfläche folgt dem Fluent Design von Windows 11: Navigation links,
-Karten mit runden Ecken, Segoe-UI-Variable-Schrift und Fluent-Symbole.
-Unter Windows 11 erhalten Titelleiste und Navigation das Mica-Material,
-unter Windows 10 eine passende einfarbige Fläche. Animationen richten sich
-nach der Windows-Einstellung „Animationseffekte“ und lassen sich in der App
-abschalten.
+Die Oberfläche (Qt 6, Qt Quick) folgt dem Fluent Design von Windows 11:
+Navigation links, Karten mit runden Ecken, Segoe-UI-Variable-Schrift und
+Fluent-Symbole. Unter Windows 11 erhalten Titelleiste und Navigation das
+Mica-Material, unter Windows 10 eine passende einfarbige Fläche.
+Animationen richten sich nach der Windows-Einstellung „Animationseffekte“
+(dann mindestens „Reduziert“) und lassen sich in der App auf „Reduziert“
+oder „Aus“ stellen.
 
 
 Wenn etwas nicht klappt

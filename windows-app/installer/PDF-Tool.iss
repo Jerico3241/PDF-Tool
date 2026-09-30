@@ -25,7 +25,7 @@
 ; Feste AppId – darf sich in künftigen Versionen NIE ändern, sonst entsteht eine zweite Installation.
 #define AppGuid        "59C40061-D5E5-446D-ACB4-E077D3C71E1A"
 #define AppId          "{{" + AppGuid + "}"
-; Muss zu ui/windows.py passen (Taskleisten-Gruppierung und Erkennung der laufenden App)
+; Muss zu app/winsys.py passen (Taskleisten-Gruppierung und Erkennung der laufenden App)
 #define AppUserModelID "Jerico.PDFTool"
 #define AppMutexName   "Jerico.PDFTool.Instanz"
 ; Name, Ordner und Mutex bis Version 2.2 (»Übersichten-Ersteller«)
@@ -83,7 +83,10 @@ UsePreviousAppDir=yes
 UsePreviousTasks=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0
+; Qt 6 (Oberfläche seit 2.7.0) braucht Windows 10 Version 1809 (Build 17763) oder neuer – u. a. die
+; mit Windows gelieferte ICU-Bibliothek. Ältere Systeme erhalten vom Setup einen Hinweis statt einer App,
+; die nicht startet; eine vorhandene Installation bleibt dann unverändert.
+MinVersion=10.0.17763
 
 ; Laufende App erkennen und zum Schließen auffordern (Restart Manager)
 CloseApplications=yes

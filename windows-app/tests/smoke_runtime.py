@@ -6,8 +6,9 @@ Aufruf mit der zu prüfenden Laufzeit (nicht mit einem System-Python):
     %LOCALAPPDATA%\\PDF-Tool\\runtime\\python.exe -s smoke_runtime.py --app ...\\app --ui
 
 Geprüft wird:
-1. Import aller Laufzeitmodule (tkinter, numpy, pandas, openpyxl, xlrd, reportlab, PIL,
-   pikepdf mit qpdf, pypdfium2 mit PDFium, pypdf) und der App-Module beider Werkzeuge
+1. Import aller Laufzeitmodule (PySide6 mit Qt Quick, numpy, pandas, openpyxl, xlrd, reportlab,
+   PIL, pikepdf mit qpdf, pypdfium2 mit PDFium, pypdf) und der App-Module beider Werkzeuge;
+   tkinter ist nicht mehr Teil der Laufzeit (seit 2.7.0)
 2. Vertragsübersichten: eine echte PDF aus einer Excel mit fett formatierter Zelle und
    formatierter Fußzeile; Kundenakte 2.0 (Übernahme einer Kundenhistorie aus 2.3 mit
    Sicherung, Wiedererkennung per E-Mail, Speichern) und Live-Vorschau (PDF im
@@ -20,9 +21,11 @@ Geprüft wird:
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen;
    erweiterte Wiederherstellung: klassische PDF ohne xref, Trailer, %%EOF und mit
    defektem Seitenbaum rekonstruieren, Text und Seiten mit pypdf prüfen
-4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge und die Ansichten
-   »Stapel« und »Vorschau« öffnen; Kundenakte standardmäßig aus, »Kunden« erst nach dem
-   Einschalten – ohne Neustart; Einstellungen werden gespeichert)
+4. Oberfläche: die QML-Oberfläche aus der eingebauten Ressource (qml_rc) laden, ohne dass die
+   QML-Engine etwas meldet; mit ``--ui`` zusätzlich der Programmstart wie per Verknüpfung
+   (Hauptfenster mit Startseite, Werkzeuge und die Ansichten »Stapel« und »Vorschau« öffnen;
+   Kundenakte standardmäßig aus, »Kunden« erst nach dem Einschalten – ohne Neustart;
+   Einstellungen werden gespeichert). ``--offscreen`` prüft ohne sichtbares Fenster.
 
 Endet mit Code 0 und »OK«, sonst mit einer Fehlermeldung und Code 1.
 """
@@ -53,21 +56,27 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     parser.add_argument("--app", required=True, help="app-Ordner der zu prüfenden Installation bzw. des Pakets")
     parser.add_argument("--ui", action="store_true", help="zusätzlich das Hauptfenster starten und schließen")
+    parser.add_argument("--offscreen", action="store_true", help="Qt ohne sichtbares Fenster (Plattform »offscreen«)")
     args = parser.parse_args()
 
     app_dir = Path(args.app).resolve()
-    check((app_dir / "vertragdesk.py").is_file(), f"App-Ordner nicht gefunden: {app_dir}")
+    check((app_dir / "start.py").is_file() and (app_dir / "qtapp" / "application.py").is_file(), f"App-Ordner nicht gefunden: {app_dir}")
+    if args.offscreen:
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
     print(f"Python {sys.version.split()[0]} · {sys.executable}")
     check(Path(sys.executable).resolve().parent.name.lower() == "runtime", "Prüfung muss mit der eingebetteten Laufzeit laufen (runtime\\python.exe)")
 
     work = Path(tempfile.mkdtemp(prefix="pdf-tool-smoke-"))
     # Einstellungen der Prüfung in einem eigenen Ordner (vor dem Import von appstate setzen)
     os.environ["UE_DATA_DIR"] = str(work / "daten")
-    os.environ["UE_NO_ANIMATIONS"] = "1"
     sys.path.insert(0, str(app_dir))
 
     # 1. Module
-    import tkinter
+    import importlib.util
+
+    check(importlib.util.find_spec("tkinter") is None, "tkinter gehört nicht mehr zur Laufzeit (Qt-Oberfläche)")
+    import PySide6
+    from PySide6 import QtCore, QtGui, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
     import numpy
     import openpyxl
     import pandas
@@ -78,22 +87,26 @@ def main() -> int:
     import reportlab
     import xlrd
 
-    print(f"tkinter {tkinter.TkVersion} · numpy {numpy.__version__} · pandas {pandas.__version__} · openpyxl {openpyxl.__version__} · xlrd {xlrd.__version__} · reportlab {reportlab.Version} · Pillow {PIL.__version__}")
+    check(PySide6.__version__ == "6.11.2" and QtCore.qVersion() == "6.11.2", f"PySide6 {PySide6.__version__} / Qt {QtCore.qVersion()} statt 6.11.2")
+    print(f"PySide6 {PySide6.__version__} (Qt {QtCore.qVersion()}) · numpy {numpy.__version__} · pandas {pandas.__version__} · openpyxl {openpyxl.__version__} · xlrd {xlrd.__version__} · reportlab {reportlab.Version} · Pillow {PIL.__version__}")
     print(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__}) · pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO}) · pypdf {pypdf.__version__}")
+    import appstate
     import engine
     import excelstyle
     import pdffonts
     import richtext
-    import vertragdesk
+    from qtapp import application as qt_application
+    from qtapp.contracts import comparison as qt_comparison
+    from qtapp.contracts import tool as qt_contracts
+    from qtapp import repair as qt_repair
     from tools import registry
-    from tools.contract_overview import controller, customer_flow, overview, page_customers, page_preview, preview
+    from tools.contract_overview import overview, preview
     from tools.contract_overview.batch import analyzer as batch_analyzer
     from tools.contract_overview.batch import models as batch_models
-    from tools.contract_overview.batch import page as batch_page
     from tools.contract_overview.batch import processor as batch_processor
     from tools.contract_overview.batch import resolver as batch_resolver
-    from tools.contract_overview import history_flow, history_widgets
     from tools.contract_overview.customers import matching, migration, repository
+    from tools.contract_overview.customers.texts import footer_of
     from tools.contract_overview.history import compare as history_compare
     from tools.contract_overview.history import models as history_models
     from tools.contract_overview.history import report as history_report
@@ -104,15 +117,14 @@ def main() -> int:
     from tools.pdf_repair.recovery import lenient, rebuild, scanner
 
     check(lenient.available(), "pypdf fehlt in der Laufzeit (dritte Engine)")
-    check(hasattr(history_widgets, "ComparisonView") and history_flow.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
+    check(hasattr(qt_comparison, "ComparisonView") and qt_comparison.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
     check(hasattr(rebuild, "write_classic") and hasattr(scanner, "scan"), "Rohrekonstruktion fehlt")
 
     check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
-    check(hasattr(controller, "ContractOverviewTool"), "Werkzeug Vertragsübersichten fehlt")
-    check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "customers"), "Ansichten von Vertragsübersichten fehlen")
-    check(hasattr(page_customers, "CustomerPage") and hasattr(page_preview, "PreviewView") and hasattr(batch_page, "BatchPage"), "Ansichten »Kunden«, »Vorschau« bzw. »Stapel« fehlen")
+    check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool"), "Werkzeuge der Oberfläche fehlen")
+    check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
     check(overview.contract_summary(5, 3) == "5 aktive Verträge · 3 inaktiv ausgeblendet" and overview.contract_summary(1) == "1 aktiver Vertrag", "Statuszeile der Excel-Prüfung")
-    print(f"App {vertragdesk.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
+    print(f"App {appstate.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
 
     # 2. PDF mit Excel-Fettschrift und formatierter Fußzeile
     from datetime import datetime
@@ -161,8 +173,8 @@ def main() -> int:
     treffer = store.match([" RECHNUNG@mueller.de "])
     check(treffer.kind is matching.MatchKind.SINGLE, f"Wiedererkennung: {treffer.kind.value}")
     kunde = store.get(treffer.customer_id)
-    check(customer_flow.footer_of(kunde) == fuss, "Formatierung der Fußzeile ging bei der Übernahme verloren")
-    check(customer_flow.footer_of(next(k for k in store.all() if k.number == "1")) is None, "leere Fußzeile aus 2.3 wurde übernommen")
+    check(footer_of(kunde) == fuss, "Formatierung der Fußzeile ging bei der Übernahme verloren")
+    check(footer_of(next(k for k in store.all() if k.number == "1")) is None, "leere Fußzeile aus 2.3 wurde übernommen")
     check(store.match(["rechnung@mueller-gmbh.de"]).kind is matching.MatchKind.NONE, "unbekannte Adresse wurde zugeordnet")
     gespeichert = repository.CustomerStore.load(akten / repository.FILE_NAME)
     check(gespeichert.get(kunde.id) is not None and gespeichert.get(kunde.id).company == "Müller & Söhne GmbH", "Kundenakte nicht dauerhaft gespeichert")
@@ -195,8 +207,6 @@ def main() -> int:
     print(f"Vorschau: {doc.pages} Seite(n), erste Seite {breite}×{hoehe} Pixel")
 
     # Stapel: zwei Listen – ein bekannter Kunde, ein unbekannter mit eigenen Angaben – mit derselben Engine
-    import appstate
-
     stapel = work / "stapel"
     stapel.mkdir()
     for name, mail in (("bekannt.xlsx", "Rechnung@Mueller.de"), ("neu.xlsx", "info@neu.de")):
@@ -301,62 +311,106 @@ def main() -> int:
         check(rebuilt.get_warnings() == [] and len(rebuilt.pages) == 3, "rekonstruierte PDF öffnet nicht ohne Wiederherstellung")
     print(f"Erweiterte Wiederherstellung: {output.name} ({result.method.value}, {result.pages_after} Seiten)")
 
-    # 4. Programmstart
-    if args.ui:
-        from ui import dialogs
-
-        dialogs.AUTO_ANSWER = "primary"  # z. B. »Neu in Version« schließt sich selbst
-        started = time.monotonic()
-        app = vertragdesk.App()
-        shown = {}
-
-        def probe() -> None:
-            shown["mapped"] = bool(app.winfo_ismapped())
-            shown["page"] = app.nav.current
-            shown["title"] = app.title()
-            app.open_tool("repair")
-            app.update()
-            shown["repair"] = app.nav.current
-            app.open_tool("contracts")
-            app.update()
-            shown["contracts"] = app.nav.current
-            for view in ("batch", "preview"):
-                app.nav.navigate(view)
-                app.update()
-                shown[view] = app.nav.current
-            # Kundenakte: Standard aus – die Ansicht »Kunden« entsteht erst beim Einschalten (ohne Neustart)
-            shown["records"] = app.customer_records_enabled()
-            shown["customers_page"] = "customers" in app.nav.pages
-            app.nav.navigate("customers")
-            app.update()
-            shown["customers_off"] = app.nav.current
-            app.var_customer_records.set(True)
-            app.apply_customer_records_setting()
-            app.update()
-            app.nav.navigate("customers")
-            app.update()
-            shown["customers"] = app.nav.current
-            app.var_customer_records.set(False)
-            app.apply_customer_records_setting()
-            app.update()
-            shown["customers_after"] = app.nav.current
-            app._on_close()
-
-        app.after(3000, probe)
-        app.mainloop()
-        check(shown.get("mapped") is True, "Hauptfenster wurde nicht angezeigt")
-        check(shown.get("page") == "home", "Startseite fehlt")
-        check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
-        check(shown.get("repair") == "repair" and shown.get("contracts") == "create", "Werkzeuge lassen sich nicht öffnen")
-        check(shown.get("preview") == "preview" and shown.get("batch") == "batch", "Ansichten »Stapel« und »Vorschau« lassen sich nicht öffnen")
-        check(shown.get("records") is False and shown.get("customers_page") is False and shown.get("customers_off") == "preview", "Kundenakte ist nicht standardmäßig aus bzw. »Kunden« ohne Kundenakte erreichbar")
-        check(shown.get("customers") == "customers" and shown.get("customers_after") != "customers", "Kundenakte lässt sich nicht ohne Neustart ein- und ausschalten")
-        config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
-        check(config.is_file(), "Einstellungen wurden beim Beenden nicht gespeichert")
-        print(f"Programmstart: Fenster sichtbar, beendet nach {time.monotonic() - started:.1f} s")
+    # 4. Oberfläche: QML aus der eingebauten Ressource, ohne Meldungen der QML-Engine
+    source, _import_path = qt_application.qml_source()
+    if (app_dir / "qml_rc.py").is_file():
+        check(source.toString() == "qrc:/qml/Main.qml", f"Oberfläche nicht aus der Ressource: {source.toString()}")
+        check(not (app_dir / "qml").exists(), "lose QML-Dateien im Programmordner")
+    ui_probe(qt_application, full=args.ui)
 
     print("OK")
     return 0
+
+
+def ui_probe(qt_application, full: bool) -> None:
+    """Hauptfenster wie per Verknüpfung starten; mit ``full`` Werkzeuge, Ansichten und Kundenakte prüfen."""
+    import json
+
+    from PySide6.QtCore import QTimer, qInstallMessageHandler
+
+    from qtapp import dialogs
+
+    dialogs.AUTO_ANSWER = "primary"  # z. B. »Neu in Version« schließt sich selbst
+    qInstallMessageHandler(qt_application._message_handler)
+    started = time.monotonic()
+    qt = qt_application.create_application([])
+    runtime = qt_application.Runtime(qt_application.load_config())
+    engine_qml = qt_application.create_engine(runtime)
+    window = qt_application.show_window(runtime, engine_qml)
+    app = runtime.app
+    shown: dict = {}
+
+    def step(actions: list) -> None:
+        if not actions:
+            return
+        action = actions.pop(0)
+        try:
+            action()
+        except Exception:  # noqa: BLE001 - Fehler als Ergebnis festhalten
+            shown["error"] = traceback.format_exc()
+            actions.clear()
+            qt.quit()
+            return
+        QTimer.singleShot(250, lambda: step(actions))
+
+    def first() -> None:
+        shown["visible"] = window.isVisible()
+        shown["page"] = app.currentPage
+        shown["title"] = window.title()
+        shown["ready"] = app.ready
+
+    def tools() -> None:
+        app.openTool("repair")
+        shown["repair"] = app.currentPage
+        app.openTool("contracts")
+        shown["contracts"] = app.currentPage
+
+    def views() -> None:
+        for view in ("batch", "preview"):
+            app.navigate(view)
+            shown[view] = app.currentPage
+
+    def records_off() -> None:
+        shown["records"] = runtime.settings.customerRecords
+        shown["customers_blocked"] = "customers" in app.unavailablePages
+        app.navigate("customers")
+        shown["customers_off"] = app.currentPage
+
+    def records_on() -> None:
+        runtime.settings.setCustomerRecords(True)
+
+    def open_customers() -> None:
+        app.navigate("customers")
+        shown["customers"] = app.currentPage
+        runtime.settings.setCustomerRecords(False)
+
+    def finish() -> None:
+        shown["customers_after"] = app.currentPage
+        shown["messages"] = list(qt_application.MESSAGES)
+        shown["closed"] = app.requestClose()
+        window.close()
+        qt.quit()
+
+    actions = [first, tools, views, records_off, records_on, open_customers, finish] if full else [first, finish]
+    QTimer.singleShot(2500, lambda: step(actions))
+    QTimer.singleShot(60000, qt.quit)  # Sicherheitsnetz
+    qt.exec()
+    qt_application.finish_incubation(engine_qml)  # wie beim Beenden der App
+    del engine_qml
+    check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
+    check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")
+    check(shown.get("page") == "home", "Startseite fehlt")
+    check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
+    check(not shown.get("messages"), "Meldungen der QML-Engine:\n" + "\n".join(shown.get("messages") or []))
+    check(shown.get("closed") is True, "App ließ sich nicht schließen")
+    if full:
+        check(shown.get("repair") == "repair" and shown.get("contracts") == "create", "Werkzeuge lassen sich nicht öffnen")
+        check(shown.get("preview") == "preview" and shown.get("batch") == "batch", "Ansichten »Stapel« und »Vorschau« lassen sich nicht öffnen")
+        check(shown.get("records") is False and shown.get("customers_blocked") is True and shown.get("customers_off") == "preview", "Kundenakte ist nicht standardmäßig aus bzw. »Kunden« ohne Kundenakte erreichbar")
+        check(shown.get("customers") == "customers" and shown.get("customers_after") != "customers", "Kundenakte lässt sich nicht ohne Neustart ein- und ausschalten")
+    config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
+    check(config.is_file() and isinstance(json.loads(config.read_text(encoding="utf-8")), dict), "Einstellungen wurden beim Beenden nicht gespeichert")
+    print(f"Oberfläche: Fenster sichtbar, {'Werkzeuge und Ansichten geprüft, ' if full else ''}beendet nach {time.monotonic() - started:.1f} s")
 
 
 if __name__ == "__main__":
