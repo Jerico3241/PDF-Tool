@@ -49,7 +49,7 @@ _MISSING = object()
 
 
 class Observable(QObject):
-    """QObject mit ``observe(name, callback)`` für Properties aus ``prop()`` (wie ``trace_add`` in Tk)."""
+    """QObject mit ``observe(name, callback)`` für Properties aus ``prop()`` (Beobachter je Property)."""
 
     def observe(self, name: str, callback: Callable[[Any], None]) -> None:
         observers = self.__dict__.setdefault("_observers", {})

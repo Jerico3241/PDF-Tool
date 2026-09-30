@@ -12,11 +12,30 @@ ListView {
     property string subtitle: ""
     property Component headerContent: null
     property Component footerContent: null
+    // Die erzeugten Inhalte von Kopf- und Fußbereich (z. B. für focusSearch() einer Seite)
+    property Item headerContentItem: null
+    property Item footerContentItem: null
     readonly property real columnWidth: Math.max(0, Math.min(Metrics.pageMaxWidth, width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight))
     readonly property real columnX: Metrics.pagePaddingLeft + Math.max(0, (width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight - Metrics.pageMaxWidth) / 2)
     readonly property int columns: columnWidth >= Metrics.twoColumnsFrom ? 2 : 1
 
     function scrollToTop() { positionViewAtBeginning() }
+    // Pos1/Ende und Bild ↑/↓ (5 Zeilen) wie bis 2.6; ↑/↓ übernimmt die ListView selbst
+    function moveCurrent(index) {
+        if (count === 0) return
+        currentIndex = Math.max(0, Math.min(count - 1, index))
+        positionViewAtIndex(currentIndex, ListView.Contain)
+    }
+    Keys.onPressed: (event) => {
+        switch (event.key) {
+        case Qt.Key_Home: moveCurrent(0); break
+        case Qt.Key_End: moveCurrent(count - 1); break
+        case Qt.Key_PageUp: moveCurrent(currentIndex - 5); break
+        case Qt.Key_PageDown: moveCurrent(currentIndex < 0 ? 4 : currentIndex + 5); break
+        default: return
+        }
+        event.accepted = true
+    }
 
     clip: true
     boundsBehavior: Flickable.StopAtBounds
@@ -48,6 +67,7 @@ ListView {
                 Layout.fillWidth: true
                 sourceComponent: page.headerContent
                 visible: status === Loader.Ready
+                onLoaded: page.headerContentItem = item
             }
         }
     }
@@ -59,6 +79,7 @@ ListView {
             x: page.columnX
             width: page.columnWidth
             sourceComponent: page.footerContent
+            onLoaded: page.footerContentItem = item
         }
     }
 }

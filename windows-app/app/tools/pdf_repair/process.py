@@ -1,6 +1,6 @@
 """Analyse und Reparatur in einem eigenen Prozess – und die Übernahme der Ausgabe.
 
-* Die Oberfläche bleibt bedienbar: Die Arbeit läuft nicht im Tk-Hauptthread,
+* Die Oberfläche bleibt bedienbar: Die Arbeit läuft nicht im Hauptthread der Oberfläche,
   Fortschritt und Ergebnis kommen über eine Pipe zurück.
 * »Abbrechen« ist echt: Der Arbeitsprozess wird beendet und sein Arbeitsordner
   gelöscht. Es bleibt keine unvollständige Ausgabe zurück.

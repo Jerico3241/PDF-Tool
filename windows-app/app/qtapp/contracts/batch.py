@@ -290,6 +290,7 @@ class BatchController(Observable):
         self._restore = self._load_queue()
         self._loading = False
         self._closing = False
+        self._focused: set[str] = set()  # Eingabefelder der Detailansicht mit Tastaturfokus
         self.model = KeyedListModel(("name", "facts", "detail", "detailTone", "status", "statusTone", "statusKey", "selected"), key="id", parent=self)
         self.detail = ComparisonView(lambda snapshot_id: self._choose_baseline(snapshot_id), self._copy_comparison, self)
         for name in ("company", "number", "email"):
@@ -1495,7 +1496,8 @@ class BatchController(Observable):
             else:
                 self.customerTitle = "Kunde nicht zugeordnet"
                 self.customerNote = "Kein bekannter Rechnungsempfänger. Kunden auswählen oder Firmenname und Kundennummer eintragen."
-        if load_fields or not self.app.timers.pending("batch:edit"):
+        # ein Feld, in dem gerade getippt wird, nie neu laden (wie 2.6.1) – sonst verschwinden z. B. Leerzeichen am Ende
+        if load_fields or not (self._focused or self.app.timers.pending("batch:edit")):
             self._loading = True
             try:
                 self.company = res.company
@@ -1567,6 +1569,14 @@ class BatchController(Observable):
         if self._loading or not self.detailId:
             return
         self.app.timers.later("batch:edit", EDIT_DELAY, self._flush_edit)
+
+    @Slot(str, bool)
+    def setFieldFocus(self, field: str, focused: bool) -> None:  # noqa: N802
+        """QML meldet, ob Firmenname, Kundennummer oder E-Mail gerade den Tastaturfokus haben."""
+        if focused:
+            self._focused.add(field)
+        else:
+            self._focused.discard(field)
 
     def flush(self) -> None:
         if self.app.timers.pending("batch:edit"):

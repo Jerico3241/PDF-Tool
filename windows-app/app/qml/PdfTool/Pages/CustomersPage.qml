@@ -16,7 +16,7 @@ Item {
         function onFocusRequested(field) {
             if (field === "search") {
                 listPage.positionViewAtBeginning()
-                Qt.callLater(function() { if (listPage.headerItem) listPage.headerItem.focusSearch() })
+                Qt.callLater(function() { if (listPage.headerContentItem) listPage.headerContentItem.focusSearch() })
             } else if (field === "company") {
                 detailPage.scrollToTop()
                 Qt.callLater(function() { fieldCompany.forceActiveFocus(Qt.OtherFocusReason) })
@@ -38,6 +38,7 @@ Item {
         Accessible.name: "Kundenakten"
         Keys.onReturnPressed: if (currentIndex >= 0) Customers.showDetail(model.get(currentIndex).id)
         Keys.onEnterPressed: if (currentIndex >= 0) Customers.showDetail(model.get(currentIndex).id)
+        Keys.onSpacePressed: if (currentIndex >= 0) Customers.showDetail(model.get(currentIndex).id)
         onActiveFocusChanged: if (activeFocus && currentIndex < 0 && count > 0) currentIndex = 0
 
         headerContent: ColumnLayout {

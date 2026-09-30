@@ -50,7 +50,7 @@ MORE_COLORS = (
     ("Magenta", "#A21CAF"),
     ("Braun", "#78350F"),
 )
-# PDF-Schriften am Bildschirm: die passende Windows-Schrift (wie bisher in Tk)
+# PDF-Schriften am Bildschirm: die passende Windows-Schrift (wie in 2.6)
 SCREEN_FONTS = {
     "Helvetica": ["Arial", "Helvetica", "Liberation Sans", "DejaVu Sans"],
     "Times": ["Times New Roman", "Times", "Liberation Serif", "DejaVu Serif"],

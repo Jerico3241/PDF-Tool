@@ -389,7 +389,7 @@ Item {
             PMenu {
                 id: menu
                 PMenuItem { text: "Eintrag öffnen"; iconName: "open"; onTriggered: Batch.showDetail(row.id) }
-                PMenuItem { text: "PDF öffnen"; iconName: "document_pdf"; enabled: row.statusTone === "success" || row.statusKey === "warning"; onTriggered: Batch.openItemPdf(row.id) }
+                PMenuItem { text: "PDF öffnen"; iconName: "document_pdf"; enabled: row.statusKey === "success" || row.statusKey === "warning"; onTriggered: Batch.openItemPdf(row.id) }
                 PMenuItem { text: "Pfad kopieren"; iconName: "copy"; onTriggered: Batch.copyItemPath(row.id) }
                 PMenuItem { text: "Aus Stapel entfernen"; iconName: "delete"; enabled: !Batch.running; onTriggered: Batch.removeItem(row.id) }
             }
@@ -458,6 +458,7 @@ Item {
                         placeholderText: "E-Mail-Adresse (optional)"
                         text: Batch.email
                         onTextEdited: Batch.email = text
+                        onActiveFocusChanged: Batch.setFieldFocus("email", activeFocus)
                     }
                 }
                 PFactList { Layout.fillWidth: true; Layout.topMargin: 4; facts: Batch.excelFacts }
@@ -485,9 +486,9 @@ Item {
                     }
                 }
                 PFieldLabel { text: "Firmenname"; first: !Batch.customerParts }
-                PTextField { Layout.fillWidth: true; label: "Firmenname"; placeholderText: "z. B. Muster GmbH"; text: Batch.company; invalid: Batch.companyError; onTextEdited: Batch.company = text }
+                PTextField { Layout.fillWidth: true; label: "Firmenname"; placeholderText: "z. B. Muster GmbH"; text: Batch.company; invalid: Batch.companyError; onTextEdited: Batch.company = text; onActiveFocusChanged: Batch.setFieldFocus("company", activeFocus) }
                 PFieldLabel { text: "Kundennummer" }
-                PTextField { Layout.fillWidth: true; label: "Kundennummer"; placeholderText: "z. B. 10042"; text: Batch.number; invalid: Batch.numberError; onTextEdited: Batch.number = text }
+                PTextField { Layout.fillWidth: true; label: "Kundennummer"; placeholderText: "z. B. 10042"; text: Batch.number; invalid: Batch.numberError; onTextEdited: Batch.number = text; onActiveFocusChanged: Batch.setFieldFocus("number", activeFocus) }
                 PText { text: Batch.valueSource; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 4; visible: text !== "" }
                 PInfoBar { Layout.fillWidth: true; notice: Notices.area("batch_mail_info"); visible: Batch.customerParts && (shown || animating) }
             }

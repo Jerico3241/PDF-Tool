@@ -22,6 +22,11 @@ PPage {
         Preview.setViewport(viewArea.width, Math.max(240, height), Screen.devicePixelRatio)
     }
     Timer { id: viewportTimer; interval: 0; onTriggered: page.reportViewport() }
+    // Wie bis 2.6: beim Blättern steht die neue Seite oben im Blick
+    Connections {
+        target: Preview
+        function onPageChanged() { if (page.visible) page.reveal(viewArea) }
+    }
     onWidthChanged: viewportTimer.restart()
     onHeightChanged: viewportTimer.restart()
     onVisibleChanged: if (visible) viewportTimer.restart()

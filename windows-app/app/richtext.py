@@ -1,4 +1,4 @@
-"""Formatierter Text für Kopf- und Fußzeile – unabhängig von Tk und ReportLab.
+"""Formatierter Text für Kopf- und Fußzeile – unabhängig von Oberfläche und ReportLab.
 
 Datenmodell
 -----------

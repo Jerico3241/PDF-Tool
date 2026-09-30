@@ -276,6 +276,8 @@ class CustomerController(Observable):
 
     def start(self) -> None:
         """Nach dem Einrichten: Ergebnis der Übernahme melden, Anzeige herstellen, einmaliger Hinweis."""
+        # Wie bis 2.6: Schließen (×) des Kundenangebots heißt »Ignorieren« – für diese Excel nicht mehr anbieten.
+        self.app.notices.on_close("kunde_match", self.ignore_match)
         if self.enabled:
             self._report_load()
         self._mark_text_baseline()
@@ -1200,6 +1202,12 @@ class CustomerController(Observable):
     def refresh_line(self) -> None:
         customer = self.active_customer()
         self.activeId = customer.id if customer is not None else ""
+        # Kennzeichen »aktiv« in den Listen folgt der aktiven Kundenakte (nur geänderte Zeilen)
+        for model in (self.model, self.picker):
+            for item in model.items():
+                active = item.get("id") == self.activeId
+                if item.get("active") != active:
+                    model.update_item(item.get("id"), active=active)
         if customer is not None:
             self.pickerPlaceholder = "Anderen Kunden auswählen …"
             self.activeTitle = f"Kunde: {customer.label}"

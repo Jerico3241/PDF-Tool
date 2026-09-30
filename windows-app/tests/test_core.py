@@ -106,7 +106,7 @@ def test_footer_migration_rules(eintrag: dict, erwartet: str) -> None:
 
 
 def test_customer_footer_keeps_current_for_empty_values() -> None:
-    from tools.contract_overview.customer_flow import footer_of
+    from tools.contract_overview.customers.texts import footer_of
     from tools.contract_overview.customers.migration import customer_from_legacy
 
     for leer in ({"fusszeile": ""}, {"fusszeile": None}, {}, {"fusszeile": "  \n "}):

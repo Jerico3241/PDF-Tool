@@ -58,6 +58,21 @@ ColumnLayout {
             onCurrentIndexChanged: if (currentIndex >= 0) root.chosen = Customers.pickerModel.get(currentIndex).id
             Keys.onReturnPressed: (event) => { if (root.chosen !== "") Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
             Keys.onEnterPressed: (event) => { if (root.chosen !== "") Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
+            Keys.onSpacePressed: (event) => { if (root.chosen !== "") Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
+            Keys.onPressed: (event) => {
+                if (count === 0) return
+                var target
+                switch (event.key) {
+                case Qt.Key_Home: target = 0; break
+                case Qt.Key_End: target = count - 1; break
+                case Qt.Key_PageUp: target = Math.max(0, currentIndex - 5); break
+                case Qt.Key_PageDown: target = Math.min(count - 1, currentIndex < 0 ? 4 : currentIndex + 5); break
+                default: return
+                }
+                currentIndex = target
+                positionViewAtIndex(target, ListView.Contain)
+                event.accepted = true
+            }
             T.ScrollBar.vertical: PScrollBar {}
             delegate: Item {
                 id: row

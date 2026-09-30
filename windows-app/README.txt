@@ -136,7 +136,8 @@ Neu in Version 2.3
 
 Voraussetzungen
 ---------------
-- Windows 10 oder Windows 11 (64 Bit)
+- Windows 10 (Version 1809 oder neuer) oder Windows 11 (64 Bit) – die
+  Oberfläche (Qt 6) setzt Windows 10 Version 1809 voraus
 - keine Administratorrechte
 - rund 300 MB freier Speicher
 

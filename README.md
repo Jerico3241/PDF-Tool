@@ -5,7 +5,7 @@ Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Er
 
 Das Repository enthält:
 
-- die Windows-App für Windows 10 und 11 unter `windows-app/app/` – Oberfläche **PySide6 + Qt Quick/QML**
+- die Windows-App für Windows 10 (ab 1809) und 11 unter `windows-app/app/` – Oberfläche **PySide6 + Qt Quick/QML**
   (seit 2.7.0), Fachlogik in **Python**
 - das Inno-Setup-Skript für den Windows-Installer unter `windows-app/installer/PDF-Tool.iss`
 - das Build-Skript `windows-app/build.py`
@@ -37,8 +37,8 @@ und – mit eingeschalteter Kundenakte – **Kunden**. Die Kundenakte gehört au
 
 **Die Kundenakte ist optional (seit 2.6.1).** Einstellungen → **Vertragsübersichten** →
 **„Kundenakte verwenden“** – Standard **aus**, bei einer neuen Installation und auch nach einem
-Update (Opt-in). Die App fragt den Zustand zentral ab (`customer_records_enabled()` in
-`customer_flow.py`; gespeichert als `kundenakte_verwenden` in `gui-config.json`).
+Update (Opt-in). Die App fragt den Zustand zentral ab (Property `enabled` des Controllers in
+`app/qtapp/contracts/customers.py`; gespeichert als `kundenakte_verwenden` in `gui-config.json`).
 
 - **Ausgeschaltet** werden keine Kundendaten automatisch gespeichert oder abgeglichen – auch nicht im
   Hintergrund: `kundenakten.json` wird nicht gelesen, kein E-Mail-Abgleich, keine Übernahme, kein
@@ -175,7 +175,8 @@ Prominent sind nur die Änderungen; „4 unveränderte anzeigen“ blendet den R
 Verträge klappen mit den geänderten Feldern auf („Netto: 250,00 € → 270,00 €“). „Vergleichen mit“
 wählt einen früheren Stand (Standard: „Letzter Stand“), „Änderungen kopieren“ legt den Vergleich als
 Text in die Zwischenablage. Code: `app/tools/contract_overview/history/` (Modelle, Ablage, Vergleich,
-Texte), `history_flow.py` (Ablauf), `history_widgets.py` (Anzeige).
+Texte), `app/qtapp/contracts/comparison.py` (Ablauf und Anzeige-Modell), `ComparisonPage.qml` und
+`ChangeRow.qml` (Anzeige).
 
 - **Stand = strukturierte Daten, keine PDF:** Nach jeder erfolgreich erstellten PDF speichert
   PDF Tool die Verträge genau so, wie sie in der PDF stehen (Vertragsnummer, Art, Beschreibung,
