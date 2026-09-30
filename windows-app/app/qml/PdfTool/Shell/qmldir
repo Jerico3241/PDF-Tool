@@ -1,0 +1,6 @@
+module PdfTool.Shell
+AppShell 1.0 AppShell.qml
+NavigationPane 1.0 NavigationPane.qml
+PageHost 1.0 PageHost.qml
+StatusBar 1.0 StatusBar.qml
+DialogHost 1.0 DialogHost.qml

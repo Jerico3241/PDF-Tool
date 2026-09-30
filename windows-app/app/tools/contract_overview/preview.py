@@ -67,6 +67,26 @@ class PreviewDocument:
             raise
         return cls(folder, Path(path), sizes)
 
+    def render_image(self, index: int, scale: float):
+        """Seite als PIL-Bild (RGB) – im Hintergrund; die Oberfläche zeigt es direkt an."""
+        import pypdfium2 as pdfium
+
+        scale = max(0.1, min(MAX_SCALE, scale))
+        with RENDER_LOCK:
+            doc = pdfium.PdfDocument(str(self.path))
+            try:
+                page = doc[index]
+                try:
+                    bitmap = page.render(scale=scale)
+                    try:
+                        return bitmap.to_pil().convert("RGB")
+                    finally:
+                        bitmap.close()
+                finally:
+                    page.close()
+            finally:
+                doc.close()
+
     def render(self, index: int, scale: float) -> tuple[bytes, int, int]:
         """Seite als PNG (Base64) – im Hintergrund kodiert, damit die Oberfläche flüssig bleibt."""
         import pypdfium2 as pdfium
