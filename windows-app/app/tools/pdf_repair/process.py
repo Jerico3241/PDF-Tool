@@ -19,12 +19,14 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 TEMP_PREFIX = "pdf-tool-reparatur-"
 SUFFIX = "_repariert"
 STALE_SECONDS = 24 * 3600
+REAP_SECONDS = 30  # so lange holt ein Hilfsthread einen sich beendenden Arbeitsprozess höchstens ab
 # Arbeitsspeicher des Arbeitsprozesses: halber physischer Speicher, mindestens 1,5 GB, höchstens 8 GB
 MEMORY_MIN = 1536 * 1024 * 1024
 MEMORY_MAX = 8 * 1024 * 1024 * 1024
@@ -188,6 +190,7 @@ class Job:
         self.done = False
         self.cancelled = False
         self.started = time.monotonic()
+        self._reaper: threading.Thread | None = None
 
     def events(self) -> list[tuple]:
         found: list[tuple] = []
@@ -234,16 +237,35 @@ class Job:
         self.cleanup()
 
     def cleanup(self) -> None:
-        if self.work_dir is not None:
-            shutil.rmtree(self.work_dir, ignore_errors=True)
-            self.work_dir = None
+        """Arbeitsordner entfernen – erst nach dem Ende des Arbeitsprozesses (unter Windows hält er
+        sonst noch Dateien darin offen); beendet er sich noch, geschieht das im Hintergrund."""
+        work_dir, self.work_dir = self.work_dir, None
+        if work_dir is None:
+            return
+        reaper = self._reaper
+        if reaper is not None and reaper.is_alive():
+
+            def remove_later() -> None:
+                reaper.join()
+                shutil.rmtree(work_dir, ignore_errors=True)
+
+            threading.Thread(target=remove_later, name=f"pdf-tool-{self.kind}-aufraeumen", daemon=True).start()
+        else:
+            shutil.rmtree(work_dir, ignore_errors=True)
 
     def _finish_process(self) -> None:
         try:
             self._receiver.close()
         except Exception:
             pass
-        self._process.join(1)
+        if self._process.is_alive():
+            # Das Ergebnis ist da, der Arbeitsprozess beendet sich gerade – mit geladenen PDF-Bibliotheken
+            # dauert das unter Windows bis zu einer Sekunde. Die Oberfläche wartet nicht darauf:
+            # Ein Hilfsthread holt den Prozess ab.
+            self._reaper = threading.Thread(target=self._process.join, args=(REAP_SECONDS,), name=f"pdf-tool-{self.kind}-ende", daemon=True)
+            self._reaper.start()
+        else:
+            self._process.join(0)
 
     def wait(self, timeout: float = 600.0, interval: float = 0.05) -> list[tuple]:
         """Blockierend auf das Ende warten (Tests und Prüfskripte, nie in der Oberfläche)."""
@@ -256,6 +278,8 @@ class Job:
         if not self.done:
             self.cancel()
             found.append(("error", "Zeitüberschreitung"))
+        elif self._reaper is not None:
+            self._reaper.join(REAP_SECONDS)  # blockierend wie bisher: danach räumt cleanup() sofort auf
         return found
 
 

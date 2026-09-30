@@ -344,6 +344,54 @@ def test_job_cancel_removes_work_dir(tmp_path: Path) -> None:
     assert job.events() == []
 
 
+def test_result_does_not_wait_for_the_worker_to_exit(tmp_path: Path) -> None:
+    import threading
+
+    exited = threading.Event()
+
+    class SlowExit:
+        """Arbeitsprozess, der nach dem Ergebnis noch lange zum Beenden braucht (Windows, PDF-Bibliotheken)."""
+
+        exitcode = 0
+
+        def is_alive(self) -> bool:
+            return not exited.is_set()
+
+        def join(self, timeout: float | None = None) -> None:
+            exited.wait(timeout)
+
+    class Receiver:
+        def __init__(self) -> None:
+            self.items = [("progress", "write", None), ("result", "fertig")]
+
+        def poll(self) -> bool:
+            return bool(self.items)
+
+        def recv(self):
+            return self.items.pop(0)
+
+        def close(self) -> None:
+            pass
+
+    job = process.Job.__new__(process.Job)
+    job.kind, job.done, job.cancelled = "repair", False, False
+    job._receiver, job._process, job._reaper = Receiver(), SlowExit(), None
+    work = tmp_path / "arbeit"
+    work.mkdir()
+    (work / "ausgabe.pdf").write_bytes(b"%PDF-1.7\n")
+    job.work_dir = work
+    start = time.perf_counter()
+    assert job.events()[-1] == ("result", "fertig") and job.done
+    job.cleanup()
+    assert time.perf_counter() - start < 0.2  # die Oberfläche wartet nicht auf das Prozessende
+    assert work.exists()  # gelöscht wird erst, wenn der Prozess keine Dateien mehr offen haben kann
+    exited.set()
+    deadline = time.time() + 5
+    while work.exists() and time.time() < deadline:
+        time.sleep(0.02)
+    assert not work.exists() and job.work_dir is None
+
+
 def test_job_reports_crash(tmp_path: Path) -> None:
     job = process.Job("analyze", {"path": str(samples.healthy(tmp_path / "a.pdf"))})
     job._process.kill()
