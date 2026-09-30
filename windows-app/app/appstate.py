@@ -143,7 +143,7 @@ ERROR_LOG = DATA_DIR / "fehler.log"
 NEUERUNGEN = (
     "Die Kundenakte ist jetzt optional: Einstellungen → Vertragsübersichten → »Kundenakte verwenden« (zunächst aus). Gespeicherte Kundendaten bleiben immer erhalten.",
     "Flüssigere Oberfläche: Ansichten werden verdeckt vorbereitet und erscheinen fertig; schnellerer Start, ruhigeres Ändern der Fenstergröße, kurze einheitliche Animationen.",
-    "Die Vorschau wird beim erneuten Öffnen nicht neu erzeugt, der Vertragsvergleich nur bei echten Änderungen neu berechnet.",
+    "Die Vorschau hält den Platz der Seite frei und springt nicht, wenn sie erscheint; beim erneuten Öffnen wird nichts neu erzeugt. Der Vertragsvergleich wird nur bei echten Änderungen neu berechnet.",
     "Vertragsvergleich (mit Kundenakte): Nach der Excel-Prüfung zeigt die Karte »Vertragsänderungen«, welche Verträge seit dem letzten Stand des Kunden neu, entfernt oder geändert sind.",
     "»PDF reparieren« rettet deutlich mehr: Öffnet keine PDF-Engine die Datei, baut PDF Tool Querverweise, Trailer und Seitenbaum aus den noch vorhandenen Objekten neu auf.",
     "Alles bleibt lokal auf diesem PC – keine Cloud, keine Uploads.",

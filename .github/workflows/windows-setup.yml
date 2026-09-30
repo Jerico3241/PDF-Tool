@@ -24,10 +24,17 @@ on:
 permissions:
   contents: read
 
+# Ein neuer Push in denselben Pull Request ersetzt den laufenden Lauf; main, Releases und
+# manuelle Läufe laufen immer zu Ende.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   setup:
     name: Setup bauen (Inno Setup)
     runs-on: windows-latest
+    timeout-minutes: 90 # normal etwa 25 Minuten
     permissions:
       contents: write # nur für das Anhängen an ein Release
     steps:

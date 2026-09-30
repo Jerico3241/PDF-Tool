@@ -223,7 +223,10 @@ Ergebnis angezeigt wird (schneller Wechsel Kunde A → B). Code: `app/tools/cont
 Sichtbarkeit ist keine Änderung: Wer ohne Änderung zur Vorschau zurückkehrt, bekommt dieselbe PDF
 und dasselbe, bereits dekodierte Seitenbild – nichts wird neu erzeugt oder neu gezeichnet. Zoom und
 Blättern rendern nur die jeweilige Seite (Seitenbilder bleiben zwischengespeichert). Für eine noch
-entstehende Seite wird der Platz vorab reserviert, damit das Bild ohne Layoutsprung erscheint.
+entstehende Seite wird der Platz vorab reserviert – beim ersten Öffnen schon, während die PDF noch
+entsteht (A4 hoch oder quer laut „Darstellung“) –, damit das Bild ohne Layoutsprung erscheint.
+Seitenzahl und Zoomstufe haben eine feste Breite, der Zustand („Vorschau wird erstellt …“,
+„Aktuell · …“) eine eigene Zeile: Die Werkzeugleiste bricht nicht je nach Zustand um.
 
 ### Oberfläche: Rendering, Navigation und Animationen
 

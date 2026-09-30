@@ -151,6 +151,9 @@ def test_update_keeps_customer_data_and_hints_once(config_file: Path, monkeypatc
         # Update von 2.6.0: Kundenakte aus, Daten unangetastet, einmaliger Hinweis
         assert app.customer_records_enabled() is False and len(app.customers) == 0 and app.active_customer() is None
         assert app.ui.kunde_info.message == OPTIONAL_HINT
+        # sofort gemerkt – auch ohne reguläres Beenden erscheint der Hinweis kein zweites Mal
+        assert wait_until(app, lambda: json.loads(config_file.read_text(encoding="utf-8")).get("kundenakte_hinweis_gezeigt") is True, 5)
+        assert digest(store) == vorher
         app = neustart(app)
         assert app.ui.kunde_info.message != OPTIONAL_HINT  # höchstens einmal
         app._on_close()
@@ -434,6 +437,65 @@ def test_first_preview_reserves_the_page_before_the_image_arrives(config_file: P
         schliessen(app)
 
 
+def test_first_preview_keeps_page_and_toolbar_in_place_while_the_pdf_is_built(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    import threading
+
+    from tools.contract_overview import preview as preview_module
+
+    gate = threading.Event()
+    original = preview_module.PreviewDocument.build.__func__
+
+    def langsam(cls, fields):
+        gate.wait(20)
+        return original(cls, fields)
+
+    monkeypatch.setattr(preview_module.PreviewDocument, "build", classmethod(langsam))
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        pruefen(app, excel(tmp_path / "liste.xlsx"))
+        app.var_kd.set("10042")
+        app.nav.navigate("preview", animate=False)
+        pump(app, 0.2)
+        canvas, tools = app.ui.preview_canvas, app.ui.preview_tools
+        assert app._preview_doc is None and app._preview_building is not None  # die PDF entsteht noch
+        reserved = int(canvas.cget("height"))
+        assert reserved > 600  # A4 an Breite: der Platz steht schon, bevor es die PDF gibt
+        places = {str(w): (w.winfo_x(), w.winfo_y()) for w in tools.row.winfo_children()}
+        top = canvas.winfo_y()
+        gate.set()
+        assert wait_until(app, lambda: vorschau_fertig(app), 60)
+        pump(app, 0.2)
+        # »Seite 1 von 1« statt »Seite –« und ein anderer Zustandstext verschieben nichts
+        assert abs(int(canvas.cget("height")) - reserved) <= 2 and canvas.winfo_y() == top
+        assert {str(w): (w.winfo_x(), w.winfo_y()) for w in tools.row.winfo_children()} == places
+    finally:
+        gate.set()
+        schliessen(app)
+
+
+def test_failed_first_preview_leaves_no_empty_page(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    from tools.contract_overview import preview as preview_module
+
+    def kaputt(cls, fields):
+        raise RuntimeError("Testfehler")
+
+    monkeypatch.setattr(preview_module.PreviewDocument, "build", classmethod(kaputt))
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        pruefen(app, excel(tmp_path / "liste.xlsx"))
+        app.nav.navigate("preview", animate=False)
+        assert wait_until(app, lambda: app.ui.preview_view.state == "error", 30)
+        pump(app, 0.1)
+        canvas = app.ui.preview_canvas
+        assert app.ui.preview_info.severity == "error"
+        # der vorab freigehaltene Platz verschwindet mit der Fehlermeldung – kein leerer Seitenrahmen
+        assert int(canvas.cget("height")) <= 2 and canvas.itemcget(canvas._frame, "state") == "hidden"
+    finally:
+        schliessen(app)
+
+
 def test_fast_navigation_keeps_only_the_latest_transition(config_file: Path, monkeypatch) -> None:
     from ui.navigation import PARK_X
 
@@ -620,6 +682,9 @@ def test_hidden_spinner_does_not_draw(config_file: Path, monkeypatch) -> None:
         assert ring.spinner._index == 0  # abgelegte Seite: nichts gezeichnet
         app.nav.navigate("preview", animate=False)
         ring.start()
+        pump(app, 0.4)
+        assert ring.spinner._index == 0  # ohne Vorschau ist die Zustandszeile verborgen: nichts gezeichnet
+        app.ui.preview_view.set_state("busy")  # die Vorschau entsteht: Zeile mit Spinner sichtbar
         pump(app, 0.4)
         assert ring.spinner._index > 0
         ring.stop()

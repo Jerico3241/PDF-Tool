@@ -193,6 +193,8 @@ class CustomerFlow:
                 status=False,
                 animate=False,
             )
+            # Gleich merken, nicht erst beim Beenden – auch nach einem Absturz höchstens einmal.
+            self.ctx.anim.later("autosave", 800, self._autosave)
 
     def _report_customer_load(self) -> None:
         """Ergebnis des Ladens melden (Übernahme aus 2.3, Lesefehler)."""

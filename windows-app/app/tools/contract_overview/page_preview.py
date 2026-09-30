@@ -114,6 +114,11 @@ class PreviewCanvas(tk.Canvas):
             self.configure(height=wanted)
         self._layout()
 
+    def release(self) -> None:
+        """Freigehaltenen Platz ohne Bild aufgeben (die Vorschau konnte nicht entstehen)."""
+        if self._photo is None:
+            self.clear()
+
     def clear(self) -> None:
         self._photo = None
         self._data = None
@@ -162,6 +167,16 @@ class PreviewCanvas(tk.Canvas):
             pass
 
 
+def steady_width(label: Text, *samples: str) -> None:
+    """Feste Breite für eine wechselnde Beschriftung (Tk zählt in Zeichen der Ziffer »0«).
+
+    Sonst verschiebt »Seite –« → »Seite 1 von 3« alles, was in der Leiste danach kommt.
+    """
+    font = ctx().fonts.body
+    zero = max(1, font.measure("0"))
+    label.configure(width=max(-(-font.measure(sample) // zero) for sample in samples), anchor="center")
+
+
 class PreviewTools:
     """Werkzeugleiste: Seiten, Zoom, Aktualisieren und Zustand der Vorschau."""
 
@@ -171,6 +186,7 @@ class PreviewTools:
         self.prev = IconButton(pages, icons.CHEVRON_LEFT, lambda: app.preview_step(-1), tooltip="Vorherige Seite (Bild ↑)")
         self.prev.pack(side="left")
         self.page_text = Text(pages, "Seite –", style="body")
+        steady_width(self.page_text, "Seite 88 von 88")
         self.page_text.pack(side="left", padx=px(8))
         self.next = IconButton(pages, icons.CHEVRON_RIGHT, lambda: app.preview_step(1), tooltip="Nächste Seite (Bild ↓)")
         self.next.pack(side="left")
@@ -179,6 +195,7 @@ class PreviewTools:
         self.zoom_out = IconButton(zoom, icons.ZOOM_OUT, lambda: app.preview_zoom(-1), tooltip="Verkleinern (−)")
         self.zoom_out.pack(side="left", padx=(px(12), 0))
         self.zoom_text = Text(zoom, "An Breite", style="body")
+        steady_width(self.zoom_text, "An Breite", "300 %")
         self.zoom_text.pack(side="left", padx=px(8))
         self.zoom_in = IconButton(zoom, icons.ZOOM_IN, lambda: app.preview_zoom(1), tooltip="Vergrößern (+)")
         self.zoom_in.pack(side="left")
@@ -187,12 +204,13 @@ class PreviewTools:
         self.row.add(self.fit)
         self.refresh = Button(self.row, "Aktualisieren", lambda: app.refresh_preview(force=True), icon=icons.REFRESH, tooltip="Vorschau neu erzeugen (z. B. nach Änderungen an der Excel-Datei)")
         self.row.add(self.refresh)
-        state = frame(self.row)
-        self.ring = ProgressRing(state, size=16)
-        self.ring.pack(side="left", padx=(px(12), px(8)))
-        self.state_text = Text(state, "", style="caption", color="text2")
+        # Zustand in eigener Zeile: Sein Text wechselt in der Länge (»Vorschau wird erstellt …«,
+        # »Aktuell · …«) und würde die Leiste sonst je nach Zustand umbrechen – die Seite spränge.
+        self.state = frame(master)
+        self.ring = ProgressRing(self.state, size=16)
+        self.ring.pack(side="left", padx=(0, px(8)))
+        self.state_text = Text(self.state, "", style="caption", color="text2")
         self.state_text.pack(side="left")
-        self.row.add(state)
 
     def update(self, app: "App") -> None:
         doc = app._preview_doc
@@ -227,6 +245,7 @@ class PreviewView:
         page.add_section(ui.preview_source, pady=(0, px(8)))
         self.tools = PreviewTools(page.content, app)
         page.add_section(self.tools.row)
+        page.add_section(self.tools.state, pady=(px(8), 0))
         ui.preview_tools = self.tools
         ui.preview_info = InfoBar(page.content)
         page.add_section(ui.preview_info, pady=(px(8), 0))
@@ -245,6 +264,7 @@ class PreviewView:
         page.add_section(self.canvas, pady=(px(8), 0))
         self.empty.pack(fill="x", pady=(px(12), 0), before=self.canvas)
         self.canvas.pack_forget()
+        self.tools.state.pack_forget()  # ohne Vorschau gibt es keinen Zustand zu zeigen
         self.state = "empty"
 
     def set_state(self, state: str, problem: str = "") -> None:
@@ -252,6 +272,7 @@ class PreviewView:
         app = self.app
         if state == "empty":
             self.canvas.pack_forget()
+            self.tools.state.pack_forget()
             if not self.empty.winfo_manager():
                 self.empty.pack(fill="x", pady=(px(12), 0))
             self.empty_reason.configure(text=problem or "")
@@ -260,6 +281,8 @@ class PreviewView:
             return
         if self.empty.winfo_manager():
             self.empty.pack_forget()
+        if not self.tools.state.winfo_manager():
+            self.tools.state.pack(fill="x", anchor="n", pady=(px(8), 0), after=self.tools.row)
         if not self.canvas.winfo_manager():
             self.canvas.pack(fill="x", pady=(px(8), 0))
         if state == "busy":
@@ -275,6 +298,7 @@ class PreviewView:
             self.tools.set_busy(False, f"Aktuell · {time.strftime('%H:%M:%S', built)}{note}")
             app.hide_notice("preview_info")
         elif state == "error":
+            self.canvas.release()  # kein leerer Seitenrahmen unter der Fehlermeldung
             self.tools.set_busy(False, "Vorschau nicht möglich")
             app.notify("preview_info", "error", problem or "Unbekannter Fehler", title="Vorschau konnte nicht erstellt werden", status=False)
 
