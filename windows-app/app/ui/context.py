@@ -13,8 +13,8 @@ from .animations import AnimationManager
 from .render import ImageCache
 from .theme import Fonts, Palette, ThemeManager, build_fonts, init_scale
 
-# Nach dieser Pause ohne Größenänderung gilt ein Resize als abgeschlossen (Millisekunden).
-RESIZE_SETTLE_MS = 100
+# Nach dieser Pause ohne Größenänderung gilt ein Resize als abgeschlossen (Millisekunden, entprellt).
+RESIZE_SETTLE_MS = 80
 
 # Responsive Layoutzustände des Hauptfensters
 MODE_WIDE = "wide"  # Navigation ausgeklappt

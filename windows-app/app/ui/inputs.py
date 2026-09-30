@@ -511,14 +511,14 @@ def elide_middle(font, text: str, max_width: int) -> str:
     key = (str(font), text, max_width)
     found = _ELIDED.get(key)
     if found is None:
-        found = _elide(font, text, max_width)
+        found = _elide_in_middle(font, text, max_width)
         if len(_ELIDED) >= _ELIDED_MAX:
             _ELIDED.clear()
         _ELIDED[key] = found
     return found
 
 
-def _elide(font, text: str, max_width: int) -> str:
+def _elide_in_middle(font, text: str, max_width: int) -> str:
     if font.measure(text) <= max_width:
         return text
     ellipsis = "…"

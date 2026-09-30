@@ -791,14 +791,19 @@ class App(ContractOverviewTool, tk.Tk):
             self.destroy()
 
     def _cancel_pending_callbacks(self) -> None:
-        """Ausstehende Tk-Zeitgeber und Leerlauf-Rückrufe beenden – nach dem Schließen läuft nichts nach."""
+        """Ausstehende Tk-Zeitgeber und Leerlauf-Rückrufe beenden – nach dem Schließen läuft nichts nach.
+
+        Nur der Zeitgeber wird in Tcl abgebrochen; die zugehörigen Python-Befehle gehören dem
+        jeweiligen Widget und werden mit ihm entfernt (``after_cancel`` des Hauptfensters würde
+        sie vorzeitig löschen – das Zerstören des Widgets schlüge dann fehl).
+        """
         try:
             pending = self.tk.splitlist(self.tk.call("after", "info"))
         except tk.TclError:
             return
         for ident in pending:
             try:
-                self.after_cancel(ident)
+                self.tk.call("after", "cancel", ident)
             except tk.TclError:
                 pass
 

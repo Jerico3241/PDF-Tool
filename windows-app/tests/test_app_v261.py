@@ -362,3 +362,287 @@ def test_many_customers_are_available_after_switching_on(config_file: Path, monk
         assert digest(store) == vorher
     finally:
         schliessen(app)
+
+
+# --- Rendering: vorbereitete Seiten, keine unnötige Arbeit ------------------------------------------------------------
+
+
+def vorschau_fertig(app) -> bool:
+    canvas = app.ui.preview_canvas
+    return app._preview_doc is not None and app._preview_building is None and app._preview_view is None and canvas.shown_page is not None
+
+
+def test_preview_reopen_renders_and_decodes_nothing(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        pruefen(app, excel(tmp_path / "liste.xlsx"))
+        app.var_kd.set("10042")
+        app.nav.navigate("preview", animate=False)
+        assert wait_until(app, lambda: vorschau_fertig(app), 60)
+        canvas = app.ui.preview_canvas
+        runs, decoded = app.preview_runs, canvas.decoded
+        status = app.ui.preview_tools.state_text.cget("text")
+        for _ in range(3):
+            app.nav.navigate("layout", animate=False)
+            pump(app, 0.1)
+            app.nav.navigate("preview", animate=False)
+            pump(app, 0.3)
+            # Sichtbarkeit ist keine Änderung: keine neue PDF, kein neues Bild, gleicher Stand
+            assert (app.preview_runs, canvas.decoded) == (runs, decoded)
+            assert app.ui.preview_tools.state_text.cget("text") == status
+        # Zoom: nur die Seite wird neu gezeichnet, die PDF nicht neu erzeugt
+        app.preview_zoom(1)
+        assert wait_until(app, lambda: vorschau_fertig(app) and canvas.decoded == decoded + 1, 30)
+        assert app.preview_runs == runs
+        # Eine echte Änderung erzeugt die Vorschau neu (entprellt)
+        app.var_titel.set("Neuer Titel")
+        assert wait_until(app, lambda: app.preview_runs == runs + 1 and vorschau_fertig(app), 60)
+    finally:
+        schliessen(app)
+
+
+def test_first_preview_reserves_the_page_before_the_image_arrives(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    import threading
+
+    from tools.contract_overview import preview as preview_module
+
+    gate = threading.Event()
+    original = preview_module.PreviewDocument.render
+
+    def langsam(self, index, scale):
+        gate.wait(20)
+        return original(self, index, scale)
+
+    monkeypatch.setattr(preview_module.PreviewDocument, "render", langsam)
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        pruefen(app, excel(tmp_path / "liste.xlsx"))
+        app.var_kd.set("10042")
+        app.nav.navigate("preview", animate=False)
+        canvas = app.ui.preview_canvas
+        assert wait_until(app, lambda: app._preview_doc is not None and app._preview_view is not None, 60)
+        pump(app, 0.2)
+        reserved = int(canvas.cget("height"))
+        assert canvas.shown_page is None and reserved > 400  # Platz der Seite steht, bevor das Bild da ist
+        gate.set()
+        assert wait_until(app, lambda: vorschau_fertig(app), 30)
+        assert abs(int(canvas.cget("height")) - reserved) <= 2  # kein Layoutsprung beim Eintreffen
+    finally:
+        gate.set()
+        schliessen(app)
+
+
+def test_fast_navigation_keeps_only_the_latest_transition(config_file: Path, monkeypatch) -> None:
+    from ui.navigation import PARK_X
+
+    seed(config_file)
+    monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
+    from ui import dialogs
+
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
+    import vertragdesk
+
+    app = vertragdesk.App()
+    try:
+        app.ctx.anim.enabled = True
+        app.ctx.anim.reduce_motion = False
+        pump(app, 0.3)
+        for key in ("create", "layout", "preview", "batch", "create"):
+            app.nav.navigate(key)  # ohne Pause – nur das letzte Ziel zählt
+        slides = [key for key in app.ctx.anim._anims if key.startswith("page:")]
+        current = app.nav.pages["create"]
+        assert slides == [f"page:{current}:slide"]  # keine Warteschlange alter Übergänge
+        for key in ("layout", "preview", "batch"):
+            page = app.nav.pages[key]
+            assert int(page.place_info()["x"]) == PARK_X and page.scroll.offset_x == 0
+        assert app.ctx.anim.is_navigating is False
+        assert wait_until(app, lambda: app.ctx.anim.active_animations == 0, 5)
+    finally:
+        schliessen(app)
+
+
+def test_reduced_motion_switches_pages_without_movement(config_file: Path, monkeypatch) -> None:
+    seed(config_file)
+    monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
+    from ui import dialogs
+
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
+    import vertragdesk
+
+    app = vertragdesk.App()
+    try:
+        app.ctx.anim.enabled = True
+        app.ctx.anim.reduce_motion = True  # Windows: »Animationseffekte« aus
+        pump(app, 0.3)
+        app.nav.navigate("create")
+        anims = list(app.ctx.anim._anims)
+        assert not any(key.startswith(("page:", "navind:")) for key in anims), anims
+        assert app.nav.pages["create"].scroll.offset_x == 0
+        assert app.ctx.anim.allowed() and not app.ctx.anim.allowed(motion=True)  # dezente Überblendungen bleiben
+        area = app.ui.kunde_info.collapsible
+        app.notify("kunde_info", "info", "Test")
+        assert not app.ctx.anim.running(area._key)  # Ein-/Ausklappen ohne Bewegung
+    finally:
+        schliessen(app)
+
+
+def test_prepare_runs_while_the_page_is_still_hidden(config_file: Path, monkeypatch) -> None:
+    from ui.navigation import PARK_X
+
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        page = app.nav.pages["layout"]
+        seen = []
+        page.on("prepare", lambda: seen.append(int(page.place_info()["x"])))
+        page.on("activate", lambda: seen.append(int(page.place_info()["x"])))
+        app.nav.navigate("layout", animate=False)
+        assert seen == [PARK_X, 0]  # erst verdeckt vorbereitet, dann gezeigt
+    finally:
+        schliessen(app)
+
+
+def test_navigation_does_not_repeat_excel_checks(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        pruefen(app, excel(tmp_path / "liste.xlsx"))
+        calls = []
+        original = app.inspect_excel
+        monkeypatch.setattr(app, "inspect_excel", lambda *a, **k: (calls.append(a), original(*a, **k))[1])
+        for key in ("layout", "preview", "batch", "create", "layout", "create"):
+            app.nav.navigate(key, animate=False)
+            pump(app, 0.1)
+        assert calls == []  # derselbe Pfad, dieselbe Datei: die vorhandene Analyse gilt
+    finally:
+        schliessen(app)
+
+
+def test_comparison_is_only_recalculated_after_real_changes(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    from datetime import datetime
+
+    seed(config_file, {"kundenakte_verwenden": True, "kundenakte_hinweis_gezeigt": True}, [AKTE])
+    app = start(monkeypatch)
+    try:
+        pruefen(app, excel(tmp_path / "stand1.xlsx"))
+        app.apply_customer(KUNDE_ID)
+        exportieren(app, tmp_path / "out")  # erster Stand
+        rows = [[f"V-{2000 + i}", datetime(2024, 1, 1), "jährlich", 10.0 + i, "Lastschr", f"Modul {i}", "rechnung@muster.de", 10042, "Muster GmbH", "Aktiv"] for i in range(300)]
+        pruefen(app, write_excel(tmp_path / "stand2.xlsx", rows))  # großer Vertragsbestand
+        app.apply_customer(KUNDE_ID)
+        assert wait_until(app, lambda: app.comparison is not None, 10)
+        runs = app.comparison_runs
+        for _ in range(3):
+            app.refresh_customer_line()
+            app.nav.navigate("layout", animate=False)
+            pump(app, 0.1)
+            app.nav.navigate("create", animate=False)
+            pump(app, 0.1)
+        assert app.comparison_runs == runs  # Öffnen, Autosave, Tabwechsel: keine neue Berechnung
+        app.var_firma.set("Muster GmbH & Co. KG")  # Eingabe ohne Einfluss auf die Verträge
+        pump(app, 1.0)
+        assert app.comparison_runs == runs
+        app.state.regeln.append({"enthaelt": "Modul 1", "zyklus": "monatlich"})
+        app._recheck_excel()  # andere Regeln → neue Analyse → neuer Vergleich
+        assert wait_until(app, lambda: app.comparison_runs == runs + 1, 30)
+    finally:
+        schliessen(app)
+
+
+def test_batch_status_update_redraws_only_the_changed_row(config_file: Path, monkeypatch, tmp_path: Path) -> None:
+    import shutil
+
+    from tools.contract_overview.batch.models import WAITING
+
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        vorlage = excel(tmp_path / "vorlage.xlsx", mail="info@stapel.de", number=500, company="Stapel GmbH")
+        folder = tmp_path / "stapel"
+        folder.mkdir()
+        files = []
+        for i in range(100):
+            target = folder / f"liste_{i:03d}.xlsx"
+            shutil.copyfile(vorlage, target)
+            files.append(str(target))
+        app.nav.navigate("batch", animate=False)
+        app.batch_add(files)
+        assert wait_until(app, lambda: len(app.batch_items) == 100 and all(item.status not in WAITING for item in app.batch_items), 180)
+        pump(app, 0.3)
+        listing = app.ui.batch_list
+        assert len(listing.rows) == 100
+        calls = []
+        original = listing.coords
+        monkeypatch.setattr(listing, "coords", lambda *a: (calls.append(a[0]), original(*a))[1])
+        app.batch_select(app.batch_items[42].id, True)  # Statusänderung eines Eintrags
+        pump(app, 0.3)
+        per_row = len(listing._row_items(0))
+        assert 0 < len(calls) <= per_row + 4  # nur diese Zeile (plus Hover/Fokus), nicht 100 Zeilen
+    finally:
+        schliessen(app)
+
+
+def test_closing_leaves_no_pending_tk_callbacks(config_file: Path, monkeypatch) -> None:
+    seed(config_file)
+    app = start(monkeypatch)
+    app.schedule_save()
+    app.after(60000, lambda: None)
+    app._on_close()
+    assert app.tk.call("after", "info") in ("", ())
+
+
+def test_window_configure_reaches_only_window_hooks_for_the_window(config_file: Path, monkeypatch) -> None:
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        seen = []
+        app.ctx.window_hooks.append(lambda event: seen.append((event.width, event.height)))
+        app.ui.selector_create.event_generate("<Configure>", width=123, height=45)
+        pump(app, 0.05)
+        assert seen == []  # Größenereignisse der Widgets erreichen die Fenster-Haken nicht
+        app.event_generate("<Configure>", width=1000, height=700)
+        pump(app, 0.05)
+        assert seen == [(1000, 700)]
+    finally:
+        schliessen(app)
+
+
+def test_hidden_spinner_does_not_draw(config_file: Path, monkeypatch) -> None:
+    seed(config_file)
+    app = start(monkeypatch)
+    try:
+        ring = app.ui.preview_tools.ring
+        app.nav.navigate("home", animate=False)
+        ring.start()
+        pump(app, 0.4)
+        assert ring.spinner._index == 0  # abgelegte Seite: nichts gezeichnet
+        app.nav.navigate("preview", animate=False)
+        ring.start()
+        pump(app, 0.4)
+        assert ring.spinner._index > 0
+        ring.stop()
+    finally:
+        schliessen(app)
+
+
+def test_toggle_stress_keeps_one_page_and_no_extra_bindings(config_file: Path, monkeypatch) -> None:
+    from ui import diagnostics
+
+    seed(config_file, {"kundenakte_hinweis_gezeigt": True}, [AKTE])
+    app = start(monkeypatch)
+    try:
+        created = diagnostics.counters.get("page_create", 0)
+        schalten(app, True)
+        widgets = len(app.winfo_children())
+        tcl_commands = len(app.tk.call("info", "commands"))
+        for _ in range(10):
+            schalten(app, False)
+            schalten(app, True)
+        assert diagnostics.counters.get("page_create", 0) == created + 1  # »Kunden« genau einmal aufgebaut
+        assert len(app.winfo_children()) == widgets
+        assert len(app.tk.call("info", "commands")) <= tcl_commands + 2  # keine wachsenden Rückrufe
+        assert len(app.customers) == 1
+    finally:
+        schliessen(app)

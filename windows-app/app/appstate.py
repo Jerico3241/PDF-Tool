@@ -141,11 +141,11 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Vertragsvergleich in »Vertragsübersichten«: Nach der Excel-Prüfung zeigt die Karte »Vertragsänderungen«, welche Verträge seit dem letzten Stand des Kunden neu, entfernt oder geändert sind.",
-    "Ein Vertragsstand wird nur nach einer erfolgreich erstellten PDF gespeichert – je Kundenakte, nie für die Vorschau, einen Abbruch oder einen Fehler.",
-    "Im Stapel stehen die Änderungen kompakt in der Liste (z. B. »+2 neu · ~1 geändert«), die Einzelheiten in der Detailansicht.",
+    "Die Kundenakte ist jetzt optional: Einstellungen → Vertragsübersichten → »Kundenakte verwenden« (zunächst aus). Gespeicherte Kundendaten bleiben immer erhalten.",
+    "Flüssigere Oberfläche: Ansichten werden verdeckt vorbereitet und erscheinen fertig; schnellerer Start, ruhigeres Ändern der Fenstergröße, kurze einheitliche Animationen.",
+    "Die Vorschau wird beim erneuten Öffnen nicht neu erzeugt, der Vertragsvergleich nur bei echten Änderungen neu berechnet.",
+    "Vertragsvergleich (mit Kundenakte): Nach der Excel-Prüfung zeigt die Karte »Vertragsänderungen«, welche Verträge seit dem letzten Stand des Kunden neu, entfernt oder geändert sind.",
     "»PDF reparieren« rettet deutlich mehr: Öffnet keine PDF-Engine die Datei, baut PDF Tool Querverweise, Trailer und Seitenbaum aus den noch vorhandenen Objekten neu auf.",
-    "Neue dritte, tolerante PDF-Engine (pypdf); jede reparierte Datei wird danach normalisiert und streng geprüft – teilweise gerettete Dateien sind deutlich gekennzeichnet.",
     "Alles bleibt lokal auf diesem PC – keine Cloud, keine Uploads.",
 )
 
