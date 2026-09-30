@@ -45,10 +45,10 @@ ColumnLayout {
         }
         Row {
             spacing: 2
-            PFormatButton { glyph: "B"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, weight: Font.Bold }); tip: "Fett (Strg+B)"; active: editor.document ? editor.document.bold : false; onClicked: { editor.document.toggle("bold"); editor.refocus() } }
-            PFormatButton { glyph: "I"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, italic: true }); tip: "Kursiv (Strg+I)"; active: editor.document ? editor.document.italic : false; onClicked: { editor.document.toggle("italic"); editor.refocus() } }
-            PFormatButton { glyph: "U"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, underline: true }); tip: "Unterstrichen (Strg+U)"; active: editor.document ? editor.document.underline : false; onClicked: { editor.document.toggle("underline"); editor.refocus() } }
-            PFormatButton { glyph: "S"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, strikeout: true }); tip: "Durchgestrichen"; active: editor.document ? editor.document.strike : false; onClicked: { editor.document.toggle("strike"); editor.refocus() } }
+            PFormatButton { glyph: "B"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, weight: Font.Bold }); tip: "Fett (Strg+B)"; active: editor.document ? editor.document.bold : false; mixed: editor.document ? editor.document.mixed.indexOf("bold") >= 0 : false; onClicked: { editor.document.toggle("bold"); editor.refocus() } }
+            PFormatButton { glyph: "I"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, italic: true }); tip: "Kursiv (Strg+I)"; active: editor.document ? editor.document.italic : false; mixed: editor.document ? editor.document.mixed.indexOf("italic") >= 0 : false; onClicked: { editor.document.toggle("italic"); editor.refocus() } }
+            PFormatButton { glyph: "U"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, underline: true }); tip: "Unterstrichen (Strg+U)"; active: editor.document ? editor.document.underline : false; mixed: editor.document ? editor.document.mixed.indexOf("underline") >= 0 : false; onClicked: { editor.document.toggle("underline"); editor.refocus() } }
+            PFormatButton { glyph: "S"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, strikeout: true }); tip: "Durchgestrichen"; active: editor.document ? editor.document.strike : false; mixed: editor.document ? editor.document.mixed.indexOf("strike") >= 0 : false; onClicked: { editor.document.toggle("strike"); editor.refocus() } }
         }
         T.AbstractButton {
             id: colorButton

@@ -12,6 +12,7 @@ FocusScope {
     property bool expanded: true
     property bool animated: true  // aus bei Breakpoints: dann sofort umstellen
     property real amount: expanded ? 1 : 0
+    readonly property real targetWidth: expanded ? Metrics.paneExpanded : Metrics.paneCompact  // Breite nach der Animation
     signal toggleRequested()
 
     width: Metrics.paneCompact + (Metrics.paneExpanded - Metrics.paneCompact) * amount

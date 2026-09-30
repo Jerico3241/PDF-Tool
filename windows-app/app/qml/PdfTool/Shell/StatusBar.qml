@@ -41,11 +41,23 @@ Item {
             }
         }
         PCrossfadeText {
+            id: status
             Layout.fillWidth: true
             Layout.fillHeight: true
             text: App.statusText
             font: Typography.caption
             color: Theme.textSecondary
+            // Gekürzte Meldung: vollständig als Tooltip (wie bis 2.6.1)
+            MouseArea {
+                id: statusHover
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton
+            }
+            PToolTip {
+                text: App.statusText
+                visible: statusHover.containsMouse && status.truncated
+            }
         }
         Text {
             Layout.maximumWidth: bar.width * 0.55

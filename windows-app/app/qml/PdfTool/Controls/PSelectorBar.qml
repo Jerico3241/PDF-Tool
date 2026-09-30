@@ -5,12 +5,18 @@ import PdfTool.Style
 // Ansichtswahl eines Werkzeugs (z. B. »Übersicht erstellen · Stapel · Darstellung · …«).
 // Die Markierung gleitet zur gewählten Ansicht; Einträge erscheinen und verschwinden weich
 // (Deckkraft + Breite), etwa »Kunden« beim Ein- und Ausschalten der Kundenakte.
-// ``items``: Liste aus {key, label, available}
+// ``items``: Liste aus {key, label, available}; ``hiddenKeys``: gerade ausgeblendete Einträge –
+// die Liste selbst bleibt dabei unverändert, damit Einträge weich aus- und einblenden.
 Item {
     id: root
     property var items: []
+    property var hiddenKeys: []
     property string current: ""
     signal selected(string key)
+
+    function isAvailable(entry) {
+        return entry.available !== false && hiddenKeys.indexOf(entry.key) < 0
+    }
 
     implicitHeight: 40
     implicitWidth: row.implicitWidth
@@ -22,7 +28,7 @@ Item {
     function availableKeys() {
         var keys = []
         for (var i = 0; i < items.length; ++i)
-            if (items[i].available !== false) keys.push(items[i].key)
+            if (isAvailable(items[i])) keys.push(items[i].key)
         return keys
     }
     function step(delta) {
@@ -48,7 +54,7 @@ Item {
                 id: entry
                 required property var modelData
                 required property int index
-                readonly property bool available: modelData.available !== false
+                readonly property bool available: root.isAvailable(modelData)
                 readonly property bool isCurrent: modelData.key === root.current
                 readonly property bool keyboardFocus: root.activeFocus && root.focusIndex >= 0 && root.availableKeys()[root.focusIndex] === modelData.key
                 height: row.height

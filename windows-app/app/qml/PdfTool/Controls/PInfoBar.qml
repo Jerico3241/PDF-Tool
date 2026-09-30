@@ -107,9 +107,12 @@ Item {
                         required property var modelData
                         text: String(modelData)
                         onClicked: {
-                            if (root.notice)
-                                root.notice.trigger(index)
-                            root.actionTriggered(index)
+                            // Die Aktion kann denselben Hinweis mit anderen Aktionen ersetzen – dann
+                            // entsteht diese Schaltfläche neu. Danach nur noch lokale Werte verwenden.
+                            var bar = root, action = index
+                            if (bar.notice)
+                                bar.notice.trigger(action)
+                            bar.actionTriggered(action)
                         }
                     }
                 }

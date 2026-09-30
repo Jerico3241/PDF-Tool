@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from conftest import neustart, pump, wait_until, write_excel
+from qtutil import qml_type
 
 KUNDEN_23 = [
     {"firmenname": "Muster GmbH", "kundennummer": "10042", "rechnungsempfaenger": "rechnung@muster.de", "fusszeile": "Eigene\nFußzeile", "kopfzeile": "", "excel": "C:/x.xlsx", "pdf": ""},
@@ -134,8 +135,7 @@ def element(root, **merkmale):
 def typ(root, name: str):
     """Erstes QML-Element eines QML-Typs (z. B. »PListPage«)."""
     for item in elemente(root):
-        class_name = item.metaObject().className()
-        if class_name == name or class_name.startswith(name + "_"):
+        if qml_type(item) == name:
             return item
     return None
 
@@ -181,7 +181,7 @@ def vorschau_bild(h):
     """Das Seitenbild der Vorschau in QML (``Image`` mit der Quelle ``Preview.imageSource``)."""
     source = h.preview.imageSource
     for item in elemente(seite(h, "preview")):
-        if item.metaObject().className().startswith("QQuickImage") and merkmal(item, "source") is not None and item.property("source").toString() == source:
+        if qml_type(item) == "QQuickImage" and merkmal(item, "source") is not None and item.property("source").toString() == source:
             return item
     return None
 
@@ -590,7 +590,7 @@ def test_empty_state(ui_app) -> None:
     assert "Noch keine Kunden gespeichert." in sichtbar
     assert any(t.startswith("PDF Tool kann bekannte Rechnungsempfänger später automatisch wiedererkennen.") for t in sichtbar)
     bereich = element(page, text="Noch keine Kunden gespeichert.").parentItem()
-    buttons = [item for item in elemente(bereich) if item.metaObject().className().startswith("PButton")]
+    buttons = [item for item in elemente(bereich) if qml_type(item) == "PButton"]
     assert [b.property("text") for b in buttons] == ["Zur Vertragsübersicht"]
     klick(buttons[0])
     assert h.app.currentPage == "create"

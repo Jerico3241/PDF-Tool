@@ -10,13 +10,8 @@ PSelectorBar {
     id: bar
     Layout.bottomMargin: 16
     current: App.currentPage
-    items: {
-        var views = Contracts.views
-        var blocked = App.unavailablePages
-        var result = []
-        for (var i = 0; i < views.length; ++i)
-            result.push({ key: views[i].key, label: views[i].label, available: blocked.indexOf(views[i].key) < 0 })
-        return result
-    }
+    // Liste bleibt stabil – nur ausblenden, nicht neu aufbauen (sonst entfällt die Blende)
+    items: Contracts.views
+    hiddenKeys: App.unavailablePages
     onSelected: (key) => App.navigate(key)
 }

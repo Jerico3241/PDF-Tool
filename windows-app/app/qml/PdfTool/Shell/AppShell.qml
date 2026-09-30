@@ -99,7 +99,9 @@ FocusScope {
             onToggleRequested: shell.togglePane()
         }
 
-        // Inhaltsebene: nur die obere linke Ecke ist abgerundet (Windows 11)
+        // Inhaltsebene: nur die obere linke Ecke ist abgerundet (Windows 11). Klappt die Navigation
+        // ein oder aus, gleitet die Ebene mit; Seite und Statuszeile nehmen ihre neue Breite sofort
+        // an – sie werden einmal neu angeordnet, nicht in jedem Bild der Animation (wie 2.6.1).
         Rectangle {
             id: layer
             x: nav.width
@@ -115,14 +117,14 @@ FocusScope {
                 id: host
                 x: 1
                 y: 1
-                width: shell.width - nav.width - 1
+                width: shell.width - nav.targetWidth - 1
                 height: shell.height - 1 - status.height
             }
             StatusBar {
                 id: status
                 x: 1
                 y: shell.height - height
-                width: shell.width - nav.width - 1
+                width: shell.width - nav.targetWidth - 1
             }
         }
     }

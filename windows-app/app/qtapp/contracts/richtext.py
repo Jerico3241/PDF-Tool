@@ -184,6 +184,7 @@ class RichTextDocument(Observable):
     italicChanged, italic = prop(bool, "italic", False)
     underlineChanged, underline = prop(bool, "underline", False)
     strikeChanged, strike = prop(bool, "strike", False)
+    mixedChanged, mixed = prop(list, "mixed", [])  # teils formatierte Markierung: »bold«, »italic« …
     fontFamilyChanged, fontFamily = prop(str, "fontFamily", "")
     fontSizeChanged, fontSize = prop(str, "fontSize", "")
     colorChanged, color = prop(str, "color", "")
@@ -367,10 +368,12 @@ class RichTextDocument(Observable):
             values = {getattr(style, attribute) for style in styles}
             return next(iter(values)) if len(values) == 1 else None
 
-        self.bold = common("bold") is True
-        self.italic = common("italic") is True
-        self.underline = common("underline") is True
-        self.strike = common("strike") is True
+        toggles = {name: common(name) for name in ("bold", "italic", "underline", "strike")}
+        self.bold = toggles["bold"] is True
+        self.italic = toggles["italic"] is True
+        self.underline = toggles["underline"] is True
+        self.strike = toggles["strike"] is True
+        self.mixed = [name for name, state in toggles.items() if state is None]  # gemischt: weder an noch aus
         self.fontFamily = common("font") or ""
         size = common("size")
         self.fontSize = size_text(size) if size is not None else ""

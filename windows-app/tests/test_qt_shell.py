@@ -177,6 +177,33 @@ def test_breakpoint_hysteresis_and_toggle(app) -> None:
     assert not shell.property("paneAnimated")
 
 
+def test_pane_toggle_lays_out_the_page_once(app) -> None:
+    """Ein- und Ausklappen der Navigation: Die Seite erhält ihre neue Breite sofort – einmal, nicht in
+    jedem Bild der Animation; nur die Inhaltsebene gleitet mit (wie 2.6.1)."""
+    from qtutil import qml_type
+
+    app.window.resize(1100, 700)
+    app.navigate("create", 0.4)
+    shell = app.item("shell")
+    stack = [app.window.contentItem()]
+    host = None
+    while stack and host is None:
+        current = stack.pop()
+        if qml_type(current) == "PageHost":
+            host = current
+        stack.extend(current.childItems())
+    assert host is not None
+    for expanded in (False, True):
+        widths: list[float] = []
+        host.widthChanged.connect(lambda: widths.append(host.width()))
+        shell.togglePane()
+        pump(0.5)
+        host.widthChanged.disconnect()
+        assert shell.property("paneExpanded") is expanded
+        assert len(widths) == 1, widths
+        assert widths[0] == 1100 - (240 if expanded else 48) - 1
+
+
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)

@@ -83,6 +83,7 @@ class PreviewController(Observable):
         self._images: OrderedDict[tuple[int, int, float], QImage] = OrderedDict()
         self._item: str | None = None  # Stapel-Eintrag, dessen Vorschau gezeigt wird (sonst die Übersicht)
         self._viewport = (800.0, 600.0, 1.0)  # Breite, Höhe, Gerätepixelverhältnis
+        self._reserved: tuple[float, float] | None = None  # Seitenmaß (pt), für das die erste Vorschau Platz hält
         self._closing = False
         self.runs = 0  # erzeugte Vorschauen (Tests, Diagnose)
         self.renders = 0  # gerenderte Seitenbilder
@@ -210,9 +211,8 @@ class PreviewController(Observable):
         self._set_state("busy")
         if self._doc is None:
             # Erste Vorschau: Platz für die Seite schon jetzt freihalten – kein Sprung, wenn sie erscheint.
-            width_pt, height_pt = expected_page(fields)
-            scale = self._logical_scale(width_pt, height_pt)
-            self.pageWidth, self.pageHeight = width_pt * scale, height_pt * scale
+            self._reserved = expected_page(fields)
+            self._update_reserved()
         self.app.worker.run(lambda: PreviewDocument.build(fields), lambda doc: self._built(wanted, doc), lambda exc, tb: self._failed(wanted, exc, tb))
 
     def _built(self, built: tuple, doc: PreviewDocument) -> None:
@@ -228,6 +228,7 @@ class PreviewController(Observable):
             self.refresh()
             return
         old, self._doc = self._doc, doc
+        self._reserved = None
         if old is not None:
             self.app.worker.run(lambda: _close_locked(old))  # eine laufende Seitenanzeige endet zuerst
         self._signature = built
@@ -261,7 +262,12 @@ class PreviewController(Observable):
         if viewport == self._viewport:
             return
         previous, self._viewport = self._viewport, viewport
-        if self._doc is not None and self.shown():
+        if self._doc is None:
+            if self._building is not None:
+                # Die erste Vorschau entsteht noch (vorbereitet, bevor die Ansicht ihre Größe kannte):
+                # den freigehaltenen Platz an die echte Fläche anpassen.
+                self._update_reserved()
+        elif self.shown():
             if self._zoom is None:
                 self._update_size()
                 self.app.timers.later("preview:fit", 120, self._show_page)
@@ -285,6 +291,13 @@ class PreviewController(Observable):
             return A4_POINTS
         width_pt, height_pt = doc.sizes[max(0, min(index, doc.pages - 1))]
         return (width_pt or A4_POINTS[0], height_pt or A4_POINTS[1])
+
+    def _update_reserved(self) -> None:
+        if self._reserved is None:
+            return
+        width_pt, height_pt = self._reserved
+        scale = self._logical_scale(width_pt, height_pt)
+        self.pageWidth, self.pageHeight = width_pt * scale, height_pt * scale
 
     def _update_size(self) -> None:
         width_pt, height_pt = self._page_size(self.page)
@@ -413,6 +426,7 @@ class PreviewController(Observable):
         elif state == "error":
             self.stateText = "Vorschau nicht möglich"
             if self._doc is None:
+                self._reserved = None
                 self.pageWidth, self.pageHeight = 0.0, 0.0  # kein leerer Seitenrahmen unter der Fehlermeldung
             self.app.notify("preview_info", "error", self.problem or "Unbekannter Fehler", title="Vorschau konnte nicht erstellt werden", status=False)
         self._update_tools()

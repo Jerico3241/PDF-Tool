@@ -25,7 +25,7 @@ from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QCoreApplication, QEvent, QMetaO
 from PySide6.QtGui import QKeyEvent
 
 from conftest import neustart, pump, wait_until, write_excel
-from qtutil import process_events
+from qtutil import process_events, qml_type
 
 from tools.contract_overview.batch import processor
 from tools.contract_overview.batch.models import WAITING
@@ -144,7 +144,7 @@ def elemente(wurzel):
 
 
 def qml_typ(item) -> str:
-    return item.metaObject().className().split("_QML")[0]
+    return qml_type(item)
 
 
 def sichtbar(item) -> bool:

@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from conftest import pump, wait_until, write_excel
+from qtutil import qml_type
 
 SPALTEN = ["Vertrag-Nr.", "Beginnt am", "Abrechnungszyklus", "Netto [€]", "Zahlungsart", "Bemerkung", "Rechnungsempfänger Email", "Anwenderstatus"]
 STAND_1 = [
@@ -94,18 +95,8 @@ def gewaehlt(view) -> str:
 
 
 def typ_von(item) -> str:
-    """QML-Typ eines Elements (»ComparisonSummary«, »PCard« …) aus seiner JavaScript-Darstellung.
-
-    Bewusst nicht über ``metaObject()``: PySide hängt dessen Rückgabe an den Wrapper des Elements.
-    Überlebt der Wrapper die QML-Engine (z. B. im Traceback eines fehlgeschlagenen Tests), liefert
-    PySide später für ein neues Element an derselben Adresse dieses veraltete QMetaObject.
-    """
-    from PySide6.QtQml import QQmlEngine
-
-    context = QQmlEngine.contextForObject(item)
-    if context is None or context.engine() is None:
-        return ""  # nicht aus QML (z. B. die Inhaltsebene des Fensters)
-    return context.engine().toScriptValue(item).toString().split("(", 1)[0].split("_QML", 1)[0]
+    """QML-Typ eines Elements (»ComparisonSummary«, »PCard« …) – siehe ``qtutil.qml_type``."""
+    return qml_type(item)
 
 
 def elemente(root, typ: str) -> list:

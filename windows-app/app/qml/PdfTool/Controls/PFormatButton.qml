@@ -6,6 +6,7 @@ import PdfTool.Style
 T.AbstractButton {
     id: control
     property bool active: false
+    property bool mixed: false  // Markierung nur teilweise formatiert (dezente, dauerhafte Fläche wie 2.6.1)
     property string iconName: ""
     property string glyph: ""
     property font glyphFont: Typography.bodyStrong
@@ -17,10 +18,16 @@ T.AbstractButton {
     Accessible.role: Accessible.CheckBox
     Accessible.name: tip
     Accessible.checked: active
+    Accessible.checkStateMixed: mixed && !active
 
     background: Rectangle {
         radius: Metrics.radiusControl
-        color: control.pressed ? Theme.subtlePressed : (control.active ? Theme.subtleHover : (control.hovered ? Theme.subtleHover : "transparent"))
+        color: {
+            if (control.pressed) return Theme.subtlePressed
+            if (control.active) return Theme.subtleHover
+            if (control.mixed) return Qt.rgba(Theme.strongStroke.r, Theme.strongStroke.g, Theme.strongStroke.b, control.hovered ? 0.28 : 0.22)
+            return control.hovered ? Theme.subtleHover : "transparent"
+        }
         border.width: control.active ? 1 : 0
         border.color: Theme.controlStroke
         Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }

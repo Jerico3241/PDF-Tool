@@ -35,6 +35,22 @@ def pump(seconds: float = 0.3) -> None:
         time.sleep(0.004)
 
 
+def qml_type(item) -> str:
+    """QML-Typ eines Elements (»PButton«, »PCard«, »QQuickText« …) aus seiner JavaScript-Darstellung.
+
+    Bewusst nicht über ``metaObject()``: PySide hängt dessen Rückgabe an den Wrapper des Elements.
+    Überlebt der Wrapper die QML-Engine (z. B. im Traceback eines fehlgeschlagenen Tests), liefert
+    PySide später für ein neues Element an derselben Adresse dieses veraltete QMetaObject – und
+    ein fehlgeschlagener Test zöge weitere mit.
+    """
+    from PySide6.QtQml import QQmlEngine
+
+    context = QQmlEngine.contextForObject(item)
+    if context is None or context.engine() is None:
+        return ""  # nicht aus QML (z. B. die Inhaltsebene des Fensters)
+    return context.engine().toScriptValue(item).toString().split("(", 1)[0].split("_QML", 1)[0]
+
+
 def wait_until(condition, timeout: float = 60.0) -> bool:
     end = time.monotonic() + timeout
     while time.monotonic() < end:

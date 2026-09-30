@@ -13,8 +13,8 @@ Bewusst nicht portiert (Tk-Interna ohne sichtbares Gegenstück bzw. schon in ``t
 
 * ``test_navigation_all_pages_and_rapid_switching`` – gleichnamig in test_qt_shell.py; die übrigen
   Prüfungen (pack-Manager der Abschnitte, horizontaler Scrollversatz) sind Tk-Interna.
-* ``test_breakpoint_hysteresis`` – die Breakpoints hängen in QML nur an der Fensterbreite (keine
-  Rückkopplung über Inhaltsbreite oder Scrollleiste); eine Hysterese der Tk-Navigation gibt es nicht.
+* ``test_breakpoint_hysteresis`` – die Hysterese der Breakpoints (8 px wie 2.6.1) und das Umschalten
+  der Navigation prüft ``test_qt_shell.py::test_breakpoint_hysteresis_and_toggle``.
 * ``test_moves_do_not_redraw_canvas_controls`` – Neuzeichnen von Tk-Canvas-Steuerelementen beim
   Verschieben; in Qt zeichnet der Szenengraph.
 * ``test_width_change_renders_no_new_images`` – Bildzwischenspeicher der Tk-3-Slice-Grafiken.
@@ -22,13 +22,9 @@ Bewusst nicht portiert (Tk-Interna ohne sichtbares Gegenstück bzw. schon in ``t
 * ``test_theme_changes_are_coalesced`` – Abonnenten des Tk-Designs; Qt fasst Änderungen über
   Bindungen und Szenengraph ohnehin je Bild zusammen.
 
-Innerhalb portierter Tests entfallen nur:
-
-* Tk-Geometrie »Aktionen per pack unter dem Text« (``test_pdf_completion_actions_copy_and_new_overview``;
-  die QML-InfoBar ordnet Text und Aktionen in einem Flow an – geprüft wird, dass alle Aktionen sichtbar sind).
-* Der eigene Zustand »gemischt« der Fett-Schaltfläche (``test_selection_gets_only_the_chosen_format``):
-  ``RichTextDocument.bold`` und ``PFormatButton.active`` kennen nur an/aus. Geprüft wird, dass eine
-  gemischte Markierung nicht als »fett« angezeigt wird.
+Innerhalb portierter Tests entfällt nur die Tk-Geometrie »Aktionen per pack unter dem Text«
+(``test_pdf_completion_actions_copy_and_new_overview``; die QML-InfoBar ordnet Text und Aktionen in
+einem Flow an – geprüft wird, dass alle Aktionen sichtbar sind).
 """
 
 from __future__ import annotations
@@ -42,6 +38,7 @@ from PySide6.QtCore import Q_ARG, QMetaObject, QObject, QPointF, Qt, QTimer
 from PySide6.QtTest import QTest
 
 from conftest import COLUMNS, neustart, pump, wait_until, write_excel
+from qtutil import qml_type
 
 import appstate
 from appstate import DEFAULT_FOOTER, default_footer_rich
@@ -86,7 +83,7 @@ def element(wurzel, **werte):
 
 
 def qml_typ(element) -> str:
-    return element.metaObject().className()
+    return qml_type(element)
 
 
 def gleich(a, b) -> bool:
@@ -178,7 +175,7 @@ def hinweisleiste(h, bereich: str):
 def aktionsknoepfe(h, bereich: str) -> dict:
     """Aktionen der InfoBar (Beschriftung → Schaltfläche) in der angezeigten Reihenfolge."""
     leiste = hinweisleiste(h, bereich)
-    knoepfe = finde(leiste, lambda e: qml_typ(e).startswith("PButton_"))
+    knoepfe = finde(leiste, lambda e: qml_typ(e) == "PButton")
     return {knopf.property("text"): knopf for knopf in knoepfe}
 
 
@@ -767,13 +764,15 @@ def test_selection_gets_only_the_chosen_format(ui_app) -> None:
     markiere(h, KOPF, 0, 18)  # »Bitte beachten Sie«
     klicke(fett)
     assert [(t, s["bold"]) for t, s in runs(kopf.rich())] == [("Bitte beachten Sie", True), (" die Hinweise", False)]
-    # Leiste: Cursor im fetten Bereich → Fett aktiv; daneben → aus; gemischte Markierung → nicht aktiv
+    # Leiste: Cursor im fetten Bereich → Fett aktiv; daneben → aus; gemischte Markierung → »gemischt«
     setze_cursor(h, KOPF, 5)
-    assert kopf.bold is True and fett.property("active") is True
+    assert kopf.bold is True and fett.property("active") is True and fett.property("mixed") is False
     setze_cursor(h, KOPF, 25)
-    assert kopf.bold is False and fett.property("active") is False
+    assert kopf.bold is False and fett.property("active") is False and fett.property("mixed") is False
     markiere(h, KOPF, 10, 25)
     assert kopf.bold is False and fett.property("active") is False
+    assert kopf.mixed == ["bold"] and fett.property("mixed") is True  # weder an noch aus (wie 2.6.1)
+    assert leistenknopf(h, KOPF, "Kursiv (Strg+I)").property("mixed") is False
 
 
 def test_format_without_selection_applies_to_new_text(ui_app) -> None:

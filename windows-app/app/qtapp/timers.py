@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import traceback
+import weakref
 from typing import Callable
 
 from PySide6.QtCore import QObject, QTimer
@@ -23,17 +24,21 @@ class Timers(QObject):
         self.cancel(key)
         timer = QTimer(self)
         timer.setSingleShot(True)
+        # Nur schwach auf die Sammlung verweisen: Sonst hielte die Verbindung eines Zeitgebers sie am
+        # Leben, und sie endete womöglich erst mitten im Löschen dieses Zeitgebers (deleteLater).
+        owner = weakref.ref(self)
 
         def fire() -> None:
-            if self._timers.get(key) is timer:
-                del self._timers[key]
+            timers = owner()
+            if timers is not None and timers._timers.get(key) is timer:
+                del timers._timers[key]
             timer.deleteLater()
             try:
                 func()
             except Exception:  # noqa: BLE001 - Fehler im Zeitgeber melden, nicht abstürzen
                 text = traceback.format_exc()
-                if self._on_exception is not None:
-                    self._on_exception(text)
+                if timers is not None and timers._on_exception is not None:
+                    timers._on_exception(text)
                 else:
                     traceback.print_exc()
 

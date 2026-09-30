@@ -10,6 +10,7 @@ Item {
     property int elide: Text.ElideRight
     property int horizontalAlignment: Text.AlignLeft
     property bool _front: true
+    readonly property bool truncated: _front ? a.truncated : b.truncated  // sichtbarer Text gekürzt
 
     implicitWidth: Math.max(a.implicitWidth, b.implicitWidth)
     implicitHeight: Math.max(a.implicitHeight, b.implicitHeight, 1)
