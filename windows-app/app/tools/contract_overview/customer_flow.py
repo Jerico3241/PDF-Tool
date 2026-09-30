@@ -1,6 +1,16 @@
 """Kundenakte 2.0 in »Vertragsübersichten«: Wiedererkennung, Übernahme und Arbeitskopie.
 
-Grundsätze:
+Die Kundenakte ist ein optionales Modul (Einstellungen → Vertragsübersichten → »Kundenakte
+verwenden«, Standard: aus – auch nach einem Update). Ausgeschaltet gilt:
+
+* Die Kundenakten werden nicht geladen: ``customers`` ist dann ein leerer Speicher ohne
+  Datei, der nie gelesen und nie geschrieben wird. Die Datei bleibt unangetastet.
+* Kein Abgleich der Rechnungsempfänger, keine Übernahme, kein automatisches Fortschreiben,
+  keine Ansicht »Kunden« und keine Kunden-Elemente in »Übersicht erstellen« und im Stapel.
+* Einschalten lädt das Modul ohne Neustart (die Ansicht »Kunden« entsteht verdeckt und
+  fertig), Ausschalten blendet alles sofort aus – vorhandene Daten bleiben immer erhalten.
+
+Grundsätze bei eingeschalteter Kundenakte:
 
 * Kundenakte (``self.customers``) und Formular (Arbeitskopie) sind getrennt. Übernehmen
   füllt das Formular; Änderungen im Formular ändern die Kundenakte nie still. Nur
@@ -24,12 +34,17 @@ from . import customer_widgets
 from .customers.matching import MatchKind, MatchResult, is_valid_email, normalize_email
 from .customers.migration import LEGACY_KEY, open_store
 from .customers.models import Customer, TextBlock
-from .customers.repository import ORDER_RECENT, ORDERS, EmailConflict
+from .customers.repository import FILE_NAME, ORDER_RECENT, ORDERS, CustomerStore, EmailConflict
 
 CONFIG_ORDER = "kunden_sortierung"
 CONFIG_AUTO = "kunden_auto_uebernehmen"
 CONFIG_ACTIVE = "kunde_aktiv"
 CONFIG_BASE_TEXTS = "kunde_texte_vorher"  # gültige Kopf-/Fußzeile vor den Texten der aktiven Kundenakte
+CONFIG_ENABLED = "kundenakte_verwenden"  # Opt-in: Standard aus (neue Installation und Update)
+CONFIG_HINT = "kundenakte_hinweis_gezeigt"  # einmaliger Hinweis für bisherige Nutzer der Kundenakte
+OPTIONAL_HINT = "Die Kundenakte ist jetzt optional und kann in den Einstellungen aktiviert werden. Ihre gespeicherten Kundendaten bleiben erhalten."
+# Hinweisbereiche mit Kundenbezug – beim Ausschalten werden sie geleert
+CUSTOMER_AREAS = ("kunde_match", "kunde_info", "kunden_info", "kunde_detail_info", "batch_mail_info")
 # Formularwerte, die das Übernehmen einer Kundenakte (samt Vorlage) ändern kann
 WORK_VARS = ("var_firma", "var_kd", "var_mail", "var_logo", "var_ziel", "var_name", "var_format", "var_breite", "var_titel", "var_untertitel", "var_vorlage")
 CHANGE_LABELS = {
@@ -72,24 +87,56 @@ def _block(rich: RichText) -> TextBlock:
     return TextBlock(rich.text, rich.to_dict())
 
 
+def has_customer_data(folder: Path, cfg: dict) -> bool:
+    """Gibt es gespeicherte Kundendaten? Nur Dateiprüfung – die Kundenakten werden dafür nicht gelesen."""
+    legacy = cfg.get(LEGACY_KEY)
+    if isinstance(legacy, list) and legacy:
+        return True
+    try:
+        return (folder / FILE_NAME).is_file()
+    except OSError:
+        return False
+
+
 class CustomerFlow:
     """Kundenakten im Werkzeug »Vertragsübersichten« (Baustein des Hauptfensters)."""
+
+    # Der Speicher der Kundenakten gilt nur, solange das Modul eingeschaltet ist; sonst ein
+    # leerer Speicher ohne Datei (kein Abgleich, keine Anzeige, nichts wird gelesen oder geschrieben).
+    @property
+    def customers(self) -> CustomerStore:
+        store = self.__dict__.get("_customer_store")
+        if store is None or not self.__dict__.get("_customers_enabled", False):
+            return self.__dict__.setdefault("_no_customers", CustomerStore(None))
+        return store
+
+    @customers.setter
+    def customers(self, store: CustomerStore) -> None:
+        self.__dict__["_customer_store"] = store
+
+    def customer_records_enabled(self) -> bool:
+        """Zentrale Abfrage: Ist die Kundenakte eingeschaltet?"""
+        return bool(self.__dict__.get("_customers_enabled", False))
 
     # Einrichtung ----------------------------------------------------------------------------
     def _init_customers(self, cfg: dict) -> None:
         folder = Path(appstate.CONFIG_FILE).parent
-        had_legacy = LEGACY_KEY in cfg
-        self.customers, self._customer_report = open_store(folder, cfg, Path(appstate.CONFIG_FILE))
-        report = self._customer_report
-        # Die alte Kundenhistorie bleibt nur in der Konfiguration, solange die Übernahme nicht gelang.
-        self._legacy_dropped = had_legacy and (report is None or report.ok)
-        if self._legacy_dropped:
-            cfg.pop(LEGACY_KEY, None)
+        self._customers_enabled = cfg.get(CONFIG_ENABLED) is True
+        self.var_customer_records = tk.BooleanVar(self, self._customers_enabled)
+        self._customers_loaded = False
+        self._customer_report = None
+        self._legacy_dropped = False
+        if self._customers_enabled:
+            self._load_customers(cfg)
+        # Einmaliger Hinweis für bisherige Nutzer: Die Kundenakte ist jetzt optional (Daten bleiben).
+        self._customer_hint_done = cfg.get(CONFIG_HINT) is True
+        self._customer_hint_due = not self._customers_enabled and not self._customer_hint_done and has_customer_data(folder, cfg)
         order = cfg.get(CONFIG_ORDER)
         self.customer_order = order if order in ORDERS else ORDER_RECENT
         self.var_auto_customer = tk.BooleanVar(self, cfg.get(CONFIG_AUTO) is True)
         active = cfg.get(CONFIG_ACTIVE)
-        self._active_customer_id: str | None = active if isinstance(active, str) and self.customers.get(active) else None
+        # Ausgeschaltet gibt es keine aktive Kundenakte – die Angaben im Formular bleiben als Arbeitskopie.
+        self._active_customer_id: str | None = active if self._customers_enabled and isinstance(active, str) and self.customers.get(active) else None
         self._match: MatchResult | None = None
         self._match_path = ""
         self._match_ignored: set[tuple[str, tuple[str, ...]]] = set()
@@ -101,7 +148,9 @@ class CustomerFlow:
         self._customer_texts = False  # aktuelle Texte stammen aus der aktiven Kundenakte
         self._base_texts: tuple[RichText, RichText] | None = None  # gültige Texte davor
         base = cfg.get(CONFIG_BASE_TEXTS)
-        if self._active_customer_id and isinstance(base, dict):
+        # Ausgeschaltet bleiben die vorher gültigen Texte gemerkt: »Neue Übersicht« stellt sie
+        # wieder her (die Standard-Fußzeile geht nie verloren, auch nicht nach einem Update).
+        if isinstance(base, dict) and (self._active_customer_id or not self._customers_enabled):
             self._customer_texts = True
             self._base_texts = (header_rich_from(base), footer_rich_from(base))
         self._undo_apply: dict | None = None
@@ -110,10 +159,43 @@ class CustomerFlow:
         self._store_warned = False
         self.customer_page = None
 
+    def _load_customers(self, cfg: dict) -> None:
+        """Kundenakten laden – beim ersten Mal mit Übernahme der Historie aus Version 2.3."""
+        folder = Path(appstate.CONFIG_FILE).parent
+        had_legacy = LEGACY_KEY in cfg
+        self.customers, self._customer_report = open_store(folder, cfg, Path(appstate.CONFIG_FILE))
+        report = self._customer_report
+        # Die alte Kundenhistorie bleibt nur in der Konfiguration, solange die Übernahme nicht gelang.
+        self._legacy_dropped = had_legacy and (report is None or report.ok)
+        if self._legacy_dropped:
+            cfg.pop(LEGACY_KEY, None)
+        self._customers_loaded = True
+
     def _start_customers(self) -> None:
         """Nach dem Aufbau der Seiten: Ergebnis der Übernahme melden, Anzeige herstellen."""
+        if self._customers_enabled:
+            self._report_customer_load()
+        self._mark_text_baseline()
+        self.apply_customer_visibility()
+        self.refresh_customer_line()
+        if self._customer_hint_due:
+            self._customer_hint_due = False
+            self._customer_hint_done = True
+            self.notify(
+                "kunde_info",
+                "info",
+                OPTIONAL_HINT,
+                title="Kundenakte",
+                actions=(("Einstellungen öffnen", lambda: self.nav.navigate("settings")),),
+                status=False,
+                animate=False,
+            )
+
+    def _report_customer_load(self) -> None:
+        """Ergebnis des Ladens melden (Übernahme aus 2.3, Lesefehler)."""
         report = self._customer_report
         if self._legacy_dropped:
+            self._legacy_dropped = False
             self.persist()  # alte Historie aus gui-config.json entfernen (die Sicherung behält sie)
         if report is not None and report.ok and report.migrated:
             count = "1 Kunde wurde" if report.migrated == 1 else f"{report.migrated} Kunden wurden"
@@ -129,17 +211,104 @@ class CustomerFlow:
             )
         if self.customers.load_error:
             self.notify("kunden_info", "warning", self.customers.load_error, title="Kundenakten", status=False)
-        self._mark_text_baseline()
+
+    # Ein- und Ausschalten (Einstellungen) -------------------------------------------------------
+    def apply_customer_records_setting(self) -> None:
+        """Schalter »Kundenakte verwenden« – wirkt sofort, ohne Neustart."""
+        enabled = bool(self.var_customer_records.get())
+        if enabled != self._customers_enabled:
+            if enabled:
+                self._enable_customer_records()
+            else:
+                self._disable_customer_records()
+        self.persist()
+
+    def _enable_customer_records(self) -> None:
+        self._customers_enabled = True
+        if not self._customers_loaded:
+            self._load_customers(self.cfg)
+            self._report_customer_load()
+        self._ensure_customer_page()
+        self.apply_customer_visibility()
+        # Wiedererkennung für die geprüfte Excel nachholen – angeboten, nie still übernommen.
+        excel = self.var_excel.get().strip()
+        analysis = self._analysis
+        if analysis is not None and self._analysis_path == excel and analysis.get("ok"):
+            self._match = self.customers.match([str(mail) for mail in analysis.get("mails") or []])
+            self._match_path = excel
+            self._show_match(animate=False, automatic=False)
         self.refresh_customer_line()
+        self.batch_customers_changed()
+        self.set_status("Kundenakte eingeschaltet.", "success")
+
+    def _disable_customer_records(self) -> None:
+        nav = getattr(self, "nav", None)
+        if nav is not None and nav.current == "customers":
+            nav.navigate("create", animate=False)
+        if self.customer_page is not None:
+            self.customer_page.flush()  # eine offene Eingabe in »Kunden« noch sichern
+        self._customers_enabled = False
+        # Keine aktive Kundenakte mehr – die Angaben im Formular bleiben als Arbeitskopie. Stammen
+        # Kopf- und Fußzeile aus der Kundenakte, bleiben die vorher gültigen Texte gemerkt.
+        self._active_customer_id = None
+        self._undo_apply = None
+        self._undo_detach = None
+        self._match = None
+        self._match_path = ""
+        for area in CUSTOMER_AREAS:
+            self.hide_notice(area)
+        self.apply_customer_visibility()
+        self.refresh_customer_line()
+        self.batch_customers_changed()
+        self.set_status("Kundenakte ausgeschaltet – gespeicherte Kundendaten bleiben erhalten.", "success")
+
+    def _build_customer_page(self, host):
+        """Ansicht »Kunden« – das Modul wird erst geladen, wenn die Kundenakte eingeschaltet ist."""
+        from . import page_customers
+
+        return page_customers.build(self, host)
+
+    def _ensure_customer_page(self) -> None:
+        """Ansicht »Kunden« bei Bedarf verdeckt und fertig aufbauen (nie sichtbar entstehend)."""
+        nav = getattr(self, "nav", None)
+        if nav is None:
+            return
+        if "customers" in nav.pages:
+            if self.customer_page is not None:
+                self.customer_page.refresh()  # Stand seit dem Ausschalten
+            return
+        nav.add_page("customers", self._build_customer_page)
+
+    def apply_customer_visibility(self) -> None:
+        """Kunden-Elemente aller Ansichten passend zum Schalter zeigen bzw. ausblenden."""
+        enabled = self._customers_enabled
+        nav = getattr(self, "nav", None)
+        if nav is not None:
+            nav.set_available("customers", enabled)
+        from .page_create import set_customer_parts
+
+        set_customer_parts(self, enabled)
+        for view in ("create", "batch", "layout", "preview", "customers"):
+            selector = getattr(self.ui, f"selector_{view}", None)
+            if selector is not None:
+                selector.set_hidden(() if enabled else ("customers",))
+        page = getattr(self, "batch_page", None)
+        if page is not None:
+            page.set_customer_parts(enabled)
+        refresh_hint = getattr(self, "_refresh_status_hint", None)
+        if nav is not None and refresh_hint is not None:
+            refresh_hint()
 
     def customer_config(self) -> dict:
         data = {
+            CONFIG_ENABLED: self._customers_enabled,
+            CONFIG_HINT: self._customer_hint_done,
             CONFIG_ORDER: self.customer_order,
             CONFIG_AUTO: bool(self.var_auto_customer.get()),
             CONFIG_ACTIVE: self._active_customer_id or "",
             CONFIG_BASE_TEXTS: None,
         }
-        if self._active_customer_id and self._customer_texts and self._base_texts is not None:
+        if self._customer_texts and self._base_texts is not None:
             kopf, fuss = self._base_texts
             data[CONFIG_BASE_TEXTS] = {
                 "kopfzeile": kopf.text,
@@ -152,10 +321,14 @@ class CustomerFlow:
 
     # Zustand ----------------------------------------------------------------------------------
     def active_customer(self) -> Customer | None:
+        if not self._customers_enabled:
+            return None
         return self.customers.get(self._active_customer_id)
 
     def _store_customers(self) -> bool:
         """Kundenakten speichern; ein Fehler wird einmal deutlich gemeldet (die Arbeit geht weiter)."""
+        if not self._customers_enabled:
+            return False  # ausgeschaltet: nichts zu speichern – die Datei bleibt unangetastet
         if self.customers.path is None:
             if not self._store_warned:
                 self._store_warned = True
@@ -171,6 +344,8 @@ class CustomerFlow:
 
     def customers_changed(self, detail: bool = True) -> None:
         """Nach jeder bewussten Änderung an Kundenakten: speichern und alle Anzeigen aktualisieren."""
+        if not self._customers_enabled:
+            return
         self._store_customers()
         if self._active_customer_id and self.customers.get(self._active_customer_id) is None:
             self._active_customer_id = None
@@ -210,6 +385,11 @@ class CustomerFlow:
     # Wiedererkennung ---------------------------------------------------------------------------------
     def _recognize_customer(self, path: str, result: dict, animate: bool = True) -> None:
         """Nach der Excel-Prüfung: bekannte Rechnungsempfänger suchen. Nie eine alte Analyse verwenden."""
+        if not self._customers_enabled:
+            # Ohne Kundenakte kein Abgleich – auch nicht im Hintergrund.
+            self._match = None
+            self._match_path = ""
+            return
         mails = [str(mail) for mail in result.get("mails") or []] if result.get("ok") else []
         self._match = self.customers.match(mails)
         self._match_path = path
@@ -218,14 +398,14 @@ class CustomerFlow:
     def _rematch(self) -> None:
         """Nach Änderungen an Zuordnungen: aktuelle Excel erneut gegen die Kundenakten prüfen."""
         excel = self.var_excel.get().strip()
-        if self._match is None or self._match_path != excel:
+        if not self._customers_enabled or self._match is None or self._match_path != excel:
             return
         self._match = self.customers.match(self._analysis_mails())
         self._show_match(animate=False, automatic=False)
 
     def _show_match(self, animate: bool = True, automatic: bool = False) -> None:
         match = self._match
-        if match is None or self._match_path != self.var_excel.get().strip():
+        if not self._customers_enabled or match is None or self._match_path != self.var_excel.get().strip():
             self.hide_notice("kunde_match")
             return
         active = self.active_customer()
@@ -354,6 +534,8 @@ class CustomerFlow:
 
     def assign_emails(self, customer_id: str, emails: list[str], quiet: bool = False) -> list[str]:
         """Adressen künftig diesem Kunden zuordnen. Gehört eine schon einem anderen: der Benutzer entscheidet."""
+        if not self._customers_enabled:
+            return []
         customer = self.customers.get(customer_id)
         if customer is None:
             return []
@@ -383,6 +565,8 @@ class CustomerFlow:
     # Auswählen und Übernehmen -----------------------------------------------------------------------
     def pick_customer(self, candidates=None) -> None:
         """»Bekannten Kunden auswählen«: Suchdialog über alle (bzw. die angebotenen) Kundenakten."""
+        if not self._customers_enabled:
+            return
         if not len(self.customers):
             has_values = bool(self.var_firma.get().strip() or self.var_kd.get().strip())
             actions = (("Als Kundenakte speichern", self.save_as_customer),) if has_values else ()
@@ -397,6 +581,8 @@ class CustomerFlow:
 
     def apply_customer(self, customer_id: str, automatic: bool = False) -> None:
         """Kundenakte in die Arbeitskopie übernehmen (rückgängig machbar). Die Kundenakte bleibt unverändert."""
+        if not self._customers_enabled:
+            return
         customer = self.customers.get(customer_id)
         if customer is None:
             return
@@ -658,6 +844,8 @@ class CustomerFlow:
 
     def open_customer_record(self, customer_id: str | None = None) -> None:
         """Kundenakte in der Ansicht »Kunden« öffnen."""
+        if not self._customers_enabled:
+            return
         ident = customer_id or self._active_customer_id
         if not ident or self.customers.get(ident) is None:
             return
@@ -670,6 +858,8 @@ class CustomerFlow:
 
     # Bewusst speichern ------------------------------------------------------------------------------------
     def save_or_update_customer(self) -> None:
+        if not self._customers_enabled:
+            return
         if self.active_customer() is not None:
             self.update_active_customer()
         else:
@@ -693,6 +883,8 @@ class CustomerFlow:
 
     def save_as_customer(self) -> None:
         """Arbeitskopie als neue Kundenakte speichern – mit Rückfrage, ob die E-Mail gemerkt werden soll."""
+        if not self._customers_enabled:
+            return
         company, number = self.var_firma.get().strip(), self.var_kd.get().strip()
         if not company and not number:
             field = getattr(self.ui, "field_firma", None)
@@ -756,6 +948,8 @@ class CustomerFlow:
 
     def update_active_customer(self) -> None:
         """»Kundenakte aktualisieren«: gewählte Abweichungen der Arbeitskopie bewusst zurückschreiben."""
+        if not self._customers_enabled:
+            return
         customer = self.active_customer()
         if customer is None:
             self.save_as_customer()
@@ -798,6 +992,8 @@ class CustomerFlow:
 
     def create_customer_manually(self) -> None:
         """»Neue Kundenakte« in der Ansicht »Kunden« – unabhängig von der aktuellen Übersicht."""
+        if not self._customers_enabled:
+            return
         answer = customer_widgets.ask_customer_fields(self)
         if answer is None:
             return
@@ -819,7 +1015,11 @@ class CustomerFlow:
 
     # Nach dem Erstellen ------------------------------------------------------------------------------------
     def _customer_after_pdf(self, path: Path) -> None:
-        """Nur Metadaten fortschreiben; alles Weitere wird angeboten, nie still gespeichert."""
+        """Nur Metadaten fortschreiben; alles Weitere wird angeboten, nie still gespeichert.
+
+        Ohne Kundenakte wird nichts gespeichert und nichts angeboten."""
+        if not self._customers_enabled:
+            return
         customer = self.active_customer()
         if customer is not None:
             self.customers.touch(customer.id, excel=self.var_excel.get().strip() or None, pdf=str(path))
@@ -861,6 +1061,8 @@ class CustomerFlow:
 
     # Verwalten (Ansicht »Kunden«) ------------------------------------------------------------------------------
     def merge_customers(self, target_id: str, source_id: str) -> None:
+        if not self._customers_enabled:
+            return
         source = self.customers.get(source_id)
         if source is None or self.customers.get(target_id) is None:
             return
@@ -874,6 +1076,8 @@ class CustomerFlow:
 
     def delete_customer(self, customer_id: str) -> None:
         """Löscht nur die Kundenakte und ihre Zuordnungen – nie PDF- oder Excel-Dateien."""
+        if not self._customers_enabled:
+            return
         customer = self.customers.delete(customer_id)
         if customer is None:
             return
@@ -938,6 +1142,8 @@ class CustomerFlow:
 
     def find_customer(self) -> None:
         """Strg+F: in »Kunden« die Suche, sonst »Bekannten Kunden auswählen«."""
+        if not self._customers_enabled:
+            return
         if self.nav.current == "customers" and self.customer_page is not None:
             self.customer_page.focus_search()
         else:

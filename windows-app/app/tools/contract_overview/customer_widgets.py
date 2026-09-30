@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 from typing import Callable, Sequence
 
 from appstate import ICON_FILE
-from ui import dialogs, icons
-from ui.context import ctx, surface_color
+from ui import diagnostics, dialogs, icons
+from ui.context import bind_size, ctx, surface_color
 from ui.inputs import ComboBox, TextField, elide_middle
 from ui.theme import px
 from ui.widgets import Text, ToggleSwitch, frame
@@ -64,7 +64,7 @@ class CustomerList(tk.Canvas):
         self._bg = self.create_image(0, 0, anchor="nw", state="hidden")
         self._hover_img = self.create_image(0, 0, anchor="nw", state="hidden")
         self._focus = self.create_image(0, 0, anchor="nw", state="hidden")
-        self.bind("<Configure>", self._configured, add="+")
+        bind_size(self, self._configured)
         self.bind("<Motion>", self._motion, add="+")
         self.bind("<Leave>", lambda _e: self._set_hover(None), add="+")
         self.bind("<ButtonRelease-1>", self._click, add="+")
@@ -84,6 +84,7 @@ class CustomerList(tk.Canvas):
     # Daten -----------------------------------------------------------------------------
     def set_items(self, items: Sequence[Customer]) -> None:
         keep = self.items[self.selected].id if self.selected is not None and self.selected < len(self.items) else None
+        diagnostics.count("customer_list_rebuild")
         self.items = list(items)[:MAX_ROWS]
         self.selected = next((i for i, item in enumerate(self.items) if item.id == keep), None)
         self.hover = None

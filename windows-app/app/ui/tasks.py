@@ -15,7 +15,7 @@ import tkinter as tk
 
 
 class Worker:
-    POLL_MS = 40
+    POLL_MS = 50  # Ergebnisse gebündelt, höchstens 20 Aktualisierungen je Sekunde
 
     def __init__(self, root: tk.Misc) -> None:
         self.root = root

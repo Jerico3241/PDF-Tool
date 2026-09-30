@@ -8,7 +8,7 @@ from typing import Callable, Sequence
 from . import animations as motion
 from . import icons
 from . import windows
-from .context import ctx, reveal, surface_color
+from .context import bind_size, ctx, reveal, surface_color
 from .theme import px
 from .widgets import CONTROL_RADIUS, FOCUS_PAD, CanvasControl, StretchBox
 
@@ -41,7 +41,7 @@ class _FieldBase(tk.Canvas):
         self._bg = StretchBox(self)
         self.configure(bg=self.surface())
         self.c.theme.subscribe(self._theme_changed, owner=self)
-        self.bind("<Configure>", self._on_configure, add="+")
+        bind_size(self, self._on_configure)
 
     def _on_configure(self, event) -> None:
         size = (event.width, event.height)
@@ -496,21 +496,46 @@ def _elide(font, text: str, max_width: int) -> str:
     return text[:lo].rstrip() + ellipsis
 
 
+_ELIDED: dict[tuple, str] = {}
+_ELIDED_MAX = 4096
+
+
 def elide_middle(font, text: str, max_width: int) -> str:
-    """Kürzt lange Pfade in der Mitte: C:\\Users\\…\\Datei.xlsx"""
-    if max_width <= 0 or font.measure(text) <= max_width:
+    """Kürzt lange Pfade in der Mitte: C:\\Users\\…\\Datei.xlsx
+
+    Ergebnisse werden je Schrift, Text und Breite gemerkt: Listen mit vielen Zeilen messen
+    beim Neuzeichnen nicht jeden Text erneut.
+    """
+    if max_width <= 0:
+        return text
+    key = (str(font), text, max_width)
+    found = _ELIDED.get(key)
+    if found is None:
+        found = _elide(font, text, max_width)
+        if len(_ELIDED) >= _ELIDED_MAX:
+            _ELIDED.clear()
+        _ELIDED[key] = found
+    return found
+
+
+def _elide(font, text: str, max_width: int) -> str:
+    if font.measure(text) <= max_width:
         return text
     ellipsis = "…"
-    keep_right = len(text) // 2
-    left, right = text[: len(text) - keep_right], text[len(text) - keep_right :]
-    while (left or right) and font.measure(left + ellipsis + right) > max_width:
-        if len(left) >= len(right) and left:
-            left = left[:-1]
-        elif right:
-            right = right[1:]
+    # Wie viele Zeichen passen? Binäre Suche statt Zeichen für Zeichen (wenige Messungen).
+    low, high = 0, len(text)
+    while low < high:
+        keep = (low + high + 1) // 2
+        right = keep // 2
+        left = keep - right
+        candidate = text[:left] + ellipsis + (text[len(text) - right :] if right else "")
+        if font.measure(candidate) <= max_width:
+            low = keep
         else:
-            break
-    return left + ellipsis + right
+            high = keep - 1
+    right = low // 2
+    left = low - right
+    return text[:left] + ellipsis + (text[len(text) - right :] if right else "")
 
 
 class _ComboPopup:
@@ -585,7 +610,7 @@ class _ComboPopup:
                 yy = int(start_y + (y - start_y) * t)
                 self.win.geometry(f"+{x}+{yy}")
 
-            c.anim.run(f"popup:{self.win}", motion.NORMAL, step, easing=motion.DECELERATE, widget=self.win)
+            c.anim.run(f"popup:{self.win}", motion.NORMAL, step, easing=motion.DECELERATE, widget=self.win, motion=True)
 
     def pointer_inside(self) -> bool:
         try:

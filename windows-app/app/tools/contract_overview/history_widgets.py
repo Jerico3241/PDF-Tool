@@ -16,7 +16,7 @@ from typing import Callable, Sequence
 
 from ui import icons
 from ui.components import FactList
-from ui.context import ctx, surface_color
+from ui.context import bind_size, ctx, surface_color
 from ui.inputs import ComboBox, elide_middle
 from ui.theme import px
 from ui.widgets import Button, FlowRow, InfoBar, Text, frame
@@ -109,7 +109,7 @@ class ChangeList(tk.Canvas):
         self._tops: list[int] = []
         self._width = 0
         self._images: dict = {}
-        self.bind("<Configure>", self._configured, add="+")
+        bind_size(self, self._configured)
         self.bind("<Motion>", lambda e: self._set_hover(self._index_at(e.y)), add="+")
         self.bind("<Leave>", lambda _e: self._set_hover(None), add="+")
         self.bind("<ButtonRelease-1>", self._click, add="+")

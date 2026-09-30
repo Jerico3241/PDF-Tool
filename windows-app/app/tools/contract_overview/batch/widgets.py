@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from ui import icons
-from ui.context import ctx, surface_color
+from ui.context import bind_size, ctx, surface_color
 from ui.inputs import elide_middle
 from ui.theme import px
 from ui.widgets import CONTROL_RADIUS
@@ -53,7 +53,7 @@ class BatchList(tk.Canvas):
         self._images: dict = {}
         self._hover_img = self.create_image(0, 0, anchor="nw", state="hidden")
         self._focus_img = self.create_image(0, 0, anchor="nw", state="hidden")
-        self.bind("<Configure>", self._configured, add="+")
+        bind_size(self, self._configured)
         self.bind("<Motion>", self._motion, add="+")
         self.bind("<Leave>", lambda _e: self._set_hover(None), add="+")
         self.bind("<ButtonRelease-1>", self._click, add="+")

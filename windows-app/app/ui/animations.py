@@ -18,11 +18,16 @@ import tkinter as tk
 
 from . import windows
 
-# Dauer nach den Windows-Motion-Richtlinien (Millisekunden)
-FAST = 83  # Farbwechsel bei Hover
-NORMAL = 167  # Zustandswechsel, Schalter, InfoBar
-PAGE = 200  # Seitenwechsel und Auswahlindikator der Navigation
-SLOW = 250  # Dialoge
+# Dauer nach den Windows-Motion-Richtlinien (Millisekunden). Alle Übergänge sind zeitbasiert,
+# abbrechbar und laufen nie in einer Warteschlange: Ein neuer Übergang ersetzt den alten.
+PRESS = 67  # Drücken (50–80 ms)
+FAST = 83  # Farbwechsel bei Hover (70–100 ms)
+HOVER_OUT = 100  # Hover verlassen
+NORMAL = 167  # Zustandswechsel, Schalter, InfoBar, Ein-/Ausklappen (150–220 ms)
+PAGE = 180  # Seitenwechsel und Auswahlindikator der Navigation (140–200 ms)
+DIALOG = 167  # Dialoge einblenden (140–200 ms)
+DIALOG_OUT = 120  # Dialoge ausblenden
+SLOW = 250  # früherer Name für Dialoge
 
 
 def cubic_bezier(x1: float, y1: float, x2: float, y2: float) -> Callable[[float], float]:
@@ -90,9 +95,13 @@ class AnimationManager:
     """Zentrale Verwaltung aller Animationen und Zeitgeber der Oberfläche.
 
     * ``animations_enabled``: Einstellung »Animationen« (App oder Windows)
-    * ``reduce_motion``: Windows meldet »Animationseffekte aus«
+    * ``reduce_motion``: Windows meldet »Animationseffekte aus« – Bewegungen
+      (``motion=True``: Gleiten, Ein-/Ausklappen, Scrollen) springen dann sofort
+      in den Endzustand, dezente Überblendungen bleiben
     * ``is_resizing``: das Fenster wird gerade in der Größe verändert – nicht
       notwendige Animationen springen dann sofort in ihren Endzustand
+    * ``is_navigating``: ein Seitenwechsel wird gerade ausgeführt
+    * ``active_animations``: Anzahl laufender Animationen (im Leerlauf 0)
     * ``suspend()``: während die Oberfläche unsichtbar aufgebaut wird, laufen
       keine Animationen (kein gestaffeltes Einblenden beim Start)
     """
@@ -104,6 +113,7 @@ class AnimationManager:
         self.enabled = enabled
         self.reduce_motion = reduce_motion
         self._resizing = False
+        self.is_navigating = False
         self._suspended = 0
         self._anims: dict[str, _Anim] = {}
         self._timers: dict[str, str] = {}
@@ -133,9 +143,16 @@ class AnimationManager:
             self.finish_all()
         self._resizing = value
 
-    def allowed(self, essential: bool = False) -> bool:
-        """Darf jetzt animiert werden? (Aus, beim Aufbau oder während eines Resize: nein.)"""
+    @property
+    def active_animations(self) -> int:
+        return len(self._anims)
+
+    def allowed(self, essential: bool = False, motion: bool = False) -> bool:
+        """Darf jetzt animiert werden? (Aus, beim Aufbau oder während eines Resize: nein;
+        Bewegungen auch nicht bei »Animationseffekte aus« in Windows.)"""
         if not self.enabled or self._suspended:
+            return False
+        if motion and self.reduce_motion:
             return False
         return essential or not self._resizing
 
@@ -156,13 +173,15 @@ class AnimationManager:
         easing: Callable[[float], float] = DECELERATE,
         widget: tk.Misc | None = None,
         essential: bool = False,
+        motion: bool = False,
     ) -> None:
         """Startet (oder ersetzt) die Animation ``key``. ``step`` erhält 0…1 nach Easing.
 
-        Ist Animation gerade nicht erlaubt, wird sofort der Endzustand gesetzt.
+        Ist Animation gerade nicht erlaubt, wird sofort der Endzustand gesetzt. ``motion``:
+        eine Bewegung (entfällt bei »Animationseffekte aus«).
         """
         self._anims.pop(key, None)
-        if duration <= 0 or not self.allowed(essential):
+        if duration <= 0 or not self.allowed(essential, motion):
             self._safe_call(step, 1.0)
             if done:
                 self._safe_call(done)

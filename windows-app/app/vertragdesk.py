@@ -39,16 +39,15 @@ from appstate import (  # noqa: E402
     major_minor,
     save_config,
 )
-from tools.contract_overview import page_create, page_customers, page_layout, page_preview  # noqa: E402
+from tools.contract_overview import page_create, page_layout, page_preview  # noqa: E402
 from tools.contract_overview.batch import page as page_batch  # noqa: E402
 from tools.contract_overview.controller import BATCH_HINT  # noqa: E402
-from tools.contract_overview.controller import HINT as CONTRACT_HINT  # noqa: E402
 from tools.contract_overview.controller import ContractOverviewTool  # noqa: E402
 from tools.pdf_repair import page as page_repair  # noqa: E402
 from tools.pdf_repair.page import RepairTool  # noqa: E402
 from tools.registry import CONTRACTS, REPAIR, TOOLS, tool_for_page  # noqa: E402
 from ui import context as ui_context  # noqa: E402
-from ui import dialogs, icons, windows  # noqa: E402
+from ui import diagnostics, dialogs, icons, windows  # noqa: E402
 from ui.mica import MicaSource  # noqa: E402
 from ui.navigation import NavigationView, NavItem  # noqa: E402
 from ui.pages import home as page_home  # noqa: E402
@@ -106,6 +105,7 @@ class App(ContractOverviewTool, tk.Tk):
     def __init__(self) -> None:
         super().__init__(className="PDF-Tool")
         self.withdraw()
+        diagnostics.mark("root")
         # Excel-Prüfung, PDF-Erstellung und Vorschau laufen in Threads. Mit einem kürzeren Wechselintervall
         # kommt die Oberfläche nach jedem Tk-Aufruf schneller wieder an die Reihe und bleibt flüssig.
         sys.setswitchinterval(0.001)
@@ -126,6 +126,7 @@ class App(ContractOverviewTool, tk.Tk):
         self.ctx = ui_context.init(self, self.theme, animations, reduce_motion=not windows.client_area_animations())
         # Während des unsichtbaren Aufbaus läuft keine Animation (kein gestaffeltes Einblenden).
         self.ctx.anim.suspend()
+        diagnostics.mark("theme")
         if ICON_FILE.is_file():
             try:
                 self.iconbitmap(default=str(ICON_FILE))
@@ -151,30 +152,35 @@ class App(ContractOverviewTool, tk.Tk):
         self._start_zoomed = False
         self._start_position: tuple[int, int] | None = None
         # Das Mica-Material (Desktophintergrund) lädt parallel zum Aufbau der Oberfläche.
+        self._wallpaper = self._wallpaper_state()
         self._mica_thread = self._start_mica_load()
 
         self.configure(bg=self.theme.palette.mica)
         install_wheel_router(self)
-        # Alle Seiten werden jetzt aufgebaut – das Fenster ist noch verborgen.
+        # Alle Seiten werden jetzt aufgebaut – das Fenster ist noch verborgen. Die Ansicht »Kunden«
+        # entsteht nur mit eingeschalteter Kundenakte (sonst erst beim Einschalten, ebenso verdeckt).
+        factories = {
+            "home": lambda host: page_home.build(self, host),
+            "create": lambda host: page_create.build(self, host),
+            "batch": lambda host: page_batch.build(self, host),
+            "layout": lambda host: page_layout.build(self, host),
+            "preview": lambda host: page_preview.build(self, host),
+        }
+        if self.customer_records_enabled():
+            factories["customers"] = self._build_customer_page
+        factories["repair"] = lambda host: page_repair.build(self, host)
+        factories["settings"] = lambda host: page_settings.build(self, host)
         self.nav = NavigationView(
             self,
             list(NAV),
-            {
-                "home": lambda host: page_home.build(self, host),
-                "create": lambda host: page_create.build(self, host),
-                "batch": lambda host: page_batch.build(self, host),
-                "layout": lambda host: page_layout.build(self, host),
-                "preview": lambda host: page_preview.build(self, host),
-                "customers": lambda host: page_customers.build(self, host),
-                "repair": lambda host: page_repair.build(self, host),
-                "settings": lambda host: page_settings.build(self, host),
-            },
+            factories,
             on_change=self._page_changed,
             compact=bool(cfg.get("nav_kompakt", False)),
             status_hint=HOME_HINT,
             on_layout=self._layout_changed,
             title=APP_NAME,
         )
+        diagnostics.mark("pages")
         self.nav.pack(fill="both", expand=True)
         self.theme.subscribe(self._theme_changed)
         # Nach dem Start zeigt PDF Tool die Startseite mit allen Werkzeugen.
@@ -191,12 +197,14 @@ class App(ContractOverviewTool, tk.Tk):
         self.bind_all("<F1>", lambda _e: self.show_help())
         for number, key in enumerate(SHORTCUT_TARGETS, start=1):
             self.bind_all(f"<Control-Key-{number}>", lambda _e, k=key: self.open_tool(k))
-        self.bind("<Activate>", self._on_activate, add="+")
-        self.bind("<Deactivate>", self._on_deactivate, add="+")
+        ui_context.bind_own(self, "<Activate>", self._on_activate)
+        ui_context.bind_own(self, "<Deactivate>", self._on_deactivate)
         self.ctx.window_hooks.append(lambda _e: self._schedule_backdrop())
 
+        diagnostics.mark("navigation")
         self._restore_geometry()
         self._show_when_ready()
+        diagnostics.mark("visible")
         self.after_idle(self._after_show)
 
     # ------------------------------------------------------------------
@@ -230,6 +238,8 @@ class App(ContractOverviewTool, tk.Tk):
         self.ctx.anim.resume()
 
     def _after_show(self) -> None:
+        diagnostics.mark("interactive")
+        diagnostics.report_startup()
         if self._mica_thread is not None and self._mica_thread.is_alive():
             self._wait_for_mica()
         if major_minor(self.state.gesehen) != major_minor(VERSION):
@@ -340,7 +350,8 @@ class App(ContractOverviewTool, tk.Tk):
         use = self._chrome == "mica" and self.mica.available and self._active and self._mica_wanted()
         pane = self.nav.pane
         if not use:
-            self.nav.set_backdrop(None)
+            # Inaktiv: einfarbig – die berechneten Ausschnitte bleiben für das nächste Aktivieren erhalten.
+            self.nav.set_backdrop(None, key=self.nav._backdrop_key if self._chrome == "mica" else None)
             self.nav.layer.set_mica_corner(None)
             return
         rects = windows.monitor_rects(windows.frame_hwnd(self))
@@ -352,20 +363,21 @@ class App(ContractOverviewTool, tk.Tk):
         x0, y0 = pane.winfo_rootx(), pane.winfo_rooty()
         width = px(240)
         height = max(pane.winfo_height(), self.winfo_screenheight() // 2)
-        image = self.mica.region((x0, y0, x0 + width, y0 + height), (width, height), monitor, dark)
-        self.nav.set_backdrop(image)
+        # Gleiche Lage, gleiches Design, gleiches Hintergrundbild: nichts neu berechnen.
+        base = (tuple(monitor), dark, self.mica.generation)
+        self.nav.set_backdrop(lambda: self.mica.region((x0, y0, x0 + width, y0 + height), (width, height), monitor, dark), key=(*base, x0, y0, width, height))
         layer = self.nav.layer
         lx, ly = layer.winfo_rootx(), layer.winfo_rooty()
         r = px(8)
-        self.nav.layer.set_mica_corner(self.mica.region((lx, ly, lx + r, ly + r), (r, r), monitor, dark))
+        layer.set_mica_corner(lambda: self.mica.region((lx, ly, lx + r, ly + r), (r, r), monitor, dark), key=(*base, lx, ly, r))
 
-    def _on_activate(self, event) -> None:
-        if event.widget is self and not self._active:
+    def _on_activate(self, _event=None) -> None:
+        if not self._active:
             self._active = True
             self._update_backdrop()
 
-    def _on_deactivate(self, event) -> None:
-        if event.widget is self and self._active:
+    def _on_deactivate(self, _event=None) -> None:
+        if self._active:
             self._active = False
             # Wie Windows: inaktive Fenster zeigen die einfarbige Grundfläche statt Mica.
             self._update_backdrop()
@@ -406,17 +418,30 @@ class App(ContractOverviewTool, tk.Tk):
         if self._anim_pref is None:
             self.ctx.anim.animations_enabled = self._animations_wanted()
             self.var_anim.set(self.ctx.anim.enabled)
-        self.theme.set(force=True)
-        if self._mica_wanted():
+        # Neu eingefärbt wird nur bei echter Änderung (Design oder Akzentfarbe) – Windows meldet
+        # Einstellungsänderungen oft, meist betreffen sie die App gar nicht.
+        if not self.theme.set():
+            page_settings.refresh(self)  # das Farbfeld »Windows-Akzentfarbe« folgt dem System
+        wallpaper = self._wallpaper_state()
+        if self._mica_wanted() and wallpaper != self._wallpaper:
+            self._wallpaper = wallpaper
             self.worker.run(self.mica.load, lambda _ok: self._apply_chrome())
+
+    @staticmethod
+    def _wallpaper_state() -> tuple:
+        """Desktophintergrund (Datei, Änderungszeit, Anordnung, Farbe) – nur neu laden, wenn er sich ändert."""
+        path = windows.wallpaper_path() or ""
+        try:
+            stamp = Path(path).stat().st_mtime_ns if path else None
+        except OSError:
+            stamp = None
+        return (path, stamp, windows.wallpaper_style(), windows.desktop_color())
 
     def _page_changed(self, key: str) -> None:
         previous, self._page = self._page, key
         if key == "settings":
             page_settings.refresh(self)
-        tool = tool_for_page(key)
-        hint = {CONTRACTS.key: CONTRACT_HINT, REPAIR.key: page_repair.HINT}.get(tool.key if tool else "", HOME_HINT)
-        self.nav.status.set_hint(BATCH_HINT if key == "batch" else hint)
+        self._refresh_status_hint()
         # Die Auswahlleisten aller Ansichten von »Vertragsübersichten« zeigen dieselbe Ansicht.
         if key in CONTRACTS.pages:
             for view in CONTRACTS.pages:
@@ -429,8 +454,14 @@ class App(ContractOverviewTool, tk.Tk):
             self.batch_page.flush()
         if previous == "preview" and key != "preview":
             self.preview_left()
-        if key == "preview":
-            self.preview_shown()
+        # »Vorschau« aktualisiert sich vor dem Zeigen, noch verdeckt (Lebenszyklus »prepare«).
+
+    def _refresh_status_hint(self) -> None:
+        """Tastenhinweise der Statuszeile passend zur sichtbaren Seite (und zur Kundenakte)."""
+        key = self.nav.current or ""
+        tool = tool_for_page(key)
+        hint = {CONTRACTS.key: self.contract_hint(), REPAIR.key: page_repair.HINT}.get(tool.key if tool else "", HOME_HINT)
+        self.nav.status.set_hint(BATCH_HINT if key == "batch" else hint)
 
     # ------------------------------------------------------------------
     # Werkzeuge
@@ -756,7 +787,20 @@ class App(ContractOverviewTool, tk.Tk):
                 self._drop.remove()
             if self._hook is not None:
                 self._hook.remove()
+            self._cancel_pending_callbacks()
             self.destroy()
+
+    def _cancel_pending_callbacks(self) -> None:
+        """Ausstehende Tk-Zeitgeber und Leerlauf-Rückrufe beenden – nach dem Schließen läuft nichts nach."""
+        try:
+            pending = self.tk.splitlist(self.tk.call("after", "info"))
+        except tk.TclError:
+            return
+        for ident in pending:
+            try:
+                self.after_cancel(ident)
+            except tk.TclError:
+                pass
 
     def report_callback_exception(self, exc, val, tb) -> None:  # noqa: D401 - Tk-Schnittstelle
         text = "".join(traceback.format_exception(exc, val, tb))

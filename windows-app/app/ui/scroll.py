@@ -5,7 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 
 from . import animations as motion
-from .context import ctx, surface_color, surface_of
+from .context import bind_size, ctx, surface_color, surface_of
 from .theme import px
 
 
@@ -31,7 +31,7 @@ class FluentScrollbar(tk.Canvas):
         self.bind("<ButtonPress-1>", self._press, add="+")
         self.bind("<B1-Motion>", self._motion, add="+")
         self.bind("<ButtonRelease-1>", self._release, add="+")
-        self.bind("<Configure>", self._configured, add="+")
+        bind_size(self, self._configured)
         self.c.theme.subscribe(self._theme_changed, owner=self)
         self.configure(bg=surface_color(self.master))
 
@@ -161,8 +161,8 @@ class ScrollArea(tk.Frame):
         self.canvas.configure(yscrollcommand=self._on_scroll)
         self.canvas.pack(fill="both", expand=True)
         self.scrollbar.place(relx=1.0, x=-px(2), y=0, relheight=1.0, anchor="ne")
-        self.body.bind("<Configure>", self._sync, add="+")
-        self.canvas.bind("<Configure>", self._on_canvas, add="+")
+        bind_size(self.body, self._sync)
+        bind_size(self.canvas, self._on_canvas)
         self._target: float | None = None
         self.offset_x = 0
         self._max_width = px(max_width) if max_width else None
@@ -219,7 +219,7 @@ class ScrollArea(tk.Frame):
         def done() -> None:
             self._target = None
 
-        c.anim.run(f"scroll:{self}", 140, step_fn, done, easing=motion.DECELERATE, widget=self)
+        c.anim.run(f"scroll:{self}", 140, step_fn, done, easing=motion.DECELERATE, widget=self, motion=True)
 
     def scroll_to_widget(self, widget: tk.Misc) -> None:
         """Bringt ein Widget in den sichtbaren Bereich."""

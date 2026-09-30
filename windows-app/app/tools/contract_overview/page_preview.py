@@ -10,9 +10,9 @@ import time
 import tkinter as tk
 from typing import TYPE_CHECKING
 
-from ui import icons
+from ui import diagnostics, icons
 from ui.components import SelectorBar
-from ui.context import ctx, surface_color
+from ui.context import bind_size, ctx, surface_color
 from ui.navigation import Page
 from ui.theme import px
 from ui.widgets import Button, FlowRow, Icon, IconButton, InfoBar, ProgressRing, RoundedFrame, Text, frame
@@ -36,6 +36,8 @@ class PreviewCanvas(tk.Canvas):
         self.page = page
         self.MARGIN = px(16)
         self._photo: tk.PhotoImage | None = None
+        self._data: bytes | None = None  # Bilddaten des gezeigten Bildes (gleiche Daten: nicht neu dekodieren)
+        self.decoded = 0  # dekodierte Seitenbilder (Tests, Diagnose)
         self._size = (0, 0)
         self._offset = 0  # horizontale Verschiebung, wenn die Seite breiter ist als die Ansicht
         self._drag: tuple[int, int] | None = None
@@ -43,7 +45,7 @@ class PreviewCanvas(tk.Canvas):
         self.shown_page: tuple | None = None
         self._frame = self.create_rectangle(0, 0, 0, 0, width=1, state="hidden")
         self._image = self.create_image(0, 0, anchor="nw", state="hidden")
-        self.bind("<Configure>", self._configured, add="+")
+        bind_size(self, self._configured)
         self.bind("<ButtonPress-1>", self._press, add="+")
         self.bind("<B1-Motion>", self._motion, add="+")
         self.bind("<ButtonRelease-1>", lambda _e: setattr(self, "_drag", None), add="+")
@@ -80,8 +82,14 @@ class PreviewCanvas(tk.Canvas):
             self.app.preview_resized()
 
     def show(self, data: bytes, width: int, height: int, page: tuple | None = None) -> None:
-        self._photo = tk.PhotoImage(master=self, data=data)
-        self.itemconfigure(self._image, image=self._photo, state="normal")
+        if data is not self._data or self._photo is None:
+            # Nur ein neues Bild wird dekodiert – dieselbe Seite (z. B. beim erneuten Öffnen) bleibt stehen.
+            self._photo = tk.PhotoImage(master=self, data=data)
+            self._data = data
+            self.decoded += 1
+            diagnostics.count("preview_decode")
+            self.itemconfigure(self._image, image=self._photo)
+        self.itemconfigure(self._image, state="normal")
         self.itemconfigure(self._frame, state="normal")
         if (width, height) != self._size:
             self._offset = 0
@@ -92,8 +100,23 @@ class PreviewCanvas(tk.Canvas):
             self.configure(height=wanted)
         self._layout()
 
+    def reserve(self, width: int, height: int) -> None:
+        """Platz für eine Seite freihalten, deren Bild noch entsteht (kein Layoutsprung beim Eintreffen).
+
+        Nur ohne gezeigtes Bild: Ein vorhandenes Bild bleibt stehen, bis das neue fertig ist.
+        """
+        if self._photo is not None or width <= 1 or height <= 1:
+            return
+        self._size = (width, height)
+        self.itemconfigure(self._frame, state="normal")
+        wanted = height + 2 * self.MARGIN
+        if int(self.cget("height")) != wanted:
+            self.configure(height=wanted)
+        self._layout()
+
     def clear(self) -> None:
         self._photo = None
+        self._data = None
         self._size = (0, 0)
         self.shown_page = None
         self.itemconfigure(self._image, image="", state="hidden")
@@ -189,7 +212,8 @@ class PreviewTools:
             self.ring.start()
         else:
             self.ring.stop()
-        self.state_text.configure(text=text)
+        if self.state_text.cget("text") != text:  # nur bei echter Änderung neu zeichnen
+            self.state_text.configure(text=text)
 
 
 class PreviewView:
@@ -243,9 +267,12 @@ class PreviewView:
         elif state == "stale":
             self.tools.set_busy(True, "Änderungen – Vorschau wird aktualisiert …")
         elif state == "current":
-            placeholder = app.var_kd.get().strip() == "" and app._preview_doc is not None
+            doc = app._preview_doc
+            placeholder = app.var_kd.get().strip() == "" and doc is not None
             note = f" · Kundennummer fehlt (in der Vorschau »{PLACEHOLDER_KD}«)" if placeholder else ""
-            self.tools.set_busy(False, f"Aktuell · {time.strftime('%H:%M:%S')}{note}")
+            # Zeit der Erzeugung – ein erneutes Öffnen ohne Änderung erzeugt nichts neu und ändert nichts.
+            built = time.localtime(doc.created) if doc is not None else time.localtime()
+            self.tools.set_busy(False, f"Aktuell · {time.strftime('%H:%M:%S', built)}{note}")
             app.hide_notice("preview_info")
         elif state == "error":
             self.tools.set_busy(False, "Vorschau nicht möglich")
@@ -259,4 +286,6 @@ def build(app: "App", host) -> Page:
     page.add_section(ui.selector_preview, fill="none", anchor="w", pady=(0, px(16)))
     ui.preview_view = PreviewView(app, page)
     ui.preview_page = page
+    # Vor dem Zeigen (noch verdeckt) prüfen, ob die Vorschau aktuell ist – gezeigt wird das fertige Bild.
+    page.on("prepare", app.preview_shown)
     return page

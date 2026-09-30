@@ -2,21 +2,24 @@
 #   0. nur mit -Previous: Vorversion installieren und Benutzerdaten anlegen –
 #      Uebersichten-Ersteller 2.2.0, PDF Tool 2.3.0 (mit Kundenverlauf samt formatierter
 #      Fusszeile, Vorlagen, Textbausteinen und Regeln), PDF Tool 2.4.0 (Kundenakten mit
-#      formatierter Fusszeile und Vorlage, formatierte Kopfzeile, Einstellungen von "PDF reparieren")
-#      oder PDF Tool 2.5.0 (wie 2.4.0, dazu Stapel-Einstellungen und ein gespeicherter Vertragsstand)
+#      formatierter Fusszeile und Vorlage, formatierte Kopfzeile, Einstellungen von "PDF reparieren"),
+#      PDF Tool 2.5.0 (wie 2.4.0, dazu Stapel-Einstellungen und ein gespeicherter Vertragsstand)
+#      oder PDF Tool 2.6.0 (wie 2.5.0, dazu eine aktive Kundenakte)
 #   1. still installieren (bzw. aktualisieren) und Installation pruefen:
 #      Ordner, Verknuepfungen, genau ein Eintrag unter "Installierte Apps"
 #   2. nur mit -Previous: 2.2.0 – alter Programmordner und alte Verknuepfungen entfernt,
 #      Benutzerdaten mit Sicherung nach %APPDATA%\PDF-Tool uebernommen, alte Daten unveraendert;
-#      2.3.0/2.4.0/2.5.0 – das Setup laesst die Benutzerdaten unangetastet
+#      2.3.0/2.4.0/2.5.0/2.6.0 – das Setup laesst die Benutzerdaten unangetastet
 #   3. installierte Laufzeit pruefen (Module, Vertragsuebersicht, Kundenakte, Vorschau,
 #      PDF-Reparatur, Programmstart)
-#   4. echter Start wie ueber die Verknuepfung (pythonw.exe start.py); nach einem Update von
-#      2.3.0: Kundenverlauf mit Sicherung zu Kundenakten uebernommen, Formatierung,
-#      Standard-Fusszeile, Vorlagen und Textbausteine erhalten; von 2.4.0: Einstellungen,
-#      Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen unveraendert; von 2.5.0:
-#      zusaetzlich Stapel-Einstellungen erhalten, Vertragsstand unveraendert und lesbar, kein
-#      kuenstlicher neuer Stand
+#   4. echter Start wie ueber die Verknuepfung (pythonw.exe start.py). Die Kundenakte ist seit 2.6.1
+#      optional und auch nach einem Update zunaechst aus – vorhandene Kundendaten bleiben unangetastet.
+#      Nach einem Update von 2.3.0: Kundenverlauf bleibt unveraendert erhalten; nach dem Einschalten
+#      der Kundenakte mit Sicherung zu Kundenakten uebernommen, Formatierung, Standard-Fusszeile,
+#      Vorlagen und Textbausteine erhalten; von 2.4.0: Einstellungen, Kundenakten, Vorlagen, Rich Text
+#      und Reparatur-Einstellungen unveraendert; von 2.5.0/2.6.0: zusaetzlich Stapel-Einstellungen
+#      erhalten, Vertragsstand unveraendert und lesbar, kein kuenstlicher neuer Stand; von 2.6.0:
+#      Kundenakte aus, Kundenakten unveraendert und fuer die App lesbar
 #   5. still deinstallieren
 #
 # Aufruf:
@@ -25,6 +28,7 @@
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.3.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.4.0.exe
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.5.0.exe
+#   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup ...\PDF-Tool-Setup-<Version>.exe -Previous ...\PDF-Tool-Setup-2.6.0.exe
 #
 # Der Update-Test (-Previous) braucht einen Rechner ohne vorhandene Installation und ohne
 # Benutzerdaten der App. Ordner, die das Skript selbst angelegt hat, entfernt es am Ende wieder.
@@ -87,14 +91,17 @@ if ($Previous) {
         [IO.File]::WriteAllBytes((Join-Path $oldData "logos\kunde.png"), [byte[]](0..255))
         $oldHashes = @{}
         Get-ChildItem $oldData -Recurse -File | ForEach-Object { $oldHashes[$_.FullName.Substring($oldData.Length)] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
-    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $oldEntry.DisplayVersion -like "2.5*") {
-        $previousKind = "2.5"
+    } elseif ((Test-Path (Join-Path $target "app\start.py")) -and ($oldEntry.DisplayVersion -like "2.5*" -or $oldEntry.DisplayVersion -like "2.6*")) {
+        $previousKind = if ($oldEntry.DisplayVersion -like "2.6*") { "2.6" } else { "2.5" }
         if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
         # Benutzerdaten wie von PDF Tool 2.5: wie 2.4, dazu Stapel-Einstellungen; ausserdem ein
-        # gespeicherter Vertragsstand (Benutzerdaten von 2.6 – ein Update darf ihn nie loeschen)
+        # gespeicherter Vertragsstand (Benutzerdaten von 2.6 – ein Update darf ihn nie loeschen).
+        # Von 2.6.0 zusaetzlich: eine aktive Kundenakte.
         New-Item -ItemType Directory -Path $data -Force | Out-Null
-        $json = '{"gesehen": "2.5.0", "theme": "dark", "vorlagen": [{"name": "Quer", "format": "quer", "titel": "Vertragsübersicht"}], "bausteine": [{"name": "Gruß", "text": "Mit freundlichen Grüßen"}], "regeln": [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}, {"enthaelt": "Cloud", "zyklus": "monatlich"}], "kopfzeile": "Kopf fett", "kopfzeile_format": {"version": 1, "text": "Kopf fett", "spans": [{"start": 0, "end": 9, "font": "Helvetica", "size": 10, "color": "#B51F1F", "bold": true, "italic": false, "underline": false, "strike": false}], "paragraphs": [{"start": 0, "end": 9, "alignment": "left"}]}, "reparatur_ausgabe": "ordner", "reparatur_ordner": "C:\\Reparatur", "ordner_reparatur": "C:\\Quelle", "kunden_sortierung": "company", "kunden_auto_uebernehmen": false, "stapel_zielordner": "C:\\Stapel", "stapel_vorlage": "Quer", "stapel_logo": "", "stapel_unterordner": true, "stapel_kunden_zielordner": false, "stapel_konflikt": "skip"}'
+        $seen = if ($previousKind -eq "2.6") { "2.6.0" } else { "2.5.0" }
+        $active = if ($previousKind -eq "2.6") { ', "kunde_aktiv": "6f1c1d2e-0000-4000-8000-000000000024"' } else { "" }
+        $json = '{"gesehen": "' + $seen + '", "theme": "dark", "vorlagen": [{"name": "Quer", "format": "quer", "titel": "Vertragsübersicht"}], "bausteine": [{"name": "Gruß", "text": "Mit freundlichen Grüßen"}], "regeln": [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}, {"enthaelt": "Cloud", "zyklus": "monatlich"}], "kopfzeile": "Kopf fett", "kopfzeile_format": {"version": 1, "text": "Kopf fett", "spans": [{"start": 0, "end": 9, "font": "Helvetica", "size": 10, "color": "#B51F1F", "bold": true, "italic": false, "underline": false, "strike": false}], "paragraphs": [{"start": 0, "end": 9, "alignment": "left"}]}, "reparatur_ausgabe": "ordner", "reparatur_ordner": "C:\\Reparatur", "ordner_reparatur": "C:\\Quelle", "kunden_sortierung": "company", "kunden_auto_uebernehmen": false, "stapel_zielordner": "C:\\Stapel", "stapel_vorlage": "Quer", "stapel_logo": "", "stapel_unterordner": true, "stapel_kunden_zielordner": false, "stapel_konflikt": "skip"' + $active + '}'
         $seedFile = Join-Path $data "gui-config.json"
         [IO.File]::WriteAllText($seedFile, $json, (New-Object Text.UTF8Encoding $false))
         $akten = '{"schema_version": 2, "customers": [{"id": "6f1c1d2e-0000-4000-8000-000000000024", "company": "Muster GmbH", "number": "10042", "emails": ["rechnung@muster.de", "buchhaltung@muster.de"], "note": "Stammkunde", "logo": "", "target_dir": "", "template": "Quer", "template_auto": true, "header": null, "footer": {"text": "Kunde Muster\nZeile 2", "format": {"version": 1, "text": "Kunde Muster\nZeile 2", "spans": [{"start": 0, "end": 12, "font": "Helvetica", "size": 8, "color": "#333333", "bold": false, "italic": true, "underline": false, "strike": false}, {"start": 12, "end": 20, "font": "Helvetica", "size": 8, "color": "#333333", "bold": false, "italic": false, "underline": false, "strike": false}], "paragraphs": [{"start": 0, "end": 12, "alignment": "center"}, {"start": 13, "end": 20, "alignment": "center"}]}}, "last_excel": "", "last_pdf": "", "last_used_at": "2026-09-01T10:00:00.000000+02:00", "created_at": "2026-08-01T10:00:00.000000+02:00", "updated_at": "2026-08-01T10:00:00.000000+02:00", "origin": ""}]}'
@@ -164,7 +171,7 @@ if ($Previous -and $previousKind -eq "2.3") {
     Write-Host "   Programmdateien ersetzt, Benutzerdaten unveraendert"
 }
 
-if ($Previous -and $previousKind -eq "2.5") {
+if ($Previous -and ($previousKind -eq "2.5" -or $previousKind -eq "2.6")) {
     Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
     if ($oldEntry.DisplayName -ne $appName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
     if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Einstellungen veraendert" }
@@ -218,9 +225,26 @@ Start-Sleep -Seconds 2
 Write-Host "   App lief ohne Fehler"
 
 if ($Previous -and $previousKind -eq "2.3") {
-    Write-Host "   Kundenakte 2.0: Uebernahme des Kundenverlaufs pruefen"
+    # Seit 2.6.1 ist die Kundenakte optional und zunaechst aus: der Kundenverlauf bleibt unangetastet.
+    Write-Host "   Kundenakte aus: Kundenverlauf unveraendert erhalten"
     $store = Join-Path $data "kundenakten.json"
-    if (-not (Test-Path $store)) { throw "kundenakten.json fehlt nach dem ersten Start" }
+    if (Test-Path $store) { throw "kundenakten.json angelegt, obwohl die Kundenakte aus ist" }
+    $cfgFile = Join-Path $data "gui-config.json"
+    $cfg = Get-Content $cfgFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (@($cfg.kunden).Count -ne 2) { throw "Kundenverlauf ging verloren, obwohl die Kundenakte aus ist" }
+    if ($cfg.kundenakte_verwenden -eq $true) { throw "Kundenakte nach dem Update eingeschaltet" }
+    # Einschalten (wie in den Einstellungen) und erneut starten: jetzt wird uebernommen
+    $cfg | Add-Member -NotePropertyName "kundenakte_verwenden" -NotePropertyValue $true -Force
+    [IO.File]::WriteAllText($cfgFile, ($cfg | ConvertTo-Json -Depth 32), (New-Object Text.UTF8Encoding $false))
+    $seedHash = (Get-FileHash $cfgFile -Algorithm SHA256).Hash
+    $app = Start-Process -FilePath (Join-Path $target "runtime\pythonw.exe") -ArgumentList "-s", "-OO", "`"$(Join-Path $target 'app\start.py')`"" -WorkingDirectory (Join-Path $target "app") -PassThru
+    Start-Sleep -Seconds 15
+    if ($app.HasExited) { throw "Die App hat sich nach dem Einschalten der Kundenakte beendet (Code $($app.ExitCode))" }
+    if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Raw)" }
+    Stop-Process -Id $app.Id -Force
+    Start-Sleep -Seconds 2
+    Write-Host "   Kundenakte 2.0: Uebernahme des Kundenverlaufs nach dem Einschalten pruefen"
+    if (-not (Test-Path $store)) { throw "kundenakten.json fehlt nach dem Start mit eingeschalteter Kundenakte" }
     $akten = Get-Content $store -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($akten.schema_version -ne 2) { throw "schema_version: $($akten.schema_version)" }
     if (@($akten.customers).Count -ne 2) { throw "Erwartet 2 Kundenakten, gefunden: $(@($akten.customers).Count)" }
@@ -242,8 +266,8 @@ if ($Previous -and $previousKind -eq "2.3") {
     Write-Host "   2 Kundenakten mit Sicherung $($backup[0].Name) uebernommen; Formatierung, Standard-Fusszeile, Vorlagen und Textbausteine erhalten"
 }
 
-if ($Previous -and $previousKind -eq "2.5") {
-    Write-Host "   Update von 2.5: Einstellungen, Kundenakten, Vorlagen, Rich Text, Stapel- und Reparatur-Einstellungen, Vertragsstand pruefen"
+if ($Previous -and ($previousKind -eq "2.5" -or $previousKind -eq "2.6")) {
+    Write-Host "   Update von $($previousKind): Einstellungen, Kundenakten, Vorlagen, Rich Text, Stapel- und Reparatur-Einstellungen, Vertragsstand pruefen"
     if ((Get-FileHash $storeFile -Algorithm SHA256).Hash -ne $storeHash) { throw "Kundenakten wurden beim Start veraendert" }
     if ((Get-FileHash $historyFile -Algorithm SHA256).Hash -ne $historyHash) { throw "Vertragsstand wurde beim Start veraendert" }
     $staende = @(Get-ChildItem (Join-Path $data "contract-history") -Recurse -File)
@@ -258,7 +282,11 @@ if ($Previous -and $previousKind -eq "2.5") {
     if ($cfg.reparatur_ausgabe -ne "ordner" -or $cfg.reparatur_ordner -ne "C:\Reparatur" -or $cfg.ordner_reparatur -ne "C:\Quelle") { throw "Einstellungen von 'PDF reparieren' gingen verloren" }
     if ($cfg.stapel_zielordner -ne "C:\Stapel" -or $cfg.stapel_vorlage -ne "Quer" -or $cfg.stapel_unterordner -ne $true -or $cfg.stapel_kunden_zielordner -ne $false -or $cfg.stapel_konflikt -ne "skip") { throw "Stapel-Einstellungen gingen verloren" }
     if ($cfg.kunden_sortierung -ne "company") { throw "Sortierung der Kundenliste ging verloren" }
-    Write-Host "   Kundenakte, Vertragsstand (lesbar, kein neuer Stand), Vorlagen, Textbausteine, Regeln, Kopfzeile, Stapel- und Reparatur-Einstellungen erhalten"
+    # Kundenakte zunaechst aus (Opt-in) – die Kundenakten bleiben unveraendert und lesbar
+    if ($cfg.kundenakte_verwenden -eq $true) { throw "Kundenakte nach dem Update eingeschaltet" }
+    $akten = & (Join-Path $target "runtime\python.exe") -s -c "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import appstate; from tools.contract_overview.customers.repository import CustomerStore; store = CustomerStore.load(pathlib.Path(appstate.CONFIG_FILE).parent / 'kundenakten.json'); print(len(store), store.get(sys.argv[2]).company)" (Join-Path $target "app") "6f1c1d2e-0000-4000-8000-000000000024"
+    if ($LASTEXITCODE -ne 0 -or ($akten | Select-Object -Last 1).Trim() -ne "1 Muster GmbH") { throw "Kundenakten sind fuer die App nicht lesbar: $akten" }
+    Write-Host "   Kundenakte (aus, Daten unveraendert und lesbar), Vertragsstand (lesbar, kein neuer Stand), Vorlagen, Textbausteine, Regeln, Kopfzeile, Stapel- und Reparatur-Einstellungen erhalten"
 }
 
 if ($Previous -and $previousKind -eq "2.4") {

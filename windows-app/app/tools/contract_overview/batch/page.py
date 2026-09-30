@@ -39,6 +39,11 @@ SUBTITLE = "Mehrere Excel-Listen prüfen und gesammelt als PDF erstellen."
 EMPTY_TITLE = "Noch keine Excel-Dateien hinzugefügt."
 EMPTY_TEXT = "Füge mehrere Excel-Dateien hinzu, um Vertragsübersichten gesammelt zu erstellen."
 EMPTY_HINT = "Excel-Dateien oder einen Ordner auch einfach in das Fenster ziehen. Jede Datei wird sofort geprüft; bekannte Kunden werden an der Rechnungsempfänger-E-Mail erkannt."
+EMPTY_HINT_PLAIN = "Excel-Dateien oder einen Ordner auch einfach in das Fenster ziehen. Jede Datei wird sofort geprüft."
+SETTINGS_TEXT = "Gilt für alle Einträge. Angaben einer Kundenakte oder eines Eintrags haben Vorrang."
+SETTINGS_TEXT_PLAIN = "Gilt für alle Einträge. Angaben eines Eintrags haben Vorrang."
+OUTPUT_TEXT = "Eigene Angaben gelten nur für diesen Eintrag; »Zurücksetzen« übernimmt wieder Kundenakte bzw. Stapel."
+OUTPUT_TEXT_PLAIN = "Eigene Angaben gelten nur für diesen Eintrag; »Zurücksetzen« übernimmt wieder die Angaben des Stapels."
 PRIVACY = "Alles geschieht lokal auf diesem PC – keine Cloud, keine Uploads."
 RUN_TEXT = "Bereite Übersichten erstellen"
 FILTER_LABELS = {"all": "Alle", "ready": "Bereit", "needs_input": "Angaben erforderlich", "failed": "Fehler", "done": "Fertig"}
@@ -219,7 +224,8 @@ class BatchPage:
         buttons.pack(fill="x", pady=(px(14), 0))
         buttons.add(Button(buttons, "Dateien hinzufügen", app.pick_batch_files, icon=icons.ADD, kind="accent"))
         buttons.add(Button(buttons, "Ordner hinzufügen", app.pick_batch_folder, icon=icons.FOLDER_OPEN))
-        Text(inner, EMPTY_HINT, style="caption", color="text2", wrap=True).pack(anchor="w", fill="x", pady=(px(12), 0))
+        self.empty_hint = Text(inner, EMPTY_HINT, style="caption", color="text2", wrap=True)
+        self.empty_hint.pack(anchor="w", fill="x", pady=(px(12), 0))
         self.empty.lift_corners()
 
     def _build_run(self, master) -> None:
@@ -263,8 +269,9 @@ class BatchPage:
     def _build_settings(self, columns) -> None:
         app = self.app
         settings = app.batch_settings
-        card = Card(columns, "Ausgabe und Standards", icons.SETTINGS, "Gilt für alle Einträge. Angaben einer Kundenakte oder eines Eintrags haben Vorrang.")
+        card = Card(columns, "Ausgabe und Standards", icons.SETTINGS, SETTINGS_TEXT)
         columns.add(card)
+        self.settings_card = card
         body = card.body
         self.row_target = FileRow(body, icons.FOLDER, "Zielordner")
         self.row_target.pack(fill="x")
@@ -292,6 +299,7 @@ class BatchPage:
         IconButton(self.row_logo.buttons, icons.REFRESH, lambda: app.batch_update_settings(logo=""), tooltip="Installiertes Standardlogo verwenden").pack(side="right", padx=(0, px(4)))
         toggles = frame(more)
         toggles.pack(fill="x", pady=(px(8), 0))
+        self.setting_rows: dict[str, tk.Frame] = {}
         for var, text, key in (
             (self.var_subfolders, "Unterordner je Kunde (»123456 Beispiel GmbH«)", "subfolders"),
             (self.var_customer_target, "Zielordner der Kundenakte verwenden", "customer_target"),
@@ -300,12 +308,48 @@ class BatchPage:
             row.pack(fill="x", pady=(px(2), 0))
             ToggleSwitch(row, var, command=lambda v=var, k=key: app.batch_update_settings(**{k: bool(v.get())}), show_text=False).pack(side="left")
             Text(row, text, style="body", wrap=True).pack(side="left", fill="x", expand=True, padx=(px(8), 0))
+            self.setting_rows[key] = row
         note = frame(body)
         note.pack(fill="x", pady=(px(10), 0))
         if ctx().icons_available:
             Icon(note, icons.SHIELD, color="text2").pack(side="left", anchor="n", padx=(0, px(8)), pady=(px(1), 0))
         Text(note, PRIVACY, style="caption", color="text2", wrap=True).pack(side="left", fill="x", expand=True)
         card.lift_corners()
+
+    def set_customer_parts(self, enabled: bool) -> None:
+        """Kunden-Elemente zeigen bzw. ausblenden (Schalter »Kundenakte verwenden«).
+
+        Nur Ein- und Ausblenden an festen Stellen und Texte tauschen – nichts wird neu aufgebaut.
+        Ohne Kundenakte bleiben Firmenname und Kundennummer normale Eingabefelder.
+        """
+        self.customer_parts = enabled
+        self.empty_hint.configure(text=EMPTY_HINT if enabled else EMPTY_HINT_PLAIN)
+        if self.settings_card.description is not None:
+            self.settings_card.description.configure(text=SETTINGS_TEXT if enabled else SETTINGS_TEXT_PLAIN)
+        if self.output_card.description is not None:
+            self.output_card.description.configure(text=OUTPUT_TEXT if enabled else OUTPUT_TEXT_PLAIN)
+        row = self.setting_rows["customer_target"]
+        if enabled and not row.winfo_manager():
+            row.pack(fill="x", pady=(px(2), 0))
+        elif not enabled and row.winfo_manager():
+            row.pack_forget()
+        mail_info = self.app.ui.batch_mail_info
+        if enabled:
+            if not self.d_customer_part.winfo_manager():
+                self.d_customer_part.pack(fill="x", before=self.label_company)
+            self.label_company.pack_configure(pady=(px(12), px(4)))
+            if not mail_info.winfo_manager():
+                mail_info.pack(fill="x", pady=(px(8), 0))
+            if not self.d_changes_card.winfo_manager():
+                self.d_changes_card.pack(fill="x", pady=(px(12), 0), before=self.output_card)
+        else:
+            self.d_customer_part.pack_forget()
+            self.label_company.pack_configure(pady=(0, px(4)))  # erstes Feld der Karte
+            mail_info.hide(animate=False)
+            mail_info.pack_forget()
+            self.d_changes_card.pack_forget()
+        if self.item_id is not None and self.detail_view.winfo_manager():
+            self.refresh_detail()
 
     def toggle_more(self) -> None:
         if self.more.expanded:
@@ -363,15 +407,17 @@ class BatchPage:
         self.d_facts = FactList(excel.body, label_width=DETAIL_LABEL_WIDTH)
         self.d_facts.pack(fill="x", pady=(px(4), 0))
         excel.lift_corners()
-        # Kunde
+        # Kunde (Zuordnung zur Kundenakte nur mit eingeschalteter Kundenakte)
         kunde = Card(columns, "Kunde", icons.CONTACT)
         columns.add(kunde)
         body = kunde.body
-        self.d_customer = Text(body, "", style="body_strong", wrap=True)
+        self.d_customer_part = frame(body)
+        self.d_customer_part.pack(fill="x")
+        self.d_customer = Text(self.d_customer_part, "", style="body_strong", wrap=True)
         self.d_customer.pack(anchor="w", fill="x")
-        self.d_customer_note = Text(body, "", style="caption", color="text2", wrap=True)
+        self.d_customer_note = Text(self.d_customer_part, "", style="caption", color="text2", wrap=True)
         self.d_customer_note.pack(anchor="w", fill="x")
-        row = FlowRow(body, gap=6, row_gap=6)
+        row = FlowRow(self.d_customer_part, gap=6, row_gap=6)
         row.pack(fill="x", pady=(px(8), 0))
         self.btn_pick = Button(row, "Kunden auswählen …", lambda: app.batch_choose_customer(self.item_id), icon=icons.PEOPLE, tooltip="Bekannten Kunden für diesen Eintrag wählen")
         row.add(self.btn_pick)
@@ -380,7 +426,7 @@ class BatchPage:
         self.btn_auto_customer = Button(row, "Automatisch erkennen", lambda: app.batch_set_customer(self.item_id, CustomerMode.AUTO), kind="subtle", tooltip="Kunden wieder über die Rechnungsempfänger erkennen")
         row.add(self.btn_auto_customer)
         self.customer_buttons = row
-        field_label(body, "Firmenname")
+        self.label_company = field_label(body, "Firmenname")
         self.field_company = TextField(body, self.var_company, placeholder="z. B. Muster GmbH")
         self.field_company.pack(fill="x")
         field_label(body, "Kundennummer")
@@ -404,8 +450,9 @@ class BatchPage:
         self.d_changes_card.lift_corners()
 
         # Darstellung und Ausgabe
-        output = Card(self.detail_view, "Darstellung und Ausgabe", icons.DOCUMENT, "Eigene Angaben gelten nur für diesen Eintrag; »Zurücksetzen« übernimmt wieder Kundenakte bzw. Stapel.")
+        output = Card(self.detail_view, "Darstellung und Ausgabe", icons.DOCUMENT, OUTPUT_TEXT)
         output.pack(fill="x", pady=(px(12), 0))
+        self.output_card = output
         body = output.body
         row = frame(body)
         row.pack(fill="x")

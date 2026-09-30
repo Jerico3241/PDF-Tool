@@ -264,6 +264,9 @@ class PreviewFlow:
         self._preview_signature = built
         self._preview_images.clear()
         self.preview_runs += 1
+        from ui import diagnostics
+
+        diagnostics.count("preview_render")
         self._preview_page = max(0, min(self._preview_page, doc.pages - 1))
         self._preview_status("current")
         self._show_preview_page()
@@ -313,6 +316,9 @@ class PreviewFlow:
         if self._preview_view == key:
             return
         self._preview_view = key
+        # Platz für die Seite schon jetzt freihalten: Das Bild erscheint ohne Layoutsprung.
+        width_pt, height_pt = doc.sizes[index]
+        canvas.reserve(int(round(width_pt * scale)), int(round(height_pt * scale)))
 
         def done(result) -> None:
             if self._preview_view != key or self._preview_doc is not doc:

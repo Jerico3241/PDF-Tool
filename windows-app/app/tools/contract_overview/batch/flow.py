@@ -226,7 +226,8 @@ class BatchFlow:
         )
 
     def batch_resolve(self, item: BatchItem, for_preview: bool = False) -> resolver.Resolution:
-        return resolver.resolve(item, self.customers, self.state.find_vorlage, self.batch_settings, self.batch_defaults(), for_preview=for_preview)
+        customers = self.customers if self.customer_records_enabled() else None
+        return resolver.resolve(item, customers, self.state.find_vorlage, self.batch_settings, self.batch_defaults(), for_preview=for_preview)
 
     def _batch_update(self, item: BatchItem) -> resolver.Resolution:
         """Werte und Status eines Eintrags neu bestimmen (ein erstelltes Ergebnis bleibt)."""
@@ -250,9 +251,10 @@ class BatchFlow:
         self._batch_changed()
 
     def batch_customers_changed(self) -> None:
-        for item in self.batch_items:
-            if item.customer_mode is CustomerMode.MANUAL and self.customers.get(item.customer_id) is None:
-                item.customer_mode, item.customer_id = CustomerMode.AUTO, None  # gelöschte Kundenakte
+        if self.customer_records_enabled():
+            for item in self.batch_items:
+                if item.customer_mode is CustomerMode.MANUAL and self.customers.get(item.customer_id) is None:
+                    item.customer_mode, item.customer_id = CustomerMode.AUTO, None  # gelöschte Kundenakte
         self.batch_refresh_all()
 
     def batch_inherited(self, item_id: str) -> dict[str, str]:
@@ -327,7 +329,7 @@ class BatchFlow:
 
     def batch_choose_customer(self, item_id: str) -> None:
         item = self.batch_by_id.get(item_id)
-        if item is None:
+        if item is None or not self.customer_records_enabled():
             return
         if not len(self.customers):
             self.notify("batch_detail_info", "info", "Noch keine Kundenakten gespeichert. Kundenakten entstehen in »Übersicht erstellen« oder in der Ansicht »Kunden«.", auto_hide=10000, status=False)

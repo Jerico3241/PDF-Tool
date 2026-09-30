@@ -8,6 +8,9 @@
   Vorschau aus.
 * Der Stapel nutzt dieselben Stände und denselben Vergleich (kompakte Angaben in der
   Liste, Einzelheiten in der Detailansicht).
+* Ohne eingeschaltete Kundenakte gibt es keine sichere Kundenidentität: Dann entsteht kein
+  Stand und es wird nichts verglichen (nie über Firmenname, Domain oder E-Mail geraten).
+  Gespeicherte Stände bleiben unverändert erhalten.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import appstate
+from ui import diagnostics
 
 from .history import report
 from .history.compare import compare
@@ -83,6 +87,11 @@ class HistoryFlow:
         self._history_note: tuple[str, str, str] | None = None
         self._history_job = None
         self.comparison: ContractComparison | None = None
+        # Schlüssel der gezeigten Anzeige: Neu berechnet wird nur bei geänderten Daten, anderem
+        # Kunden, anderem Ausgangsstand oder neuen Ständen – nicht bei jeder Eingabe.
+        self._comparison_state: tuple | None = None
+        self._comparison_source: dict | None = None
+        self.comparison_runs = 0  # berechnete Vergleiche im Einzelmodus (Tests, Diagnose)
         # Stapel: je Eintrag der beim Erstellen gespeicherte Stand und der gewählte Vergleich
         self._batch_saved_snapshot: dict[str, str] = {}
         self._batch_baselines: dict[str, str] = {}
@@ -107,7 +116,7 @@ class HistoryFlow:
 
     def record_contract_state(self, customer_id: str | None, label: str, records: tuple[ContractRecord, ...], excel: str, pdf: str, area: str = "pdf_info") -> tuple[Snapshot, bool, bool] | None:
         """Stand nach einem erfolgreichen Export speichern. Rückgabe: (Stand, neu angelegt, erster Stand)."""
-        if not customer_id or not records:
+        if not customer_id or not records or not self.customer_records_enabled():
             return None
         first = not self.history_snapshots(customer_id)
         try:
@@ -149,25 +158,50 @@ class HistoryFlow:
         area = getattr(self.ui, "comparison_area", None)
         if view is None or area is None:
             return
-        contracts = self.current_contracts()
-        if contracts is None and self._analysis is None and self._analysis_path and self._analysis_path == self.var_excel.get().strip():
-            return  # die Prüfung läuft – die bisherige Anzeige bleibt bis zum Ergebnis stehen
-        if contracts is None:
+        if not self.customer_records_enabled():
+            # Ohne Kundenakte keine Kundenidentität – kein Vergleich, die Karte bleibt verborgen.
             self.comparison = None
+            self._comparison_state = None
+            if area.expanded:
+                area.collapse(animate=False)
+            return
+        excel = self.var_excel.get().strip()
+        result = self._analysis
+        if result is None and self._analysis_path and self._analysis_path == excel:
+            return  # die Prüfung läuft – die bisherige Anzeige bleibt bis zum Ergebnis stehen
+        if not result or not result.get("ok") or self._analysis_path != excel:
+            self.comparison = None
+            self._comparison_state = None
             if area.expanded:
                 area.collapse(animate=False)
             return
         customer = self.active_customer()
-        if customer is None:
-            self.comparison = None
-            view.show_message("info", NO_CUSTOMER, "Vertragsvergleich")
-        else:
-            session = (customer.id, self.var_excel.get().strip())
+        if customer is not None:
+            session = (customer.id, excel)
             if session != self._history_session:
                 self._history_session = session
                 self._history_saved = set()
                 self._history_baseline = None
                 self._history_note = None
+        state = (
+            customer.id if customer is not None else None,
+            excel,
+            id(result),
+            json.dumps(self.state.regeln, sort_keys=True, default=str),
+            self.history_version,
+            self._history_baseline,
+            tuple(sorted(self._history_saved)),
+            self._history_note,
+        )
+        if state == self._comparison_state and area.expanded:
+            return  # nichts geändert: keine Berechnung, keine neue Anzeige
+        self._comparison_state = state
+        self._comparison_source = result  # hält das Ergebnis fest (die id im Schlüssel bleibt eindeutig)
+        contracts = records_from(result.get("vertraege") or (), self.state.regeln)
+        if customer is None:
+            self.comparison = None
+            view.show_message("info", NO_CUSTOMER, "Vertragsvergleich")
+        else:
             snapshots = self.history_snapshots(customer.id)
             earlier = [snapshot for snapshot in snapshots if snapshot.id not in self._history_saved]
             if not earlier:
@@ -179,6 +213,8 @@ class HistoryFlow:
             else:
                 baseline = next((s for s in snapshots if s.id == self._history_baseline), None) or earlier[0]
                 self.comparison = compare(baseline, contracts)
+                self.comparison_runs += 1
+                diagnostics.count("comparison")
                 view.show_comparison(self.comparison, baseline_choices(snapshots, earlier[0], self._history_saved), baseline.id, snapshot_facts(baseline), self._history_note)
         if not area.expanded:
             area.expand(animate=False)
@@ -221,7 +257,7 @@ class HistoryFlow:
     # Stapel -------------------------------------------------------------------------------------------------
     def batch_comparison(self, item: "BatchItem") -> ContractComparison | None:
         """Vergleich eines Stapel-Eintrags mit dem Stand seiner Kundenakte (zwischengespeichert)."""
-        if item.analysis is None or not item.analysis.ok:
+        if not self.customer_records_enabled() or item.analysis is None or not item.analysis.ok:
             return None
         res = self.batch_resolution(item.id)
         customer = res.customer if res is not None else None

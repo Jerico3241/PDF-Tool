@@ -30,7 +30,7 @@ from richtext import ALIGNMENTS, FONT_SIZES, CharStyle, RichText, size_text, val
 
 from . import animations as motion
 from . import icons, windows
-from .context import ctx, reveal, surface_of
+from .context import bind_size, ctx, reveal, surface_of
 from .inputs import ComboBox, _FieldBase
 from .theme import mix, px
 from .widgets import Button, FlowRow, Swatch, Text, frame
@@ -302,7 +302,7 @@ class RichTextArea(_FieldBase):
         self.text.bind("<Shift-Tab>", self._shift_tab, add="+")
         self.text.bind("<<Selection>>", lambda _e: self._schedule_state(), add="+")
         self.text.bind("<Control-KeyPress>", self._control_key, add="+")
-        self.text.bind("<Configure>", self._text_configured, add="+")
+        bind_size(self.text, self._text_configured)
         self.bind("<Button-1>", lambda _e: self.text.focus_set(), add="+")
         self._bind_hover(self.text)
         self._text_width = 0

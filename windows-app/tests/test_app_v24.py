@@ -20,7 +20,7 @@ def kunden_app(config_file: Path, monkeypatch):
     """App ohne Animationen; Dialoge antworten mit der Hauptschaltfläche."""
     import appstate
 
-    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light"}), encoding="utf-8")
+    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light", "kundenakte_verwenden": True}), encoding="utf-8")
     monkeypatch.setenv("UE_NO_ANIMATIONS", "1")
     from ui import dialogs
 
@@ -652,7 +652,7 @@ def test_history_of_23_becomes_customer_records(config_file: Path, monkeypatch) 
         {"firmenname": "Muster GmbH", "kundennummer": "10042", "rechnungsempfaenger": "rechnung@muster.de", "fusszeile": "Eigene\nFußzeile", "kopfzeile": "", "excel": "C:/x.xlsx", "pdf": ""},
         {"firmenname": "Alt AG", "kundennummer": "1", "rechnungsempfaenger": "", "fusszeile": "", "kopfzeile": ""},
     ]
-    config_file.write_text(json.dumps({"gesehen": "2.3.0", "theme": "light", "kunden": kunden, "firmenname": "Muster GmbH"}), encoding="utf-8")
+    config_file.write_text(json.dumps({"gesehen": "2.3.0", "theme": "light", "kunden": kunden, "firmenname": "Muster GmbH", "kundenakte_verwenden": True}), encoding="utf-8")
     app = vertragdesk.App()
     try:
         pump(app, 0.8)  # »Neu in Version« erscheint nach 0,5 s und schließt sich im Test selbst
@@ -677,7 +677,7 @@ def test_failed_migration_keeps_the_history(config_file: Path, monkeypatch) -> N
     monkeypatch.setenv("UE_NO_ANIMATIONS", "1")
     monkeypatch.setattr(CustomerStore, "save", lambda self: False)
     kunden = [{"firmenname": "Muster GmbH", "kundennummer": "10042", "rechnungsempfaenger": "r@m.de"}]
-    config_file.write_text(json.dumps({"gesehen": "2.3.0", "theme": "light", "kunden": kunden}), encoding="utf-8")
+    config_file.write_text(json.dumps({"gesehen": "2.3.0", "theme": "light", "kunden": kunden, "kundenakte_verwenden": True}), encoding="utf-8")
     app = vertragdesk.App()
     try:
         pump(app, 0.8)
