@@ -56,9 +56,18 @@ jobs:
 
       - name: Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, alle Abläufe)
         timeout-minutes: 60 # ein hängender Test bricht so früh ab
+        shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest windows-app/tests/test_qt_resources.py windows-app/tests/test_qt_bridge.py windows-app/tests/test_qt_shell.py windows-app/tests/test_qt_contracts.py windows-app/tests/test_qt_customers.py windows-app/tests/test_qt_batch.py windows-app/tests/test_qt_repair.py windows-app/tests/test_qt_history.py windows-app/tests/test_qt_optional.py -q -p no:cacheprovider
+        run: |
+          # Jede Testdatei in einem eigenen Prozess: jede meldet ihre Fehler vollständig, und ein
+          # Absturz zeigt den laufenden Test (-v) – alle Dateien laufen, auch nach einem Fehler.
+          $failed = @()
+          foreach ($name in "resources", "bridge", "shell", "contracts", "customers", "batch", "repair", "history", "optional") {
+            python -m pytest "windows-app/tests/test_qt_$name.py" -v -rfE -p no:cacheprovider
+            if ($LASTEXITCODE -ne 0) { $failed += "test_qt_$name.py" }
+          }
+          if ($failed.Count -gt 0) { throw "Qt-Tests fehlgeschlagen: $($failed -join ', ')" }
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh

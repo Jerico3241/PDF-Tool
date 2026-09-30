@@ -73,6 +73,17 @@ def config_file(tmp_path: Path, monkeypatch) -> Path:
     return path
 
 
+@pytest.fixture(autouse=True)
+def _windows_settings(monkeypatch):
+    """Tests hängen nicht von den Windows-Einstellungen des Rechners ab: »Animationseffekte« an
+    (auf CI-Rechnern oft aus), kein Mica (sonst würde je Test das Hintergrundbild geladen). Tests,
+    die diese Einstellungen prüfen, setzen sie selbst."""
+    import winsys
+
+    monkeypatch.setattr(winsys, "client_area_animations", lambda: True)
+    monkeypatch.setattr(winsys, "mica_supported", lambda: False)
+
+
 @pytest.fixture(scope="session")
 def qt_application():
     """Die eine QApplication des Testlaufs (Qt erlaubt nur eine je Prozess)."""
