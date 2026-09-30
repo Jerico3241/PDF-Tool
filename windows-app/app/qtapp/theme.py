@@ -80,8 +80,10 @@ class ThemeController(Observable):
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
         mode = cfg.get("theme")
-        self._mode = mode if mode in THEMES else THEME_SYSTEM
-        self.set_quietly("mode", self._mode)
+        self.set_quietly("mode", mode if mode in THEMES else THEME_SYSTEM)
+        # Bis 2.6 hieß »an« ausdrücklich: Animationen trotz Windows-Einstellung. Der Wert bleibt
+        # erhalten, solange das Profil »Vollständig« ist (Benutzerdaten ändern sich nicht grundlos).
+        self._legacy_on = cfg.get(CONFIG_LEGACY_ANIMATIONS) is True
         self.set_quietly("accentChoice", valid_accent(cfg.get("accent", design.SYSTEM_ACCENT)))
         self.set_quietly("profile", profile_from_config(cfg))
         self.set_quietly("micaEnabled", bool(cfg.get("mica", True)))
@@ -252,8 +254,14 @@ class ThemeController(Observable):
     # Speichern ------------------------------------------------------------------------------------
     def config(self) -> dict:
         data = {"theme": self.mode, "accent": self.accentChoice, "mica": bool(self.micaEnabled), CONFIG_PROFILE: self.profile}
-        # Für ältere Versionen (bis 2.6): »aus« bleibt aus, sonst wie Windows.
-        data[CONFIG_LEGACY_ANIMATIONS] = False if self.profile == PROFILE_OFF else None
+        # Für ältere Versionen (bis 2.6): »aus« bleibt aus, ein ausdrückliches »an« bleibt bei
+        # »Vollständig« erhalten, sonst wie Windows (Schlüssel fehlt).
+        if self.profile == PROFILE_OFF:
+            data[CONFIG_LEGACY_ANIMATIONS] = False
+        elif self.profile == PROFILE_FULL and self._legacy_on:
+            data[CONFIG_LEGACY_ANIMATIONS] = True
+        else:
+            data[CONFIG_LEGACY_ANIMATIONS] = None
         return data
 
 

@@ -33,15 +33,23 @@ class Worker(QObject):
             try:
                 result = func()
             except BaseException as exc:  # noqa: BLE001 - Fehler gehen an die Oberfläche
-                self._deliver.emit((on_error, (exc, traceback.format_exc()), True))
+                self._send((on_error, (exc, traceback.format_exc()), True))
             else:
-                self._deliver.emit((on_done, (result,), True))
+                self._send((on_done, (result,), True))
 
         threading.Thread(target=target, name="pdftool-arbeit", daemon=True).start()
 
     def post(self, callback: Callable[..., None], *args: Any) -> None:
         """Aus einem Hintergrund-Thread: ``callback(*args)`` im GUI-Thread ausführen."""
-        self._deliver.emit((callback, args, False))
+        self._send((callback, args, False))
+
+    def _send(self, payload) -> None:
+        if self._closed:
+            return  # nach dem Beenden verfallen Ergebnisse
+        try:
+            self._deliver.emit(payload)
+        except RuntimeError:
+            pass  # Das Qt-Objekt ist beim Beenden schon gelöscht
 
     def _handle(self, payload) -> None:
         callback, args, finished = payload

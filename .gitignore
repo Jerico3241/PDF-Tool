@@ -40,3 +40,6 @@ public/downloads/*.zip
 Thumbs.db
 .vscode/
 .idea/
+
+# Erzeugt vom Build (QML-Ressourcen)
+windows-app/app/qml_rc.py

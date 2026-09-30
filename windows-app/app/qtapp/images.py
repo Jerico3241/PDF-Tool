@@ -11,12 +11,27 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
+from PySide6.QtCore import QByteArray, QFile, QIODevice, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtQuick import QQuickImageProvider
 from PySide6.QtSvg import QSvgRenderer
 
 ICON_DIR = Path(__file__).resolve().parent.parent / "qml" / "icons"
+ICON_RESOURCE = ":/qml/icons"  # im Setup: eingebaute Ressource (qml_rc)
+
+
+def read_icon(name: str, folder: Path = ICON_DIR) -> bytes:
+    """SVG eines Symbols – aus der eingebauten Ressource, sonst aus dem Ordner ``qml/icons``."""
+    resource = QFile(f"{ICON_RESOURCE}/{name}.svg")
+    if resource.exists() and resource.open(QIODevice.OpenModeFlag.ReadOnly):
+        try:
+            return bytes(resource.readAll().data())
+        finally:
+            resource.close()
+    try:
+        return (folder / f"{name}.svg").read_bytes()
+    except OSError:
+        return b""
 
 
 def pil_to_qimage(image) -> QImage:
@@ -61,12 +76,7 @@ class IconProvider(QQuickImageProvider):
     def _render(self, name: str, color: str, width: int, height: int) -> QImage:
         data = self._svg.get(name)
         if data is None:
-            path = self.folder / f"{name}.svg"
-            try:
-                data = path.read_bytes()
-            except OSError:
-                data = b""
-            self._svg[name] = data
+            data = self._svg[name] = read_icon(name, self.folder)
         image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(Qt.GlobalColor.transparent)
         if data:

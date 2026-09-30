@@ -1,8 +1,8 @@
 """Gemeinsame Hilfen für die Tests der Windows-App.
 
-Die Tests laufen mit jedem Python ≥ 3.11 mit tkinter, pandas, openpyxl,
-reportlab und Pillow. Oberflächentests benötigen ein Display (unter Linux
-z. B. ``xvfb-run``) und werden sonst übersprungen.
+Die Tests laufen mit jedem Python ≥ 3.11 mit PySide6, pandas, openpyxl, reportlab und
+Pillow. Oberflächentests laufen ohne Bildschirm (Qt-Plattform »offscreen«) – unter Linux,
+Windows und in der CI gleich. ``qtutil.Harness`` startet die App wie beim echten Start.
 """
 
 from __future__ import annotations
@@ -73,81 +73,90 @@ def config_file(tmp_path: Path, monkeypatch) -> Path:
     return path
 
 
-def display_available() -> bool:
-    if sys.platform == "win32":
-        return True
-    return bool(os.environ.get("DISPLAY"))
+@pytest.fixture(scope="session")
+def qt_application():
+    """Die eine QApplication des Testlaufs (Qt erlaubt nur eine je Prozess)."""
+    from qtutil import qt_application as create
+
+    return create()
 
 
-def pump(app, seconds: float = 0.3) -> None:
-    end = time.time() + seconds
-    while time.time() < end:
-        app.update()
-        time.sleep(0.01)
-
-
-def wait_until(app, condition, timeout: float = 60.0) -> bool:
-    end = time.time() + timeout
-    while time.time() < end:
-        app.update()
-        if condition():
-            return True
-        time.sleep(0.02)
-    return False
-
-
-@pytest.fixture(params=[True, False], ids=["animationen", "ohne-animationen"])
-def app(request, config_file: Path, monkeypatch):
-    """Gestartete App mit frischer Konfiguration (Neuerungen bereits gesehen)."""
+def _prepare(config_file: Path, monkeypatch, profile: str, extra: dict | None = None) -> None:
     import json
 
     import appstate
+    from qtapp import dialogs, files
 
-    # Die bisherigen Oberflächentests prüfen die App mit eingeschalteter Kundenakte (seit 2.6.1 optional,
-    # Standard aus – den Standard prüft test_app_v261.py).
-    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light", "accent": "#005FB8", "kundenakte_verwenden": True}), encoding="utf-8")
-    if request.param:
-        monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
-    else:
-        monkeypatch.setenv("UE_NO_ANIMATIONS", "1")
-    from ui import dialogs
-
+    data = {"gesehen": appstate.VERSION, "theme": "light", "accent": "#005FB8", "kundenakte_verwenden": True, "animationsprofil": profile}
+    data.update(extra or {})
+    if not config_file.exists():
+        config_file.write_text(json.dumps(data), encoding="utf-8")
+    # Rückfragen: »primary«; Dateiauswahl: keine (ein echter Dialog öffnet sich in Tests nie).
     monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
-    import vertragdesk
-
-    instance = vertragdesk.App()
-    instance.ctx.anim.enabled = request.param
-    pump(instance, 0.5)
-    yield instance
-    try:
-        instance._on_close()
-    except Exception:
-        pass
-    # Tk-Objekte im Hauptthread freigeben, nicht später in einem Worker-Thread.
-    import gc
-
-    gc.collect()
+    monkeypatch.setattr(files, "RESPONSES", [])
+    # Öffnen mit dem Standardprogramm nur protokollieren
+    opened: list[str] = []
+    monkeypatch.setattr(files, "open_path", lambda path: opened.append(str(path)))
+    monkeypatch.setattr(files, "OPENED", opened, raising=False)
 
 
-def neustart(app):
+@pytest.fixture(params=["full", "off"], ids=["animationen", "ohne-animationen"])
+def app(request, qt_application, config_file: Path, monkeypatch):
+    """Gestartete App (Controller + QML im Fenster) mit frischer Konfiguration.
+
+    Kundenakte eingeschaltet (den Standard »aus« prüft test_qt_customer_optional.py).
+    Nach dem Test darf die QML-Engine keine Warnung gemeldet haben.
+    """
+    from qtutil import Harness
+
+    _prepare(config_file, monkeypatch, request.param)
+    harness = Harness(ui=True)
+    holder = {"current": harness}
+    harness.holder = holder
+    yield harness
+    current = holder["current"]
+    messages = current.messages()
+    current.close()
+    assert not messages, "QML-Meldungen:\n" + "\n".join(messages)
+
+
+@pytest.fixture
+def ui_app(qt_application, config_file: Path, monkeypatch):
+    """Wie ``app``, aber nur mit dem Standardprofil »Vollständig« (für Ablauf-Tests)."""
+    from qtutil import Harness
+
+    _prepare(config_file, monkeypatch, "full")
+    harness = Harness(ui=True)
+    holder = {"current": harness}
+    harness.holder = holder
+    yield harness
+    current = holder["current"]
+    messages = current.messages()
+    current.close()
+    assert not messages, "QML-Meldungen:\n" + "\n".join(messages)
+
+
+@pytest.fixture
+def backend(qt_application, config_file: Path, monkeypatch):
+    """Nur die Controller (ohne QML) – für reine Ablauf-Tests."""
+    from qtutil import Harness
+
+    _prepare(config_file, monkeypatch, "off")
+    harness = Harness(ui=False)
+    holder = {"current": harness}
+    harness.holder = holder
+    yield harness
+    holder["current"].close()
+
+
+def neustart(harness):
     """App schließen (speichert wie beim Beenden) und mit derselben Konfiguration neu starten."""
-    import gc
-
-    import vertragdesk
-
-    app._on_close()
-    gc.collect()
-    neu = vertragdesk.App()
-    neu.ctx.anim.enabled = False
-    pump(neu, 0.3)
+    neu = harness.restart()
+    holder = getattr(harness, "holder", None)
+    if holder is not None:
+        holder["current"] = neu
+        neu.holder = holder
     return neu
 
 
-def schliessen(app) -> None:
-    import gc
-
-    try:
-        app._on_close()
-    except Exception:
-        pass
-    gc.collect()
+from qtutil import pump, wait_until  # noqa: E402,F401 - für die Testmodule

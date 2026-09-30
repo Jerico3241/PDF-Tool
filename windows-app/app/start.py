@@ -1,7 +1,11 @@
-"""Startet die Oberfläche und zeigt Fehler in einem Windows-Dialog.
+"""Startet PDF Tool und zeigt Fehler beim Start in einem Windows-Dialog.
 
 Aufruf durch die Verknüpfungen: runtime\\pythonw.exe -s -OO app\\start.py
 (pythonw.exe öffnet kein Konsolenfenster).
+
+Die Oberfläche ist eine Qt-Quick-Anwendung (PySide6). Sie hängt nicht vom Arbeitsverzeichnis
+ab: Die QML-Dateien kommen aus der eingebauten Ressource ``qml_rc`` (bzw. im Quellbaum aus dem
+Ordner ``qml``), alle anderen Pfade werden relativ zu dieser Datei bestimmt.
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ APP_DIR = Path(__file__).resolve().parent
 INSTALL_DIR = APP_DIR.parent
 RUNTIME = INSTALL_DIR / "runtime"
 APP_NAME = "PDF Tool"
+# Qt-Einstellungen von außen (z. B. einer anderen Qt-Installation) dürfen die App nicht stören.
+FOREIGN_QT_VARIABLES = ("QT_PLUGIN_PATH", "QML2_IMPORT_PATH", "QML_IMPORT_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH", "QT_QUICK_CONTROLS_STYLE", "QT_QUICK_CONTROLS_CONF")
 
 
 def _message(title: str, text: str, error: bool = True) -> None:
@@ -44,33 +50,28 @@ def fail(text: str) -> None:
 
 
 def prepare_env() -> None:
-    os.chdir(APP_DIR)
-    sys.path.insert(0, str(APP_DIR))
-    tcl = RUNTIME / "tcl" / "tcl8.6"
-    tk = RUNTIME / "tcl" / "tk8.6"
+    if str(APP_DIR) not in sys.path:
+        sys.path.insert(0, str(APP_DIR))
     dlls = RUNTIME / "DLLs"
-    if tcl.is_dir():
-        os.environ.setdefault("TCL_LIBRARY", str(tcl))
-    if tk.is_dir():
-        os.environ.setdefault("TK_LIBRARY", str(tk))
-    os.environ["PATH"] = str(RUNTIME) + os.pathsep + str(dlls) + os.pathsep + os.environ.get("PATH", "")
+    if RUNTIME.is_dir():
+        os.environ["PATH"] = str(RUNTIME) + os.pathsep + str(dlls) + os.pathsep + os.environ.get("PATH", "")
+    for name in FOREIGN_QT_VARIABLES:
+        os.environ.pop(name, None)
 
 
 def main() -> None:
     prepare_env()
     try:
-        import tkinter  # noqa: F401
+        from PySide6 import QtCore, QtQml, QtQuick  # noqa: F401
     except Exception:
-        fail(
-            "Die Fenster-Oberfläche konnte nicht geladen werden.\n\n"
-            + traceback.format_exc()
-        )
+        fail("Die Oberfläche (Qt) konnte nicht geladen werden.\n\n" + traceback.format_exc())
     try:
-        import vertragdesk
+        from qtapp.application import main as run
 
-        vertragdesk.main()
+        code = run()
     except Exception:
         fail("Die App ist beim Start abgestürzt.\n\n" + traceback.format_exc())
+    raise SystemExit(code)
 
 
 if __name__ == "__main__":

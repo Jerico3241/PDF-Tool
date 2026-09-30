@@ -3,11 +3,12 @@
 Reihenfolge (ohne weißes oder halb aufgebautes Fenster):
 
 1. Konfiguration lesen
-2. Design bestimmen (Hell/Dunkel, Akzentfarbe, Animationsprofil)
-3. Kern-Dienste und Controller anlegen (Kundenakten nur, wenn eingeschaltet)
-4. Qt-Anwendung, QML-Singletons und Bildquellen registrieren
-5. QML laden – die Oberfläche entsteht vollständig, das Fenster bleibt verborgen
-6. Fensterlage und Titelleiste setzen, Fenster verdeckt (DWM-Cloaking) zeigen
+2. Qt-Anwendung anlegen (nötig für Systemfarben, Schriften und Bildschirme)
+3. Design bestimmen (Hell/Dunkel, Akzentfarbe, Animationsprofil)
+4. Kern-Dienste und Controller anlegen (Kundenakten nur, wenn eingeschaltet)
+5. QML-Singletons und Bildquellen registrieren, QML laden – die Oberfläche entsteht
+   vollständig, das Fenster bleibt verborgen
+6. Fensterlage und Titelleiste setzen, Fenster verdeckt (DWM-Cloaking) zeigen, Startseite
 7. Nach dem ersten fertig gezeichneten Bild aufdecken; weitere Seiten laden danach im Hintergrund
 """
 
@@ -15,12 +16,13 @@ from __future__ import annotations
 
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QObject, Qt, QtMsgType, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QIcon
-from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterSingletonInstance
+from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, qmlRegisterSingletonType
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
@@ -39,6 +41,12 @@ BACKEND_URI = "PdfTool.Backend"
 
 # Meldungen der QML-Engine (Warnungen, Fehler) – Tests prüfen, dass keine auftreten.
 MESSAGES: list[str] = []
+# QML-Singletons (»App«, »Contracts« …): je Name einmal registriert; jede Engine erhält die
+# Controller ihrer eigenen Laufzeit (in der App gibt es genau eine, in Tests nacheinander mehrere).
+_REGISTERED: dict[str, type] = {}
+_ENGINES: dict[int, dict[str, QObject]] = {}  # Kennung der Engine → Controller ihrer Laufzeit
+_ENGINE_KEY = "pdftoolRuntime"
+_engine_ids = iter(range(1, 1 << 30))
 
 
 def _message_handler(mode, context, message) -> None:
@@ -105,15 +113,52 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     return app
 
 
+def _provider(name: str) -> Callable[[QQmlEngine], QObject]:
+    def provide(engine: QQmlEngine) -> QObject | None:
+        singletons = _ENGINES.get(engine.property(_ENGINE_KEY) or 0)
+        instance = singletons.get(name) if singletons else None
+        if instance is not None:
+            # Die Controller gehören der Laufzeit, nicht der Engine (die sie sonst beim Beenden löschte).
+            QQmlEngine.setObjectOwnership(instance, QQmlEngine.ObjectOwnership.CppOwnership)
+        return instance
+
+    return provide
+
+
+def register_backend(singletons: dict[str, QObject]) -> None:
+    for name, instance in singletons.items():
+        registered = _REGISTERED.get(name)
+        if registered is None:
+            qmlRegisterSingletonType(type(instance), BACKEND_URI, 1, 0, name, _provider(name))
+            _REGISTERED[name] = type(instance)
+        elif registered is not type(instance):
+            raise TypeError(f"QML-Singleton {name}: {type(instance).__name__} statt {registered.__name__}")
+
+
+def release_engine(engine: QQmlEngine) -> None:
+    """Engine endet: ihre Singleton-Zuordnung entfernen (geschieht auch beim Löschen der Engine)."""
+    _ENGINES.pop(engine.property(_ENGINE_KEY) or 0, None)
+
+
+def _engine_warnings(errors) -> None:
+    MESSAGES.extend(error.toString() for error in errors)
+    del MESSAGES[:-200]
+
+
 def create_engine(runtime: Runtime) -> QQmlApplicationEngine:
-    for name, instance in runtime.singletons.items():
-        qmlRegisterSingletonInstance(type(instance), BACKEND_URI, 1, 0, name, instance)
+    register_backend(runtime.singletons)
     engine = QQmlApplicationEngine()
+    key = next(_engine_ids)
+    engine.setProperty(_ENGINE_KEY, key)
+    _ENGINES[key] = dict(runtime.singletons)
+    # Erst mit der Engine selbst endet die Zuordnung – auch Seiten, die sie noch im Hintergrund
+    # lädt, erhalten bis dahin ihre Controller.
+    engine.destroyed.connect(lambda _obj=None, key=key: _ENGINES.pop(key, None))
     engine.addImageProvider("icons", IconProvider())
     engine.addImageProvider("appicon", AppIconProvider(ICON_FILE))
     engine.addImageProvider("mica", MicaProvider(runtime.theme.mica))
     engine.addImageProvider("preview", PreviewProvider(lambda ident: runtime.preview_lookup(ident)))
-    engine.warnings.connect(lambda errors: MESSAGES.extend(error.toString() for error in errors))
+    engine.warnings.connect(_engine_warnings)
     url, import_path = qml_source()
     engine.addImportPath(import_path)
     engine.load(url)
@@ -165,10 +210,17 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config()
     qt_app = create_application(argv)
     runtime = Runtime(cfg)
+
+    def report(kind, value, tb) -> None:
+        # Unerwartete Fehler in Rückmeldungen: in fehler.log und in der Statuszeile, die App läuft weiter
+        runtime.app.report_exception("".join(traceback.format_exception(kind, value, tb)))
+
+    sys.excepthook = report
     engine = create_engine(runtime)
     show_window(runtime, engine)
     code = qt_app.exec()
     runtime.app.shutdown()
     # Die QML-Engine endet vor den Controllern, an die ihre Bindungen gebunden sind.
     del engine
+    sys.excepthook = sys.__excepthook__
     return code
