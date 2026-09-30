@@ -1,6 +1,7 @@
-"""Seite »Einstellungen«: globale Einstellungen von PDF Tool (Design, Akzentfarbe, Mica, Animationen).
+"""Seite »Einstellungen«: globale Einstellungen von PDF Tool (Design, Akzentfarbe, Mica, Animationen)
+und die optionale Kundenakte der Vertragsübersichten.
 
-Einstellungen einzelner Werkzeuge stehen im jeweiligen Werkzeug."""
+Weitere Einstellungen einzelner Werkzeuge stehen im jeweiligen Werkzeug."""
 
 from __future__ import annotations
 
@@ -12,12 +13,15 @@ from ..context import ctx
 from ..inputs import ComboBox
 from ..navigation import Page
 from ..theme import ACCENTS, SYSTEM_ACCENT, accent_name, px, system_accent
-from ..widgets import Button, Swatch, Text, ToggleSwitch, frame
+from ..widgets import Button, Icon, Swatch, Text, ToggleSwitch, frame
 
 if TYPE_CHECKING:
     from vertragdesk import App
 
 THEME_LABELS = (("system", "Wie Windows"), ("light", "Hell"), ("dark", "Dunkel"))
+CUSTOMER_RECORDS_TITLE = "Kundenakte verwenden"
+CUSTOMER_RECORDS_TEXT = "Speichert Kundendaten lokal und ermöglicht die Wiedererkennung bekannter Rechnungsempfänger."
+CUSTOMER_RECORDS_NOTE = "Alle Kundendaten werden ausschließlich lokal auf diesem PC gespeichert."
 
 
 def build(app: "App", host) -> Page:
@@ -77,6 +81,20 @@ def build(app: "App", host) -> Page:
     page.add_section(anim_card)
     ui.anim_card = anim_card
     ToggleSwitch(anim_card.control, app.var_anim, command=app.apply_animation_setting).pack()
+
+    # Vertragsübersichten ----------------------------------------------------------------
+    page.section_title("Vertragsübersichten")
+    records_card = SettingsCard(page.content, icons.PEOPLE, CUSTOMER_RECORDS_TITLE, CUSTOMER_RECORDS_TEXT)
+    page.add_section(records_card)
+    ui.customer_records_card = records_card
+    ui.customer_records_toggle = ToggleSwitch(records_card.control, app.var_customer_records, command=app.apply_customer_records_setting)
+    ui.customer_records_toggle.pack()
+    extra = records_card.show_extra()
+    note_row = frame(extra)
+    note_row.pack(fill="x")
+    if c.icons_available:
+        Icon(note_row, icons.SHIELD, color="text2").pack(side="left", anchor="n", padx=(0, px(8)), pady=(px(1), 0))
+    Text(note_row, CUSTOMER_RECORDS_NOTE, style="caption", color="text2", wrap=True).pack(side="left", fill="x", expand=True)
     note = Text(page.content, "Einstellungen der einzelnen Werkzeuge stehen im jeweiligen Werkzeug – z. B. Vorlagen und Verlauf unter »Vertragsübersichten · Darstellung«.", style="caption", color="text2", wrap=True)
     page.add_section(note, pady=(px(8), 0))
 

@@ -31,6 +31,7 @@ DEBOUNCE_MS = 450
 ZOOMS = (0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
 MAX_SCALE = 4.0  # PDFium-Pixel je Punkt – begrenzt den Speicherbedarf
 CACHE_PAGES = 6
+A4_POINTS = (595.2756, 841.8898)  # Seitenmaß der Übersicht (ReportLab A4)
 PLACEHOLDER_KD = "–"
 FOLDER_PREFIX = "pdf-tool-vorschau-"
 STALE_AFTER = 12 * 3600  # verwaiste Vorschau-Ordner (z. B. nach einem Absturz) nach 12 Stunden entfernen
@@ -120,6 +121,12 @@ def _page_sizes(path: Path) -> list[tuple[float, float]]:
         return [tuple(doc.get_page_size(index)) for index in range(len(doc))]  # type: ignore[misc]
     finally:
         doc.close()
+
+
+def expected_page(fields: dict) -> tuple[float, float]:
+    """Seitenmaß der entstehenden PDF (A4 hoch oder quer) – für den Platz vor dem ersten Bild."""
+    width, height = A4_POINTS
+    return (height, width) if fields.get("seitenformat") == "quer" else (width, height)
 
 
 def signature(fields: dict) -> tuple:
@@ -244,6 +251,9 @@ class PreviewFlow:
         self._preview_building = wanted
         self._preview_again = False
         self._preview_status("busy")
+        if self._preview_doc is None:
+            # Erste Vorschau: Platz für die Seite schon jetzt freihalten – kein Sprung, wenn sie erscheint.
+            self._reserve_preview_page(*expected_page(fields))
         self.worker.run(lambda: PreviewDocument.build(fields), lambda doc: self._preview_built(wanted, doc), lambda exc, tb: self._preview_failed(wanted, exc, tb))
 
     def _preview_built(self, built: tuple, doc: PreviewDocument) -> None:
@@ -264,6 +274,9 @@ class PreviewFlow:
         self._preview_signature = built
         self._preview_images.clear()
         self.preview_runs += 1
+        from ui import diagnostics
+
+        diagnostics.count("preview_render")
         self._preview_page = max(0, min(self._preview_page, doc.pages - 1))
         self._preview_status("current")
         self._show_preview_page()
@@ -285,13 +298,22 @@ class PreviewFlow:
 
     # Anzeigen ----------------------------------------------------------------------------------
     def _preview_scale(self, doc: PreviewDocument, index: int) -> float:
+        return self._scale_for(doc.sizes[index][0] or A4_POINTS[0])
+
+    def _scale_for(self, width_pt: float) -> float:
         from ui.theme import px
 
-        width_pt = doc.sizes[index][0] or 595.0
         if self._preview_zoom is None:
             available = max(px(200), self.ui.preview_canvas.view_width() - 2 * self.ui.preview_canvas.MARGIN)
             return round(available / width_pt, 3)
         return round(px(width_pt * 96 / 72 * self._preview_zoom) / width_pt, 3)
+
+    def _reserve_preview_page(self, width_pt: float, height_pt: float) -> None:
+        canvas = self.ui.preview_canvas
+        if canvas.winfo_width() <= 1:
+            canvas.update_idletasks()  # gerade eingeblendet: erst die echte Breite kennen
+        scale = min(MAX_SCALE, self._scale_for(width_pt))
+        canvas.reserve(int(round(width_pt * scale)), int(round(height_pt * scale)))
 
     def _show_preview_page(self) -> None:
         doc = self._preview_doc
@@ -313,6 +335,9 @@ class PreviewFlow:
         if self._preview_view == key:
             return
         self._preview_view = key
+        # Platz für die Seite schon jetzt freihalten: Das Bild erscheint ohne Layoutsprung.
+        width_pt, height_pt = doc.sizes[index]
+        canvas.reserve(int(round(width_pt * scale)), int(round(height_pt * scale)))
 
         def done(result) -> None:
             if self._preview_view != key or self._preview_doc is not doc:

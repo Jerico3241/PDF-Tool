@@ -12,8 +12,8 @@ import tkinter as tk
 from typing import Callable, Iterable
 
 from . import animations as motion
-from . import icons
-from .context import ctx, surface_color, surface_of
+from . import diagnostics, icons
+from .context import bind_size, ctx, surface_color, surface_of
 from .theme import mix, px
 
 FOCUS_PAD = 3  # Abstand für den Fokusrahmen außerhalb des Steuerelements (WinUI: FocusVisualMargin)
@@ -84,7 +84,7 @@ class Text(tk.Label):
         self._wrap = wrap
         if wrap:
             self.configure(wraplength=px(wrap_width))
-            self.bind("<Configure>", self._rewrap, add="+")
+            bind_size(self, self._rewrap)
 
     def _rewrap(self, event) -> None:
         width = max(40, event.width)
@@ -202,6 +202,7 @@ class Card(RoundedFrame):
         pad = px(padding)
         self.header = None
         self.header_right = None
+        self.description = None  # Beschreibung unter dem Titel (Text), falls vorhanden
         if title:
             self.header = frame(self)
             self.header.pack(fill="x", padx=pad, pady=(pad, 0))
@@ -211,7 +212,8 @@ class Card(RoundedFrame):
             titles.pack(side="left", fill="x", expand=True)
             Text(titles, title, style="body_strong").pack(anchor="w")
             if description:
-                Text(titles, description, style="caption", color="text2", wrap=True).pack(anchor="w", fill="x", pady=(px(2), 0))
+                self.description = Text(titles, description, style="caption", color="text2", wrap=True)
+                self.description.pack(anchor="w", fill="x", pady=(px(2), 0))
             self.header_right = frame(self.header)
             self.header_right.pack(side="right")
         self.body = frame(self)
@@ -306,7 +308,7 @@ class CanvasControl(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._on_release, add="+")
         self.bind("<FocusIn>", self._on_focus_in, add="+")
         self.bind("<FocusOut>", self._on_focus_out, add="+")
-        self.bind("<Configure>", self._on_configure, add="+")
+        bind_size(self, self._on_configure)
 
     def _on_configure(self, event) -> None:
         size = (event.width, event.height)
@@ -316,6 +318,7 @@ class CanvasControl(tk.Canvas):
         self.size_changed()
 
     def size_changed(self) -> None:
+        diagnostics.count("canvas_redraw")
         self.redraw(animate=False)
 
     # Hilfen ------------------------------------------------------------------
@@ -331,6 +334,7 @@ class CanvasControl(tk.Canvas):
 
     def _theme_changed(self) -> None:
         # Designwechsel ohne Überblendung: alle Flächen wechseln gleichzeitig.
+        diagnostics.count("canvas_redraw")
         self.configure(bg=self.surface())
         self.redraw(animate=False)
 
@@ -411,6 +415,8 @@ class CanvasControl(tk.Canvas):
 
 RING_FRAMES = 60
 RING_PERIOD_MS = 1600
+RING_HIDDEN_POLL_MS = 250  # unsichtbarer Ring (abgelegte Seite, minimiert): nur selten nachsehen, nichts zeichnen
+HIDDEN_X = -10000  # abgelegte Seiten liegen weit links außerhalb des Fensters
 
 
 def _ring_geometry(t: float) -> tuple[float, float]:
@@ -471,12 +477,16 @@ class RingSpinner:
         self.running = True
         self._schedule()
 
-    def _schedule(self) -> None:
-        interval = RING_PERIOD_MS // RING_FRAMES
+    def _schedule(self, visible: bool = True) -> None:
+        interval = RING_PERIOD_MS // RING_FRAMES if visible else RING_HIDDEN_POLL_MS
         try:
             self._job = self.canvas.after(interval, self._step)
         except tk.TclError:
             self.running = False
+
+    def _visible(self) -> bool:
+        canvas = self.canvas
+        return bool(canvas.winfo_viewable()) and canvas.winfo_rootx() > HIDDEN_X
 
     def _step(self) -> None:
         self._job = None
@@ -486,13 +496,15 @@ class RingSpinner:
             if not self.canvas.winfo_exists():
                 self.running = False
                 return
-            if self.canvas.winfo_ismapped() and self.item is not None and self.frames:
+            # Nur ein sichtbarer Ring dreht sich – auf einer abgelegten Seite wird nichts gezeichnet.
+            visible = self._visible()
+            if visible and self.item is not None and self.frames:
                 self._index = (self._index + 1) % RING_FRAMES
                 self.canvas.itemconfigure(self.item, image=self.frames[self._index])
         except tk.TclError:
             self.running = False
             return
-        self._schedule()
+        self._schedule(visible)
 
     def stop(self) -> None:
         self.running = False
@@ -886,7 +898,7 @@ class Button(CanvasControl):
             self.c.anim.cancel(key)
             self._paint(target, width)
             return
-        duration = motion.FAST if (self._hover or self._pressed) else 150
+        duration = motion.PRESS if self._pressed else (motion.FAST if self._hover else motion.HOVER_OUT)
 
         def step(t: float) -> None:
             q = 1.0 if t >= 1 else _quantize(t)
@@ -1020,7 +1032,7 @@ class ToggleSwitch(CanvasControl):
             self._pos = start + (target - start) * t
             self.redraw()
 
-        self.c.anim.run(f"toggle:{self}", motion.NORMAL, step, easing=motion.POINT_TO_POINT, widget=self)
+        self.c.anim.run(f"toggle:{self}", motion.NORMAL, step, easing=motion.POINT_TO_POINT, widget=self, motion=True)
 
     def redraw(self, animate: bool = True) -> None:
         c = self.c
@@ -1316,6 +1328,7 @@ class InfoBar(tk.Frame):
         self.collapsible.pack(fill="x")
         self.box = RoundedFrame(self.collapsible.content, fill="info_bg", stroke="card_stroke", radius=CONTROL_RADIUS)
         self.box.pack(fill="x")
+        self._gap = 0  # Abstand nach oben – Teil der Leiste (siehe pack_configure)
         self.severity = "neutral"
         self.title = ""
         self.message = ""
@@ -1351,9 +1364,24 @@ class InfoBar(tk.Frame):
             self._close = IconButton(inner, icons.CANCEL, self._close_clicked, tooltip="Schließen", size=32)
             self._close.pack(side="right", anchor="n")
         self._texts_width = 0
-        texts.bind("<Configure>", self._texts_configured, add="+")
+        bind_size(texts, self._texts_configured)
         c.theme.subscribe(self._repaint, owner=self)
         self._repaint()
+
+    def pack_configure(self, cnf=None, **kw):
+        """Wie ``pack``. Der Abstand nach oben gehört zur Leiste selbst: Er klappt mit ihr ein und
+        aus – eine verborgene Leiste hinterlässt keinen Leerraum, eine sichtbare sieht aus wie bisher."""
+        options = dict(cnf or {}, **kw)
+        pady = options.get("pady")
+        if pady is not None:
+            top, bottom = pady if isinstance(pady, (tuple, list)) else (pady, pady)
+            if int(top) != self._gap:
+                self._gap = int(top)
+                self.box.pack_configure(pady=(self._gap, 0))
+            options["pady"] = (0, bottom)
+        return super().pack_configure(**options)
+
+    pack = pack_configure
 
     def _close_clicked(self) -> None:
         self.hide()
@@ -1509,7 +1537,7 @@ class Collapsible(tk.Frame):
         self._key = f"collapse:{self}"
         # Eingeklappt liegt der Inhalt knapp unterhalb der 1-px-Fläche und ist unsichtbar.
         self.content.place(x=0, y=0 if expanded else 1, relwidth=1)
-        self.content.bind("<Configure>", self._content_configured, add="+")
+        bind_size(self.content, self._content_configured)
         c.block_focus(self.content, not expanded)
 
     def _natural_height(self) -> int:
@@ -1539,7 +1567,7 @@ class Collapsible(tk.Frame):
         def done() -> None:
             self.configure(height=self._natural_height())
 
-        c.anim.run(self._key, motion.NORMAL if animate else 0, step, done, easing=motion.DECELERATE, widget=self)
+        c.anim.run(self._key, motion.NORMAL if animate else 0, step, done, easing=motion.DECELERATE, widget=self, motion=True)
 
     def collapse(self, animate: bool = True) -> None:
         c = ctx()
@@ -1556,7 +1584,7 @@ class Collapsible(tk.Frame):
             self.configure(height=1)
             self.content.place_configure(y=1)
 
-        c.anim.run(self._key, motion.NORMAL if animate else 0, step, done, easing=motion.ACCELERATE if animate else motion.linear, widget=self)
+        c.anim.run(self._key, motion.NORMAL if animate else 0, step, done, easing=motion.ACCELERATE if animate else motion.linear, widget=self, motion=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1680,7 +1708,7 @@ class FlowRow(tk.Frame):
         self._sizes: dict[str, tuple[int, int]] = {}
         self._hidden: set[str] = set()
         self._pending = False
-        self.bind("<Configure>", self._configured, add="+")
+        bind_size(self, self._configured)
 
     def set_visible(self, widget: tk.Widget, visible: bool) -> None:
         """Element ein- oder ausblenden, ohne die übrige Reihenfolge zu ändern."""
@@ -1705,7 +1733,7 @@ class FlowRow(tk.Frame):
 
     def add(self, widget: tk.Widget, align: str = "left") -> tk.Widget:
         self._items.append((widget, align))
-        widget.bind("<Configure>", lambda event, w=widget: self._child_configured(w, event), add="+")
+        bind_size(widget, lambda event, w=widget: self._child_configured(w, event))
         self._schedule()
         return widget
 

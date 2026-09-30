@@ -2,14 +2,14 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.6.0
+Version 2.6.1
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
-  vielen Excel-Dateien, mit Live-Vorschau, Kundenakten, die bekannte
-  Kunden an der Rechnungsempfänger-E-Mail wiedererkennen, und einem
-  Vergleich mit dem letzten Vertragsstand des Kunden.
+  vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
+  bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen, und
+  einem Vergleich mit dem letzten Vertragsstand des Kunden.
 - PDF reparieren: analysiert beschädigte PDF-Dateien und versucht, lesbare
   Inhalte in eine neue PDF zu übertragen – bei Bedarf baut es die
   Dokumentstruktur aus den noch vorhandenen Objekten neu auf.
@@ -19,13 +19,32 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.6.0.exe
+PDF-Tool-Setup-2.6.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit qpdf, pypdfium2 mit
 PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
 andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.6.1
+--------------------
+Ein Qualitäts-Update: Geschwindigkeit, ruhige Darstellung und Bedienkomfort.
+- Die Kundenakte ist jetzt optional: Einstellungen → Vertragsübersichten →
+  „Kundenakte verwenden“. Bei neuen Installationen – und auch nach dem
+  Update – ist sie zunächst aus. Gespeicherte Kundendaten bleiben dabei
+  immer erhalten; nach dem Einschalten stehen sie sofort wieder bereit.
+- Ausgeschaltet werden keine Kundendaten gespeichert oder abgeglichen und
+  die Kunden-Elemente sind ausgeblendet. Firmenname, Kundennummer und
+  Rechnungsempfänger tragen Sie selbst ein (oder sie stammen aus der
+  Excel); Vorschau, Stapel und PDF-Erstellung funktionieren unverändert.
+- Flüssigere Oberfläche: Ansichten werden verdeckt vorbereitet und
+  erscheinen fertig, der Start ist schneller, das Ändern der Fenstergröße
+  ruhiger; Animationen sind kurz und einheitlich.
+- Die Vorschau wird beim erneuten Öffnen nicht neu erzeugt, der
+  Vertragsvergleich nur bei echten Änderungen neu berechnet.
+- Ist in Windows „Animationseffekte“ ausgeschaltet, wechseln Seiten ohne
+  Bewegung.
 
 Neu in Version 2.6
 ------------------
@@ -147,9 +166,19 @@ steht danach nur noch „PDF Tool“.
   erhalten. Schlägt die Übernahme fehl, arbeitet die App mit dem alten
   Ordner weiter und versucht es beim nächsten Start erneut.
 
-Update von PDF Tool 2.3: Das Setup ersetzt nur die Programmdateien. Beim
-ersten Start wird der bisherige Kundenverlauf einmalig zu Kundenakten.
-Vorher sichert die App die Einstellungen byte-genau nach
+Update von PDF Tool 2.6.0: Das Setup ersetzt nur die Programmdateien.
+Die Kundenakte ist jetzt optional und zunächst aus – Ihre Kundenakten,
+E-Mail-Zuordnungen und Vertragsstände bleiben unverändert erhalten. Ein
+einmaliger Hinweis nennt die neue Einstellung; nach dem Einschalten
+(Einstellungen → Vertragsübersichten → „Kundenakte verwenden“) ist alles
+sofort wieder da. Einstellungen, Vorlagen, Textbausteine, formatierte
+Kopf- und Fußzeilen, Zyklus-Regeln, Stapel- und Reparatur-Einstellungen,
+Design und Akzentfarbe bleiben unverändert.
+
+Update von PDF Tool 2.3: Das Setup ersetzt nur die Programmdateien. Der
+bisherige Kundenverlauf bleibt unverändert erhalten. Sobald Sie die
+Kundenakte einschalten, wird er einmalig zu Kundenakten. Vorher sichert die
+App die Einstellungen byte-genau nach
 %APPDATA%\PDF-Tool\sicherungen\gui-config-vor-kundenakte-<Zeit>.json.
 Schlägt die Übernahme fehl, bleibt der alte Verlauf unverändert erhalten
 und sie wird beim nächsten Start erneut versucht. Vorlagen, Textbausteine,
@@ -180,8 +209,8 @@ erneut ausführen repariert die Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   PDF-Tool-Setup-2.6.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   PDF-Tool-Setup-2.6.0.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.6.1.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.6.1.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -202,7 +231,8 @@ eine Excel-Liste „Vertragsübersichten“.
 
 Tastatur: Strg+1 Start · Strg+2 Vertragsübersichten · Strg+3 PDF reparieren ·
 Strg+4 Einstellungen · Strg+O Datei wählen · Strg+Enter Hauptaktion des
-Werkzeugs · Strg+F bekannten Kunden suchen (Vertragsübersichten) ·
+Werkzeugs · Strg+F bekannten Kunden suchen (Vertragsübersichten, mit
+Kundenakte) ·
 F1 Kurzanleitung · Tab/Umschalt+Tab zwischen Feldern wechseln ·
 Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Listen.
 
@@ -210,7 +240,8 @@ Leertaste/Eingabe löst Schaltflächen aus · Escape schließt Dialoge und Liste
 Werkzeug „Vertragsübersichten“
 ------------------------------
 Oben wechselt die Umschaltleiste zwischen den Ansichten „Übersicht
-erstellen“, „Stapel“, „Darstellung“, „Vorschau“ und „Kunden“.
+erstellen“, „Stapel“, „Darstellung“, „Vorschau“ und – mit eingeschalteter
+Kundenakte – „Kunden“.
 
 1. „Übersicht erstellen“: Excel-Liste wählen (Strg+O) oder die Datei in das
    Fenster ziehen. Die Statuszeile nennt das Ergebnis, z. B. „Excel geprüft ·
@@ -218,10 +249,11 @@ erstellen“, „Stapel“, „Darstellung“, „Vorschau“ und „Kunden“.
    zusätzliche Angaben: der Rechnungsempfänger (bei mehreren „3 erkannt“
    mit Auswahl daneben) und Hinweise. Kundennummer und Firmenname aus der
    Datei werden übernommen, sofern sie darin stehen.
-2. Ist ein Rechnungsempfänger als Kunde bekannt, erscheint „Bekannter Kunde
-   gefunden“: „Übernehmen“ füllt die Kundendaten, „Kundenakte“ öffnet sie,
-   „Ignorieren“ blendet den Hinweis für diese Excel aus. Sonst Firmenname
-   und Kundennummer eintragen oder „Bekannten Kunden auswählen“ (Strg+F).
+2. Firmenname und Kundennummer eintragen, sofern sie nicht aus der Excel
+   stammen. Mit eingeschalteter Kundenakte: Ist ein Rechnungsempfänger als
+   Kunde bekannt, erscheint „Bekannter Kunde gefunden“: „Übernehmen“ füllt
+   die Kundendaten, „Kundenakte“ öffnet sie, „Ignorieren“ blendet den
+   Hinweis für diese Excel aus; oder „Bekannten Kunden auswählen“ (Strg+F).
 3. Optional Logo und Zielordner ändern; „Vorschau“ zeigt die PDF vorab.
 4. Sobald „Bereit zum Erstellen“ erscheint: „PDF erstellen“ klicken oder
    Strg+Enter drücken. Fehlt etwas, nennt die Anzeige den Grund; ein Klick
@@ -269,11 +301,13 @@ Einzelmodus „Übersicht erstellen“ bleibt unverändert.
 2. Jede Datei wird sofort im Hintergrund geprüft – mit derselben Prüfung
    wie im Einzelmodus. Die Liste zeigt je Datei den Status, kurz die
    Vertragszahlen und den Rechnungsempfänger sowie den erkannten Kunden.
-3. Bekannte Kunden werden über die gespeicherten E-Mail-Zuordnungen
-   erkannt. Ist ein Kunde eindeutig erkannt und alles vorhanden, ist der
-   Eintrag „Bereit“. Unbekannte Kunden sind „Angaben erforderlich“:
-   Firmenname und Kundennummer eintragen oder „Kunden auswählen …“.
-   Gehören die Empfänger verschiedenen Kunden, entscheiden Sie selbst.
+3. Stehen Firmenname und Kundennummer in der Excel, ist der Eintrag
+   „Bereit“; sonst „Angaben erforderlich“: Firmenname und Kundennummer
+   eintragen. Mit eingeschalteter Kundenakte werden bekannte Kunden
+   zusätzlich über die gespeicherten E-Mail-Zuordnungen erkannt („Kunden
+   auswählen …“); gehören die Empfänger verschiedenen Kunden, entscheiden
+   Sie selbst. Ohne Kundenakte gibt es keinen Abgleich, keine Zuordnung
+   und keinen Vertragsvergleich – die Angaben stehen direkt am Eintrag.
 4. Ein Klick auf einen Eintrag öffnet ihn: Kunde, Firmenname, Kundennummer,
    Rechnungsempfänger, Vorlage, Logo und Zielordner lassen sich hier nur
    für diesen Eintrag setzen („Zurücksetzen“ übernimmt wieder Kundenakte
@@ -315,7 +349,10 @@ einem Neustart ist er wieder da. Technische Fehler stehen in stapel.log
 Vertragsänderungen (Vertragsübersichten → „Übersicht erstellen“)
 -----------------------------------------------------------------
 Ist eine Kundenakte aktiv, vergleicht PDF Tool nach der Excel-Prüfung die
-Verträge mit dem zuletzt gespeicherten Stand dieses Kunden. Die Karte
+Verträge mit dem zuletzt gespeicherten Stand dieses Kunden. Der Vergleich
+braucht eine sichere Kundenidentität: Ist die Kundenakte ausgeschaltet,
+bleibt die Karte verborgen, es wird nichts geraten (weder über Firmenname
+noch über E-Mail-Adresse) – und gespeicherte Stände bleiben unverändert. Die Karte
 „Vertragsänderungen“ zeigt z. B. „Seit 12.08.2026“ und „2 neu · 1 entfernt
 · 1 geändert · 4 unverändert“ in Farben (neu grün, entfernt rot, geändert
 gelb, unverändert grau). Aufgeführt werden nur die Änderungen:
@@ -358,6 +395,14 @@ Wer seine Daten sichert, sichert den ganzen Ordner %APPDATA%\PDF-Tool.
 
 Kundenakten (Vertragsübersichten → „Kunden“)
 --------------------------------------------
+Die Kundenakte ist optional: Einstellungen → Vertragsübersichten →
+„Kundenakte verwenden“ (Standard: aus). Ist sie aus, werden keine
+Kundendaten automatisch gespeichert oder abgeglichen – nicht einmal im
+Hintergrund –, die Ansicht „Kunden“ und alle Kunden-Elemente sind
+ausgeblendet, und vorhandene Kundenakten bleiben unverändert auf diesem PC
+liegen. Einschalten wirkt sofort, ohne Neustart; alle gespeicherten
+Kundenakten stehen dann wieder zur Verfügung.
+
 Eine Kundenakte enthält Firmenname, Kundennummer, die E-Mail-Adressen der
 Rechnungsempfänger (die erste ist primär), eine Notiz und Einstellungen für
 Vertragsübersichten: bevorzugtes Logo, bevorzugter Zielordner, bevorzugte

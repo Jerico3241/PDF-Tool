@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import icons
-from .context import ctx, surface_color, surface_of
+from .context import bind_size, ctx, surface_color, surface_of
 from .inputs import elide_middle
 from .theme import px
 from .widgets import Card, Icon, RingSpinner, RoundedFrame, Text, frame
@@ -71,7 +71,7 @@ class FileRow(tk.Frame):
         self.value.pack(anchor="w", fill="x")
         self._full = ""
         self._value_width = 0
-        self.value.bind("<Configure>", self._value_configured, add="+")
+        bind_size(self.value, self._value_configured)
         self.buttons = frame(self)
         self.buttons.pack(side="right", anchor="center", padx=(px(8), 0))
         self._tip = None
@@ -253,7 +253,7 @@ class ResponsiveColumns(tk.Frame):
         if central:
             ctx().layout.subscribe(self._layout, owner=self)
         else:
-            self.bind("<Configure>", self._configured, add="+")
+            bind_size(self, self._configured)
 
     def add(self, widget: tk.Widget) -> tk.Widget:
         self._children.append(widget)
@@ -320,6 +320,7 @@ class SelectorBar(tk.Canvas):
         self.hover: str | None = None
         self.pressed: str | None = None
         self.focus_key = selected
+        self.hidden: frozenset[str] = frozenset()  # ausgeblendete Elemente (z. B. ausgeschaltetes Modul)
         self._texts = {key: self.create_text(0, 0, text=label, anchor="center") for key, label in self.items}
         self._overlays = {key: self.create_image(0, 0, anchor="nw", state="hidden") for key, _label in self.items}
         self._pill = self.create_image(0, 0, anchor="n", state="hidden")
@@ -343,7 +344,10 @@ class SelectorBar(tk.Canvas):
     def _layout(self) -> None:
         font = ctx().fonts.body
         x = 0
+        self._rects = {}
         for key, label in self.items:
+            if key in self.hidden:
+                continue
             width = font.measure(label) + 2 * px(self.PAD)
             self._rects[key] = (x, px(2), x + width, px(2) + px(self.ITEM_HEIGHT))
             x += width + px(4)
@@ -378,7 +382,7 @@ class SelectorBar(tk.Canvas):
         self.redraw()
 
     def _move(self, delta: int) -> str:
-        keys = [key for key, _label in self.items]
+        keys = [key for key, _label in self.items if key not in self.hidden]
         index = keys.index(self.focus_key) if self.focus_key in keys else 0
         self.focus_key = keys[(index + delta) % len(keys)]
         self._activate(self.focus_key)
@@ -391,6 +395,23 @@ class SelectorBar(tk.Canvas):
 
     def select(self, key: str) -> None:
         self.selected = self.focus_key = key
+        self.redraw()
+
+    def set_hidden(self, keys) -> None:
+        """Elemente aus- bzw. wieder einblenden – nur bei echter Änderung, ohne Neuaufbau."""
+        hidden = frozenset(keys)
+        if hidden == self.hidden:
+            return
+        self.hidden = hidden
+        for key, _label in self.items:
+            self.itemconfigure(self._texts[key], state="hidden" if key in hidden else "normal")
+            if key in hidden:
+                self.itemconfigure(self._overlays[key], state="hidden")
+        if self.hover in hidden:
+            self.hover = None
+        if self.focus_key in hidden:
+            self.focus_key = self.selected
+        self._layout()
         self.redraw()
 
     def set_labels(self, labels: dict[str, str]) -> None:

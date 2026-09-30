@@ -61,10 +61,13 @@ def build(app: "App", host) -> Page:
     buttons.add(Button(buttons, "Kundenakte öffnen", app.open_active_customer, icon=icons.OPEN_IN_WINDOW, kind="subtle", tooltip="Kundenakte in der Ansicht »Kunden« öffnen"))
     buttons.add(Button(buttons, "Lösen", app.detach_customer, icon=icons.CANCEL, kind="subtle", tooltip="Kundenakte für diese Übersicht nicht mehr verwenden – die Angaben bleiben"))
     box.lift_corners()
-    field_label(body, "Bekannten Kunden auswählen", first=True)
-    ui.kunde_picker = PickerBox(body, app.pick_customer, placeholder="Firma, Kundennummer oder E-Mail suchen", width=240, tooltip="Kundenakte suchen und übernehmen (Strg+F)")
+    # Nur mit eingeschalteter Kundenakte (Einstellungen → Vertragsübersichten)
+    ui.kunde_picker_row = frame(body)
+    ui.kunde_picker_row.pack(fill="x")
+    field_label(ui.kunde_picker_row, "Bekannten Kunden auswählen", first=True)
+    ui.kunde_picker = PickerBox(ui.kunde_picker_row, app.pick_customer, placeholder="Firma, Kundennummer oder E-Mail suchen", width=240, tooltip="Kundenakte suchen und übernehmen (Strg+F)")
     ui.kunde_picker.pack(fill="x")
-    field_label(body, "Firmenname")
+    ui.label_firma = field_label(body, "Firmenname")
     ui.field_firma = TextField(body, app.var_firma, placeholder="z. B. Muster GmbH")
     ui.field_firma.pack(fill="x")
     field_label(body, "Kundennummer")
@@ -75,9 +78,9 @@ def build(app: "App", host) -> Page:
     ui.field_mail.pack(fill="x")
     ui.kunde_info = InfoBar(body)
     ui.kunde_info.pack(fill="x", pady=(px(8), 0))
-    save_row = frame(body)
-    save_row.pack(fill="x", pady=(px(12), 0))
-    ui.btn_kunde_save = Button(save_row, "Als Kundenakte speichern", app.save_or_update_customer, icon=icons.SAVE, tooltip="Kundendaten bewusst als Kundenakte speichern bzw. die aktive Kundenakte aktualisieren")
+    ui.kunde_save_row = frame(body)
+    ui.kunde_save_row.pack(fill="x", pady=(px(12), 0))
+    ui.btn_kunde_save = Button(ui.kunde_save_row, "Als Kundenakte speichern", app.save_or_update_customer, icon=icons.SAVE, tooltip="Kundendaten bewusst als Kundenakte speichern bzw. die aktive Kundenakte aktualisieren")
     ui.btn_kunde_save.pack(side="left")
 
     # Dateien ---------------------------------------------------------------------
@@ -110,10 +113,11 @@ def build(app: "App", host) -> Page:
     ui.mail_combo.grid_remove()
     ui.excel_facts = FactList(details, label_width=DETAIL_LABEL_WIDTH)
     ui.excel_facts.pack(fill="x")
-    # Wiedererkennung nach der Excel-Prüfung (Schließen = Ignorieren)
+    # Wiedererkennung nach der Excel-Prüfung (Schließen = Ignorieren) – nur mit Kundenakte
     ui.kunde_match = InfoBar(body, on_close=app.ignore_match)
     ui.kunde_match.pack(fill="x", pady=(px(8), 0))
-    Divider(body).pack(fill="x", pady=px(10))
+    ui.divider_logo = Divider(body)
+    ui.divider_logo.pack(fill="x", pady=px(10))
     ui.row_logo = FileRow(body, icons.PICTURE, "Logo")
     ui.row_logo.pack(fill="x")
     Button(ui.row_logo.buttons, "Durchsuchen", app.pick_logo, icon=icons.OPEN_FILE, tooltip="Logo-Datei wählen").pack(side="right")
@@ -165,5 +169,33 @@ def build(app: "App", host) -> Page:
 
     app.reload_pdfs()
     app.refresh_files()
+    set_customer_parts(app, app.customer_records_enabled())
     app.refresh_customer_line()
     return page
+
+
+def set_customer_parts(app: "App", enabled: bool) -> None:
+    """Kunden-Elemente zeigen bzw. ausblenden (Schalter »Kundenakte verwenden«).
+
+    Nur Ein- und Ausblenden an festen Stellen – nichts wird neu aufgebaut. Ohne Kundenakte
+    bleiben Firmenname, Kundennummer und Rechnungsempfänger als normale Eingabefelder.
+    """
+    ui = app.ui
+    row = getattr(ui, "kunde_picker_row", None)
+    if row is None:
+        return
+    if enabled:
+        if not row.winfo_manager():
+            row.pack(fill="x", before=ui.label_firma)
+        ui.label_firma.pack_configure(pady=(px(12), px(4)))
+        if not ui.kunde_save_row.winfo_manager():
+            ui.kunde_save_row.pack(fill="x", pady=(px(12), 0), after=ui.kunde_info)
+        if not ui.kunde_match.winfo_manager():
+            ui.kunde_match.pack(fill="x", pady=(px(8), 0), before=ui.divider_logo)
+    else:
+        row.pack_forget()
+        ui.label_firma.pack_configure(pady=(0, px(4)))  # erstes Feld der Karte
+        ui.kunde_save_row.pack_forget()
+        ui.kunde_match.hide(animate=False)
+        ui.kunde_match.pack_forget()
+        ui.kunde_active_area.collapse(animate=False)

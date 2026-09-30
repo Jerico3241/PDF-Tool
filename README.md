@@ -1,6 +1,6 @@
 # PDF Tool
 
-Quellcode von **PDF Tool 2.6.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
+Quellcode von **PDF Tool 2.6.1** – einer Windows-App mit Werkzeugen für PDF-Dateien.
 Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Das Repository enthält:
@@ -18,7 +18,7 @@ werden: eine PDF öffnet „PDF reparieren“, eine Excel-Liste „Vertragsüber
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
-| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | `app/tools/contract_overview/` (Ablauf, Seiten, `overview.py` als gemeinsame Fachlogik, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
+| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | `app/tools/contract_overview/` (Ablauf, Seiten, `overview.py` als gemeinsame Fachlogik, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` |
 | **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen – bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten | `app/tools/pdf_repair/` (`recovery/` für die erweiterte Wiederherstellung) |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
@@ -28,9 +28,36 @@ Neue Werkzeuge bekommen ein eigenes Paket unter `app/tools/` und einen Eintrag i
 
 ### Vertragsübersichten: Kundenakte und Kundenwiedererkennung
 
-Das Werkzeug hat fünf Ansichten: **Übersicht erstellen**, **Stapel**, **Darstellung**, **Vorschau**
-und **Kunden**. Die Kundenakte gehört ausschließlich zu „Vertragsübersichten“; „PDF reparieren“
-bleibt davon unberührt.
+Das Werkzeug hat die Ansichten **Übersicht erstellen**, **Stapel**, **Darstellung**, **Vorschau**
+und – mit eingeschalteter Kundenakte – **Kunden**. Die Kundenakte gehört ausschließlich zu
+„Vertragsübersichten“; „PDF reparieren“ bleibt davon unberührt.
+
+**Die Kundenakte ist optional (seit 2.6.1).** Einstellungen → **Vertragsübersichten** →
+**„Kundenakte verwenden“** – Standard **aus**, bei einer neuen Installation und auch nach einem
+Update (Opt-in). Die App fragt den Zustand zentral ab (`customer_records_enabled()` in
+`customer_flow.py`; gespeichert als `kundenakte_verwenden` in `gui-config.json`).
+
+- **Ausgeschaltet** werden keine Kundendaten automatisch gespeichert oder abgeglichen – auch nicht im
+  Hintergrund: `kundenakten.json` wird nicht gelesen, kein E-Mail-Abgleich, keine Übernahme, kein
+  Fortschreiben nach der PDF, keine Zuordnungen, kein kundenbezogener Vertragsvergleich. Die Ansicht
+  „Kunden“ wird gar nicht erst aufgebaut; „Bekannten Kunden auswählen“, „Bekannter Kunde gefunden“,
+  „Als Kundenakte speichern“, „Zuordnung merken“ und die Kunden-Angaben im Stapel sind ausgeblendet.
+  Firmenname, Kundennummer und Rechnungsempfänger bleiben normale Eingabefelder; Excel-Prüfung,
+  Vorlagen, Kopf- und Fußzeile, Vorschau, Stapel und PDF-Erstellung arbeiten unverändert.
+- **Vorhandene Daten bleiben immer erhalten:** Ausschalten löscht nichts – Kundenakten,
+  Zuordnungen, Vertragsstände und ein Kundenverlauf aus 2.3 bleiben unverändert auf dem PC.
+  Stammen Kopf- und Fußzeile gerade aus einer Kundenakte, bleibt die vorher gültige Fassung gemerkt
+  („Neue Übersicht“ stellt sie wieder her) – die Standard-Fußzeile geht nie verloren.
+- **Ein- und Ausschalten ohne Neustart:** Beim ersten Einschalten lädt die App die Kundenakten
+  (ein Kundenverlauf aus 2.3 wird erst jetzt übernommen) und baut die Ansicht „Kunden“ verdeckt und
+  fertig auf (`NavigationView.add_page`); danach wird sie nur noch zugelassen bzw. gesperrt
+  (`set_available`) und in den Umschaltleisten ein- bzw. ausgeblendet – keine Navigation wird neu
+  aufgebaut, keine Bindung doppelt registriert.
+- **Bisherige Nutzer** sehen nach dem Update einmalig: „Die Kundenakte ist jetzt optional und kann
+  in den Einstellungen aktiviert werden. Ihre gespeicherten Kundendaten bleiben erhalten.“
+- Alle Kundendaten bleiben ausschließlich lokal auf diesem PC.
+
+Mit eingeschalteter Kundenakte gilt:
 
 **Excel-Prüfung ohne Doppelungen:** Die Statuszeile ist die einzige Stelle mit den Vertragszahlen
 („Excel geprüft · 5 aktive Verträge · 3 inaktiv ausgeblendet“, Einzahl „1 aktiver Vertrag“, ohne
@@ -152,7 +179,9 @@ Texte), `history_flow.py` (Ablauf), `history_widgets.py` (Anzeige).
   Beginn, Abrechnungszyklus nach den Zyklus-Regeln, Netto, Zahlungsart) plus die Rohwerte der Excel.
   Alte PDFs werden nie gelesen oder geparst; ein Vergleich funktioniert auch, wenn die alten Excel-
   und PDF-Dateien längst gelöscht sind. Kein Stand entsteht für die Live-Vorschau, die Excel-Prüfung,
-  einen Abbruch, einen Fehler oder ohne Kundenakte.
+  einen Abbruch, einen Fehler oder ohne Kundenakte. Ist die Kundenakte ausgeschaltet, fehlt die
+  sichere Kundenidentität: Die Karte bleibt verborgen, nichts wird über Firmenname, Domain oder
+  Rechnungsempfänger geraten, und gespeicherte Stände bleiben unverändert erhalten.
 - **Identität:** Ein Stand gehört allein zur stabilen ID der Kundenakte – nie zu Firmenname,
   Kundennummer oder E-Mail-Ähnlichkeit. Ein Vertrag ist seine Vertragsnummer als Text (`001234`
   bleibt `001234`); eine neue Nummer ist „entfernt“ plus „neu“, nie eine Umbenennung.
@@ -190,6 +219,49 @@ temporären Ordner, und zeigt sie seitenweise (PDFium) – mit Seitennavigation 
 eines Kunden) markiert die Vorschau als veraltet; neu erzeugt wird entprellt im Hintergrund und nur,
 solange die Ansicht sichtbar ist. Eine Signatur aller Eingaben verhindert, dass ein veraltetes
 Ergebnis angezeigt wird (schneller Wechsel Kunde A → B). Code: `app/tools/contract_overview/preview.py`.
+
+Sichtbarkeit ist keine Änderung: Wer ohne Änderung zur Vorschau zurückkehrt, bekommt dieselbe PDF
+und dasselbe, bereits dekodierte Seitenbild – nichts wird neu erzeugt oder neu gezeichnet. Zoom und
+Blättern rendern nur die jeweilige Seite (Seitenbilder bleiben zwischengespeichert). Für eine noch
+entstehende Seite wird der Platz vorab reserviert – beim ersten Öffnen schon, während die PDF noch
+entsteht (A4 hoch oder quer laut „Darstellung“) –, damit das Bild ohne Layoutsprung erscheint.
+Seitenzahl und Zoomstufe haben eine feste Breite, der Zustand („Vorschau wird erstellt …“,
+„Aktuell · …“) eine eigene Zeile: Die Werkzeugleiste bricht nicht je nach Zustand um.
+
+### Oberfläche: Rendering, Navigation und Animationen
+
+Die Oberfläche soll nie zeigen, wie Tkinter sie zusammensetzt (`app/ui/`):
+
+- **Start:** Das Hauptfenster entsteht zurückgezogen (`withdraw`); Design, Schriften, Palette,
+  Titelleiste (DWM) und Mica stehen fest, bevor das erste Widget entsteht. Alle Seiten werden
+  verdeckt aufgebaut und angeordnet und erst dann in einem Zug gezeigt (DWM-Cloaking bzw. außerhalb
+  des Bildschirms) – kein weißes oder halbfertiges Fenster.
+- **Seiten bleiben bestehen** und haben einen Lebenszyklus: *create* (einmal) → *prepare* (vor dem
+  Zeigen, noch verdeckt: Inhalte aktualisieren, fertig anordnen) → *activate* → *deactivate*. Ein
+  Wechsel baut nichts neu auf; nicht sichtbare Seiten liegen fertig angeordnet außerhalb des
+  Sichtbereichs. Ein Übergang bewegt nur die ganze, fertige Seite (16 px, 180 ms) und wird beim
+  nächsten Wechsel abgebrochen – es gibt keine Warteschlange.
+- **Größenereignisse:** Bindungen an das Hauptfenster erhalten in Tk über die Bindtags die
+  Ereignisse *aller* Widgets. `<Configure>`, `<Activate>` und `<Deactivate>` des Fensters werden
+  deshalb schon in Tcl gefiltert (`ui/context.py`); Größen-Handler erhalten nur Breite und Höhe ohne
+  die teure Umwandlung in ein Ereignisobjekt (`bind_size`).
+- **Resize:** Während des Ziehens laufen keine Layoutanimationen; das Ende wird nach 80 ms Ruhe
+  erkannt. Layoutzustände (breit, mittel, kompakt) wechseln nur an Breakpoints mit Hysterese.
+- **Animationen** sind zeitbasiert (`time.perf_counter`), zentral verwaltet
+  (`ui/animations.py`: `animations_enabled`, `reduce_motion`, `is_resizing`, `is_navigating`,
+  `active_animations`) und abbrechbar: Hover 83 ms (Verlassen 100 ms), Drücken 67 ms, InfoBar und
+  Ein-/Ausklappen 167 ms, Seitenwechsel und Navigationsindikator 180 ms, Dialoge 167 ms (Schließen
+  120 ms). Ist in Windows „Animationseffekte“ aus, entfallen alle Bewegungen; ohne aktive Animation
+  läuft kein Zeitgeber (Leerlauf ohne CPU-Last). Unsichtbare Ladeanimationen zeichnen nicht.
+- **Neuzeichnen nur bei Änderung:** Canvas-Steuerelemente behalten ihre Elemente und zeichnen nur
+  bei geänderter Größe, geändertem Zustand oder Design; Listen (Stapel, Kunden) zeichnen nur
+  geänderte Zeilen. Der Vertragsvergleich wird nur bei geänderten Daten, anderem Ausgangsstand oder
+  anderem Kunden neu berechnet; Designwechsel werden gebündelt in einem Schritt angewendet;
+  Systemmeldungen von Windows färben nur bei echter Änderung neu ein.
+- **Messpunkte für die Entwicklung** (`ui/diagnostics.py`): Startzeiten (`root`, `theme`, `pages`,
+  `navigation`, `visible`, `interactive`) und Zähler (`page_create`, `canvas_redraw`,
+  `preview_render`, `preview_decode`, `customer_list_rebuild`, `comparison`). Ausgegeben wird nur mit
+  `PDF_TOOL_PROFILE=1` auf der Konsole – nie in ein Protokoll.
 
 ### PDF reparieren
 
@@ -277,6 +349,9 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
   (`migration-backup-<Version>.zip`), dann Kopie mit Prüfung jeder Datei (Größe und SHA-256).
   Der alte Datenordner bleibt unverändert erhalten; schlägt die Übernahme fehl, arbeitet die App mit
   ihm weiter.
+- **Update von 2.6.0:** Das Setup ersetzt nur Programmdateien. Die Kundenakte ist danach zunächst
+  aus (Opt-in); Kundenakten, Zuordnungen und Vertragsstände bleiben unverändert erhalten und stehen
+  nach dem Einschalten sofort wieder bereit. Alle übrigen Einstellungen bleiben unverändert.
 - **Update von 2.5:** Das Setup ersetzt nur Programmdateien; Einstellungen, Kundenakten, Vorlagen,
   Textbausteine, Rich-Text-Kopf- und Fußzeilen, Zyklus-Regeln, der gespeicherte Stapel mit seinen
   Einstellungen und die Einstellungen von „PDF reparieren“ bleiben unverändert. Vertragsstände
@@ -284,9 +359,10 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
   werden sie nur mit den übrigen Benutzerdaten und nur auf Nachfrage entfernt.
 - **Update von 2.4:** Das Setup ersetzt nur Programmdateien; Einstellungen, Kundenakten, Vorlagen,
   Rich-Text-Kopf- und Fußzeilen und die Einstellungen von „PDF reparieren“ bleiben unverändert.
-- **Update von 2.3:** Das Setup ersetzt nur Programmdateien. Beim ersten Start übernimmt die App den
-  Kundenverlauf als Kundenakten (siehe oben, mit Sicherung); Einstellungen, Vorlagen,
-  Textbausteine, Regeln sowie Kopf- und Fußzeile bleiben unverändert.
+- **Update von 2.3:** Das Setup ersetzt nur Programmdateien. Der Kundenverlauf bleibt unverändert
+  erhalten; sobald die Kundenakte eingeschaltet wird, übernimmt die App ihn als Kundenakten (siehe
+  oben, mit Sicherung). Einstellungen, Vorlagen, Textbausteine, Regeln sowie Kopf- und Fußzeile
+  bleiben unverändert.
 - Die Version steht zentral in `windows-app/VERSION`.
 
 ## Datenschutz
@@ -302,6 +378,10 @@ vollständig lokal – keine Cloud, keine Uploads.
 diesem PC. Protokolle enthalten weder Vertragsdaten noch Verläufe von Kunden; Fehler beim Speichern
 eines Stands werden ohne Vertragsinhalte protokolliert. Wer die Benutzerdaten sichert, sichert den
 Ordner `%APPDATA%\PDF-Tool` vollständig – `contract-history` gehört dazu.
+
+**Die Kundenakte ist optional** (Standard: aus). Ist sie ausgeschaltet, werden keine Kundendaten
+automatisch gespeichert oder abgeglichen, und `kundenakten.json` wird nicht gelesen; vorhandene
+Kundendaten bleiben unverändert erhalten.
 
 **Kundenakten und E-Mail-Zuordnungen** sind ausschließlich lokal gespeicherte Nutzerdaten: keine
 Cloud, keine Telemetrie, keine Synchronisierung, keine E-Mail-Abfrage, keine Internetsuche und
@@ -335,10 +415,12 @@ Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) bau
 PDF-Reparatur im Arbeitsprozess, Kundenakte, Vorschau, Stapel, Programmstart) und das installierte
 Setup: stille Installation, Programmstart, stille Deinstallation, das Update vom Übersichten-Ersteller
 2.2.0 (ein Eintrag unter „Installierte Apps“, Ordner, Verknüpfungen, Datenübernahme), das Update
-von PDF Tool 2.3.0 mit Beispieldaten (Kundenverlauf wird mit Sicherung zu Kundenakten,
-Formatierung, Standard-Fußzeile und Vorlagen bleiben), das Update von PDF Tool 2.4.0 mit
-Beispieldaten (Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten) und das
-Update von PDF Tool 2.5.0 mit Beispieldaten (zusätzlich Stapel-Einstellungen und Vertragsstände).
+von PDF Tool 2.3.0 mit Beispieldaten (der Kundenverlauf bleibt bei ausgeschalteter Kundenakte
+unverändert und wird nach dem Einschalten mit Sicherung zu Kundenakten; Formatierung,
+Standard-Fußzeile und Vorlagen bleiben), das Update von PDF Tool 2.4.0 mit Beispieldaten
+(Kundenakten, Vorlagen, Rich Text und Reparatur-Einstellungen bleiben erhalten), das Update von
+PDF Tool 2.5.0 (zusätzlich Stapel-Einstellungen und Vertragsstände) und das Update von PDF Tool
+2.6.0 (Kundenakte zunächst aus, Kundenakten und Vertragsstände unverändert und lesbar).
 Der Runtime-Smoke-Test prüft außerdem pypdf, die Rohrekonstruktion einer beschädigten PDF und das
 Speichern und Vergleichen eines Vertragsstands. Manuell gestartet mit
 `release: true` veröffentlicht sie danach das Release `v<Version>` („PDF Tool <Version>“) mit Setup
@@ -359,6 +441,30 @@ Seitenbaum, falsche `/Parent`-Verweise, geerbte Ressourcen, Binärdaten mit sche
 Objektköpfen, inkrementelle Updates, Objektströme und eine Nachbildung einer realen, nach den Seiten
 abgeschnittenen Datei. Echte Kundendateien liegen nie im Repository; eine lokale Beispieldatei lässt
 sich mit `PDF_TOOL_REAL_SAMPLE=<Pfad>` zusätzlich prüfen.
+
+Die Oberflächentests (`test_app_*.py`) prüfen neben den Funktionen auch das Rendering: Seiten
+entstehen genau einmal, die Vorschau wird ohne Änderung nicht neu erzeugt oder dekodiert, ein
+schneller Seitenwechsel lässt nur den letzten Übergang laufen, „Animationseffekte aus“ unterdrückt
+Bewegungen, Statusänderungen im Stapel zeichnen nur die betroffene Zeile, beim Beenden bleibt kein
+Zeitgeber offen – und die optionale Kundenakte (Standard aus, kein Abgleich und kein Speichern bei
+ausgeschalteter Kundenakte, Umschalten ohne Neustart, Daten bleiben erhalten).
+
+**Manuelle Prüfung vor einem Release (Windows 10/11):**
+
+1. Skalierung 100 %, 125 %, 150 % und 175 % (Einstellungen → Anzeige): Start ohne weißes oder
+   halbfertiges Fenster, keine abgeschnittenen Texte, Navigation breit/mittel/kompakt, Einstellungen
+   vollständig lesbar. Unter Linux lässt sich die Skalierung mit `UE_SCALE=1.5` nachbilden.
+2. Hell/Dunkel mehrfach wechseln (auch „Wie Windows“ und über die Windows-Einstellung): Wechsel in
+   einem Schritt, Titelleiste und Mica passend.
+3. „Animationseffekte“ in Windows aus: Seitenwechsel, Navigation und Bereiche ohne Bewegung.
+4. Fenstergröße langsam und schnell ziehen, maximieren, wiederherstellen, Navigation ein- und
+   ausklappen: keine springenden Karten, kein Flackern.
+5. Schnell zwischen „Übersicht erstellen“, „Darstellung“, „Vorschau“, „Stapel“ und (mit Kundenakte)
+   „Kunden“ wechseln: keine leeren oder halb aufgebauten Seiten.
+6. Kundenakte aus → ein → aus → ein: Daten bleiben, keine doppelten Einträge; Stapel und PDF ohne
+   Kundenakte.
+7. `set PDF_TOOL_PROFILE=1` und Start mit `runtime\python.exe app\start.py`: Die Konsole zeigt die
+   Startmesspunkte.
 
 Das App-Symbol entsteht mit `python windows-app/scripts/make_icons.py` (Windows-Symbol, Favicons
 und Logo der Downloadseite).

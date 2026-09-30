@@ -103,7 +103,9 @@ def app(request, config_file: Path, monkeypatch):
 
     import appstate
 
-    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light", "accent": "#005FB8"}), encoding="utf-8")
+    # Die bisherigen Oberflächentests prüfen die App mit eingeschalteter Kundenakte (seit 2.6.1 optional,
+    # Standard aus – den Standard prüft test_app_v261.py).
+    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light", "accent": "#005FB8", "kundenakte_verwenden": True}), encoding="utf-8")
     if request.param:
         monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
     else:

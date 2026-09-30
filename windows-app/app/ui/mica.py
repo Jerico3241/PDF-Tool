@@ -70,6 +70,7 @@ class MicaSource:
         self._grids: dict[tuple, Image.Image] = {}
         self._lock = threading.Lock()
         self.available = False
+        self.generation = 0  # zählt geladene Hintergrundbilder (Schlüssel für zwischengespeicherte Ausschnitte)
 
     # Laden ------------------------------------------------------------------
     def load(self) -> bool:
@@ -83,6 +84,7 @@ class MicaSource:
             self._grids.clear()
             self._loaded = True
             self.available = image is not None
+            self.generation += 1
         return self.available
 
     @staticmethod

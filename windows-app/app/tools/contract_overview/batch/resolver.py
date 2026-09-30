@@ -71,6 +71,7 @@ class Resolution:
 
     customer: Customer | None = None
     customer_source: str = ""  # »erkannt«, »gewählt« oder leer
+    customer_records: bool = True  # Kundenakte eingeschaltet (sonst kein Kundenbezug)
     match: MatchResult | None = None
     emails: tuple[str, ...] = ()  # Rechnungsempfänger der Excel
     company: str = ""
@@ -97,7 +98,11 @@ class Resolution:
 
     @property
     def customer_line(self) -> str:
-        """»Kunde erkannt: Beispiel GmbH · 123456«, »Kunde nicht zugeordnet« …"""
+        """»Kunde erkannt: Beispiel GmbH · 123456«, »Kunde nicht zugeordnet« …
+
+        Ohne Kundenakte nur die Angaben selbst (»Muster GmbH · 10042«) – kein Kundenbezug."""
+        if not self.customer_records:
+            return " · ".join(part for part in (self.company, self.number) if part)
         if self.customer is not None:
             prefix = "Kunde erkannt" if self.customer_source == "erkannt" else "Kunde"
             return f"{prefix}: {self.customer.label}"
@@ -141,10 +146,12 @@ def resolve(
 ) -> Resolution:
     """Geltende Werte eines Eintrags bestimmen (ohne etwas zu verändern).
 
+    ``customers``: Speicher der Kundenakten – ``None``, wenn die Kundenakte ausgeschaltet ist
+    (dann kein Abgleich, keine Kundenwerte; Angaben kommen aus dem Eintrag und der Excel).
     ``for_preview``: Auftrag auch dann bilden, wenn nur Angaben wie die Kundennummer fehlen –
     für die Vorschau (dieselbe Pipeline wie im Einzelmodus), nie für die Erstellung.
     """
-    res = Resolution()
+    res = Resolution(customer_records=customers is not None)
     analysis = item.analysis
     ov = item.overrides
     issues: list[Issue] = []
@@ -157,11 +164,11 @@ def resolve(
 
     # 2. Kundenakte: bewusst gewählt, bewusst keine oder über die Rechnungsempfänger erkannt ------------
     customer: Customer | None = None
-    if item.customer_mode is CustomerMode.MANUAL:
+    if customers is not None and item.customer_mode is CustomerMode.MANUAL:
         customer = customers.get(item.customer_id)
         if customer is not None:
             res.customer_source = "gewählt"
-    if customer is None and item.customer_mode is not CustomerMode.NONE and usable:
+    if customers is not None and customer is None and item.customer_mode is not CustomerMode.NONE and usable:
         match = customers.match(res.emails) if res.emails else MatchResult(MatchKind.NONE)
         res.match = match
         if item.customer_mode is CustomerMode.AUTO or customers.get(item.customer_id) is None:
@@ -180,7 +187,7 @@ def resolve(
             elif match.kind is MatchKind.AMBIGUOUS:
                 issues.append(Issue("kunde", "customer_ambiguous", "E-Mail-Adresse mehreren Kundenakten zugeordnet – Kunden bitte wählen"))
     res.customer = customer
-    if usable and res.emails:
+    if customers is not None and usable and res.emails:
         res.unknown_emails = tuple(email for email in (normalize_email(mail) for mail in res.emails) if email and not customers.owner_ids(email))
 
     # 3. Firmenname, Kundennummer ------------------------------------------------------------------

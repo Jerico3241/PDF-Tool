@@ -60,6 +60,7 @@ from .preview import RENDER_LOCK, PreviewFlow
 
 # Tastenhinweis in der Statuszeile, solange eine Seite des Werkzeugs sichtbar ist
 HINT = "Strg+Enter  PDF erstellen   ·   Strg+O  Excel öffnen   ·   Strg+F  Kunde suchen"
+HINT_PLAIN = "Strg+Enter  PDF erstellen   ·   Strg+O  Excel öffnen"  # ohne Kundenakte
 BATCH_HINT = "Strg+Enter  Bereite Übersichten erstellen   ·   Strg+O  Excel-Dateien hinzufügen   ·   Leertaste  auswählen"
 BATCH_HELP_STEPS = (
     "Excel-Dateien hinzufügen (Strg+O), einen Ordner hinzufügen oder mehrere Dateien in das Fenster ziehen – jede Datei wird sofort geprüft.",
@@ -74,6 +75,19 @@ BATCH_HELP_NOTES = (
     "Neue E-Mail-Zuordnungen entstehen nur mit »Zuordnung merken«.",
     "»Stapel abbrechen« beendet die laufende PDF sauber; fertige PDFs bleiben erhalten.",
     "Alles bleibt lokal auf diesem PC. Gespeichert werden nur Pfade und Ihre Angaben, keine Kopien der Excel-Dateien.",
+)
+# Ohne Kundenakte: Angaben kommen aus der Excel bzw. werden im Eintrag eingetragen
+BATCH_HELP_STEPS_PLAIN = (
+    BATCH_HELP_STEPS[0],
+    "Bei »Angaben erforderlich« den Eintrag öffnen und Firmenname und Kundennummer eintragen (sofern nicht in der Excel).",
+    *BATCH_HELP_STEPS[2:],
+)
+BATCH_HELP_NOTES_PLAIN = (
+    "Vorrang für Vorlage und Logo: im Eintrag gewählt → Standard des Stapels → globaler Standard.",
+    BATCH_HELP_NOTES[1],
+    BATCH_HELP_NOTES[3],
+    BATCH_HELP_NOTES[4],
+    "Kundenakten (Wiedererkennung bekannter Rechnungsempfänger) lassen sich unter »Einstellungen« → »Vertragsübersichten« einschalten.",
 )
 
 
@@ -883,9 +897,33 @@ class ContractOverviewTool(CustomerFlow, PreviewFlow, BatchFlow, HistoryFlow):
         if excel and Path(excel).is_file():
             self.inspect_excel(excel)
 
+    def contract_hint(self) -> str:
+        """Tastenhinweis der Statuszeile – »Strg+F Kunde suchen« nur mit Kundenakte."""
+        return HINT if self.customer_records_enabled() else HINT_PLAIN
+
     def show_contract_help(self) -> None:
+        records = self.customer_records_enabled()
         if self.nav.current == "batch":
-            self.show_steps("Kurzanleitung – Stapel", BATCH_HELP_STEPS, BATCH_HELP_NOTES)
+            if records:
+                self.show_steps("Kurzanleitung – Stapel", BATCH_HELP_STEPS, BATCH_HELP_NOTES)
+            else:
+                self.show_steps("Kurzanleitung – Stapel", BATCH_HELP_STEPS_PLAIN, BATCH_HELP_NOTES_PLAIN)
+            return
+        if not records:
+            schritte = (
+                "Die Excel-Datei wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort geprüft.",
+                "Firmenname, Kundennummer und Rechnungsempfänger eintragen (bzw. aus der Excel übernehmen).",
+                "Optional Logo, Zielordner sowie Kopf- und Fußzeile in der Ansicht »Darstellung« setzen; die »Vorschau« zeigt das Ergebnis.",
+                "Auf »PDF erstellen« klicken oder Strg+Enter drücken.",
+            )
+            hinweise = (
+                "Stehen mehrere Rechnungsempfänger in der Excel, bitte einen auswählen.",
+                "Viele Excel-Listen auf einmal erstellen: Ansicht »Stapel«.",
+                "Zyklus-Regeln und Vorlagen stehen in der Ansicht »Darstellung«. Hott-KI wird standardmäßig jährlich ausgegeben.",
+                "Hotline-Zeilen werden als Supportvertrag ausgegeben. Nur Netto, kein Brutto.",
+                "Bekannte Kunden wiedererkennen und ihre Angaben übernehmen: »Einstellungen« → »Vertragsübersichten« → »Kundenakte verwenden«. Alle Daten bleiben lokal auf diesem PC.",
+            )
+            self.show_steps("Kurzanleitung – Vertragsübersichten", schritte, hinweise)
             return
         schritte = (
             "Die Excel-Datei wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort geprüft.",

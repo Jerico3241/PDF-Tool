@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from types import SimpleNamespace
 from typing import Callable
 
 import _tkinter
@@ -12,8 +13,8 @@ from .animations import AnimationManager
 from .render import ImageCache
 from .theme import Fonts, Palette, ThemeManager, build_fonts, init_scale
 
-# Nach dieser Pause ohne Größenänderung gilt ein Resize als abgeschlossen (Millisekunden).
-RESIZE_SETTLE_MS = 100
+# Nach dieser Pause ohne Größenänderung gilt ein Resize als abgeschlossen (Millisekunden, entprellt).
+RESIZE_SETTLE_MS = 80
 
 # Responsive Layoutzustände des Hauptfensters
 MODE_WIDE = "wide"  # Navigation ausgeklappt
@@ -71,7 +72,7 @@ class UIContext:
         self.window_hooks: list = []
         root.bind_all("<KeyPress>", self._on_key, add="+")
         root.bind_all("<ButtonPress>", self._on_mouse, add="+")
-        root.bind("<Configure>", self._on_root_configure, add="+")
+        self._bind_root_configure()
         self._install_focus_filter()
 
     # Tastaturfokus ---------------------------------------------------------------------
@@ -129,6 +130,26 @@ class UIContext:
                 hook(event)
             except Exception:
                 pass
+
+    def _bind_root_configure(self) -> None:
+        """Größe und Lage des Hauptfensters verfolgen.
+
+        Eine Bindung an das Hauptfenster erhält über die Bindtags die ``<Configure>``-Ereignisse
+        aller Widgets darin – beim Start und bei jedem Resize Tausende. Gefiltert wird deshalb
+        schon in Tcl: Python wird nur für das Hauptfenster selbst aufgerufen, und nur mit Breite
+        und Höhe (ohne die teure Umwandlung in ein Ereignisobjekt).
+        """
+        root = self.root
+        command = root.register(self._root_configured)
+        path = str(root)
+        root.tk.call("bind", path, "<Configure>", f'+if {{"%W" eq "{path}"}} {{{command} %w %h}}')
+
+    def _root_configured(self, width: str, height: str) -> None:
+        try:
+            event = SimpleNamespace(widget=self.root, width=int(width), height=int(height))
+        except ValueError:
+            return
+        self._on_root_configure(event)
 
     def _on_root_configure(self, event) -> None:
         if event.widget is not self.root:
@@ -214,6 +235,48 @@ def surface_color(widget: tk.Misc | None, default: str = "layer") -> str:
     if role.startswith("#"):
         return role
     return getattr(ctx().pal, role)
+
+
+class SizeEvent:
+    """Schlankes ``<Configure>``-Ereignis: nur Widget, Breite und Höhe."""
+
+    __slots__ = ("widget", "width", "height")
+
+    def __init__(self, widget: tk.Misc, width: int, height: int) -> None:
+        self.widget = widget
+        self.width = width
+        self.height = height
+
+
+def bind_size(widget: tk.Misc, callback: Callable[[SizeEvent], object]) -> None:
+    """``<Configure>`` ohne teure Ereignisumwandlung – ``callback`` erhält nur Breite und Höhe.
+
+    tkinter wandelt für jedes gebundene Ereignis 19 Felder um. Größenereignisse kommen beim
+    Aufbau und bei jeder Änderung der Fenstergröße zu Tausenden; hier genügt ein schlankes
+    Objekt mit ``widget``, ``width`` und ``height``.
+    """
+
+    def handler(width: str, height: str) -> None:
+        try:
+            event = SizeEvent(widget, int(width), int(height))
+        except ValueError:
+            return
+        callback(event)
+
+    command = widget.register(handler)
+    widget.tk.call("bind", str(widget), "<Configure>", f"+{command} %w %h")
+
+
+def bind_own(widget: tk.Misc, sequence: str, callback: Callable[[], None]) -> None:
+    """Ereignis nur für ``widget`` selbst – nicht für alle Kinder.
+
+    Bindungen an ein Toplevel gelten über die Bindtags auch für jedes Widget darin (z. B.
+    ``<Activate>`` bei jedem Fensterwechsel für Hunderte Widgets). Gefiltert wird in Tcl;
+    Python wird nur für das Fenster selbst aufgerufen, ohne teures Ereignisobjekt.
+    """
+    command = widget.register(callback)
+    path = str(widget)
+    widget.tk.call("bind", path, sequence, f'+if {{"%W" eq "{path}"}} {{{command}}}')
 
 
 def settle(widget: tk.Misc, limit: int = 5000) -> None:

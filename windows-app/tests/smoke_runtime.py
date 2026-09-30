@@ -21,7 +21,8 @@ Geprüft wird:
    erweiterte Wiederherstellung: klassische PDF ohne xref, Trailer, %%EOF und mit
    defektem Seitenbaum rekonstruieren, Text und Seiten mit pypdf prüfen
 4. mit ``--ui``: Programmstart (Hauptfenster mit Startseite, Werkzeuge und die Ansichten
-   »Stapel«, »Vorschau« und »Kunden« öffnen, Einstellungen werden gespeichert)
+   »Stapel« und »Vorschau« öffnen; Kundenakte standardmäßig aus, »Kunden« erst nach dem
+   Einschalten – ohne Neustart; Einstellungen werden gespeichert)
 
 Endet mit Code 0 und »OK«, sonst mit einer Fehlermeldung und Code 1.
 """
@@ -319,10 +320,26 @@ def main() -> int:
             app.open_tool("contracts")
             app.update()
             shown["contracts"] = app.nav.current
-            for view in ("batch", "preview", "customers"):
+            for view in ("batch", "preview"):
                 app.nav.navigate(view)
                 app.update()
                 shown[view] = app.nav.current
+            # Kundenakte: Standard aus – die Ansicht »Kunden« entsteht erst beim Einschalten (ohne Neustart)
+            shown["records"] = app.customer_records_enabled()
+            shown["customers_page"] = "customers" in app.nav.pages
+            app.nav.navigate("customers")
+            app.update()
+            shown["customers_off"] = app.nav.current
+            app.var_customer_records.set(True)
+            app.apply_customer_records_setting()
+            app.update()
+            app.nav.navigate("customers")
+            app.update()
+            shown["customers"] = app.nav.current
+            app.var_customer_records.set(False)
+            app.apply_customer_records_setting()
+            app.update()
+            shown["customers_after"] = app.nav.current
             app._on_close()
 
         app.after(3000, probe)
@@ -331,7 +348,9 @@ def main() -> int:
         check(shown.get("page") == "home", "Startseite fehlt")
         check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
         check(shown.get("repair") == "repair" and shown.get("contracts") == "create", "Werkzeuge lassen sich nicht öffnen")
-        check(shown.get("preview") == "preview" and shown.get("customers") == "customers" and shown.get("batch") == "batch", "Ansichten »Stapel«, »Vorschau« und »Kunden« lassen sich nicht öffnen")
+        check(shown.get("preview") == "preview" and shown.get("batch") == "batch", "Ansichten »Stapel« und »Vorschau« lassen sich nicht öffnen")
+        check(shown.get("records") is False and shown.get("customers_page") is False and shown.get("customers_off") == "preview", "Kundenakte ist nicht standardmäßig aus bzw. »Kunden« ohne Kundenakte erreichbar")
+        check(shown.get("customers") == "customers" and shown.get("customers_after") != "customers", "Kundenakte lässt sich nicht ohne Neustart ein- und ausschalten")
         config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
         check(config.is_file(), "Einstellungen wurden beim Beenden nicht gespeichert")
         print(f"Programmstart: Fenster sichtbar, beendet nach {time.monotonic() - started:.1f} s")

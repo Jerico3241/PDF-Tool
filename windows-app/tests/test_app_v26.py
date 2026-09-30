@@ -37,7 +37,7 @@ def app26(config_file: Path, monkeypatch):
     """App ohne Animationen; Dialoge antworten mit der Hauptschaltfläche."""
     import appstate
 
-    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light"}), encoding="utf-8")
+    config_file.write_text(json.dumps({"gesehen": appstate.VERSION, "theme": "light", "kundenakte_verwenden": True}), encoding="utf-8")
     monkeypatch.setenv("UE_NO_ANIMATIONS", "1")
     from ui import dialogs
 

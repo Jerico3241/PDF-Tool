@@ -19,8 +19,8 @@ from typing import Callable
 from PIL import Image
 
 from . import animations as motion
-from . import icons
-from .context import MODE_COMPACT, MODE_MEDIUM, MODE_WIDE, ctx, settle
+from . import diagnostics, icons
+from .context import MODE_COMPACT, MODE_MEDIUM, MODE_WIDE, bind_size, ctx, settle
 from .render import rounded_box, to_photo
 from .scroll import ScrollArea
 from .theme import px
@@ -96,7 +96,7 @@ class NavigationPane(tk.Canvas):
         self.bind("<Leave>", self._leave)
         self.bind("<ButtonPress-1>", self._press)
         self.bind("<ButtonRelease-1>", self._release)
-        self.bind("<Configure>", self._configured)
+        bind_size(self, self._configured)
         self.bind("<FocusIn>", self._focus_in)
         self.bind("<FocusOut>", lambda _e: self.redraw())
         for key, delta in (("Up", -1), ("Down", 1)):
@@ -268,7 +268,7 @@ class NavigationPane(tk.Canvas):
             self._indicator_h = px(16) + min(distance * 0.5, px(28)) * math.sin(math.pi * t)
             self.redraw()
 
-        self.c.anim.run(f"navind:{self}", motion.PAGE, step, easing=motion.POINT_TO_POINT, widget=self)
+        self.c.anim.run(f"navind:{self}", motion.PAGE, step, easing=motion.POINT_TO_POINT, widget=self, motion=True)
 
     # Zeichnen ----------------------------------------------------------------------
     def _set(self, item: int, coords: tuple | None = None, **options) -> None:
@@ -380,15 +380,29 @@ class ContentLayer(Surface):
         self._left.place(x=0, y=px(OVERLAY_RADIUS), width=1, relheight=1.0)
         self._corner.place(x=0, y=0)
         self._mica_corner: Image.Image | None = None
+        self._mica_key: tuple | None = None
+        self._corner_key: tuple | None = None
         ctx().theme.subscribe(self.refresh_corner, owner=self)
         self.refresh_corner()
 
-    def set_mica_corner(self, image: Image.Image | None) -> None:
-        self._mica_corner = image
+    def set_mica_corner(self, image: "Image.Image | Callable[[], Image.Image | None] | None", key: tuple | None = None) -> None:
+        """Mica-Ausschnitt für die runde Ecke. Gleicher ``key``: nichts neu berechnen (z. B. beim
+        Aktivieren des Fensters); ``image`` darf eine Funktion sein, die erst bei Bedarf rechnet."""
+        if image is None:
+            key = None
+        elif key is not None and key == self._mica_key:
+            self.refresh_corner()
+            return
+        self._mica_corner = image() if callable(image) else image
+        self._mica_key = key
         self.refresh_corner()
 
     def refresh_corner(self) -> None:
         pal = ctx().pal
+        state = (self._mica_key, id(self._mica_corner), pal.layer, pal.layer_stroke, pal.mica, px(OVERLAY_RADIUS))
+        if state == self._corner_key and self._corner_img is not None:
+            return  # unverändert: kein neues Bild
+        self._corner_key = state
         self._top.configure(bg=pal.layer_stroke)
         self._left.configure(bg=pal.layer_stroke)
         r = px(OVERLAY_RADIUS)
@@ -404,12 +418,19 @@ class ContentLayer(Surface):
 
 
 class Page(tk.Frame):
-    """Seite mit Titel, Untertitel und Abschnitten. Wird einmal aufgebaut und bleibt bestehen."""
+    """Seite mit Titel, Untertitel und Abschnitten. Wird einmal aufgebaut und bleibt bestehen.
+
+    Lebenszyklus: *create* (einmal, verdeckt) → *prepare* (vor dem Zeigen, noch verdeckt:
+    Inhalte aktualisieren) → *activate* (sichtbar) → *deactivate* (abgelegt). Ein Wechsel
+    baut nie etwas neu auf; ``on("prepare", …)`` usw. hängen Rückrufe an.
+    """
 
     MAX_WIDTH = 1180
+    EVENTS = ("prepare", "activate", "deactivate")
 
     def __init__(self, master, title: str, subtitle: str | None = None) -> None:
         super().__init__(master, bd=0, highlightthickness=0)
+        self._hooks: dict[str, list[Callable[[], None]]] = {event: [] for event in self.EVENTS}
         self.surface_role = "layer"
         ctx().theme.style(self, bg="layer")
         self.scroll = ScrollArea(self, max_width=self.MAX_WIDTH)
@@ -434,13 +455,21 @@ class Page(tk.Frame):
         label = Text(self.content, text, style="body_strong")
         return self.add_section(label, pady=(px(20), px(8)))
 
+    # Lebenszyklus --------------------------------------------------------------
+    def on(self, event: str, callback: Callable[[], None]) -> None:
+        self._hooks[event].append(callback)
+
+    def emit(self, event: str) -> None:
+        for callback in self._hooks[event]:
+            callback()
+
     def enter(self, animate: bool) -> None:
         """Übergang als Einheit: Die fertig aufgebaute Seite gleitet 16 px von rechts ein."""
         c = ctx()
         key = f"page:{self}"
         c.anim.cancel_prefix(key)
         self.scroll.to_top()
-        if not animate or not c.anim.allowed():
+        if not animate or not c.anim.allowed(motion=True):
             self.scroll.set_offset(0)
             return
         shift = px(16)
@@ -448,7 +477,7 @@ class Page(tk.Frame):
         def slide(t: float) -> None:
             self.scroll.set_offset(int(round(shift * (1 - t))))
 
-        c.anim.run(f"{key}:slide", motion.PAGE, slide, easing=motion.DECELERATE, widget=self)
+        c.anim.run(f"{key}:slide", motion.PAGE, slide, easing=motion.DECELERATE, widget=self, motion=True)
 
     def leave(self) -> None:
         ctx().anim.cancel_prefix(f"page:{self}")
@@ -480,7 +509,7 @@ class StatusBar(Surface):
         self.text = "Bereit"
         self._label_width = 0
         self._tooltip = Tooltip(self.label, "")
-        self.label.bind("<Configure>", self._label_configured, add="+")
+        bind_size(self.label, self._label_configured)
         self._kind = "neutral"
         c.theme.subscribe(self._recolor, owner=self)
 
@@ -577,6 +606,8 @@ class NavigationView(tk.Frame):
         # zuletzt gezeigte Seite je Navigationseintrag (ein Werkzeug kann mehrere Seiten haben)
         self._last_page: dict[str, str] = {}
         self.pages: dict[str, Page] = {}
+        # Gesperrte Seiten (ausgeschaltete Module): bleiben aufgebaut, lassen sich aber nicht öffnen.
+        self._unavailable: set[str] = set()
         self.current: str | None = None
         self.on_change = on_change
         self.on_layout = on_layout
@@ -592,6 +623,7 @@ class NavigationView(tk.Frame):
         self.backdrop = tk.Canvas(self, highlightthickness=0, bd=0)
         self._backdrop_item = self.backdrop.create_image(0, 0, anchor="nw", state="hidden")
         self._backdrop_photo: tk.PhotoImage | None = None
+        self._backdrop_key: tuple | None = None
         c.theme.style(self.backdrop, bg="mica")
         self.backdrop.place(x=0, y=0, relwidth=1.0, relheight=1.0)
         self.layer = ContentLayer(self)
@@ -610,12 +642,52 @@ class NavigationView(tk.Frame):
     def page(self, key: str) -> Page:
         if key not in self.pages:
             page = self.factories[key](self.host)
+            diagnostics.count("page_create")
             self.pages[key] = page
             # Beim Start liegen alle Seiten übereinander und werden verdeckt fertig angeordnet.
             page.place(x=0, y=0, relwidth=1.0, relheight=1.0)
             if self.current in self.pages:
                 tk.Misc.lower(page, self.pages[self.current])
         return self.pages[key]
+
+    def add_page(self, key: str, factory: Callable[[tk.Misc], Page]) -> Page:
+        """Seite nachträglich aufnehmen (z. B. ein eben eingeschaltetes Modul).
+
+        Die Seite entsteht verdeckt außerhalb des Sichtbereichs und wird dort fertig
+        angeordnet – wie die beim Start aufgebauten Seiten. Sie erscheint erst beim
+        Navigieren, als Ganzes; nichts wird sichtbar aufgebaut.
+        """
+        if key in self.pages:
+            return self.pages[key]
+        self.factories[key] = factory
+        page = factory(self.host)
+        diagnostics.count("page_create")
+        self.pages[key] = page
+        self._park(page, self.host.winfo_width(), self.host.winfo_height())
+        self._settle()
+        return page
+
+    def available(self, key: str) -> bool:
+        return key in self.factories and key not in self._unavailable
+
+    def set_available(self, key: str, available: bool) -> None:
+        """Seite zulassen bzw. sperren. Eine gesperrte Seite bleibt aufgebaut und abgelegt
+        (kein Neuaufbau beim Wiedereinschalten), lässt sich aber nicht mehr öffnen."""
+        if available:
+            self._unavailable.discard(key)
+            return
+        if key in self._unavailable:
+            return
+        self._unavailable.add(key)
+        for item, page in list(self._last_page.items()):
+            if page == key:
+                del self._last_page[item]
+        if self._pending is not None and self._pending[0] == key:
+            self._pending = None
+        if self.current == key:
+            item = self.item_for_page(key)
+            target = self.page_for_item(item) if item else None
+            self.navigate(target or "home", animate=False)
 
     def park_hidden_pages(self) -> None:
         """Nicht sichtbare Seiten fertig angeordnet außerhalb des Sichtbereichs ablegen.
@@ -640,12 +712,13 @@ class NavigationView(tk.Frame):
         """Seite, die ein Navigationseintrag öffnet: die zuletzt gezeigte bzw. die erste."""
         item = next((item for item in self.items if item.key == key and not item.header), None)
         if item is None:
-            return key if key in self.factories else None
-        if key in self._last_page:
-            return self._last_page[key]
+            return key if self.available(key) else None
+        last = self._last_page.get(key)
+        if last is not None and self.available(last):
+            return last
         if item.pages:
-            return item.pages[0]
-        return key if key in self.factories else None
+            return next((page for page in item.pages if self.available(page)), item.pages[0])
+        return key if self.available(key) else None
 
     def _select_item(self, key: str) -> None:
         page = self.page_for_item(key)
@@ -658,24 +731,30 @@ class NavigationView(tk.Frame):
             if resolved is None or resolved not in self.factories:
                 return
             key = resolved
-        if key == self.current:
+        if key == self.current or key in self._unavailable:
             return
         if self._navigating:
             self._pending = (key, animate)
             return
         self._navigating = True
+        c = ctx()
+        c.anim.is_navigating = True
         try:
-            c = ctx()
             old = self.pages.get(self.current) if self.current else None
             page = self.page(key)
             width, height = self.host.winfo_width(), self.host.winfo_height()
             if old is not None:
-                if (page.winfo_width(), page.winfo_height()) != (width, height):
+                resized = (page.winfo_width(), page.winfo_height()) != (width, height)
+                if resized:
                     # Fenstergröße hat sich geändert: Seite außerhalb des Sichtbereichs neu anordnen.
                     page.place(x=PARK_X, y=0, width=max(1, width), height=max(1, height), relwidth=0, relheight=0)
+                # Noch verdeckt: Inhalte aktualisieren und fertig anordnen – gezeigt wird nur das Ergebnis.
+                page.emit("prepare")
+                if resized or page._hooks["prepare"]:
                     self._settle()
                 self._release_focus(old)
                 old.leave()
+                old.emit("deactivate")
             # Die fertige Seite wird nur noch hereingeholt …
             c.block_focus(page, False)
             page.place(x=0, y=0, width=0, height=0, relwidth=1.0, relheight=1.0)
@@ -684,15 +763,17 @@ class NavigationView(tk.Frame):
             if old is not None:
                 self._park(old, width, height)
             self.current = key
-            allowed = animate and c.anim.allowed()
+            allowed = animate and c.anim.allowed(motion=True)
             item = self.item_for_page(key) or key
             self._last_page[item] = key
             self.pane.select(item, animate=allowed and self.pane.selected != item)
             page.enter(allowed)
+            page.emit("activate")
             if self.on_change:
                 self.on_change(key)
         finally:
             self._navigating = False
+            c.anim.is_navigating = False
         if self._pending is not None:
             pending, self._pending = self._pending, None
             self.after_idle(lambda: self.navigate(*pending))
@@ -791,7 +872,7 @@ class NavigationView(tk.Frame):
         if start == target:
             self._set_amount(target)
         else:
-            c.anim.run(f"pane:{self}", self.PANE_MS if animate else 0, step, easing=motion.DECELERATE, widget=self)
+            c.anim.run(f"pane:{self}", self.PANE_MS if animate else 0, step, easing=motion.DECELERATE, widget=self, motion=True)
         tk.Misc.lift(self.pane)
         if self.on_layout:
             self.on_layout()
@@ -802,12 +883,22 @@ class NavigationView(tk.Frame):
         self.pane.redraw()
 
     # Hintergrund (Mica) ------------------------------------------------------------
-    def set_backdrop(self, image: Image.Image | None) -> None:
+    def set_backdrop(self, image: "Image.Image | Callable[[], Image.Image | None] | None", key: tuple | None = None) -> None:
+        """Mica-Hintergrund setzen bzw. ausblenden. Gleicher ``key`` wie zuletzt: das vorhandene
+        Bild wird wieder gezeigt, nichts neu berechnet (Aktivieren/Deaktivieren des Fensters)."""
         if image is None:
-            self._backdrop_photo = None
             self.backdrop.itemconfigure(self._backdrop_item, state="hidden")
             self.pane.set_backdrop(None)
+            if key is None:
+                self._backdrop_photo = None
+                self._backdrop_key = None
             return
-        self._backdrop_photo = to_photo(self, image)
+        if key is None or key != self._backdrop_key or self._backdrop_photo is None:
+            picture = image() if callable(image) else image
+            if picture is None:
+                self.set_backdrop(None)
+                return
+            self._backdrop_photo = to_photo(self, picture)
+            self._backdrop_key = key
         self.backdrop.itemconfigure(self._backdrop_item, image=self._backdrop_photo, state="normal")
         self.pane.set_backdrop(self._backdrop_photo)

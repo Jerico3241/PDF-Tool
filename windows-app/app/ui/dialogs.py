@@ -136,7 +136,7 @@ class ContentDialog:
         if c.anim.allowed():
             try:
                 win.attributes("-alpha", 1.0)
-                c.anim.run(f"dlgout:{win}", 90, lambda t: win.attributes("-alpha", 1.0 - t), close, easing=motion.ACCELERATE, widget=win)
+                c.anim.run(f"dlgout:{win}", motion.DIALOG_OUT, lambda t: win.attributes("-alpha", 1.0 - t), close, easing=motion.ACCELERATE, widget=win)
                 return
             except tk.TclError:
                 pass
@@ -171,7 +171,7 @@ class ContentDialog:
         else:
             win.focus_set()
         if fade:
-            c.anim.run(f"dlgin:{win}", motion.SLOW, lambda t: win.attributes("-alpha", t), easing=motion.DECELERATE, widget=win)
+            c.anim.run(f"dlgin:{win}", motion.DIALOG, lambda t: win.attributes("-alpha", t), easing=motion.DECELERATE, widget=win)
         win.wait_window()
         return self.result
 
