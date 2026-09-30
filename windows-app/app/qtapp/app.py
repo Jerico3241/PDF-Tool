@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable, Protocol, Sequence
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
 from tools.registry import CONTRACTS, REPAIR, TOOLS, tool_for_page
@@ -327,8 +328,8 @@ class AppController(Observable):
     # Fensterrahmen ----------------------------------------------------------------------------------------
     def apply_chrome(self) -> None:
         """Titelleiste (DWM) in das Design einbinden: dunkel/hell, Farbe der App oder Mica."""
-        if self.window is None or self.theme is None:
-            return
+        if self.window is None or self.theme is None or QGuiApplication.platformName() != "windows":
+            return  # ohne echtes Windows-Fenster (Tests: »offscreen«) gibt es keine Titelleiste
         palette = self.theme.palette
         self.chrome = winsys.apply_window_chrome(int(self.window.winId()), palette.dark, caption=palette.mica, text=palette.text, mica=self.theme.micaWanted())
 

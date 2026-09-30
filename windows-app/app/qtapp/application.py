@@ -16,12 +16,13 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QObject, Qt, QtMsgType, QUrl, qInstallMessageHandler
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, qmlRegisterSingletonType
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -170,6 +171,22 @@ def create_engine(runtime: Runtime) -> QQmlApplicationEngine:
     return engine
 
 
+def native_windows() -> bool:
+    """Echte Windows-Fenster (Plattform »windows«) – nicht »offscreen« in Tests ohne Bildschirm."""
+    return QGuiApplication.platformName() == "windows"
+
+
+def finish_incubation(engine: QQmlEngine | None, timeout: float = 2.0) -> None:
+    """Noch entstehende QML-Objekte (z. B. Seiten, die im Hintergrund laden) fertig bauen, bevor
+    die Engine endet – ohne den Abbau mitten in ihrer Entstehung."""
+    controller = engine.incubationController() if engine is not None else None
+    if controller is None:
+        return
+    deadline = time.monotonic() + timeout
+    while controller.incubatingObjectCount() > 0 and time.monotonic() < deadline:
+        controller.incubateFor(20)
+
+
 def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow:
     """Fenster verdeckt zeigen und nach dem ersten fertigen Bild aufdecken."""
     roots = engine.rootObjects()
@@ -186,7 +203,7 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow
     app.apply_chrome()
     runtime.theme.darkChanged.connect(app.apply_chrome)
     runtime.theme.revisionChanged.connect(app.apply_chrome)
-    cloaked = winsys.can_cloak() and winsys.set_cloak(hwnd, True)
+    cloaked = native_windows() and winsys.can_cloak() and winsys.set_cloak(hwnd, True)
 
     shown = False
 
@@ -225,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
     show_window(runtime, engine)
     code = qt_app.exec()
     runtime.app.shutdown()
+    finish_incubation(engine)
     # Die QML-Engine endet vor den Controllern, an die ihre Bindungen gebunden sind.
     del engine
     sys.excepthook = sys.__excepthook__

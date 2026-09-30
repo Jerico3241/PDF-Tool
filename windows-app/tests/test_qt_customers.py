@@ -271,7 +271,8 @@ def test_open_record_from_the_offer(ui_app, tmp_path: Path) -> None:
     pump(0.4)
     assert h.app.currentPage == "customers" and h.customers.detailId == kunde.id
     page = seite(h, "customers")
-    assert typ(page, "PPage").isVisible() and not typ(page, "PListPage").isVisible()  # Detailansicht statt Liste
+    # Detailansicht statt Liste (Überblendung abwarten – auf langsamen Rechnern dauert sie länger)
+    assert wait_until(lambda: typ(page, "PPage").isVisible() and not typ(page, "PListPage").isVisible(), 10)
     assert h.customers.detailTitle == "Beispiel GmbH" and "Beispiel GmbH" in texte(page)
 
 

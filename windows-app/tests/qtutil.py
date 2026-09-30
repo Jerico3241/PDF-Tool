@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import gc
 import os
+import sys
 import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if sys.platform == "win32" and os.environ["QT_QPA_PLATFORM"] == "offscreen":
+    # »offscreen« findet unter Windows keine Schriften von selbst – ohne sie wären Textmaße falsch
+    os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 
 
 def qt_application():
@@ -151,6 +155,8 @@ class Harness:
         try:
             self.app.shutdown()
         finally:
+            # Noch entstehende QML-Objekte fertig bauen – nie die Engine mitten in ihrer Entstehung abbauen
+            self.appmod.finish_incubation(self.engine)
             if self.window is not None:
                 self.window.close()
                 self.window = None

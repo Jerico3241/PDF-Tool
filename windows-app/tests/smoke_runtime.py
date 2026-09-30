@@ -395,6 +395,7 @@ def ui_probe(qt_application, full: bool) -> None:
     QTimer.singleShot(2500, lambda: step(actions))
     QTimer.singleShot(60000, qt.quit)  # Sicherheitsnetz
     qt.exec()
+    qt_application.finish_incubation(engine_qml)  # wie beim Beenden der App
     del engine_qml
     check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
     check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")

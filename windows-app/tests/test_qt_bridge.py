@@ -330,4 +330,7 @@ def test_copy_path_reports_empty_and_copies(backend) -> None:
 def test_local_paths_from_drag_and_drop() -> None:
     from qtapp.files import local_paths
 
-    assert local_paths(["file:///tmp/a%20b.pdf", "/tmp/c.xlsx", ""]) == ["/tmp/a b.pdf", "/tmp/c.xlsx"]
+    import os
+
+    # in der Schreibweise des Systems (unter Windows mit »\\«)
+    assert local_paths(["file:///tmp/a%20b.pdf", "/tmp/c.xlsx", ""]) == [os.path.normpath("/tmp/a b.pdf"), os.path.normpath("/tmp/c.xlsx")]
