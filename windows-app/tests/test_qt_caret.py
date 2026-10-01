@@ -23,6 +23,7 @@ eigener Prozess – Qt liest die Skalierung nur beim Start).
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -188,12 +189,15 @@ def test_caret_height_and_baseline_follow_each_font_size(konfig, ui_app, dauerha
             pixel = strich_pixel(h, FUSS, pump)
             assert pixel is not None and pixel["x1"] - pixel["x0"] == 1, (groesse, position, pixel)
             assert pixel["y1"] - pixel["y0"] == js_round(m.ascent() + m.descent()), (groesse, position, pixel)
-            # Die Schrift der Zeile (Großbuchstaben bis Unterlänge) liegt innerhalb der Marke
+            # Die Schrift der Zeile (Großbuchstaben bis Unterlänge) liegt innerhalb der Marke. Geprüft
+            # werden nur Pixelreihen, die ganz zu dieser Zeile gehören: Liegt die Zeilenkante zwischen
+            # zwei Pixeln (Windows), reicht die kantengeglättete Unterlänge der Zeile darüber in die
+            # gemeinsame Reihe. Unten ±1 Pixel: Lage und Höhe der Marke sind auf ganze Pixel gerundet.
             links = g["cursor"][0] + 2 if position == start else g["cursor"][0] - 40
             with ohne_marke(h, FUSS, pump):
-                text_tinte = tinte(h, links, g["cursor"][1], links + 38, g["cursor"][1] + g["cursor"][2])
+                text_tinte = tinte(h, links, math.ceil(g["cursor"][1]), links + 38, g["cursor"][1] + g["cursor"][2])
             assert text_tinte is not None
-            assert pixel["y0"] < text_tinte["y0"] and text_tinte["y1"] <= pixel["y1"], (groesse, position, pixel, text_tinte)
+            assert pixel["y0"] < text_tinte["y0"] and text_tinte["y1"] <= pixel["y1"] + 1, (groesse, position, pixel, text_tinte)
         start += len(text) + 1
 
 
