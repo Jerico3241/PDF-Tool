@@ -32,10 +32,6 @@ on:
         description: "Nach bestandenen Prüfungen das Release v<Version> (»PDF Tool <Version>«) mit Setup und SHA-256 veröffentlichen"
         type: boolean
         default: false
-      ersetzen:
-        description: "Nur mit »release«: ein bereits veröffentlichtes Release derselben Version aktualisieren (Tag auf diesen Commit, Setup, Prüfsumme und Release Notes ersetzen)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -64,9 +60,11 @@ jobs:
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
           architecture: x64
@@ -120,9 +118,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40 # normal etwa 7 Minuten
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
           architecture: x64
@@ -185,7 +185,7 @@ jobs:
 
       - name: "Setup von PDF Tool ${{ steps.versions.outputs.previous }} aus dem Zwischenspeicher"
         id: previous-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/vorversion
           key: pdf-tool-setup-${{ steps.versions.outputs.previous }}
@@ -233,7 +233,7 @@ jobs:
           & ./windows-app/build/payload/runtime/python.exe -s windows-app/tests/smoke_runtime.py --app windows-app/build/payload/app --part ui --ui
           if ($LASTEXITCODE -ne 0) { throw "QML-Smoke-Test fehlgeschlagen" }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: PDF-Tool-Setup
           path: |
@@ -251,15 +251,34 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: PDF-Tool-Setup
           path: dist
 
-      - name: Setup und Prüfsumme anhängen
+      - name: Setup und Prüfsumme sicher anhängen (nie überschreiben)
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.exe dist/*.sha256 --clobber --repo "${{ github.repository }}"
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.release.tag_name }}"
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")"
+          for file in dist/*.exe dist/*.sha256; do
+            name="$(basename "${file}")"
+            existing_name="$(printf '%s' "${release_json}" | jq -r --arg name "${name}" '.assets[] | select(.name == $name) | .name' | head -n1)"
+            if [ -n "${existing_name}" ]; then
+              existing_digest="$(printf '%s' "${release_json}" | jq -r --arg name "${name}" '.assets[] | select(.name == $name) | (.digest // "")' | head -n1)"
+              local_digest="sha256:$(sha256sum "${file}" | awk '{print $1}')"
+              if [ -n "${existing_digest}" ] && [ "${existing_digest}" = "${local_digest}" ]; then
+                echo "${name} ist bereits unverändert am Release vorhanden."
+                continue
+              fi
+              echo "Sicherheitsabbruch: Release-Asset ${name} existiert bereits und wird nicht überschrieben." >&2
+              exit 1
+            fi
+            gh release upload "${tag}" "${file}" --repo "${GITHUB_REPOSITORY}"
+          done
 
   release:
     name: 7. Release veröffentlichen
@@ -271,17 +290,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: PDF-Tool-Setup
           path: dist
 
-      - name: Tag und Release v<Version> erstellen (bzw. mit »ersetzen« aktualisieren)
+      - name: Unveränderliches Release v<Version> erstellen
         env:
           GH_TOKEN: ${{ github.token }}
-          ERSETZEN: ${{ inputs.ersetzen }}
         run: |
           set -euo pipefail
           version="$(tr -d '[:space:]' < windows-app/VERSION)"
@@ -293,17 +313,14 @@ jobs:
           test -f "${notes}" || { echo "Release Notes fehlen: ${notes}" >&2; exit 1; }
           (cd dist && sha256sum -c "${setup}.sha256")
           if gh release view "${tag}" >/dev/null 2>&1; then
-            if [ "${ERSETZEN}" != "true" ]; then
-              echo "Release ${tag} existiert bereits – nichts verändert (zum Aktualisieren »ersetzen« wählen)." >&2
-              exit 1
-            fi
-            echo "Release ${tag} wird aktualisiert: Tag → ${GITHUB_SHA}, Setup, Prüfsumme und Release Notes neu"
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" -f sha="${GITHUB_SHA}" -F force=true >/dev/null
-            gh release upload "${tag}" "dist/${setup}" "dist/${setup}.sha256" --clobber
-            gh release edit "${tag}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
-          else
-            gh release create "${tag}" "dist/${setup}" "dist/${setup}.sha256" \
-              --target "${GITHUB_SHA}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
+            echo "Sicherheitsabbruch: Release ${tag} existiert bereits. Veröffentlichte Releases werden nicht überschrieben; bitte eine neue Version veröffentlichen." >&2
+            exit 1
           fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            echo "Sicherheitsabbruch: Tag ${tag} existiert bereits und wird nicht verschoben." >&2
+            exit 1
+          fi
+          gh release create "${tag}" "dist/${setup}" "dist/${setup}.sha256" \
+            --target "${GITHUB_SHA}" --title "PDF Tool ${version}" --notes-file "${notes}" --latest
           test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag}" --jq .sha)" = "${GITHUB_SHA}" || { echo "Tag ${tag} zeigt nicht auf ${GITHUB_SHA}" >&2; exit 1; }
           gh release view "${tag}"
