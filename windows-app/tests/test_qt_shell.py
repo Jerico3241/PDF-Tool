@@ -325,7 +325,7 @@ def test_drop_on_start_page_routes_by_file_type(app, tmp_path: Path, excel_file:
     assert app.app.dragEnter([pdf.as_uri()]) is True
     app.app.drop([pdf.as_uri()])
     assert app.app.currentPage == "repair"
-    assert wait_until(lambda: app.repair.analyzed, 60)
+    assert wait_until(lambda: app.repair.analysis is not None, 60)
     app.navigate("home")
     app.app.drop([excel_file.as_uri()])
     assert app.app.currentPage == "create"
