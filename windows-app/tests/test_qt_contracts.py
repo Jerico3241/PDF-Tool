@@ -255,7 +255,7 @@ def alte_konfig(request, config_file: Path) -> dict:
 def test_start_and_version(ui_app) -> None:
     h = ui_app
     assert h.window.title() == appstate.APP_NAME == "PDF Tool"
-    assert h.app.version == appstate.VERSION == "2.7.0"
+    assert h.app.version == appstate.VERSION == "2.7.1"
     assert h.app.currentPage == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert h.item("createPdf").property("text") == "PDF erstellen"
 

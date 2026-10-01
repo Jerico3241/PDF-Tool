@@ -9,7 +9,8 @@
   Job-Objekt zusätzlich seinen Arbeitsspeicher (Schutz vor »Speicherbomben«).
 * Ausgaben entstehen nur im Arbeitsordner (Temp). Erst nach bestandener Prüfung
   wird die Datei exklusiv unter einem freien Namen gespeichert – eine vorhandene
-  Datei, insbesondere das Original, wird nie überschrieben.
+  Datei, insbesondere das Original, wird nie überschrieben (Namen und Nummerierung:
+  ``batch``).
 """
 
 from __future__ import annotations
@@ -22,9 +23,12 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from typing import Iterable
+
+from .batch import DEFAULT_SUFFIX as SUFFIX
+from .batch import folder_key, names_in, numbered
 
 TEMP_PREFIX = "pdf-tool-reparatur-"
-SUFFIX = "_repariert"
 STALE_SECONDS = 24 * 3600
 REAP_SECONDS = 30  # so lange holt ein Hilfsthread einen sich beendenden Arbeitsprozess höchstens ab
 # Arbeitsspeicher des Arbeitsprozesses: halber physischer Speicher, mindestens 1,5 GB, höchstens 8 GB
@@ -293,29 +297,53 @@ def _same_file(a: Path, b: Path) -> bool:
         return False
 
 
-def output_name(source: Path, number: int = 1) -> str:
-    """»Rechnung.pdf« → »Rechnung_repariert.pdf«, bei Konflikt »Rechnung_repariert_2.pdf« …"""
-    return f"{source.stem}{SUFFIX}.pdf" if number <= 1 else f"{source.stem}{SUFFIX}_{number}.pdf"
+def _taken(target: Path, source: Path, avoid: set[str], existing: set[str]) -> bool:
+    """Name belegt: vorhanden (ohne Rücksicht auf Groß-/Kleinschreibung, wie unter Windows), das
+    Original oder für eine andere Datei reserviert."""
+    folded = target.name.casefold()
+    if folded in avoid or folded in existing or _same_file(target, source):
+        return True
+    if folder_key(target.parent) == folder_key(source.parent) and folded == source.name.casefold():
+        return True
+    return target.exists()
 
 
-def next_output(source: Path, folder: Path | None = None) -> Path:
-    """Vorschau des Ausgabenamens (der erste freie)."""
-    folder = folder or source.parent
-    number = 1
-    while (folder / output_name(source, number)).exists() or _same_file(folder / output_name(source, number), source):
-        number += 1
-    return folder / output_name(source, number)
-
-
-def deliver(temp_output: Path, source: Path, folder: Path | None = None) -> Path:
-    """Geprüfte Ausgabe exklusiv unter dem ersten freien Namen speichern – nie überschreiben."""
+def next_output(source: Path, folder: Path | None = None, base: str | None = None) -> Path:
+    """Vorschau des Ausgabenamens (der erste freie): »Rechnung_repariert.pdf«, »… (1).pdf« …"""
     folder = Path(folder or source.parent)
-    folder.mkdir(parents=True, exist_ok=True)
-    number = 1
-    while True:
-        target = folder / output_name(source, number)
+    base = base or f"{source.stem}{SUFFIX}"
+    existing = names_in(folder)
+    number = 0
+    while _taken(folder / numbered(base, number), source, set(), existing):
         number += 1
-        if _same_file(target, source):
+    return folder / numbered(base, number)
+
+
+def deliver(
+    temp_output: Path,
+    source: Path,
+    folder: Path | None = None,
+    base: str | None = None,
+    start: int = 0,
+    avoid: Iterable[str] = (),
+) -> Path:
+    """Geprüfte Ausgabe exklusiv unter dem ersten freien Namen speichern – nie überschreiben.
+
+    Gewünscht ist ``numbered(base, start)`` (Standard: »<Original>_repariert.pdf«); ist der Name
+    belegt (vorhanden, das Original oder in ``avoid`` für eine andere Datei reserviert), folgt die
+    nächste Nummer. Geschrieben wird exklusiv (»xb«): Entsteht die Datei gleichzeitig anderswo,
+    schlägt das Öffnen fehl und die nächste Nummer wird versucht.
+    """
+    folder = Path(folder or source.parent)
+    base = base or f"{source.stem}{SUFFIX}"
+    reserved = {name.casefold() for name in avoid}
+    folder.mkdir(parents=True, exist_ok=True)
+    existing = names_in(folder)
+    number = max(0, start)
+    while True:
+        target = folder / numbered(base, number)
+        number += 1
+        if _taken(target, source, reserved, existing):
             continue
         try:
             handle = open(target, "xb")  # schlägt fehl, wenn die Datei schon existiert

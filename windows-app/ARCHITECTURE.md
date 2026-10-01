@@ -28,8 +28,12 @@ und `app/tools/` (ohne Oberflächencode):
   Stapelmodus), `preview.py` – Vorschau-PDF und Seitenbilder (PDFium),
   `customers/` – Kundenakte (Modelle, Abgleich, Speicher, Übernahme aus 2.3),
   `batch/` – Stapel (Analyse, Auflösung, Verarbeitung), `history/` – Vertragsstände und Vergleich.
-- `tools/pdf_repair/` – Analyse und Reparatur (`engine.py`), Arbeitsprozess (`process.py`),
-  Texte und Angaben für die Anzeige (`presentation.py`), erweiterte Wiederherstellung (`recovery/`).
+- `tools/pdf_repair/` – Analyse und Reparatur (`engine.py`), Arbeitsprozess (`process.py`, auch
+  `deliver`: exklusives Speichern unter dem reservierten Namen), Dateiliste für eine oder mehrere
+  PDFs (`batch.py`: Zustände `ItemState`, Namensregel `NameMode` AUTO/MANUAL, Windows-Namensprüfung,
+  Konflikte und Nummerierung, Reservierung beim Start – keine eigene Engine, nur Reihenfolge und
+  Namen), Texte und Angaben für die Anzeige (`presentation.py`), erweiterte Wiederherstellung
+  (`recovery/`).
 - `tools/registry.py` – welche Werkzeuge es gibt und welche Seiten zu ihnen gehören.
 
 Regeln: kein `import PySide6` und keine Oberfläche im Kern; Texte, die die Oberfläche zeigt,
@@ -100,8 +104,11 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
 - `tasks.Worker.run(func, on_done, on_error)` – Excel-Prüfung, PDF-Erzeugung, Vorschau, Stapel,
   Hashing in Threads. Ergebnisse, Fehler und Zwischenmeldungen kommen über ein Qt-Signal
   (queued) in den GUI-Thread. **Hintergrund-Threads berühren nie QML-Objekte.**
-- PDF reparieren läuft in einem eigenen Prozess (`tools/pdf_repair/process.py`); der Controller
-  fragt dessen Meldungen alle 80 ms im GUI-Thread ab. „Abbrechen“ beendet den Prozess.
+- PDF reparieren läuft je Datei in einem eigenen Prozess (`tools/pdf_repair/process.py`); der
+  Controller fragt die Meldungen aller laufenden Prozesse alle 80 ms im GUI-Thread ab – höchstens
+  zwei gleichzeitig (Analysen), repariert wird nacheinander. „Abbrechen“ beendet die Prozesse und
+  lässt die noch nicht begonnenen Dateien aus. Die Zeilen (`Repair.items`, `KeyedListModel`) melden
+  Fortschritt nur für die betroffene Zeile und Rolle.
 - `timers.Timers` – benannte, abbrechbare Zeitgeber (verzögertes Speichern, Entprellen der Suche).
 
 ## QML-Oberfläche (`app/qml`)
@@ -145,8 +152,10 @@ fertigen Bild → weitere Seiten laden.
   Test scheitern.
 - Einfügemarke: `tests/test_qt_caret.py` (Bild bei 100 %, Geometrie in Gerätepixeln bei 125 … 200 %
   über `tests/caret_geometry.py` – je Skalierung ein eigener Prozess).
+- PDF reparieren: `tests/test_pdf_repair_batch.py` (Liste, Zustände, Namen, Konflikte ohne Qt),
+  `tests/test_qt_repair.py` (eine PDF wie bis 2.7.0, mehrere PDFs, Namen; bis zu 100 PDFs).
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
-  (`tests/fixtures/config_v22.json` … `config_v261.json`, dazu Kundenakten und ein Vertragsstand)
+  (`tests/fixtures/config_v22.json` … `config_v270.json`, dazu Kundenakten und ein Vertragsstand)
   in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.
 - Laufzeit und Setup: `tests/smoke_runtime.py` (`--part runtime` bzw. `--part ui`),
   `tests/smoke_installer.ps1` (in der CI).

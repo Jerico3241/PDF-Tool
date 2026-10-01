@@ -20,6 +20,38 @@ ListView {
     readonly property int columns: columnWidth >= Metrics.twoColumnsFrom ? 2 : 1
 
     function scrollToTop() { positionViewAtBeginning() }
+
+    // Wächst oder schrumpft der Kopfbereich (Hinweise, aufklappende Bereiche), bleibt eine Liste,
+    // die ganz oben stand, oben – ListView hielte sonst die Zeilen fest und schöbe den Seitentitel
+    // aus dem Bild. Wer gescrollt hat, behält seine Zeilen im Blick. Zurückgesetzt wird erst nach
+    // dem Aufbau der Seite und verzögert (Qt.callLater): nie mitten in der Anordnung der ListView
+    // oder während ihre Zeilen noch entstehen.
+    property bool pinnedTop: true
+    property bool _ready: false
+    property bool _repin: false
+    property real _headerHeight: -1
+    Component.onCompleted: _ready = true
+    function _trackTop() {
+        // Während ListView auf einen geänderten Kopfbereich reagiert, gilt der alte Stand
+        if (_repin || (headerItem && headerItem.height !== _headerHeight))
+            return
+        pinnedTop = contentY <= originY + 0.5
+    }
+    function _headerResized(height) {
+        _headerHeight = height
+        if (_ready && pinnedTop && !_repin) {
+            _repin = true
+            Qt.callLater(_keepTop)
+        }
+    }
+    function _keepTop() {
+        _repin = false
+        if (!moving && contentY > originY + 0.5)
+            positionViewAtBeginning()
+        _trackTop()
+    }
+    onContentYChanged: _trackTop()
+    onOriginYChanged: _trackTop()
     // Pos1/Ende und Bild ↑/↓ (5 Zeilen) wie bis 2.6; ↑/↓ übernimmt die ListView selbst
     function moveCurrent(index) {
         if (count === 0) return
@@ -49,6 +81,7 @@ ListView {
     header: Item {
         width: page.width
         height: headerColumn.implicitHeight + Metrics.pagePaddingTop
+        onHeightChanged: page._headerResized(height)
         ColumnLayout {
             id: headerColumn
             x: page.columnX

@@ -301,7 +301,7 @@ class AppController(Observable):
         if hooks is not None:
             hooks.drag_enter(target is not None, self.currentPage)
         elif target is not None:
-            self.set_status("Loslassen: eine PDF öffnet »PDF reparieren«, eine Excel-Liste »Vertragsübersichten«.", "info")
+            self.set_status("Loslassen: PDFs öffnen »PDF reparieren«, eine Excel-Liste »Vertragsübersichten«.", "info")
         return target is not None
 
     @Slot()

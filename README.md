@@ -1,6 +1,6 @@
 # PDF Tool
 
-Quellcode von **PDF Tool 2.7.0** – einer Windows-App mit Werkzeugen für PDF-Dateien.
+Quellcode von **PDF Tool 2.7.1** – einer Windows-App mit Werkzeugen für PDF-Dateien.
 Entwickler und Inhaber: Jerico. Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Das Repository enthält:
@@ -15,12 +15,12 @@ Das Repository enthält:
 
 Nach dem Start zeigt PDF Tool eine Startseite mit allen Werkzeugen. Die Navigation links führt zu
 **Start**, den **Tools** und den **Einstellungen**. Eine Datei kann direkt in das Fenster gezogen
-werden: eine PDF öffnet „PDF reparieren“, eine Excel-Liste „Vertragsübersichten“.
+werden: PDFs (eine oder mehrere) öffnen „PDF reparieren“, eine Excel-Liste „Vertragsübersichten“.
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
 | **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | Fachlogik: `app/tools/contract_overview/` (`overview.py`, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` · Controller: `app/qtapp/contracts/` · Seiten: `app/qml/PdfTool/Pages/` |
-| **PDF reparieren** | Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte in eine neue PDF zu übertragen – bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten | Fachlogik: `app/tools/pdf_repair/` (`recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seite: `app/qml/PdfTool/Pages/RepairPage.qml` |
+| **PDF reparieren** | Analysiert beschädigte PDF-Dateien – eine oder mehrere auf einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen, bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten; Ausgabenamen je Datei, nie wird eine vorhandene Datei überschrieben | Fachlogik: `app/tools/pdf_repair/` (`batch.py` für Liste, Zustände und Ausgabenamen, `recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seiten: `app/qml/PdfTool/Pages/RepairPage.qml`, `RepairItem.qml` |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
 Logik; gemeinsam sind nur Fenster, Navigation, Design und Dialoge (`app/qtapp/app.py`,
@@ -265,6 +265,33 @@ Details für Mitwirkende: [`windows-app/ARCHITECTURE.md`](windows-app/ARCHITECTU
 
 ### PDF reparieren
 
+- **Eine oder mehrere PDFs (seit 2.7.1):** Mehrfachauswahl im Dialog, mehrere Dateien zugleich
+  in das Fenster ziehen, später weitere hinzufügen; dieselbe Datei (Pfad ohne Rücksicht auf
+  Groß-/Kleinschreibung) wird nur einmal aufgenommen, andere Dateien mit Hinweis übergangen.
+  Jede Datei wird für sich analysiert – höchstens zwei Arbeitsprozesse gleichzeitig, repariert
+  wird nacheinander. Zustände je Datei: `PENDING`, `ANALYZING`, `READY`, `ENCRYPTED`,
+  `UNREADABLE`, `REPAIRING`, `REPAIRED`, `PARTIALLY_RECOVERED`, `FAILED`, `CANCELLED`, `SKIPPED`
+  (`app/tools/pdf_repair/batch.py`; Entscheidungen nie anhand von Texten). „Alle reparieren“
+  nimmt die beschädigten Dateien, „Nur diese Datei reparieren“ eine einzelne; „Abbrechen“ beendet
+  den laufenden Arbeitsprozess (Arbeitsordner wird gelöscht) und lässt die noch nicht begonnenen
+  aus – fertige Dateien bleiben. Ein Fehler betrifft nur seine Datei; nur ein globaler Fehler
+  (kein Schreibzugriff, Datenträger voll) hält den ganzen Durchlauf an. Fortschritt gesamt
+  („3 / 8 Dateien“) und je Datei (Analyse → Reparatur → Validierung → Fertig), Zusammenfassung
+  („5 erfolgreich repariert · 1 teilweise wiederhergestellt · 1 fehlgeschlagen“) mit
+  „Ausgabeordner öffnen“ und „Fehlgeschlagene erneut versuchen“. Es gibt keine eigene
+  „Batch-Engine“: Jede Datei läuft genau wie im Einzelmodus durch `engine.analyze` /
+  `engine.repair` in einem eigenen Arbeitsprozess.
+- **Ausgabenamen:** Schalter „„repariert“ an Dateinamen anhängen“ (Standard ein,
+  `reparatur_anhaengen`; fehlt die Einstellung nach einem Update, gilt ein) mit änderbarem Zusatz
+  (`reparatur_zusatz`, Standard `_repariert`). Jeder Eintrag zeigt seinen Ausgabenamen und lässt ihn
+  ändern (ohne Endung – `.pdf` wird ergänzt); Windows-Regeln (`< > : " / \ | ? *`, reservierte
+  Namen wie `CON`, keine leeren Namen, kein Punkt am Ende) werden sofort geprüft. Eigene Namen
+  (`MANUAL`) bleiben, wenn sich die Regel ändert, bis „Automatischen Namen wiederherstellen“.
+  Konflikte – vorhandene Datei (ohne Rücksicht auf Groß-/Kleinschreibung), das Original selbst oder
+  ein Name, den schon eine andere Datei der Liste bekommt (auch gleich benannte PDFs aus
+  verschiedenen Ordnern in einem gemeinsamen Ausgabeordner) – lösen sich durch Nummerierung:
+  `Rechnung_repariert (1).pdf`, `(2)` … Beim Start werden die Namen reserviert; gespeichert wird
+  exklusiv, eine vorhandene Datei wird nie überschrieben.
 - **Analyse vor der Reparatur:** Größe, Seiten, PDF-Version, Verschlüsselung, Querverweistabelle,
   Objekte, Trailer, Seitenbaum, Metadaten, Datenströme, Formulare, Anhänge und digitale Signaturen.
   Ergebnis: „Keine Fehler gefunden“, „Reparierbare Probleme erkannt“, „Schwer beschädigt“,
@@ -278,12 +305,16 @@ Details für Mitwirkende: [`windows-app/ARCHITECTURE.md`](windows-app/ARCHITECTU
   nicht reparierbar – ohne Garantieversprechen. Nicht übernommene Bestandteile (z. B. Lesezeichen,
   Anhänge, gültige Signaturen) werden genannt.
 - **Original bleibt unverändert:** Es wird nur gelesen; vor und nach der Verarbeitung wird die
-  SHA-256-Prüfsumme verglichen. Die Ausgabe heißt `<Name>_repariert.pdf` (bei Bedarf `_2`, `_3` …)
-  und entsteht neben dem Original oder in einem gewählten Ordner. Bei einem Fehler bleibt keine
-  Ausgabe zurück.
+  SHA-256-Prüfsumme verglichen; es wird nie verändert, umbenannt oder gelöscht. Die Ausgabe heißt
+  `<Name>_repariert.pdf` (bei Bedarf `<Name>_repariert (1).pdf` …, siehe oben) und entsteht neben dem
+  Original oder in einem gemeinsamen Ausgabeordner. Bei einem Fehler bleibt keine Ausgabe zurück.
 - **Verschlüsselte PDFs** lassen sich mit dem richtigen Passwort reparieren; die Kopie bleibt
-  verschlüsselt. Das Passwort wird nie gespeichert oder protokolliert, Passwortschutz wird nicht
-  umgangen.
+  verschlüsselt. Das Passwort gilt nur für seine Datei (nie für andere PDFs der Liste), wird nie
+  gespeichert oder protokolliert, Passwortschutz wird nicht umgangen.
+- **Signaturen und Rettungsmodus in der Liste:** Signierte Dateien sind gekennzeichnet; vor der
+  Reparatur fragt die App einmal („Alle reparieren“ oder „Signierte überspringen“). Der
+  Rettungsmodus (Seiten als Bilder) gilt nur für die einzelne Datei und nur nach Bestätigung –
+  „Alle reparieren“ verwendet ihn nie.
 - **Arbeitsprozess:** Analyse und Reparatur laufen in einem eigenen Prozess mit niedriger Priorität.
   Die Oberfläche bleibt bedienbar, „Abbrechen“ beendet den Prozess wirklich und entfernt alle
   Zwischendateien. Schutz vor Ressourcenbomben: Der Arbeitsspeicher des Arbeitsprozesses ist
@@ -349,6 +380,10 @@ pypdfium2) und alle weiteren Pakete – es muss nichts zusätzlich installiert w
   (`migration-backup-<Version>.zip`), dann Kopie mit Prüfung jeder Datei (Größe und SHA-256).
   Der alte Datenordner bleibt unverändert erhalten; schlägt die Übernahme fehl, arbeitet die App mit
   ihm weiter.
+- **Update von 2.7.0 auf 2.7.1:** Das Setup ersetzt nur Programmdateien; alle Einstellungen und
+  Daten bleiben unverändert. Die neuen Einstellungen von „PDF reparieren“ (`reparatur_anhaengen`,
+  `reparatur_zusatz`) fehlen danach zunächst – es gilt das bisherige Verhalten
+  (`<Name>_repariert.pdf`); gespeichert werden sie erst, wenn die App beendet wird.
 - **Update von 2.6.1 (Tk-Oberfläche) auf 2.7.0:** Das Setup ersetzt die Programmdateien vollständig –
   die frühere Tk-Oberfläche und Tcl/Tk bleiben nicht zurück. Einstellungen, Kundenakten,
   Zuordnungen, Vorlagen, Regeln, Textbausteine, Kopf- und Fußzeilen, Stapel- und
@@ -425,15 +460,15 @@ Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) bau
 
 1. **Tests:** Kernlogik, Qt-Oberfläche (ohne Bildschirm; in drei gleichzeitig laufenden Jobs auf
    eigenen Rechnern) und die **Datenmigration älterer Einstellungen** – `tests/test_config_migration.py`
-   lädt Fixtures im Format von 2.2.0, 2.3.0, 2.4.0, 2.5.0, 2.6.0 und 2.6.1 (Einstellungen, Kundenakten,
-   Vertragsstand) in die aktuelle Version. Dafür wird kein altes Setup installiert.
+   lädt Fixtures im Format von 2.2.0, 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1 und 2.7.0 (Einstellungen,
+   Kundenakten, Vertragsstand) in die aktuelle Version. Dafür wird kein altes Setup installiert.
 2. **Setup bauen.**
 3. **Clean-Install-Test** der neuen Version: stille Installation, Prüfung, Programmstart, stille
    Deinstallation.
-4. **Upgrade-Test** nur von der unmittelbar vorherigen stabilen Version (für 2.7.0: **2.6.1 → 2.7.0**).
+4. **Upgrade-Test** nur von der unmittelbar vorherigen stabilen Version (für 2.7.1: **2.7.0 → 2.7.1**).
    `windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
    veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert – nie neu gebaut.
-   Das Protokoll nennt den Pfad ausdrücklich („Upgrade test: PDF Tool 2.6.1 → PDF Tool 2.7.0“).
+   Das Protokoll nennt den Pfad ausdrücklich („Upgrade test: PDF Tool 2.7.0 → PDF Tool 2.7.1“).
 5. **Runtime-Smoke-Test** der eingebetteten Laufzeit (Module, Vertragsübersicht, Kundenakte, Vorschau,
    Stapel, Vertragsvergleich, PDF-Reparatur im Arbeitsprozess, Rohrekonstruktion).
 6. **QML-Smoke-Test** (Oberfläche aus der Ressource, Programmstart mit Fenster, Werkzeuge und Ansichten).
@@ -443,7 +478,7 @@ Die GitHub-Action [`windows-setup.yml`](.github/workflows/windows-setup.yml) bau
    Setup, Prüfsumme, Release Notes).
 
 Die vollständige historische Installer-Prüfung (Update vom Übersichten-Ersteller 2.2.0 und von
-PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1 mit Beispieldaten) läuft nur noch auf ausdrückliche
+PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1, 2.7.0 mit Beispieldaten) läuft nur noch auf ausdrückliche
 Anforderung im manuellen Workflow [`deep-compatibility.yml`](.github/workflows/deep-compatibility.yml)
 („Deep Compatibility Test“, je Vorversion ein frischer Windows-Rechner).
 

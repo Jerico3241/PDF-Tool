@@ -13,3 +13,4 @@ ComparisonPage 1.0 ComparisonPage.qml
 CustomersPage 1.0 CustomersPage.qml
 BatchPage 1.0 BatchPage.qml
 RepairPage 1.0 RepairPage.qml
+RepairItem 1.0 RepairItem.qml
