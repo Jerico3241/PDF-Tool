@@ -7,6 +7,7 @@ Fenster (offscreen); nach jedem Test darf die QML-Engine keine Warnung gemeldet 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,31 @@ def test_start_and_version(app) -> None:
     assert app.item("homePage") is not None
     assert app.item("toolCard_contracts") is not None and app.item("toolCard_repair") is not None
     assert app.window.isVisible()
+
+
+def test_qml_runtime_avoids_the_qt_611_crash_when_loading_pages(ui_app) -> None:
+    """Qt 6.11: Mit der schrittweisen Speicherbereinigung der QML-Engine können Objekte, die beim
+    Laden der Seiten im Hintergrund entstehen, ihre QML-Funktionen verlieren – ein »Connections«
+    mit Funktionen stürzt dann beim Fertigstellen ab (unter Windows und Linux beobachtet).
+
+    Deshalb bereinigt die Engine in einem Zug (``QV4_GC_TIMELIMIT=0``, gesetzt vor dem Anlegen der
+    Engine), und Steuerelemente, die in vielen Schaltflächen und Seiten stecken, kommen ohne
+    »Connections« aus."""
+    import os
+    import sys
+
+    from qtapp import application as appmod
+
+    assert os.environ.get(appmod.GC_TIME_LIMIT) == "0"
+    if sys.platform == "win32":
+        import ctypes
+
+        crt = ctypes.CDLL("ucrtbase")  # Qt liest die Variable über die C-Laufzeit
+        crt.getenv.restype = ctypes.c_char_p
+        assert crt.getenv(appmod.GC_TIME_LIMIT.encode()) == b"0"
+    controls = Path(appmod.QML_DIR) / "PdfTool" / "Controls"
+    for name in ("PButton", "PIconButton", "PIcon", "PProgressRing", "PInfoBar"):
+        assert not re.search(r"\bConnections\s*\{", (controls / f"{name}.qml").read_text(encoding="utf-8")), name
 
 
 def test_navigation_all_pages_and_rapid_switching(app) -> None:

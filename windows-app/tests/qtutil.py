@@ -23,7 +23,70 @@ def qt_application():
     """Die eine QApplication des Testprozesses (Stil »Basic« wie in der App)."""
     from qtapp import application as appmod
 
-    return appmod.create_application([])
+    app = appmod.create_application([])
+    if os.environ.get("PDFTOOL_LAYOUT_DEBUG"):
+        _layout_diagnostics()
+    return app
+
+
+_LAYOUT_TRACE: list[str] = []
+_DIAG_WINDOWS: list = []
+
+
+def _layout_diagnostics() -> None:
+    """Nur zur Fehlersuche (``PDFTOOL_LAYOUT_DEBUG=1``, z. B. in der Absturzanalyse der CI):
+    Qt Quick Layouts schreibt seine Schritte mit; meldet ein Layout »Detected recursive
+    rearrange«, stehen die letzten Schritte und alle Karten (Titel, Adresse des Inhalts, Größen)
+    in der Ausgabe – die Warnung selbst nennt nur Datei und Zeile, nicht die Karte."""
+    if _LAYOUT_TRACE:
+        return
+    from PySide6.QtCore import QLoggingCategory, QtMsgType, qInstallMessageHandler
+
+    _LAYOUT_TRACE.append("")
+
+    def handler(mode, context, message) -> None:
+        text = str(message)
+        category = str(context.category) if context is not None and context.category else ""
+        if mode == QtMsgType.QtDebugMsg:
+            if category.startswith("qt.quick.layouts"):
+                _LAYOUT_TRACE.append(text)
+                del _LAYOUT_TRACE[1:-150]
+            return
+        print(text, file=sys.stderr)
+        if "recursive rearrange" in text:
+            print("=== Qt Quick Layouts: letzte Schritte ===", file=sys.stderr)
+            for line in _LAYOUT_TRACE[1:]:
+                print("  " + line, file=sys.stderr)
+            print("=== Karten (PCard): Titel · Adresse des Inhalts · Größe · implizite Größe ===", file=sys.stderr)
+            for window in _DIAG_WINDOWS:
+                for card in _cards(window):
+                    print("  " + card, file=sys.stderr)
+            sys.stderr.flush()
+
+    QLoggingCategory.setFilterRules("qt.quick.layouts.debug=true")
+    qInstallMessageHandler(handler)
+
+
+def _cards(window) -> list[str]:
+    import shiboken6
+
+    if not shiboken6.isValid(window):
+        return []
+    out = []
+    stack = [window.contentItem()]
+    while stack:
+        item = stack.pop()
+        stack.extend(item.childItems())
+        if qml_type(item) != "PCard":
+            continue
+        try:  # Inhalt der Karte: zweites Element ihrer Spalte (Kopfzeile, Inhalt, Füller)
+            body = item.childItems()[0].childItems()[1]
+            address = hex(shiboken6.getCppPointer(body)[0])
+        except (IndexError, RuntimeError):
+            address = "?"
+        out.append(f"{item.property('title')!r} · {address} · {item.width():.1f}×{item.height():.1f} · "
+                   f"{item.implicitWidth():.1f}×{item.implicitHeight():.1f} · sichtbar {item.isVisible()}")
+    return out
 
 
 def process_events(ms: int = 20) -> None:
@@ -98,6 +161,8 @@ class Harness:
         if ui:
             self.engine = appmod.create_engine(rt)
             self.window = appmod.show_window(rt, self.engine)
+            if _LAYOUT_TRACE:
+                _DIAG_WINDOWS[:] = [self.window]
             self.window.resize(*size)
             wait_until(lambda: self.app.ready, 10)
             self.wait_pages()

@@ -48,6 +48,7 @@ _REGISTERED: dict[str, type] = {}
 _ENGINES: dict[int, dict[str, QObject]] = {}  # Kennung der Engine → Controller ihrer Laufzeit
 _ENGINE_KEY = "pdftoolRuntime"
 _engine_ids = iter(range(1, 1 << 30))
+GC_TIME_LIMIT = "QV4_GC_TIMELIMIT"  # Zeitscheibe der QML-Speicherbereinigung in ms, 0 = in einem Zug
 
 
 def _message_handler(mode, context, message) -> None:
@@ -170,6 +171,11 @@ def _engine_warnings(errors) -> None:
 
 def create_engine(runtime: Runtime) -> QQmlApplicationEngine:
     register_backend(runtime.singletons)
+    # Speicherbereinigung der QML-Engine in einem Zug statt in Zeitscheiben (Qt liest die Variable
+    # beim Anlegen der Engine). Mit der schrittweisen Bereinigung von Qt 6.11 können Objekte, die
+    # beim Laden der Seiten im Hintergrund entstehen, ihre QML-Funktionen verlieren – ein
+    # »Connections« stürzt dann beim Fertigstellen ab.
+    os.environ.setdefault(GC_TIME_LIMIT, "0")
     engine = QQmlApplicationEngine()
     key = next(_engine_ids)
     engine.setProperty(_ENGINE_KEY, key)

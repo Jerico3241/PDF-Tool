@@ -107,12 +107,13 @@ jobs:
 
       - name: Absturzanalyse der Qt-Tests (nur nach einem Fehler – nativer Aufrufstapel mit cdb)
         if: failure()
-        timeout-minutes: 20
+        timeout-minutes: 30
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QSG_INFO: "1" # Grafik-API und Render-Schleife ausgeben
           PDFTOOL_QML_DEBUG: "1" # alle Qt-Meldungen ausgeben
+          PDFTOOL_LAYOUT_DEBUG: "1" # bei »Detected recursive rearrange«: letzte Layout-Schritte und alle Karten
         run: |
           $cdb = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Debuggers\x64\cdb.exe"
           if (-not (Test-Path $cdb)) { Write-Host "cdb.exe nicht vorhanden – keine Absturzanalyse"; exit 0 }

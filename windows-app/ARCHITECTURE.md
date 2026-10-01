@@ -142,6 +142,14 @@ Hintergrund. Ein Seitenwechsel blendet die alte Seite aus und die fertige neue e
 neu aufgebaut. Im Setup kommt die Oberfläche aus der Qt-Ressource `qrc:/qml` (`qml_rc.py`, erzeugt
 von `windows-app/qmlres.py`).
 
+**Qt 6.11 und das Laden im Hintergrund:** Mit der schrittweisen Speicherbereinigung der QML-Engine
+können Objekte, die beim Laden der Seiten im Hintergrund entstehen, ihre QML-Funktionen verlieren;
+ein `Connections` mit Funktionen stürzt dann beim Fertigstellen ab (Windows und Linux, im Stresstest
+mit sehr kleinen Ladeschritten reproduziert). Deshalb setzt `create_engine` vor dem Anlegen der
+Engine `QV4_GC_TIMELIMIT=0` (Bereinigung in einem Zug), und Steuerelemente, die in vielen
+Schaltflächen und Seiten stecken (`PProgressRing`, `PInfoBar`), reagieren über eigene
+Signal-Handler statt über `Connections`.
+
 ## Start
 
 `app/start.py` → `qtapp.application.main()`:

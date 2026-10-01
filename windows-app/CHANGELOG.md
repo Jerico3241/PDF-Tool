@@ -53,6 +53,8 @@ Beta zum Testen (Kanal „Beta“). Die stabile Version 2.8.0 folgt erst nach Te
 - Ansichtsleiste von „Vertragsübersichten“ verschiebbar, wenn die Breite nicht reicht
 - Stapel: „Standardvorlage“ heißt jetzt „Vorlage des Stapels“ (die Standardvorlage gilt für alle)
 - Speichern wiederholt kurz gesperrte Dateien (z. B. durch Virenscanner) statt abzubrechen
+- Oberfläche: Schutz vor einem Absturz der QML-Engine (Qt 6.11) beim Laden der Ansichten im
+  Hintergrund
 - Release-Workflow: ein stabiles Release setzt eine veröffentlichte Beta derselben Version voraus
 
 # PDF Tool 2.7.2
