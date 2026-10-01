@@ -37,6 +37,15 @@ def server():
     server.stop()
 
 
+@pytest.fixture(autouse=True)
+def messages(monkeypatch) -> list[str]:
+    """Hinweise des Hilfsprozesses nur mitschreiben: unter Windows wären es Hinweisfenster, die ohne
+    Bildschirm (CI) niemand schließt – der Test bliebe stehen."""
+    shown: list[str] = []
+    monkeypatch.setattr(launch, "message", shown.append)
+    return shown
+
+
 def make_service(server: UpdateServer, folder: Path, installed: str = "2.7.2", channel: Channel = Channel.STABLE, **timeouts) -> UpdateService:
     from qtapp.tasks import Worker
 
@@ -509,20 +518,22 @@ def test_103_helper_waits_for_the_app_then_starts_the_verified_setup(tmp_path):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Shell-Skript als Setup-Attrappe")
-def test_helper_refuses_a_changed_setup(tmp_path):
+def test_helper_refuses_a_changed_setup(tmp_path, messages):
     setup, digest = fake_setup(tmp_path)
     setup.write_text(setup.read_text(encoding="utf-8") + "# verändert\n", encoding="utf-8")
     assert launch.main(["--setup", str(setup), "--sha256", digest, "--wait", "0"]) == launch.NOT_VERIFIED_CODE
     assert not setup.exists() and not (tmp_path / "gestartet.txt").exists()
+    assert messages == [launch.NOT_VERIFIED]
 
 
-def test_helper_refuses_foreign_programs_and_bad_arguments(tmp_path):
+def test_helper_refuses_foreign_programs_and_bad_arguments(tmp_path, messages):
     other = tmp_path / "cmd.exe"
     other.write_bytes(b"MZ")
     digest = hashlib.sha256(b"MZ").hexdigest()
     assert launch.main(["--setup", str(other), "--sha256", digest, "--wait", "0"]) == launch.NOT_VERIFIED_CODE
     assert other.exists()  # fremde Dateien werden nie gelöscht
     assert launch.main(["--setup", str(tmp_path / "PDF-Tool-Setup-2.7.3.exe"), "--sha256", "kein-hash"]) == launch.NOT_VERIFIED_CODE
+    assert messages == [launch.NOT_VERIFIED, launch.NOT_VERIFIED]  # der Benutzer erfährt es, nichts startet
     assert launch.main([]) == launch.USAGE_CODE
 
 

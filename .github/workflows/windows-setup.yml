@@ -141,6 +141,7 @@ jobs:
         run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py -q -p no:cacheprovider
 
       - name: 1. Tests (Updater mit lokalem Testserver – Download, SHA-256, Abbruch, Offline, Zeitlimits, Weiterleitungen, Cache, Hilfsprozess)
+        timeout-minutes: 10 # normal unter einer Minute; ein hängender Test bricht früh ab
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_updater_flow.py -v -p no:cacheprovider
