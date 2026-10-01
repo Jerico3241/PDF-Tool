@@ -1,7 +1,7 @@
 name: Windows-Setup
 
 # Normaler Lauf (Push, Pull Request, Release):
-#   1. Tests – Kernlogik, Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.6.1),
+#   1. Tests – Kernlogik, Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.0),
 #      PDF reparieren; die Qt-Oberflächentests laufen gleichzeitig in drei eigenen Jobs
 #      (je ein eigener Rechner – keine gegenseitige Last, gleiche Bedingungen wie bisher)
 #   2. Setup bauen
@@ -58,9 +58,9 @@ jobs:
           - gruppe: Start, Navigation, Einstellungen, Verlauf, optionale Kundenakte
             dateien: resources bridge shell history optional
           - gruppe: Vertragsübersichten, Kopf- und Fußzeile, PDF reparieren
-            dateien: contracts richtext caret repair
-          - gruppe: Kundenakte, Stapel
-            dateien: customers batch
+            dateien: contracts richtext repair
+          - gruppe: Kundenakte, Stapel, Einfügemarke
+            dateien: customers batch caret
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -133,7 +133,7 @@ jobs:
       - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl)
         run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py -q -p no:cacheprovider
 
-      - name: 1. Tests (Datenmigration älterer Einstellungen 2.2.0 … 2.6.1 – Fixtures statt alter Setups)
+      - name: 1. Tests (Datenmigration älterer Einstellungen 2.2.0 … 2.7.0 – Fixtures statt alter Setups)
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_config_migration.py -v -p no:cacheprovider

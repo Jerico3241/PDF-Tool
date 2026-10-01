@@ -43,7 +43,16 @@ alles unter `windows-app/app/qml/`.
 - Seiten: `PPage` (scrollende Seite) bzw. `PListPage` (lange, virtualisierte Liste). Zeilen nutzen
   `columnX`/`columnWidth` der Seite.
 - Große Listen immer als `ListView` mit Modell und `reuseItems`, nie als `Repeater` über hunderte
-  Einträge.
+  Einträge. Wiederverwendete Zeilen (`ListView.onReused`) setzen zurück, was Übergänge oder eigene
+  Zustände verändert haben (z. B. `opacity`/`scale` nach `add`/`remove`, aufgeklappte Details – deren
+  Zustand gehört der Seite, nicht der Zeile). Inhalte, die erst beim Aufklappen gebraucht werden,
+  entstehen per `Loader` (`active: offen || animating`).
+- `PListPage` hält eine Liste, die ganz oben stand, oben, wenn sich der Kopfbereich ändert
+  (`pinnedTop`) – ListView allein hielte die Zeilen fest und schöbe den Seitentitel hinaus.
+- Ein abgeschalteter `Loader` behält seine letzte `implicitHeight`: in Layouts zusätzlich
+  `visible: active`, außerhalb die Höhe aus `item` ableiten. Zwischenzustände vermeiden – mehrere
+  Bedingungen, die sich nacheinander ändern (`hasFile`, dann `single`), nicht kombinieren, wenn
+  eine Größe (`count`) es in einem Schritt sagt.
 - Bereiche, die auf- und zuklappen, mit `PCollapse`; Hinweise mit `PInfoBar` und einem
   `Notices.area("…")`; Zustandswechsel mit `PStateStack`/`PCrossfadeText`.
 - Laufende Animationen nur, solange sie sichtbar sind (`running: visible && …`).

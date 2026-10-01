@@ -4,208 +4,81 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// »PDF reparieren«: PDF wählen oder hineinziehen → Analyse mit Diagnose → Reparatur mit
-// Fortschritt und »Abbrechen« → Ergebnis. Analyse und Ergebnis klappen weich auf und rücken
-// danach in den sichtbaren Bereich. Die Originaldatei wird nie verändert.
-PPage {
-    id: page
+// »PDF reparieren« (eine oder mehrere PDFs): PDFs wählen oder hineinziehen → jede
+// wird für sich analysiert → Liste mit Zustand, Diagnose und geplantem Ausgabenamen → »PDF
+// reparieren« bzw. »Alle reparieren« (nacheinander) mit Fortschritt je Datei und gesamt →
+// Ergebnis je Datei und Zusammenfassung. Die Zeilen sind virtualisiert (auch 100 PDFs bleiben
+// flüssig); neue und entfernte Dateien blenden weich ein und aus (Animationsprofil beachtet).
+// Eine PDF: Reihenfolge wie bis 2.7.0 (Datei → Ausgabe → Reparieren → Ergebnis); mehrere PDFs:
+// Ausgabe, »Alle reparieren« und Ergebnis über der Liste. Die Originaldateien werden nie verändert.
+Item {
+    id: root
     objectName: "repairPage"
-    title: "PDF reparieren"
-    subtitle: "Beschädigte PDF-Dateien analysieren und lesbare Inhalte in eine neue PDF übertragen."
 
-    property bool detailsOpen: false
-    property bool resultDetailsOpen: false
-    // Fortschritt erst nach kurzer Zeit zeigen: schnelle Analysen blitzen nicht auf
-    property bool progressShown: false
+    // Aufgeklappte Details (bleiben beim Scrollen erhalten, obwohl Zeilen wiederverwendet werden)
+    property var openKeys: ({})
+    function setOpen(key, open) {
+        const next = Object.assign({}, openKeys)
+        if (open)
+            next[key] = true
+        else
+            delete next[key]
+        openKeys = next
+    }
 
     Connections {
         target: Repair
         function onFocusRequested(field) {
-            if (field === "password")
-                passwordField.forceActiveFocus(Qt.OtherFocusReason)
-            else if (field === "pick")
-                pickButton.forceActiveFocus(Qt.OtherFocusReason)
+            const header = listPage.headerContentItem
+            if (field !== "pick" || !header)
+                return
+            const button = Repair.hasFile ? header.addButton : header.pickButton
+            if (button)
+                button.forceActiveFocus(Qt.OtherFocusReason)
         }
         function onRevealRequested(what) {
-            revealTimer.item = what === "result" ? resultCard : analysisCard
-            revealTimer.restart()
+            if (what === "result")
+                revealTimer.restart()
         }
-        function onPasswordCleared() { passwordField.clear() }
-        function onAnalyzedChanged() {
-            if (Repair.analyzed && Motion.enabled)
-                factsFlash.restart()
-        }
-        function onBusyChanged() {
-            if (Repair.busy) {
-                progressDelay.restart()
-            } else {
-                progressDelay.stop()
-                page.progressShown = false
-            }
+        function onHasFileChanged() {
+            if (!Repair.hasFile)
+                root.openKeys = ({})
         }
     }
     Timer {
         id: revealTimer
-        property Item item: null
         interval: Motion.expand + 40  // nach dem Aufklappen
-        onTriggered: page.reveal(item)
-    }
-    Timer {
-        id: progressDelay
-        interval: 150
-        onTriggered: page.progressShown = Repair.busy
+        // Eine PDF: Ergebnis unter der Datei; mehrere: Zusammenfassung über der Liste
+        onTriggered: Repair.single ? listPage.positionViewAtEnd() : listPage.positionViewAtBeginning()
     }
 
-    // Datenschutz
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.bottomMargin: 12
-        spacing: 8
-        PIcon { name: "shield"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
-        PText { text: Repair.texts.privacy; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-    }
-
-    // PDF auswählen ----------------------------------------------------------------------------
-    PDropZone {
-        id: dropZone
-        objectName: "repairDrop"
-        Layout.fillWidth: true
-        highlighted: Repair.dropHighlight
-        iconName: "document_pdf"
-        title: "PDF hierher ziehen"
-        text: "oder eine Datei auswählen – eine PDF pro Vorgang. Die Originaldatei wird nie verändert."
-        actions: [
-            PButton {
-                id: pickButton
-                objectName: "repairPick"
-                kind: Repair.hasFile ? "standard" : "accent"
-                iconName: "open"
-                text: "PDF auswählen"
-                tip: "PDF auswählen (Strg+O)"
-                enabled: !Repair.busy
-                onClicked: Repair.pick()
-            }
-        ]
-    }
-    PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_drop_info") }
-
-    // Analyse ------------------------------------------------------------------------------------
-    PCollapse {
-        Layout.fillWidth: true
-        expanded: Repair.hasFile
+    // Ausgabe, Reparieren/Abbrechen, Gesamtfortschritt, Ergebnis
+    Component {
+        id: controls
         ColumnLayout {
-            width: parent.width
             spacing: 0
-            Item { implicitHeight: 12 }
+
             PCard {
-                id: analysisCard
-                objectName: "repairAnalysis"
+                objectName: "repairOutput"
                 Layout.fillWidth: true
-                title: "Analyse"
-                iconName: "document_search"
-                headerRight: [
-                    PIconButton { iconName: "open"; tip: "Andere PDF wählen (Strg+O)"; enabled: !Repair.busy; onClicked: Repair.pick() }
-                ]
-
-                PFileRow {
-                    Layout.fillWidth: true
-                    iconName: "document_pdf"
-                    label: "Datei"
-                    value: Repair.fileName
-                    fullPath: Repair.filePath
-                    PIconButton { iconName: "copy"; tip: "Pfad der PDF kopieren"; onClicked: Repair.copyInputPath() }
-                }
-                PFactList {
-                    id: factList
-                    objectName: "repairFacts"
-                    Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    facts: Repair.facts
-                    SequentialAnimation {
-                        id: factsFlash
-                        NumberAnimation { target: factList; property: "opacity"; to: 0.35; duration: 60 }
-                        NumberAnimation { target: factList; property: "opacity"; to: 1; duration: Motion.fade; easing.type: Motion.decelerate }
-                    }
-                }
-                PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_analysis"); closable: false; topMargin: 4 }
-
-                // Passwort (nur bei verschlüsselten PDFs)
-                PCollapse {
-                    Layout.fillWidth: true
-                    expanded: Repair.needsPassword
-                    ColumnLayout {
-                        width: parent.width
-                        spacing: 0
-                        PFieldLabel { text: "Passwort" }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            PTextField {
-                                id: passwordField
-                                objectName: "repairPassword"
-                                preferredWidth: 260
-                                label: "Passwort der PDF"
-                                placeholderText: "Passwort der PDF"
-                                echoMode: TextInput.Password
-                                passwordCharacter: "•"
-                                inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-                                enabled: !Repair.busy
-                                onSubmitted: Repair.unlock(text)
-                            }
-                            PButton {
-                                iconName: "lock_closed"
-                                text: "Entsperren"
-                                tip: "PDF mit diesem Passwort öffnen"
-                                enabled: !Repair.busy
-                                onClicked: Repair.unlock(passwordField.text)
-                            }
-                        }
-                        PText {
-                            text: "Das Passwort wird nur für diesen Vorgang verwendet und nicht gespeichert."
-                            textStyle: "caption"
-                            tone: "secondary"
-                            wrap: true
-                            Layout.fillWidth: true
-                            Layout.topMargin: 6
-                        }
-                    }
-                }
-
-                // Technische Details (aufklappbar)
-                PButton {
-                    kind: "subtle"
-                    iconName: page.detailsOpen ? "chevron_up" : "info"
-                    text: page.detailsOpen ? "Technische Details ausblenden" : "Technische Details anzeigen"
-                    enabled: Repair.analyzed
-                    Layout.topMargin: 2
-                    onClicked: page.detailsOpen = !page.detailsOpen
-                }
-                PCollapse {
-                    Layout.fillWidth: true
-                    expanded: page.detailsOpen && Repair.analyzed
-                    PFactList {
-                        objectName: "repairDetails"
-                        width: parent.width
-                        labelWidth: 190
-                        facts: Repair.details
-                    }
-                }
-
-                Rectangle { Layout.fillWidth: true; Layout.topMargin: 4; Layout.bottomMargin: 4; height: 1; color: Theme.divider }
-
-                // Ausgabe
-                PText { text: "Speichern"; textStyle: "bodyStrong" }
+                Layout.topMargin: Repair.single ? 4 : 12
+                title: "Ausgabe"
+                iconName: "folder"
                 Flow {
                     Layout.fillWidth: true
                     spacing: 16
                     PRadioButton {
+                        objectName: "repairOutOriginal"
                         text: "Neben der Original-PDF"
                         checked: Repair.outMode === Repair.texts.outOriginal
+                        enabled: !Repair.running
                         onClicked: Repair.setOutMode(Repair.texts.outOriginal)
                     }
                     PRadioButton {
-                        text: "Anderer Ordner"
+                        objectName: "repairOutFolder"
+                        text: "Gemeinsamer Ausgabeordner"
                         checked: Repair.outMode === Repair.texts.outFolder
+                        enabled: !Repair.running
                         onClicked: Repair.setOutMode(Repair.texts.outFolder)
                     }
                 }
@@ -216,111 +89,270 @@ PPage {
                     value: Repair.outLabel
                     valueTone: Repair.outMissing ? "warning" : ""
                     fullPath: Repair.outPath
-                    PButton { iconName: "folder_open"; text: "Durchsuchen"; tip: "Ordner für reparierte PDFs wählen"; onClicked: Repair.pickOutDir() }
+                    PButton { iconName: "folder_open"; text: "Durchsuchen"; tip: "Ordner für reparierte PDFs wählen"; enabled: !Repair.running; onClicked: Repair.pickOutDir() }
                 }
-                PText { objectName: "repairOutName"; text: Repair.outName; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-
-                // Aktionen
-                Flow {
+                Rectangle { Layout.fillWidth: true; Layout.topMargin: 4; Layout.bottomMargin: 4; height: 1; color: Theme.divider }
+                // Namensregel: »_repariert« anhängen (Standard: ein) und Zusatz
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    spacing: 8
-                    PButton {
-                        objectName: "repairStart"
-                        kind: "accent"
-                        large: true
-                        minimumWidth: 180
-                        iconName: "wrench"
-                        text: Repair.repairText
-                        tip: "PDF reparieren (Strg+Enter)"
-                        enabled: Repair.canRepair && !Repair.busy
-                        onClicked: Repair.startRepair()
+                    spacing: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        PText { text: "„repariert“ an Dateinamen anhängen"; wrap: true; Layout.fillWidth: true }
+                        PText { objectName: "repairNamingExample"; text: Repair.namingExample; textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                        TapHandler { enabled: !Repair.running; onTapped: Repair.setAppendSuffix(!Repair.appendSuffix) }
                     }
-                    PButton {
-                        objectName: "repairCancel"
-                        large: true
-                        iconName: "dismiss"
-                        text: "Abbrechen"
-                        tip: "Vorgang abbrechen – es bleibt keine unvollständige Datei zurück"
-                        enabled: Repair.busy
-                        onClicked: Repair.cancel()
+                    PToggle {
+                        objectName: "repairAppendSuffix"
+                        label: "„repariert“ an Dateinamen anhängen"
+                        checked: Repair.appendSuffix
+                        enabled: !Repair.running
+                        onToggled: Repair.setAppendSuffix(checked)
                     }
                 }
                 PCollapse {
                     Layout.fillWidth: true
-                    expanded: page.progressShown && Repair.busy
+                    expanded: Repair.appendSuffix
                     ColumnLayout {
                         width: parent.width
-                        spacing: 8
-                        Item { implicitHeight: 2 }
-                        PStatusLine { Layout.fillWidth: true; kind: "busy"; text: Repair.progressText }
-                        PProgressBar {
+                        spacing: 2
+                        RowLayout {
                             Layout.fillWidth: true
-                            indeterminate: Repair.progressValue < 0
-                            value: Math.max(0, Repair.progressValue)
-                            visible: Repair.busy
+                            Layout.topMargin: 4
+                            spacing: 8
+                            PText { text: "Zusatz"; tone: "secondary" }
+                            PTextField {
+                                objectName: "repairSuffix"
+                                preferredWidth: 160
+                                label: "Zusatz am Dateinamen"
+                                text: Repair.suffix
+                                invalid: Repair.suffixError !== ""
+                                enabled: Repair.appendSuffix && !Repair.running
+                                onTextEdited: Repair.setSuffix(text)
+                            }
+                            PButton {
+                                kind: "subtle"
+                                visible: Repair.suffix !== Repair.texts.defaultSuffix || Repair.suffixError !== ""
+                                iconName: "arrow_reset"
+                                text: "Standard"
+                                tip: "Zusatz »" + Repair.texts.defaultSuffix + "« verwenden"
+                                enabled: !Repair.running
+                                onClicked: Repair.setSuffix(Repair.texts.defaultSuffix)
+                            }
+                            Item { Layout.fillWidth: true }
                         }
+                        PText { objectName: "repairSuffixError"; visible: text !== ""; text: Repair.suffixError; tone: "critical"; textStyle: "caption"; wrap: true; Layout.fillWidth: true }
                     }
                 }
-                PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_info"); topMargin: 4 }
+                PText { objectName: "repairOutName"; Layout.topMargin: 4; text: Repair.single ? Repair.outName : Repair.texts.namingHint; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+            }
+
+            // Reparieren, Abbrechen, Gesamtfortschritt
+            Flow {
+                Layout.fillWidth: true
+                Layout.topMargin: 12
+                spacing: 8
+                PButton {
+                    objectName: "repairStart"
+                    kind: "accent"
+                    large: true
+                    minimumWidth: 180
+                    iconName: "wrench"
+                    text: Repair.primaryText
+                    tip: Repair.single ? "PDF reparieren (Strg+Enter)" : "Alle beschädigten PDFs nacheinander reparieren (Strg+Enter)"
+                    enabled: Repair.canStart
+                    onClicked: Repair.startRepair()
+                }
+                PButton {
+                    objectName: "repairCancel"
+                    large: true
+                    iconName: "dismiss"
+                    text: "Abbrechen"
+                    tip: Repair.single ? "Vorgang abbrechen – es bleibt keine unvollständige Datei zurück" : "Laufende Reparatur sauber beenden und noch nicht gestartete Dateien auslassen – fertige Dateien bleiben"
+                    enabled: Repair.busy
+                    onClicked: Repair.cancel()
+                }
+                PButton {
+                    objectName: "repairRetry"
+                    visible: Repair.canRetry && !Repair.hasResult
+                    large: true
+                    iconName: "arrow_clockwise"
+                    text: "Fehlgeschlagene erneut versuchen"
+                    onClicked: Repair.retryFailed()
+                }
+            }
+            PCollapse {
+                Layout.fillWidth: true
+                expanded: Repair.running
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 4
+                    Item { implicitHeight: 6 }
+                    PProgressBar { objectName: "repairProgress"; Layout.fillWidth: true; indeterminate: Repair.progressValue < 0; value: Math.max(0, Repair.progressValue) }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        PText { objectName: "repairProgressText"; text: Repair.progressText; textStyle: "bodyStrong" }
+                        PCrossfadeText { objectName: "repairCurrent"; text: Repair.currentText; font: Typography.caption; color: Theme.textSecondary; Layout.fillWidth: true; Layout.preferredHeight: 20 }
+                    }
+                }
+            }
+            PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_info"); topMargin: 8 }
+
+            // Ergebnis des Durchlaufs
+            PCollapse {
+                Layout.fillWidth: true
+                expanded: Repair.hasResult
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 0
+                    Item { implicitHeight: 12 }
+                    PCard {
+                        objectName: "repairResult"
+                        Layout.fillWidth: true
+                        title: "Ergebnis"
+                        iconName: "document_checkmark"
+                        PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_result"); closable: false; topMargin: 0 }
+                        Flow {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 4
+                            spacing: 8
+                            readonly property bool alone: Repair.summary.single === true
+                            readonly property bool saved: Repair.summary.hasOutput === true
+                            // Eine Datei: wie bis 2.7.0
+                            PButton { objectName: "repairOpen"; visible: parent.alone; kind: "accent"; iconName: "window_new"; text: "Öffnen"; tip: "Reparierte PDF öffnen"; enabled: parent.saved; onClicked: Repair.openResultFile() }
+                            PButton { visible: parent.alone; iconName: "folder_open"; text: "Ordner öffnen"; enabled: parent.saved; onClicked: Repair.openResultFolder() }
+                            PButton { visible: parent.alone; iconName: "copy"; text: "Pfad kopieren"; enabled: parent.saved; onClicked: Repair.copyResultPath() }
+                            // Mehrere PDFs
+                            PButton { objectName: "repairOpenFolder"; visible: !parent.alone; kind: "accent"; iconName: "folder_open"; text: "Ausgabeordner öffnen"; enabled: parent.saved; onClicked: Repair.openResultFolder() }
+                            PButton { objectName: "repairResultRetry"; visible: Repair.canRetry; iconName: "arrow_clockwise"; text: "Fehlgeschlagene erneut versuchen"; onClicked: Repair.retryFailed() }
+                            PButton { objectName: "repairAgain"; iconName: "add"; text: "Weitere PDFs reparieren"; tip: "Liste leeren und neue PDFs wählen"; enabled: !Repair.busy; onClicked: Repair.reset() }
+                        }
+                        PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_result_info"); topMargin: 4 }
+                    }
+                }
             }
         }
     }
 
-    // Ergebnis -----------------------------------------------------------------------------------
-    PCollapse {
-        Layout.fillWidth: true
-        expanded: Repair.hasResult
-        ColumnLayout {
-            width: parent.width
-            spacing: 0
-            Item { implicitHeight: 12 }
-            PCard {
-                id: resultCard
-                objectName: "repairResult"
-                Layout.fillWidth: true
-                title: "Ergebnis"
-                iconName: "document_checkmark"
+    PListPage {
+        id: listPage
+        objectName: "repairList"
+        anchors.fill: parent
+        title: "PDF reparieren"
+        subtitle: "Beschädigte PDF-Dateien analysieren und lesbare Inhalte in neue PDFs übertragen – eine oder mehrere auf einmal."
+        model: Repair.items
+        Accessible.role: Accessible.List
+        Accessible.name: "PDF-Dateien"
 
-                PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_result"); closable: false; topMargin: 0 }
-                PFactList { Layout.fillWidth: true; Layout.topMargin: 4; facts: Repair.resultFacts }
-                Repeater {
-                    model: Repair.resultWarnings
-                    RowLayout {
-                        required property string modelData
-                        Layout.fillWidth: true
-                        spacing: 8
-                        PIcon { name: "warning"; color: Theme.warning; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
-                        PText { text: modelData; wrap: true; Layout.fillWidth: true }
+        // Neue Dateien blenden ein, entfernte aus; die übrigen rücken weich nach
+        add: Transition {
+            enabled: Motion.enabled
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.normal; easing.type: Motion.decelerate }
+            NumberAnimation { property: "scale"; from: Motion.moves ? 0.98 : 1; to: 1; duration: Motion.normal; easing.type: Motion.decelerate }
+        }
+        remove: Transition {
+            enabled: Motion.enabled
+            NumberAnimation { property: "opacity"; to: 0; duration: Motion.fade; easing.type: Motion.accelerate }
+        }
+        displaced: Transition {
+            enabled: Motion.moves
+            NumberAnimation { properties: "y"; duration: Motion.normal; easing.type: Motion.standard }
+        }
+
+        headerContent: ColumnLayout {
+            property alias pickButton: pickButton
+            property alias addButton: addButton
+            spacing: 0
+
+            // Datenschutz
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.bottomMargin: 12
+                spacing: 8
+                PIcon { name: "shield"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
+                PText { text: Repair.texts.privacy; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+            }
+
+            // Leer: große Ablagefläche
+            PDropZone {
+                objectName: "repairDrop"
+                Layout.fillWidth: true
+                visible: !Repair.hasFile
+                highlighted: Repair.dropHighlight
+                iconName: "document_pdf"
+                title: Repair.texts.emptyTitle
+                text: Repair.texts.emptyText
+                actions: [
+                    PButton {
+                        id: pickButton
+                        objectName: "repairPick"
+                        kind: "accent"
+                        iconName: "open"
+                        text: "PDFs auswählen"
+                        tip: "Eine oder mehrere PDFs auswählen (Strg+O)"
+                        onClicked: Repair.pick()
                     }
-                }
-                Flow {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    spacing: 8
-                    PButton { objectName: "repairOpen"; kind: "accent"; iconName: "window_new"; text: "Öffnen"; tip: "Reparierte PDF öffnen"; enabled: Repair.hasOutput; onClicked: Repair.openOutput() }
-                    PButton { iconName: "folder_open"; text: "Ordner öffnen"; enabled: Repair.hasOutput; onClicked: Repair.openOutputFolder() }
-                    PButton { iconName: "copy"; text: "Pfad kopieren"; enabled: Repair.hasOutput; onClicked: Repair.copyOutputPath() }
-                    PButton { objectName: "repairAgain"; iconName: "add"; text: "Weitere PDF reparieren"; enabled: !Repair.busy; onClicked: Repair.reset() }
-                }
-                PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_rescue"); closable: false; topMargin: 4 }
-                PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_result_info"); topMargin: 4 }
+                ]
+            }
+
+            // Mehrere PDFs: Gesamtstand; Liste bearbeiten
+            PStatusLine { objectName: "repairOverview"; Layout.fillWidth: true; Layout.bottomMargin: 8; visible: Repair.hasFile && !Repair.single; kind: Repair.overviewKind; text: Repair.overview }
+            Flow {
+                Layout.fillWidth: true
+                visible: Repair.hasFile
+                spacing: 8
                 PButton {
-                    kind: "subtle"
-                    iconName: page.resultDetailsOpen ? "chevron_up" : "list"
-                    text: page.resultDetailsOpen ? "Details ausblenden" : "Details anzeigen"
-                    onClicked: page.resultDetailsOpen = !page.resultDetailsOpen
+                    id: addButton
+                    objectName: "repairAdd"
+                    iconName: "add"
+                    text: "PDFs hinzufügen"
+                    tip: "Weitere PDFs zur Liste hinzufügen (Strg+O) – auch per Ziehen und Ablegen"
+                    onClicked: Repair.pick()
                 }
-                PCollapse {
-                    Layout.fillWidth: true
-                    expanded: page.resultDetailsOpen
-                    PFactList {
-                        width: parent.width
-                        labelWidth: 40
-                        facts: Repair.resultActions
-                    }
+                PButton {
+                    objectName: "repairRemoveAll"
+                    visible: Repair.count > 1
+                    kind: "subtle"
+                    iconName: "delete"
+                    text: "Alle entfernen"
+                    tip: "Liste leeren – die Dateien bleiben unverändert"
+                    enabled: !Repair.running
+                    onClicked: Repair.removeAll()
                 }
             }
+            PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_drop_info"); topMargin: 8 }
+
+            // Ein abgeschalteter Loader behält seine Höhe – deshalb zusätzlich ausblenden. »count« ändert
+            // sich in einem Schritt (mit »hasFile« und »single« entstünde kurz ein Zwischenzustand).
+            Loader {
+                Layout.fillWidth: true
+                active: Repair.count > 1
+                visible: active
+                sourceComponent: controls
+            }
+            Item { implicitHeight: Repair.hasFile ? 12 : 0 }
+        }
+
+        // Eine PDF: Ausgabe, Reparieren und Ergebnis unter der Datei
+        footerContent: Item {
+            implicitHeight: footerControls.active && footerControls.item ? footerControls.item.implicitHeight : 0
+            Loader {
+                id: footerControls
+                width: parent.width
+                active: Repair.count === 1
+                sourceComponent: controls
+            }
+        }
+
+        delegate: RepairItem {
+            id: entry
+            width: listPage.width
+            columnX: listPage.columnX
+            columnWidth: listPage.columnWidth
+            detailsOpen: root.openKeys[entry.key] === true
+            onToggleDetails: root.setOpen(entry.key, !entry.detailsOpen)
         }
     }
 }

@@ -11,9 +11,10 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from .batch import ItemState, Phase, RepairBatch
 from .models import Condition, Method, PdfAnalysis, PdfRepairResult, RepairStatus
 
-HINT = "Strg+O  PDF auswählen   ·   Strg+Enter  PDF reparieren"
+HINT = "Strg+O  PDFs auswählen   ·   Strg+Enter  Reparieren"
 PRIVACY = "Die Verarbeitung erfolgt vollständig lokal auf diesem PC. Keine Datei wird hochgeladen."
 LOG_FILE = "pdf-repair.log"
 LOG_LIMIT = 1_000_000  # Byte, danach wird das Protokoll einmal rotiert
@@ -21,18 +22,19 @@ OUT_ORIGINAL = "original"
 OUT_FOLDER = "ordner"
 OUT_NAME_EMPTY = "Ausgabe: <Name>_repariert.pdf – die Originaldatei wird nie überschrieben."
 HELP_STEPS = (
-    "Eine PDF wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort analysiert.",
-    "Die Analyse lesen: Keine Fehler, reparierbare Probleme, schwer beschädigt oder erweiterte Wiederherstellung möglich.",
-    "Verschlüsselte PDFs erst mit dem richtigen Passwort entsperren.",
-    "Auf »PDF reparieren« klicken oder Strg+Enter drücken. Ein laufender Vorgang lässt sich abbrechen.",
-    "Das Ergebnis öffnen, den Ordner anzeigen oder den Pfad kopieren.",
+    "Eine oder mehrere PDFs wählen (Strg+O) oder in das Fenster ziehen – jede wird sofort für sich analysiert.",
+    "Die Analyse je Datei lesen: Keine Fehler, reparierbare Probleme, schwer beschädigt, erweiterte Wiederherstellung möglich oder verschlüsselt.",
+    "Verschlüsselte PDFs einzeln mit ihrem Passwort entsperren.",
+    "Ausgabe festlegen: neben dem Original oder in einem Ordner, »„repariert“ an Dateinamen anhängen« ein oder aus; Namen einzelner Dateien lassen sich ändern.",
+    "»PDF reparieren« bzw. »Alle reparieren« (Strg+Enter) – die Dateien werden nacheinander repariert; »Abbrechen« hält den Vorgang an.",
+    "Das Ergebnis je Datei öffnen, den Ausgabeordner anzeigen oder Fehlgeschlagene erneut versuchen.",
 )
 HELP_NOTES = (
-    "Die Originaldatei wird nie verändert. Die reparierte Datei heißt »<Name>_repariert.pdf« (bei Bedarf »_2«, »_3« …).",
+    "Die Originaldateien werden nie verändert, umbenannt oder überschrieben. Standardname: »<Name>_repariert.pdf«; gibt es den Namen schon, wird nummeriert: »<Name>_repariert (1).pdf« …",
     "Nicht jede Datei lässt sich vollständig wiederherstellen; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
     "Öffnet keine PDF-Engine die Datei, sucht PDF Tool die noch vorhandenen PDF-Objekte direkt in der Datei und baut Querverweise, Trailer und Seitenbaum neu auf (»PDF-Struktur rekonstruieren«).",
-    "Der Rettungsmodus überträgt lesbare Seiten als Bilder – nur nach Bestätigung, weil Text- und Vektorinformationen verloren gehen.",
-    "Passwörter werden nicht gespeichert. Technische Details stehen im Protokoll pdf-repair.log im Datenordner.",
+    "Der Rettungsmodus überträgt lesbare Seiten als Bilder – nur für die einzelne Datei und nur nach Bestätigung, weil Text- und Vektorinformationen verloren gehen.",
+    "Passwörter gelten nur für ihre Datei und werden nicht gespeichert. Technische Details stehen im Protokoll pdf-repair.log im Datenordner.",
 )
 
 CONDITION_TEXT = {
@@ -258,3 +260,105 @@ def result_log(result: PdfRepairResult) -> list[str]:
     if result.error:
         lines.append(f"  Fehler: {result.error}")
     return lines
+
+
+# Mehrere PDFs ------------------------------------------------------------------------------------
+# Zustand einer Datei der Liste → (Beschriftung, Ton); Ton: success, caution, critical, muted oder leer
+
+EMPTY_TITLE = "PDF-Dateien hier ablegen"
+EMPTY_TEXT = "oder PDFs auswählen – eine oder mehrere. Jede Datei wird einzeln geprüft; die Originaldateien werden nie verändert."
+NAMING_HINT = "Eine vorhandene Datei – auch das Original – wird nie überschrieben. Gibt es den Namen schon, wird nummeriert: »Name (1).pdf«."
+PHASE_TEXT = {Phase.ANALYSIS: "Analyse", Phase.REPAIR: "Reparatur", Phase.VALIDATION: "Validierung", Phase.DONE: "Fertig"}
+STATE_TEXT = {
+    ItemState.PENDING: ("Wartet auf Prüfung", "muted"),
+    ItemState.ANALYZING: ("Wird geprüft …", "muted"),
+    ItemState.ENCRYPTED: ("Passwort erforderlich", "caution"),
+    ItemState.UNREADABLE: ("Nicht wiederherstellbar", "critical"),
+    ItemState.REPAIRING: ("Wird repariert …", "muted"),
+    ItemState.REPAIRED: ("Repariert", "success"),
+    ItemState.PARTIALLY_RECOVERED: ("Teilweise wiederhergestellt", "caution"),
+    ItemState.FAILED: ("Fehlgeschlagen", "critical"),
+    ItemState.CANCELLED: ("Abgebrochen", "muted"),
+    ItemState.SKIPPED: ("Übersprungen", "muted"),
+}
+READY_TEXT = {
+    Condition.HEALTHY: ("Keine Fehler gefunden", "success"),
+    Condition.REPAIRABLE: ("Beschädigt · Reparatur möglich", "caution"),
+    Condition.DAMAGED: ("Schwer beschädigt · Teilrettung möglich", "caution"),
+    Condition.RAW_RECOVERABLE: ("Erweiterte Wiederherstellung möglich", "caution"),
+}
+RESCUE_AVAILABLE = "Weitere Rettungsoption verfügbar"
+
+
+def item_state_text(item) -> tuple[str, str]:
+    """(Beschriftung, Ton) des Zustands einer Datei."""
+    if item.state is ItemState.READY and item.condition in READY_TEXT:
+        return READY_TEXT[item.condition]
+    if item.state is ItemState.ENCRYPTED and item.analysis is not None and item.analysis.password_rejected:
+        return "Passwort falsch", "critical"
+    if item.state is ItemState.REPAIRED and item.result is not None:
+        if item.analysis is not None and item.analysis.condition is Condition.HEALTHY:
+            return "Neu aufgebaut", "success"
+        if item.result.method in REBUILD_METHODS:
+            return "Struktur rekonstruiert", "success"
+    if item.rescue and item.state in (ItemState.UNREADABLE, ItemState.FAILED, ItemState.PARTIALLY_RECOVERED):
+        label, tone = STATE_TEXT[item.state]
+        return f"{label} · {RESCUE_AVAILABLE}", tone
+    return STATE_TEXT.get(item.state, ("", ""))
+
+
+def batch_overview(liste: RepairBatch) -> tuple[str, str]:
+    """Gesamtstand der Liste (»8 PDFs · 6 reparierbar · 1 verschlüsselt …«) und Art der Statuszeile."""
+    total = len(liste)
+    if not total:
+        return "", "neutral"
+    groups = [
+        ("wird geprüft", lambda i: i.state in (ItemState.PENDING, ItemState.ANALYZING)),
+        ("reparierbar", lambda i: i.state is ItemState.READY and i.condition is not Condition.HEALTHY),
+        ("ohne Fehler", lambda i: i.state is ItemState.READY and i.condition is Condition.HEALTHY),
+        ("verschlüsselt", lambda i: i.state is ItemState.ENCRYPTED),
+        ("nicht wiederherstellbar", lambda i: i.state is ItemState.UNREADABLE),
+        ("in Arbeit", lambda i: i.state is ItemState.REPAIRING),
+        ("repariert", lambda i: i.state is ItemState.REPAIRED),
+        ("teilweise wiederhergestellt", lambda i: i.state is ItemState.PARTIALLY_RECOVERED),
+        ("fehlgeschlagen", lambda i: i.state is ItemState.FAILED),
+        ("abgebrochen", lambda i: i.state is ItemState.CANCELLED),
+        ("übersprungen", lambda i: i.state is ItemState.SKIPPED),
+    ]
+    parts = [f"{total} PDF" + ("s" if total != 1 else "")]
+    for label, test in groups:
+        number = sum(1 for item in liste.items if test(item))
+        if number:
+            parts.append(f"{number} {label}")
+    busy = any(item.busy for item in liste.items)
+    return " · ".join(parts), ("busy" if busy else "info")
+
+
+def run_summary(states: list[ItemState], not_started: int = 0) -> tuple[str, str, list[str]]:
+    """Zusammenfassung eines Durchlaufs: (Schweregrad, Titel, Zeilen »5 erfolgreich repariert« …).
+
+    ``not_started``: Dateien, die nach »Abbrechen« nicht mehr begonnen wurden."""
+    counts = {state: states.count(state) for state in set(states)}
+    lines = []
+    for state, label in (
+        (ItemState.REPAIRED, "erfolgreich repariert"),
+        (ItemState.PARTIALLY_RECOVERED, "teilweise wiederhergestellt"),
+        (ItemState.FAILED, "fehlgeschlagen"),
+        (ItemState.ENCRYPTED, "Passwort fehlt oder ist falsch"),
+        (ItemState.SKIPPED, "übersprungen"),
+        (ItemState.CANCELLED, "abgebrochen"),
+    ):
+        if counts.get(state):
+            lines.append(f"{counts[state]} {label}")
+    if not_started:
+        lines.append(f"{not_started} nicht gestartet")
+    if counts.get(ItemState.CANCELLED) or not_started:
+        return "warning", "Reparatur abgebrochen", lines
+    if counts.get(ItemState.FAILED) or counts.get(ItemState.ENCRYPTED):
+        severity = "warning" if counts.get(ItemState.REPAIRED) or counts.get(ItemState.PARTIALLY_RECOVERED) else "error"
+        return severity, "Reparatur abgeschlossen", lines
+    if counts.get(ItemState.PARTIALLY_RECOVERED):
+        return "warning", "Reparatur abgeschlossen", lines
+    if not counts.get(ItemState.REPAIRED):
+        return "info", "Keine PDF repariert", lines  # z. B. alle übersprungen
+    return "success", "Reparatur abgeschlossen", lines

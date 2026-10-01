@@ -166,7 +166,7 @@ def test_status_hint_follows_the_tool(app) -> None:
     app.navigate("batch")
     assert "Stapel" in app.app.hint or "Excel-Dateien" in app.app.hint
     app.navigate("repair")
-    assert app.app.hint.startswith("Strg+O  PDF auswählen")
+    assert app.app.hint.startswith("Strg+O  PDFs auswählen")  # eine oder mehrere PDFs
 
 
 def test_help_follows_the_open_view(app) -> None:
@@ -325,7 +325,7 @@ def test_drop_on_start_page_routes_by_file_type(app, tmp_path: Path, excel_file:
     assert app.app.dragEnter([pdf.as_uri()]) is True
     app.app.drop([pdf.as_uri()])
     assert app.app.currentPage == "repair"
-    assert wait_until(lambda: app.repair.analyzed, 60)
+    assert wait_until(lambda: app.repair.analysis is not None, 60)
     app.navigate("home")
     app.app.drop([excel_file.as_uri()])
     assert app.app.currentPage == "create"

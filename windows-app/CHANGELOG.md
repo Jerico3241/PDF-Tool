@@ -2,6 +2,52 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 2.7.1
+
+## PDF reparieren: mehrere PDFs
+
+- mehrere PDFs gleichzeitig reparieren
+- Multi-File Drag & Drop
+- Batch-Reparatur
+- individuelle Ausgabedateinamen
+- optionales "_repariert" im Dateinamen
+- sichere automatische Konfliktauflösung
+- Fortschritt und Ergebnis pro PDF
+- Batch-Ergebnisübersicht
+
+Im Einzelnen: Mehrfachauswahl im Dialog, mehrere Dateien zugleich ablegen, später weitere
+hinzufügen; dieselbe Datei nur einmal, andere Dateien mit Hinweis. Jede PDF wird für sich
+analysiert (höchstens zwei Arbeitsprozesse) und nacheinander mit der unveränderten Engine aus
+2.7.0 repariert – keine eigene Batch-Engine. Zustand je Datei, Gesamtstand („8 PDFs · 6
+reparierbar · 1 verschlüsselt · 1 nicht wiederherstellbar“), „Alle reparieren“, „Nur diese Datei
+reparieren“, „Abbrechen“ (fertige Dateien bleiben), „Fehlgeschlagene erneut versuchen“,
+Zusammenfassung mit „Ausgabeordner öffnen“. Passwörter gelten nur für ihre Datei; signierte
+Dateien lassen sich auf Rückfrage überspringen; der Rettungsmodus gilt nur für eine Datei und nur
+nach Bestätigung. Mit einer PDF bleibt der Ablauf wie in 2.7.0.
+
+Dateinamen: Schalter „„repariert“ an Dateinamen anhängen“ (Standard ein, auch nach dem Update)
+mit änderbarem Zusatz; eigener Name je Datei mit sofortiger Prüfung auf unter Windows ungültige
+Namen. Ein Name, den es schon gibt – ohne Rücksicht auf Groß-/Kleinschreibung, das Original selbst
+oder schon für eine andere Datei der Liste geplant –, wird nummeriert: `Rechnung_repariert (1).pdf`
+statt bisher `Rechnung_repariert_2.pdf`. Die Namen werden beim Start reserviert; eine vorhandene
+Datei wird nie überschrieben, das Original nie verändert, umbenannt oder gelöscht.
+
+## Korrekturen
+
+- Listen-Seiten (PDF reparieren, Stapel, Kunden, Vertragsvergleich) bleiben oben, wenn sich der
+  Kopfbereich ändert (Hinweis, aufklappender Bereich, erste Datei) – der Seitentitel rutschte
+  vorher aus dem Bild. Wer zu den Zeilen gescrollt hat, behält sie im Blick.
+
+## Tests
+
+- `tests/test_pdf_repair_batch.py`: Liste, Zustände, Namensregel, Windows-Namen, Konflikte,
+  Nummerierung, Reservierung.
+- `tests/test_qt_repair.py`: alle Abläufe aus 2.7.0 mit einer PDF sowie 10 gemischte PDFs,
+  Abbrechen bei Datei 4 von 10, Passwort nur je Datei, Signaturen überspringen, kein stiller
+  Rettungsmodus, Fehlgeschlagene erneut, globaler Schreibfehler, 100 PDFs, Animationsprofile,
+  Schalter aus/an, eigener Name, gleiche Namen aus verschiedenen Ordnern, Neustart.
+- Datenmigration: Einstellungen von 2.7.0 (`config_v270.json`).
+
 # PDF Tool 2.7.0
 
 ## Neue Oberfläche

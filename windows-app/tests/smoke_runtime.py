@@ -18,7 +18,8 @@ Geprüft wird:
    Vertragsvergleich: Stand nach dem Export speichern (unverändert nicht doppelt),
    Änderungen erkennen
 3. PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
-   Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen;
+   Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen – auch
+   ohne »_repariert« (nummeriert, das Original bleibt);
    erweiterte Wiederherstellung: klassische PDF ohne xref, Trailer, %%EOF und mit
    defektem Seitenbaum rekonstruieren, Text und Seiten mit pypdf prüfen
 4. Oberfläche: die QML-Oberfläche aus der eingebauten Ressource (qml_rc) laden, ohne dass die
@@ -285,8 +286,18 @@ def main() -> int:
     result = results[0]
     check(result.status is RepairStatus.REPAIRED, f"Reparatur: {result.status.value} {result.error}")
     output = repair_process.deliver(Path(result.output_path), damaged)
-    job.cleanup()
     check(output == folder / "Vertrag beschädigt_repariert.pdf", f"Ausgabe: {output}")
+    # Mehrere PDFs: Liste ohne Doppelte, Name ohne »_repariert« – das Original wird nie überschrieben
+    from tools.pdf_repair.batch import RepairBatch
+
+    liste = RepairBatch()
+    check(len(liste.add([damaged]).added) == 1 and not liste.add([damaged]).added, "Liste: dieselbe Datei doppelt")
+    liste.plan(lambda item: item.path.parent, False, "_repariert")
+    eintrag = liste.items[0]
+    check(eintrag.planned == folder / "Vertrag beschädigt (1).pdf", f"Geplanter Name ohne Zusatz: {eintrag.planned}")
+    ohne = repair_process.deliver(Path(result.output_path), damaged, folder, base=eintrag.planned_base, start=eintrag.planned_number)
+    check(ohne == eintrag.planned, f"Ausgabe ohne Zusatz: {ohne}")
+    job.cleanup()
     check(damaged.read_bytes() == before, "Original wurde verändert")
     with pikepdf.open(output) as repaired:
         check(len(repaired.pages) == result.pages_before, "Seitenzahl der reparierten PDF stimmt nicht")

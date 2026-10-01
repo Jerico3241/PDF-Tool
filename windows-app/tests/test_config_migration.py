@@ -1,4 +1,4 @@
-"""Einstellungen älterer Versionen (2.2.0 … 2.6.1) → aktuelle Version: schnelle Migrationstests.
+"""Einstellungen älterer Versionen (2.2.0 … 2.7.0) → aktuelle Version: schnelle Migrationstests.
 
 Datenmigrationstest ≠ Installer-Upgrade-Test: Ob die App die Daten älterer Versionen versteht,
 prüft dieser Test direkt am Python-Code – in wenigen Sekunden, ohne ein altes Setup zu
@@ -17,6 +17,8 @@ Fixtures (``tests/fixtures``) – so, wie die jeweilige Version ihre Daten gesch
 * ``config_v26.json`` – 2.6.0: dazu ein Vertragsstand (``vertragsstand_v26.json``), Fensterlage und
   »Animationen aus« der Tk-Oberfläche
 * ``config_v261.json`` – 2.6.1: Kundenakte optional (hier eingeschaltet), »Animationen an«
+* ``config_v270.json`` – 2.7.0 (Qt-Oberfläche): so, wie 2.7.0 die 2.6.1-Daten gespeichert hat –
+  dazu Animationsprofil und Fensterlage; ohne die Namensregel von »PDF reparieren« (neu in 2.7.1)
 """
 
 from __future__ import annotations
@@ -35,9 +37,10 @@ from appstate import DEFAULT_FOOTER, baustein_rich, default_footer_rich
 from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE, RichText
 
 FIXTURES = Path(__file__).parent / "fixtures"
-VERSIONEN = ["v22", "v23", "v24", "v25", "v26", "v261"]
-MIT_KUNDENAKTEN = {"v24", "v25", "v26", "v261"}
-MIT_VERTRAGSSTAND = {"v26", "v261"}
+VERSIONEN = ["v22", "v23", "v24", "v25", "v26", "v261", "v270"]
+MIT_KUNDENAKTEN = {"v24", "v25", "v26", "v261", "v270"}
+MIT_VERTRAGSSTAND = {"v26", "v261", "v270"}
+KUNDENAKTE_AN = {"v261", "v270"}  # seit 2.6.1 optional; in diesen Daten eingeschaltet
 KUNDE = "6f1c1d2e-0000-4000-8000-000000000024"
 STAND = "20260901T100000000000-d35c1e20.json"
 # Schlüssel, die die aktuelle Version bewusst ergänzt bzw. vereinheitlicht (alle anderen bleiben gleich):
@@ -110,12 +113,14 @@ def test_old_settings_load_into_current_version(alt) -> None:
     assert h.app.navCompact is True
     if "reparatur_ausgabe" in daten:
         assert (h.repair.outMode, h.repair.out_dir, h.repair.source_dir) == ("ordner", "C:\\Reparatur", "C:\\Quelle")
+    # »PDF reparieren«: die Namensregel ist neu in 2.7.1 – fehlt sie, bleibt es bei »<Name>_repariert.pdf«
+    assert h.repair.appendSuffix is True and h.repair.suffix == "_repariert"
     if "stapel_zielordner" in daten:
         s = h.batch.settings
         assert (s.target_dir, s.template, s.subfolders, s.customer_target, s.conflict.value) == ("C:\\Stapel", "Quer", True, False, "skip")
     # Kundenakte: seit 2.6.1 optional – nach einem Update zunächst aus, eingeschaltet bleibt eingeschaltet
-    assert h.customers.enabled is (name == "v261")
-    if name == "v261":
+    assert h.customers.enabled is (name in KUNDENAKTE_AN)
+    if name in KUNDENAKTE_AN:
         assert len(h.customers.customers) == 1 and h.customers.customers.get(KUNDE).company == "Muster GmbH"
 
 
@@ -128,7 +133,7 @@ def test_saving_keeps_old_keys_and_writes_current_schema(alt, config_file: Path)
     for key, value in daten.items():
         if key in ERGAENZT:
             continue
-        if key == "kunde_aktiv" and name != "v261":
+        if key == "kunde_aktiv" and name not in KUNDENAKTE_AN:
             # wie seit 2.6.1: Ausgeschaltet gibt es keine aktive Kundenakte (Formular bleibt Arbeitskopie,
             # die Kundenakte selbst bleibt unverändert – siehe test_customer_records_and_contract_states_stay_unchanged)
             assert gespeichert.get(key) == ""
@@ -143,7 +148,8 @@ def test_saving_keeps_old_keys_and_writes_current_schema(alt, config_file: Path)
     assert RichText.from_storage(gespeichert["fusszeile"], gespeichert["fusszeile_format"], FOOTER_STYLE, FOOTER_ALIGN) == h.overview.footer_rich()
     assert RichText.from_storage(gespeichert["kopfzeile"], gespeichert["kopfzeile_format"], HEADER_STYLE, HEADER_ALIGN) == h.overview.header_rich()
     assert gespeichert["animationsprofil"] == ("off" if daten.get("animationen") is False else "full")
-    assert gespeichert["kundenakte_verwenden"] is (name == "v261")
+    assert gespeichert["kundenakte_verwenden"] is (name in KUNDENAKTE_AN)
+    assert gespeichert["reparatur_anhaengen"] is True and gespeichert["reparatur_zusatz"] == "_repariert"
     # erneut starten und speichern: dasselbe Ergebnis (die Übernahme ist abgeschlossen)
     h.close()
     zweite = Harness(ui=False)

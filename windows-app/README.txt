@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.7.0
+Version 2.7.1
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
@@ -10,22 +10,50 @@ Werkzeuge für PDF-Dateien:
   vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
   bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen, und
   einem Vergleich mit dem letzten Vertragsstand des Kunden.
-- PDF reparieren: analysiert beschädigte PDF-Dateien und versucht, lesbare
-  Inhalte in eine neue PDF zu übertragen – bei Bedarf baut es die
-  Dokumentstruktur aus den noch vorhandenen Objekten neu auf.
+- PDF reparieren: analysiert beschädigte PDF-Dateien – eine oder mehrere auf
+  einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen; bei
+  Bedarf baut es die Dokumentstruktur aus den noch vorhandenen Objekten neu
+  auf.
 
 Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.7.0.exe
+PDF-Tool-Setup-2.7.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
 qpdf, pypdfium2 mit PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
 andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.7.1 – PDF Repair Batch
+---------------------------------------
+„PDF reparieren“ verarbeitet jetzt mehrere PDFs auf einmal.
+- Mehrere PDFs auswählen (Mehrfachauswahl) oder zusammen in das Fenster
+  ziehen; weitere lassen sich jederzeit hinzufügen. Dieselbe Datei wird
+  nur einmal aufgenommen, andere Dateien werden mit Hinweis übergangen.
+- Jede PDF wird für sich geprüft. Die Liste zeigt je Datei den Zustand
+  (z. B. „Beschädigt · Reparatur möglich“, „Passwort erforderlich“),
+  den geplanten Ausgabenamen und den Fortschritt; darüber steht der
+  Gesamtstand, z. B. „8 PDFs · 6 reparierbar · 1 verschlüsselt · 1 nicht
+  wiederherstellbar“.
+- „Alle reparieren“ repariert die beschädigten PDFs nacheinander –
+  Fortschritt gesamt („3 / 8 Dateien“) und je Datei (Analyse, Reparatur,
+  Validierung, Fertig). „Abbrechen“ beendet die laufende Reparatur sauber;
+  fertige Dateien bleiben. Ein Fehler betrifft nur seine Datei.
+- Danach eine Zusammenfassung, z. B. „5 erfolgreich repariert · 1 teilweise
+  wiederhergestellt · 1 fehlgeschlagen“, mit „Ausgabeordner öffnen“ und
+  „Fehlgeschlagene erneut versuchen“.
+- Dateinamen: Der Schalter „„repariert“ an Dateinamen anhängen“ (Standard:
+  ein) ergibt wie bisher Rechnung_repariert.pdf, ausgeschaltet Rechnung.pdf;
+  der Zusatz ist änderbar (z. B. „_gefixt“). Jeder Name lässt sich einzeln
+  ändern, die Endung .pdf ergänzt PDF Tool selbst.
+- Die Originaldatei wird nie überschrieben: Gibt es den Namen schon, wird
+  nummeriert – „Rechnung (1).pdf“, „Rechnung_repariert (1).pdf“ (bisher
+  „…_repariert_2.pdf“).
+- Mit einer einzelnen PDF bleibt alles so einfach wie bisher.
 
 Neu in Version 2.7 – Next Generation UI
 ---------------------------------------
@@ -185,6 +213,11 @@ steht danach nur noch „PDF Tool“.
   erhalten. Schlägt die Übernahme fehl, arbeitet die App mit dem alten
   Ordner weiter und versucht es beim nächsten Start erneut.
 
+Update von PDF Tool 2.7.0 auf 2.7.1: Das Setup ersetzt nur die
+Programmdateien. Alle Einstellungen und Daten bleiben unverändert. Der neue
+Schalter „„repariert“ an Dateinamen anhängen“ ist eingeschaltet – reparierte
+Dateien heißen wie bisher <Name>_repariert.pdf.
+
 Update von PDF Tool 2.6.1 auf 2.7.0: Das Setup ersetzt die
 Programmdateien vollständig durch die neue Oberfläche – die frühere
 Oberfläche bleibt nicht zurück. Einstellungen, Kundenakten, E-Mail-
@@ -236,8 +269,8 @@ erneut ausführen repariert die Installation.
 
 Stille Installation (Skripte, Softwareverteilung)
 -------------------------------------------------
-   PDF-Tool-Setup-2.7.0.exe /VERYSILENT /SUPPRESSMSGBOXES
-   PDF-Tool-Setup-2.7.0.exe /SILENT          (mit Fortschritt)
+   PDF-Tool-Setup-2.7.1.exe /VERYSILENT /SUPPRESSMSGBOXES
+   PDF-Tool-Setup-2.7.1.exe /SILENT          (mit Fortschritt)
 
 Weitere Parameter:
    /LOG="C:\Pfad\setup.log"      Protokoll an diesen Ort schreiben
@@ -252,9 +285,9 @@ Stille Deinstallation:
 
 Verwendung
 ----------
-Startseite: Jedes Werkzeug hat eine Karte mit „Öffnen“. Eine Datei kann
-auch direkt in das Fenster gezogen werden: Eine PDF öffnet „PDF reparieren“,
-eine Excel-Liste „Vertragsübersichten“.
+Startseite: Jedes Werkzeug hat eine Karte mit „Öffnen“. Dateien können
+auch direkt in das Fenster gezogen werden: PDFs (eine oder mehrere) öffnen
+„PDF reparieren“, eine Excel-Liste „Vertragsübersichten“.
 
 Tastatur: Strg+1 Start · Strg+2 Vertragsübersichten · Strg+3 PDF reparieren ·
 Strg+4 Einstellungen · Strg+O Datei wählen · Strg+Enter Hauptaktion des
@@ -478,10 +511,15 @@ abgeleitet.
 
 Werkzeug „PDF reparieren“
 -------------------------
-1. Eine PDF wählen (Strg+O) oder in das Fenster ziehen – eine PDF pro
-   Vorgang. Sie wird sofort analysiert.
+1. Eine oder mehrere PDFs wählen („PDFs auswählen“, Strg+O, Mehrfach-
+   auswahl) oder in das Fenster ziehen; „PDFs hinzufügen“ nimmt weitere
+   auf. Jede Datei wird sofort für sich analysiert (höchstens zwei
+   gleichzeitig). Dieselbe Datei steht nur einmal in der Liste; das Kreuz
+   an einem Eintrag nimmt ihn heraus, „Alle entfernen“ leert die Liste –
+   die Dateien selbst bleiben unverändert.
 2. Die Analyse zeigt Größe, Seiten, PDF-Version, Verschlüsselung und den
-   Zustand:
+   Zustand (mit mehreren PDFs kurz am Eintrag, ausführlich unter „Details
+   anzeigen“):
    - „Keine Fehler gefunden“ – die PDF scheint strukturell in Ordnung zu
      sein. Ein Neuaufbau ist trotzdem möglich („Trotzdem neu aufbauen“).
    - „Reparierbare Probleme erkannt“ – beschädigte Strukturen, die
@@ -499,17 +537,30 @@ Werkzeug „PDF reparieren“
    Trailer, Seitenbaum, Metadaten, Datenströme und alle Befunde – bei
    beschädigten Dateien auch die Rohanalyse (Objektkandidaten, Katalog,
    Seitenobjekte, Seitenbaum-Knoten, xref, Trailer, startxref, %%EOF).
-3. Verschlüsselte PDF: Passwort eingeben und „Entsperren“ wählen. Das
-   Passwort wird nur für diesen Vorgang verwendet und nirgends gespeichert.
-   Die reparierte Kopie bleibt mit demselben Passwort geschützt.
-4. Speicherort wählen: „Neben der Original-PDF“ (Standard) oder „Anderer
-   Ordner“. Die Einstellung wird gemerkt.
-5. „PDF reparieren“ klicken oder Strg+Enter drücken. Der Fortschritt nennt
-   die Arbeitsschritte; „Abbrechen“ beendet den Vorgang sofort, es bleibt
-   keine unvollständige Datei zurück.
-6. Ergebnis: Ausgabedatei, Größe vorher/nachher, Seiten vorher/nachher und
-   Hinweise – mit „Öffnen“, „Ordner öffnen“, „Pfad kopieren“ und
-   „Weitere PDF reparieren“.
+3. Verschlüsselte PDF: Passwort am Eintrag eingeben und „Entsperren“
+   wählen. Das Passwort gilt nur für diese Datei, wird nie für andere PDFs
+   verwendet und nirgends gespeichert. Die reparierte Kopie bleibt mit
+   demselben Passwort geschützt.
+4. Ausgabe festlegen: „Neben der Original-PDF“ (Standard) oder
+   „Gemeinsamer Ausgabeordner“, dazu der Schalter „„repariert“ an
+   Dateinamen anhängen“ und – eingeschaltet – der Zusatz (Standard
+   „_repariert“). Jeder Eintrag zeigt seinen Ausgabenamen und lässt ihn
+   ändern; ».pdf« wird ergänzt, ungültige Namen (z. B. mit : oder ?)
+   werden sofort angezeigt. Ein eigener Name bleibt, auch wenn Sie den
+   Schalter umstellen – bis „Automatischen Namen wiederherstellen“.
+   Die Einstellungen werden gemerkt.
+5. „PDF reparieren“ (eine PDF) bzw. „Alle reparieren“ (alle beschädigten)
+   klicken oder Strg+Enter drücken; „Nur diese Datei reparieren“ repariert
+   einen einzelnen Eintrag. Repariert wird nacheinander; der Fortschritt
+   nennt die Datei und den Schritt (Analyse, Reparatur, Validierung,
+   Fertig). „Abbrechen“ beendet die laufende Reparatur sofort – es bleibt
+   keine unvollständige Datei zurück – und lässt die noch nicht begonnenen
+   aus; fertige Dateien bleiben. Gesunde PDFs repariert „Alle reparieren“
+   nicht; „Trotzdem neu aufbauen“ geht einzeln.
+6. Ergebnis je Datei: Ausgabedatei, Größe und Seiten vorher/nachher und
+   Hinweise – mit „Öffnen“, „Ordner öffnen“ und „Pfad kopieren“. Dazu die
+   Zusammenfassung des Durchlaufs, „Ausgabeordner öffnen“,
+   „Fehlgeschlagene erneut versuchen“ und „Weitere PDFs reparieren“.
 
 Ergebnisse:
 - „PDF wurde repariert“ – alle Seiten wurden vollständig übernommen und die
@@ -519,8 +570,12 @@ Ergebnisse:
 - „PDF konnte nicht repariert werden“ – es wird keine Datei gespeichert.
 Nicht jede beschädigte Datei lässt sich vollständig wiederherstellen.
 
-Die Originaldatei wird nie verändert oder überschrieben. Die neue Datei
-heißt <Name>_repariert.pdf (bei Bedarf <Name>_repariert_2.pdf usw.).
+Die Originaldatei wird nie verändert, umbenannt oder überschrieben. Die neue
+Datei heißt <Name>_repariert.pdf (Schalter aus: <Name>.pdf). Gibt es den
+Namen im Zielordner schon – auch anders geschrieben, z. B. „rechnung.PDF“ –,
+ist es das Original oder bekommt ihn bereits eine andere Datei der Liste,
+wird nummeriert: <Name>_repariert (1).pdf, (2) usw. Die Namen werden beim
+Start festgelegt; eine vorhandene Datei wird nie überschrieben.
 
 Erweiterte Wiederherstellung: PDF Tool versucht nacheinander qpdf, die
 Übertragung einzelner Seiten, PDFium und die tolerante Engine pypdf. Reicht
@@ -535,10 +590,12 @@ Verschlüsselte Dateien ohne Verschlüsselungsangaben werden nicht
 rekonstruiert – ein Passwortschutz wird nie umgangen.
 
 Digitale Signaturen: Eine Reparatur kann die Gültigkeit von Signaturen
-aufheben. Die App fragt deshalb vorher nach.
+aufheben. Die App fragt deshalb vorher nach – mit mehreren PDFs einmal für
+alle signierten („Alle reparieren“ oder „Signierte überspringen“).
 
 Rettungsmodus „Lesbare Seiten als neue PDF retten“: Nur wenn nichts anderes
-hilft und nur nach Bestätigung. Die lesbaren Seiten werden als Bilder in
+hilft, nur für die einzelne Datei („Weitere Rettungsoption verfügbar“) und
+nur nach Bestätigung – „Alle reparieren“ verwendet ihn nie. Die lesbaren Seiten werden als Bilder in
 eine neue PDF übertragen – Text ist dann nicht mehr durchsuchbar oder
 kopierbar, Links, Formulare und Lesezeichen fehlen.
 

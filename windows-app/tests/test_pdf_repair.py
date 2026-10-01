@@ -303,19 +303,28 @@ def test_engine_works_without_lxml(tmp_path: Path) -> None:
 
 def test_output_names_never_overwrite(tmp_path: Path) -> None:
     pdf = samples.healthy(tmp_path / "Vertrag.pdf")
+    original = pdf.read_bytes()
     temp = tmp_path / "temp.pdf"
-    temp.write_bytes(pdf.read_bytes())
+    temp.write_bytes(original)
     assert process.next_output(pdf).name == "Vertrag_repariert.pdf"
     first = process.deliver(temp, pdf)
     second = process.deliver(temp, pdf)
-    assert (first.name, second.name) == ("Vertrag_repariert.pdf", "Vertrag_repariert_2.pdf")
-    assert process.next_output(pdf).name == "Vertrag_repariert_3.pdf"
+    assert (first.name, second.name) == ("Vertrag_repariert.pdf", "Vertrag_repariert (1).pdf")
+    assert process.next_output(pdf).name == "Vertrag_repariert (2).pdf"
     other = process.deliver(temp, pdf, tmp_path / "Ausgabe")
     assert other == tmp_path / "Ausgabe" / "Vertrag_repariert.pdf"
     # Das Original heißt nie wie eine Ausgabe
     trap = tmp_path / "Falle_repariert.pdf"
     trap.write_bytes(b"original")
     assert process.deliver(temp, trap).name == "Falle_repariert_repariert.pdf" and trap.read_bytes() == b"original"
+    # Ohne »_repariert« neben dem Original: nummeriert, das Original bleibt unverändert
+    assert process.deliver(temp, pdf, base="Vertrag").name == "Vertrag (1).pdf" and pdf.read_bytes() == original
+    # Groß-/Kleinschreibung zählt nicht (wie unter Windows); reservierte Namen anderer Dateien auch nicht
+    (tmp_path / "vertrag_repariert (2).pdf").write_bytes(b"fremd")
+    assert process.next_output(pdf).name == "Vertrag_repariert (3).pdf"
+    reserviert = process.deliver(temp, pdf, base="Vertrag_repariert", start=3, avoid=["VERTRAG_REPARIERT (3).PDF"])
+    assert reserviert.name == "Vertrag_repariert (4).pdf"
+    assert (tmp_path / "vertrag_repariert (2).pdf").read_bytes() == b"fremd"
 
 
 def test_job_runs_in_separate_process(tmp_path: Path) -> None:

@@ -13,7 +13,7 @@ _spec = importlib.util.spec_from_file_location("releases", ROOT / "releases.py")
 releases = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(releases)
 
-# Veröffentlichte Releases dieses Projekts (Stand 2.7.0) – samt Entwurf und Vorabversion
+# Veröffentlichte Releases dieses Projekts (Stand 2.7.1) – samt Entwurf und Vorabversion
 PUBLISHED = [
     {"tagName": "v2.7.0", "isDraft": False, "isPrerelease": False},
     {"tagName": "v2.6.1", "isDraft": False, "isPrerelease": False},
@@ -34,6 +34,13 @@ def test_previous_stable_for_270_is_261() -> None:
     assert releases.previous_stable((2, 7, 0), versions) == (2, 6, 1)
     # Entwürfe, Vorabversionen und fremde Tags zählen nie
     assert (2, 7, 1) not in versions and (2, 8, 0) not in versions
+
+
+def test_previous_stable_for_271_is_270() -> None:
+    """Update-Test von 2.7.1: von 2.7.0 (der Entwurf von 2.7.1 selbst zählt nicht)."""
+    versions = releases.stable_versions(PUBLISHED)
+    assert releases.previous_stable((2, 7, 1), versions) == (2, 7, 0)
+    assert [releases.text(v) for v in releases.older_stable((2, 7, 1), versions)][-2:] == ["2.6.1", "2.7.0"]
 
 
 def test_semver_not_alphabetical() -> None:
