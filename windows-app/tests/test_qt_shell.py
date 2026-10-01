@@ -166,7 +166,7 @@ def test_status_hint_follows_the_tool(app) -> None:
     app.navigate("batch")
     assert "Stapel" in app.app.hint or "Excel-Dateien" in app.app.hint
     app.navigate("repair")
-    assert app.app.hint.startswith("Strg+O  PDF auswählen")
+    assert app.app.hint.startswith("Strg+O  PDFs auswählen")  # eine oder mehrere PDFs
 
 
 def test_help_follows_the_open_view(app) -> None:
