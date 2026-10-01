@@ -148,6 +148,11 @@ def _prepare(config_file: Path, monkeypatch, profile: str, extra: dict | None = 
     data.update(extra or {})
     if not config_file.exists():
         config_file.write_text(json.dumps(data), encoding="utf-8")
+    # Automatische Sicherung und Aufräumen nach dem Start nur, wenn ein Test sie selbst auslöst
+    from qtapp import backups, diagnose
+
+    monkeypatch.setattr(backups, "AUTO_DELAY", 10**9)
+    monkeypatch.setattr(diagnose, "CLEANUP_DELAY", 10**9)
     # Rückfragen: »primary«; Dateiauswahl: keine (ein echter Dialog öffnet sich in Tests nie).
     monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
     monkeypatch.setattr(files, "RESPONSES", [])

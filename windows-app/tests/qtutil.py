@@ -75,6 +75,7 @@ class Harness:
         self.appmod = appmod
         self.qt = qt_application()
         appmod.MESSAGES.clear()
+        appmod.prepare_data()  # wie beim echten Start: vorbereitete Wiederherstellung zuerst
         self.runtime = appmod.Runtime(load_config())
         rt = self.runtime
         self.app = rt.app
@@ -86,6 +87,11 @@ class Harness:
         self.preview = rt.contracts.preview
         self.batch = rt.contracts.batch
         self.comparison = rt.contracts.comparison
+        self.templates = rt.contracts.templates
+        self.rules = rt.contracts.rules
+        self.backup = rt.backup
+        self.diagnose = rt.diagnose
+        self.updates = rt.updates
         self.repair = rt.repair.controller
         self.engine = None
         self.window = None
@@ -97,7 +103,7 @@ class Harness:
             self.wait_pages()
             pump(0.1)
 
-    PAGES = ("home", "create", "layout", "preview", "batch", "comparison", "customers", "repair", "settings")
+    PAGES = ("home", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings")
 
     def wait_pages(self, timeout: float = 20.0) -> bool:
         """Warten, bis alle verfügbaren Seiten im Hintergrund geladen sind (wie nach dem Start)."""

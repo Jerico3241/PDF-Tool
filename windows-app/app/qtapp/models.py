@@ -129,8 +129,10 @@ class KeyedListModel(QAbstractListModel):
         if len(self._items) != before:
             self.countChanged.emit()
 
-    def update_item(self, key, **changes: Any) -> bool:
-        """Einzelne Rollen eines Eintrags ändern (``dataChanged`` nur für diese Rollen)."""
+    def update_item(self, key, /, **changes: Any) -> bool:
+        """Einzelne Rollen eines Eintrags ändern (``dataChanged`` nur für diese Rollen).
+
+        ``changes`` darf auch den Schlüssel selbst enthalten (z. B. eine Rolle »key«) – er bleibt gleich."""
         row = self.indexOf(key)
         if row < 0:
             return False

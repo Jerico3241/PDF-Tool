@@ -2,6 +2,59 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 2.8.0-beta.1
+
+Beta zum Testen (Kanal „Beta“). Die stabile Version 2.8.0 folgt erst nach Test und Freigabe.
+
+## Vorlagen 2.0
+
+- je Vorlage eine eigene Datei mit fester ID und Schema-Version (`vorlagen\`); Vorlagen bis 2.7
+  werden beim ersten Start einmalig übernommen, die bisherige Liste bleibt unverändert
+- neue Ansicht „Vorlagen“: suchen, ansehen, anwenden, laden und bearbeiten, umbenennen,
+  duplizieren, Beschreibung, Standardvorlage, löschen (Verweise in Kundenakten, Stapel und
+  Standardvorlage werden dabei kontrolliert gelöst)
+- „Darstellung“: geladene Vorlage mit „Vorlage geändert“, „Vorlage aktualisieren“, „Als neue
+  Vorlage speichern“ und „Änderungen verwerfen“; die Vorlage hält auch das Regelwerk fest
+- Standardvorlage für jede neue Übersicht (rückgängig machbar) und als vierte Stufe im Stapel:
+  Eintrag → Kundenakte → Vorlage des Stapels → Standardvorlage → Darstellung
+
+## Regelwerk 2.0
+
+- Regelwerke mit Regeln „WENN … DANN …“: Bedingungen für Text, Zahl (Netto) und Datum (Beginn),
+  „alle“ oder „mindestens eine“; Aktionen setzen, ersetzen, voranstellen, anhängen, leeren für Art,
+  Beschreibung, Abrechnungszyklus und Zahlungsart – keine Skripte, kein Code
+- neue Ansicht „Regeln“: Regelkarten, visueller Editor, Reihenfolge, duplizieren, entfernen mit
+  „Rückgängig“, ein- und ausschalten; automatisch gespeichert
+- Testmodus („Trifft auf 7 von 18 Verträgen zu“) und Vorschau vorher → nachher mit Konflikten,
+  im Hintergrund berechnet; „Übersicht erstellen“ nennt, was das Regelwerk ändert
+- wirkt auf PDF, Vorschau, Stapel und Vertragsstand (gespeichert werden die exportierten Werte),
+  nie auf die Excel-Datei; Stapel: Regelwerk je Eintrag
+
+## Sicherung & Wiederherstellung
+
+- Sicherung als `.pdtbackup` (ZIP mit Manifest und SHA-256 je Datei), atomar erstellt und geprüft
+- „Jetzt sichern …“ in einen Ordner Ihrer Wahl; automatisch einmal täglich bei Änderungen und vor
+  jedem Update; die letzten 10 automatischen bleiben, manuelle werden nie automatisch gelöscht
+- Wiederherstellen: vollständige Prüfung, Zusammenfassung, Auswahl der Bereiche, Sicherung des
+  aktuellen Stands, Ausführung beim Neustart – atomar mit Rückabwicklung; Sicherungen einer
+  neueren Version werden nie eingespielt
+
+## Diagnose
+
+- Systeminformationen (Version, Kanal, Python, Qt, Windows, Pfade, Module, Reparatur-Engines)
+- Datenprüfung ohne Änderungen (Einstellungen, Kundenakten, Vorlagen, Regelwerke, Vertragsstände,
+  Sicherungsordner, temporärer Ordner, freier Speicher)
+- Support-Paket (ZIP) mit Bericht und bereinigten Protokollen – ohne Kunden- oder Dokumentdaten
+- Protokoll `pdf-tool.log` mit Rotation; eigene temporäre Dateien früherer Sitzungen werden
+  aufgeräumt
+
+## Weitere Änderungen
+
+- Ansichtsleiste von „Vertragsübersichten“ verschiebbar, wenn die Breite nicht reicht
+- Stapel: „Standardvorlage“ heißt jetzt „Vorlage des Stapels“ (die Standardvorlage gilt für alle)
+- Speichern wiederholt kurz gesperrte Dateien (z. B. durch Virenscanner) statt abzubrechen
+- Release-Workflow: ein stabiles Release setzt eine veröffentlichte Beta derselben Version voraus
+
 # PDF Tool 2.7.2
 
 ## In-App Updates

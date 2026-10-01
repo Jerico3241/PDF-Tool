@@ -158,9 +158,21 @@ class ContractRecord:
         )
 
 
-def record_from(vertrag, regeln=None) -> ContractRecord:
-    """Vertrag aus ``engine.Vertragsdaten`` – mit denselben Regeln wie in der PDF."""
-    shown = vertrag.anzeige(regeln)
+def _evaluator(regelwerk):
+    """Regelwerk als ``Evaluator`` (aus ``RuleSet``, gespeichertem Wörterbuch oder bereits übersetzt)."""
+    if regelwerk is None or hasattr(regelwerk, "apply_contract"):
+        return regelwerk
+    from ..rules.evaluate import evaluator_for
+
+    return evaluator_for(regelwerk)
+
+
+def record_from(vertrag, regeln=None, regelwerk=None) -> ContractRecord:
+    """Vertrag aus ``engine.Vertragsdaten`` – mit denselben Regeln wie in der PDF.
+
+    ``regelwerk``: Regelwerk 2.0 der PDF – der Vertragsstand hält genau die exportierten Werte fest.
+    """
+    shown = vertrag.ausgabe(regeln, _evaluator(regelwerk))
     total = amount(vertrag.netto)
     return ContractRecord(
         contract_number=clean_text(vertrag.nummer),
@@ -182,8 +194,9 @@ def record_from(vertrag, regeln=None) -> ContractRecord:
     )
 
 
-def records_from(vertraege, regeln=None) -> tuple[ContractRecord, ...]:
-    return tuple(record_from(vertrag, regeln) for vertrag in vertraege)
+def records_from(vertraege, regeln=None, regelwerk=None) -> tuple[ContractRecord, ...]:
+    evaluator = _evaluator(regelwerk)
+    return tuple(record_from(vertrag, regeln, evaluator) for vertrag in vertraege)
 
 
 def content_hash(records) -> str:

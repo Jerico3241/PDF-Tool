@@ -5,10 +5,18 @@ Die Fachlogik ist dieselbe wie bis 2.6 (``tools.contract_overview``): Prüfung u
 ``engine``, offene Punkte über ``overview``, Vorlagen und Regeln über ``appstate.State``.
 Kundenakte, Vorschau, Stapel und Vertragsvergleich haben eigene Controller; sie werden über
 das Werkzeug (``tool``) erreicht.
+
+Vorlagen 2.0 (ab 2.8): Die »Darstellung« ist die Arbeitskopie. Eine geladene Vorlage
+(``vorlageId``) bleibt verknüpft; weicht die Darstellung von ihrem Stand ab, zeigt die
+Oberfläche »Vorlage geändert« (``templateModified``) mit »Vorlage aktualisieren«, »Als neue
+Vorlage speichern« und »Änderungen verwerfen«. Das Regelwerk der Übersicht (``ruleSetId``)
+gehört zur Darstellung; eine Vorlage kann es festlegen.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -43,6 +51,7 @@ from tools.contract_overview.overview import (
     valid_width,
 )
 from tools.contract_overview.preview import RENDER_LOCK
+from tools.contract_overview.templates.models import ENTRY_RULE_SET
 
 from .. import files
 from ..base import Observable, Var, prop
@@ -101,6 +110,15 @@ class ContractOverviewController(Observable):
     pdfOeffnenChanged, pdfOeffnen = prop(bool, "pdfOeffnen", True)
     bausteinChanged, baustein = prop(str, "baustein", "")
     vorlageChanged, vorlage = prop(str, "vorlage", "")
+    # Vorlagen 2.0 und Regelwerk
+    vorlageIdChanged, vorlageId = prop(str, "vorlageId", "")
+    templateRevisionChanged, templateRevision = prop(int, "templateRevision", 0)  # Auswahlliste neu gefüllt
+    templateLabelChanged, templateLabel = prop(str, "templateLabel", "")
+    templateModifiedChanged, templateModified = prop(bool, "templateModified", False)
+    defaultTemplateChanged, defaultTemplate = prop(str, "defaultTemplate", "")
+    ruleSetIdChanged, ruleSetId = prop(str, "ruleSetId", "")
+    ruleSetLabelChanged, ruleSetLabel = prop(str, "ruleSetLabel", "")
+    ruleSetChoicesChanged, ruleSetChoices = prop(list, "ruleSetChoices", [])
     regelSuchChanged, regelSuch = prop(str, "regelSuch", "")
     regelZykChanged, regelZyk = prop(str, "regelZyk", "")
 
@@ -144,6 +162,11 @@ class ContractOverviewController(Observable):
         self.set_quietly("untertitel", cfg.get("untertitel", DEFAULT_UNTERTITEL))
         self.set_quietly("pdfOeffnen", bool(cfg.get("pdf_oeffnen", True)))
         self.set_quietly("baustein", cfg.get("baustein_name", ""))
+        self.set_quietly("vorlageId", str(cfg.get("vorlage_aktiv") or ""))
+        self.set_quietly("defaultTemplate", str(cfg.get("vorlage_standard") or ""))
+        self.set_quietly("ruleSetId", str(cfg.get("regelwerk") or ""))
+        # Stand der Darstellung beim Laden/Speichern der Vorlage (Prüfsumme) – »Vorlage geändert«
+        self._template_baseline = str(cfg.get("vorlage_stand") or "")
         # Formularwerte mit derselben Schnittstelle wie bisher (get/set/trace_add)
         self.var_firma, self.var_kd, self.var_mail = Var(self, "firma"), Var(self, "kd"), Var(self, "mail")
         self.var_excel, self.var_logo, self.var_ziel = Var(self, "excel"), Var(self, "logo"), Var(self, "ziel")
@@ -155,7 +178,7 @@ class ContractOverviewController(Observable):
         # Standard-Fußzeile (auch nach einem Update), ohne gespeicherte Formatierung das Standardformat.
         self.header = RichTextDocument(HEADER_STYLE, HEADER_ALIGN, header_rich_from(cfg), on_change=self.app.schedule_save, parent=self)
         self.footer = RichTextDocument(FOOTER_STYLE, FOOTER_ALIGN, footer_rich_from(cfg), on_change=self.app.schedule_save, parent=self)
-        self.templates = KeyedListModel(("name",), key="name", parent=self)
+        self.templates = KeyedListModel(("id", "name", "standard"), key="id", parent=self)
         self.textBlocks = KeyedListModel(("name",), key="name", parent=self)
         self.rules = KeyedListModel(("index", "enthaelt", "zyklus"), key="key", parent=self)
         self.recentPdfs = KeyedListModel(("path",), key="label", parent=self)
@@ -164,6 +187,7 @@ class ContractOverviewController(Observable):
         self._analysis: dict | None = None
         self._analysis_path = ""
         self._undo_overview: tuple[str, str, str, str] | None = None
+        self._undo_layout: dict | None = None
         self._undo_overview_customer: dict | None = None
         self._drag_saved: tuple | None = None
         self._pdf_by_label: dict[str, str] = {}
@@ -184,7 +208,11 @@ class ContractOverviewController(Observable):
         self.observe("logo", lambda _value: self.refresh_files())
         self.observe("ziel", lambda _value: self.refresh_files())
         self.observe("kd", lambda _value: self._clear_error("kd") if self.kd.strip() else None)
+        # »Vorlage geändert« folgt jeder Änderung der Darstellung (gesammelt im nächsten Durchlauf).
+        for name in ("logo", "format", "dateiname", "breite", "titel", "untertitel", "ruleSetId"):
+            self.observe(name, lambda _value: self.template_state_soon())
         self.reload_pdfs()
+        self.reload_rule_sets()
         self.reload_vorlagen()
         self.reload_bausteine()
         self.reload_regeln()
@@ -223,9 +251,14 @@ class ContractOverviewController(Observable):
             "bausteine": self.state.bausteine,
             "pdfs": self.state.pdfs[:8],
             "regeln": self.state.regeln,
-            "vorlagen": self.state.vorlagen,
+            # Vorlagen liegen ab 2.8 in eigenen Dateien; die bisherige Liste bleibt unverändert stehen.
+            **({"vorlagen": self.state.vorlagen} if self.state.templates is None else {}),
             "staende": self.state.staende,
             "pdf_oeffnen": bool(self.pdfOeffnen),
+            "vorlage_aktiv": self.vorlageId or None,
+            "vorlage_stand": self._template_baseline if self.vorlageId else None,
+            "vorlage_standard": self.defaultTemplate or None,
+            "regelwerk": self.ruleSetId or None,
         }
 
     # Hilfen -------------------------------------------------------------------------------------
@@ -657,10 +690,12 @@ class ContractOverviewController(Observable):
     def set_header(self, rich: RichText) -> None:
         self.header.set_rich(rich)
         self.tool.preview_dirty()
+        self.template_state_soon()
 
     def set_footer(self, rich: RichText) -> None:
         self.footer.set_rich(rich)
         self.tool.preview_dirty()
+        self.template_state_soon()
 
     @Slot()
     def saveHeader(self) -> None:  # noqa: N802
@@ -741,15 +776,93 @@ class ContractOverviewController(Observable):
         self.reload_bausteine()
         self.notify("fuss_info", "success", f"Textbaustein „{name}“ gelöscht.", auto_hide=5000)
 
-    # Vorlagen -----------------------------------------------------------------------------------------------
+    # Vorlagen ------------------------------------------------------------------------------------------------
     def reload_vorlagen(self) -> None:
-        self.templates.set_items([{"name": str(eintrag.get("name", ""))} for eintrag in self.state.vorlagen if str(eintrag.get("name", ""))])
+        """Auswahllisten der Vorlagen (alphabetisch) samt Standard-Kennzeichen neu füllen."""
+        store = self.state.templates
+        if store is None:
+            entries = [{"id": str(e.get("name", "")), "name": str(e.get("name", "")), "standard": False} for e in self.state.vorlagen if str(e.get("name", ""))]
+        else:
+            if self.defaultTemplate and store.get(self.defaultTemplate) is None:
+                self.defaultTemplate = ""
+            if self.vorlageId and store.get(self.vorlageId) is None:
+                self.vorlageId = ""  # geladene Vorlage wurde gelöscht: die Darstellung bleibt
+            entries = [{"id": tpl.id, "name": tpl.name, "standard": tpl.id == self.defaultTemplate} for tpl in store.templates()]
+        self.templates.set_items(entries)
+        self.templateRevision += 1  # QML: gewählten Eintrag neu bestimmen (Reihenfolge, neue Vorlagen)
+        self._refresh_template_label()
+        self.refresh_template_state()
+
+    def _refresh_template_label(self) -> None:
+        template = self.state.templates.get(self.vorlageId) if self.state.templates is not None else None
+        self.templateLabel = template.name if template is not None else ""
+        if template is not None:
+            self.vorlage = template.name
+
+    def template_entry(self) -> dict | None:
+        """Wörterbuch der geladenen Vorlage (oder ``None``)."""
+        return self.state.find_vorlage(self.vorlageId) if self.vorlageId else None
+
+    def _work_signature(self) -> str:
+        """Prüfsumme der Darstellung – alles, was eine Vorlage festhält."""
+        data = {
+            "logo": self.logo.strip(),
+            "format": self.format,
+            "dateiname": self.dateiname.strip(),
+            "breite": self.breite.strip(),
+            "titel": self.titel.strip(),
+            "untertitel": self.untertitel.strip(),
+            "kopf": self.header_rich().to_dict(),
+            "fuss": self.footer_rich().to_dict(),
+            "regeln": self.state.regeln,
+            "regelwerk": self.ruleSetId,
+        }
+        return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
+
+    def template_state_soon(self) -> None:
+        self.app.timers.soon("template-state", self.refresh_template_state)
+
+    def refresh_template_state(self) -> None:
+        self.templateModified = bool(self.vorlageId) and self._template_baseline != self._work_signature()
+
+    def _mark_template(self, template_id: str) -> None:
+        """Vorlage gilt als geladen und unverändert (nach Anwenden oder Speichern)."""
+        self.vorlageId = template_id
+        self._refresh_template_label()
+        self._template_baseline = self._work_signature()
+        self.templateModified = False
+
+    def current_entry(self, name: str) -> dict:
+        """Die aktuelle Darstellung als Vorlage (Wörterbuch wie bisher, plus Regelwerk)."""
+        kopf = self.header_rich()
+        fuss = self.footer_rich()
+        return {
+            "name": name,
+            "logo": self.logo.strip(),
+            "format": self.format,
+            "dateiname": self.dateiname.strip(),
+            "logo_breite": self.breite.strip(),
+            "titel": self.titel.strip(),
+            "untertitel": self.untertitel.strip(),
+            "kopfzeile": kopf.text,
+            HEADER_FORMAT: kopf.to_dict(),
+            "fusszeile": fuss.text,
+            FOOTER_FORMAT: fuss.to_dict(),
+            FOOTER_EXPLICIT: True,
+            "regeln": [dict(regel) for regel in self.state.regeln],
+            ENTRY_RULE_SET: self.ruleSetId,
+        }
 
     @Slot(str)
     def pickVorlage(self, label: str) -> None:  # noqa: N802
+        """Vorlage anwenden – per ID (Auswahlliste) oder Name (bis 2.7)."""
         eintrag = self.state.find_vorlage(label)
         if eintrag:
             self.apply_vorlage(eintrag)
+
+    @Slot(str)
+    def applyTemplate(self, template_id: str) -> None:  # noqa: N802
+        self.pickVorlage(template_id)
 
     def apply_vorlage(self, eintrag: dict, texts: bool = True, quiet: bool = False) -> None:
         """Vorlage anwenden. ``texts=False`` lässt Kopf- und Fußzeile unverändert (vom Benutzer geändert)."""
@@ -772,14 +885,27 @@ class ContractOverviewController(Observable):
         changed = regeln != self.state.regeln
         self.state.regeln = regeln
         self.reload_regeln()
+        # Regelwerk der Vorlage (nur wenn sie eines festlegt; ältere Vorlagen lassen es unverändert)
+        missing_rule_set = False
+        if isinstance(eintrag.get(ENTRY_RULE_SET), str):
+            wanted = eintrag[ENTRY_RULE_SET]
+            if wanted and (self.state.rule_sets is None or self.state.rule_sets.get(wanted) is None):
+                missing_rule_set, wanted = True, ""
+            if wanted != self.ruleSetId:
+                self._set_rule_set(wanted, quiet=True)
+        if eintrag.get("id"):
+            self._mark_template(str(eintrag["id"]))
         self.app.persist()
         if changed:
             self.recheck_excel()  # andere Zyklus-Regeln: Excel neu prüfen (nie eine alte Analyse verwenden)
-        if not quiet:
+        if missing_rule_set:
+            self.notify("vorlagen_info", "warning", f"Vorlage „{eintrag.get('name', '')}“ geladen. Ihr Regelwerk gibt es nicht mehr – es wird kein Regelwerk verwendet.")
+        elif not quiet:
             self.notify("vorlagen_info", "success", f"Vorlage „{eintrag.get('name', '')}“ geladen.", auto_hide=5000)
 
     @Slot()
     def saveVorlage(self) -> None:  # noqa: N802
+        """Darstellung unter dem eingetragenen Namen speichern (gleicher Name: Vorlage aktualisieren)."""
         name = self.vorlage.strip()
         if not name:
             self._set_error("vorlage")
@@ -787,44 +913,171 @@ class ContractOverviewController(Observable):
             self.notify("vorlagen_info", "warning", "Bitte zuerst einen Namen für die Vorlage eintragen.")
             return
         self._clear_error("vorlage")
-        kopf = self.header_rich()
-        fuss = self.footer_rich()
-        self.state.save_vorlage(
-            {
-                "name": name,
-                "logo": self.logo.strip(),
-                "format": self.format,
-                "dateiname": self.dateiname.strip(),
-                "logo_breite": self.breite.strip(),
-                "titel": self.titel.strip(),
-                "untertitel": self.untertitel.strip(),
-                "kopfzeile": kopf.text,
-                HEADER_FORMAT: kopf.to_dict(),
-                "fusszeile": fuss.text,
-                FOOTER_FORMAT: fuss.to_dict(),
-                FOOTER_EXPLICIT: True,
-                "regeln": [dict(regel) for regel in self.state.regeln],
-            }
-        )
+        saved = self.state.save_vorlage(self.current_entry(name))
+        if self.state.templates is not None and saved is None:
+            self.notify("vorlagen_info", "error", self.state.templates.last_error or "Die Vorlage konnte nicht gespeichert werden.")
+            return
+        if saved is not None:
+            self._mark_template(saved.id)
         self.reload_vorlagen()
         self.app.persist()
-        self.tool.batch_mark_stale()
+        self.tool.templates_changed()
         self.notify("vorlagen_info", "success", f"Die Vorlage „{name}“ wurde gespeichert.", auto_hide=5000)
 
     @Slot()
-    def deleteVorlage(self) -> None:  # noqa: N802
-        name = self.vorlage.strip()
-        if not name or self.state.find_vorlage(name) is None:
-            self.notify("vorlagen_info", "warning", "Bitte zuerst eine gespeicherte Vorlage auswählen.")
+    def updateTemplate(self) -> None:  # noqa: N802
+        """Geladene Vorlage mit der aktuellen Darstellung aktualisieren (Name, ID und Beschreibung bleiben)."""
+        store = self.state.templates
+        template = store.get(self.vorlageId) if store is not None else None
+        if template is None:
+            self.notify("vorlagen_info", "warning", "Es ist keine Vorlage geladen.")
             return
-        if not self.app.dialogs.confirm("Vorlage löschen?", f"Die Vorlage „{name}“ wird dauerhaft entfernt. Die aktuellen Einstellungen bleiben unverändert.", "Löschen"):
+        from tools.contract_overview.templates.models import Template
+
+        entry = {**self.current_entry(template.name), "id": template.id, "beschreibung": template.meta.description}
+        saved = store.update(Template.from_entry(entry, template_id=template.id, created_at=template.meta.created_at))
+        if saved is None:
+            self.notify("vorlagen_info", "error", store.last_error or "Die Vorlage konnte nicht gespeichert werden.")
             return
-        self.state.delete_vorlage(name)
-        self.vorlage = ""
+        self._mark_template(saved.id)
         self.reload_vorlagen()
         self.app.persist()
-        self.tool.batch_mark_stale()
-        self.notify("vorlagen_info", "success", f"Vorlage „{name}“ gelöscht.", auto_hide=5000)
+        self.tool.templates_changed()
+        self.notify("vorlagen_info", "success", f"Vorlage „{saved.name}“ aktualisiert.", auto_hide=5000)
+
+    @Slot(str, result=str)
+    def templateNameProblem(self, name: str) -> str:  # noqa: N802
+        """Prüfung eines neuen Namens: "" = in Ordnung, sonst der Grund."""
+        from tools.contract_overview.templates.models import clean_name
+
+        name = clean_name(name)
+        if not name:
+            return "Bitte einen Namen eintragen."
+        if self.state.templates is not None and self.state.templates.name_taken(name):
+            return "Eine Vorlage mit diesem Namen gibt es bereits."
+        return ""
+
+    @Slot(str, result=bool)
+    def saveAsTemplate(self, name: str) -> bool:  # noqa: N802
+        """Aktuelle Darstellung als neue Vorlage speichern und laden."""
+        problem = self.templateNameProblem(name)
+        if problem:
+            self.notify("vorlagen_info", "warning", problem)
+            return False
+        store = self.state.templates
+        if store is None:
+            self.vorlage = name
+            self.saveVorlage()
+            return True
+        from tools.contract_overview.templates.models import Template
+
+        created = store.update(Template.from_entry(self.current_entry(name)))
+        if created is None:
+            self.notify("vorlagen_info", "error", store.last_error or "Die Vorlage konnte nicht gespeichert werden.")
+            return False
+        self._mark_template(created.id)
+        self.reload_vorlagen()
+        self.app.persist()
+        self.tool.templates_changed()
+        self.notify("vorlagen_info", "success", f"Neue Vorlage „{created.name}“ gespeichert.", auto_hide=5000)
+        return True
+
+    @Slot()
+    def discardTemplateChanges(self) -> None:  # noqa: N802
+        """Darstellung wieder auf den Stand der geladenen Vorlage setzen."""
+        entry = self.template_entry()
+        if entry is None:
+            return
+        self.apply_vorlage(entry, quiet=True)
+        self.notify("vorlagen_info", "info", f"Änderungen verworfen – Vorlage „{entry.get('name', '')}“ wieder geladen.", auto_hide=5000)
+
+    @Slot()
+    def detachTemplate(self) -> None:  # noqa: N802
+        """»Keine Vorlage«: die Darstellung bleibt, die Verknüpfung mit der Vorlage entfällt."""
+        self.vorlageId = ""
+        self.vorlage = ""
+        self.templateLabel = ""
+        self.templateModified = False
+        self.app.persist()
+
+    @Slot(str)
+    def setDefaultTemplate(self, template_id: str) -> None:  # noqa: N802
+        """Standardvorlage festlegen ("" = keine). Sie wird für jede neue Übersicht geladen."""
+        if template_id and (self.state.templates is None or self.state.templates.get(template_id) is None):
+            return
+        self.defaultTemplate = template_id
+        self.reload_vorlagen()
+        self.app.persist()
+        self.tool.templates_changed()
+
+    @Slot()
+    def deleteVorlage(self) -> None:  # noqa: N802
+        """Vorlage mit dem eingetragenen Namen löschen (mit Rückfrage)."""
+        name = self.vorlage.strip()
+        entry = self.state.find_vorlage(name) if name else None
+        if entry is None:
+            self.notify("vorlagen_info", "warning", "Bitte zuerst eine gespeicherte Vorlage auswählen.")
+            return
+        self.tool.delete_template(str(entry.get("id") or name), area="vorlagen_info")
+
+    def template_deleted(self, template_id: str, name: str) -> None:
+        """Nach dem Löschen einer Vorlage: Verknüpfungen lösen (die Darstellung bleibt unverändert)."""
+        if self.vorlageId == template_id or (not self.vorlageId and self.vorlage == name):
+            self.vorlageId = ""
+            self.vorlage = ""
+            self.templateModified = False
+        if self.defaultTemplate == template_id:
+            self.defaultTemplate = ""
+        self.reload_vorlagen()
+        self.app.persist()
+
+    # Regelwerk der Übersicht -------------------------------------------------------------------------------
+    def reload_rule_sets(self) -> None:
+        store = self.state.rule_sets
+        if store is None:
+            self.ruleSetChoices = []
+            return
+        if self.ruleSetId and store.get(self.ruleSetId) is None:
+            self.ruleSetId = ""
+        self.ruleSetChoices = [{"key": "", "label": "Kein Regelwerk"}] + [
+            {"key": rule_set.id, "label": rule_set.name + ("" if rule_set.active else " (inaktiv)")} for rule_set in store.rule_sets()
+        ]
+        current = store.get(self.ruleSetId)
+        self.ruleSetLabel = current.name if current is not None else ""
+
+    def rule_set(self):
+        """Regelwerk der Übersicht (``RuleSet``) oder ``None``."""
+        store = self.state.rule_sets
+        return store.get(self.ruleSetId) if store is not None and self.ruleSetId else None
+
+    def rule_set_dict(self) -> dict | None:
+        rule_set = self.rule_set()
+        return rule_set.to_dict() if rule_set is not None else None
+
+    @Slot(str)
+    def setRuleSet(self, rule_set_id: str) -> None:  # noqa: N802
+        self._set_rule_set(rule_set_id)
+
+    def _set_rule_set(self, rule_set_id: str, quiet: bool = False) -> None:
+        store = self.state.rule_sets
+        if rule_set_id and (store is None or store.get(rule_set_id) is None):
+            return
+        if rule_set_id == self.ruleSetId:
+            return
+        self.ruleSetId = rule_set_id
+        self.reload_rule_sets()
+        self.rule_set_changed()
+        if not quiet:
+            self.app.persist()
+            label = self.ruleSetLabel
+            self.set_status(f"Regelwerk: {label}" if label else "Kein Regelwerk", "success")
+
+    def rule_set_changed(self) -> None:
+        """Regelwerk gewählt oder geändert: Vorschau, Vergleich, Regelvorschau und Stapel folgen."""
+        self.tool.preview_dirty()
+        self.tool.refresh_comparison()
+        self.tool.rules_changed()
+        self.template_state_soon()
 
     @Slot()
     def resetPdfSettings(self) -> None:  # noqa: N802
@@ -849,6 +1102,7 @@ class ContractOverviewController(Observable):
         self.rules.set_items(
             [{"key": f"{index}:{regel.get('enthaelt', '')}", "index": index, "enthaelt": regel.get("enthaelt", ""), "zyklus": regel.get("zyklus", "")} for index, regel in enumerate(self.state.regeln)]
         )
+        self.template_state_soon()
 
     @Slot(int)
     def editRegel(self, index: int) -> None:  # noqa: N802
@@ -937,6 +1191,7 @@ class ContractOverviewController(Observable):
         customer = self.tool.customers.active_customer()
         customer_id, customer_label = (customer.id, customer.label) if customer is not None else (None, "")
         regeln = auftrag.get("regeln")
+        regelwerk = auftrag.get("regelwerk")
         self.app.persist()
         self.busy = True
         self.hide_notice("pdf_info")
@@ -950,7 +1205,7 @@ class ContractOverviewController(Observable):
             # Gemeinsame Sperre mit der Vorschau: die PDF-Erzeugung läuft nie parallel.
             with RENDER_LOCK:
                 path = erstelle_pdf(job)
-            return path, records_from(job.vertraege, regeln)
+            return path, records_from(job.vertraege, regeln, regelwerk)
 
         def done(result) -> None:
             path, records = result
@@ -978,6 +1233,7 @@ class ContractOverviewController(Observable):
             header=self.header_rich(),
             footer=self.footer_rich(),
             regeln=self.state.regeln,
+            regelwerk=self.rule_set_dict(),
         )
 
     def _done(self, path: Path) -> None:
@@ -1009,19 +1265,61 @@ class ContractOverviewController(Observable):
         self.new_overview()
 
     def new_overview(self) -> None:
-        """Nur die kundenspezifischen Arbeitsdaten zurücksetzen (Firma, Kundennummer, Empfänger, Excel).
+        """Kundenspezifische Arbeitsdaten zurücksetzen (Firma, Kundennummer, Empfänger, Excel).
 
-        Logo, Zielordner, Darstellung, Vorlage, Kopf-/Fußzeile, Design und Regeln bleiben.
+        Logo, Zielordner, Darstellung, Kopf-/Fußzeile und Regeln bleiben – gibt es eine
+        Standardvorlage, wird sie geladen (rückgängig machbar). Eine Kundenakte mit »Vorlage
+        automatisch verwenden« lädt danach ihre eigene Vorlage (sie hat Vorrang).
         """
         previous = (self.firma, self.kd, self.mail, self.excel)
+        layout = self._layout_snapshot()
         customer = self.tool.customers.leave()
-        self._undo_overview = previous if any(value.strip() for value in previous) or customer else None
         self._undo_overview_customer = customer
         self._reset_work(("", "", "", ""))
+        default = self._apply_default_template()
+        self._undo_overview = previous if any(value.strip() for value in previous) or customer or default else None
+        self._undo_layout = layout if default else None
         self.hide_notice("pdf_info")
         actions = (("Rückgängig", self._undo_new_overview),) if self._undo_overview else ()
-        self.notify("kunde_info", "info", "Bereit für eine neue Übersicht: Kundendaten und Excel-Datei wurden zurückgesetzt.", actions=actions, auto_hide=10000)
+        text = "Bereit für eine neue Übersicht: Kundendaten und Excel-Datei wurden zurückgesetzt."
+        if default:
+            text += f" Standardvorlage „{default}“ geladen."
+        self.notify("kunde_info", "info", text, actions=actions, auto_hide=10000)
         self._focus("firma")
+
+    def _apply_default_template(self) -> str:
+        """Standardvorlage laden, falls es eine gibt und sie nicht schon unverändert geladen ist."""
+        if not self.defaultTemplate:
+            return ""
+        entry = self.state.find_vorlage(self.defaultTemplate)
+        if entry is None or (self.vorlageId == self.defaultTemplate and not self.templateModified):
+            return ""
+        self.apply_vorlage(entry, quiet=True)
+        return str(entry.get("name", ""))
+
+    def _layout_snapshot(self) -> dict:
+        return {
+            "values": {name: getattr(self, name) for name in ("logo", "format", "dateiname", "breite", "titel", "untertitel", "vorlage", "vorlageId", "ruleSetId")},
+            "header": self.header_rich(),
+            "footer": self.footer_rich(),
+            "regeln": [dict(regel) for regel in self.state.regeln],
+            "baseline": self._template_baseline,
+        }
+
+    def _restore_layout(self, snapshot: dict) -> None:
+        values = snapshot["values"]
+        for name in ("logo", "format", "dateiname", "breite", "titel", "untertitel", "vorlage", "vorlageId"):
+            setattr(self, name, values[name])
+        self.refresh_files()
+        self.set_header(snapshot["header"])
+        self.set_footer(snapshot["footer"])
+        self.state.regeln = snapshot["regeln"]
+        self.reload_regeln()
+        if values["ruleSetId"] != self.ruleSetId:
+            self._set_rule_set(values["ruleSetId"], quiet=True)
+        self._template_baseline = snapshot["baseline"]
+        self._refresh_template_label()
+        self.refresh_template_state()
 
     def _reset_work(self, values: tuple[str, str, str, str]) -> None:
         firma, kd, mail, excel = values
@@ -1048,6 +1346,9 @@ class ContractOverviewController(Observable):
         if self._undo_overview is not None:
             values, self._undo_overview = self._undo_overview, None
             customer, self._undo_overview_customer = self._undo_overview_customer, None
+            layout, self._undo_layout = self._undo_layout, None
+            if layout is not None:
+                self._restore_layout(layout)
             self.tool.customers.return_to(customer)
             self._reset_work(values)
             self.hide_notice("kunde_info")

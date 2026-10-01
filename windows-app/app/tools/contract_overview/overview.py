@@ -148,8 +148,12 @@ def pdf_fields(
     header: RichText,
     footer: RichText,
     regeln: list[dict],
+    regelwerk: dict | None = None,
 ) -> dict:
-    """Auftrag für ``engine.erstelle_pdf`` (ohne Zielordner) – für PDF, Vorschau und Stapel gleich."""
+    """Auftrag für ``engine.erstelle_pdf`` (ohne Zielordner) – für PDF, Vorschau und Stapel gleich.
+
+    ``regelwerk``: Regelwerk 2.0 als ``RuleSet.to_dict()`` (oder ``None``).
+    """
     return dict(
         excel=Path(excel),
         logo=Path(logo),
@@ -166,6 +170,7 @@ def pdf_fields(
         kopfzeile=header.text,
         kopfzeile_format=header.to_dict(),
         regeln=[dict(eintrag) for eintrag in regeln],
+        regelwerk=regelwerk,
     )
 
 

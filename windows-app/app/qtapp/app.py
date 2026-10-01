@@ -107,6 +107,7 @@ class AppController(Observable):
         self.closing = False
         self._tools: dict[str, ToolHooks] = {}
         self._config_parts: list[Callable[[], dict]] = []
+        self.restart_requested = False  # nach dem Beenden neu starten (Wiederherstellung)
         self._at_shutdown: list[Callable[[], None]] = []
         self._last_page: dict[str, str] = {}
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
@@ -410,6 +411,9 @@ class AppController(Observable):
     def report_exception(self, text: str) -> None:
         """Unerwarteter Fehler in einer Rückmeldung: protokollieren und in der Statuszeile nennen."""
         self.write_error_log(text)
+        from diagnostics.applog import get as get_log
+
+        get_log("app").error("Unerwarteter Fehler:\n%s", text.rstrip())
         last = text.strip().splitlines()[-1] if text.strip() else "Unbekannter Fehler"
         try:
             self.set_status(f"Unerwarteter Fehler: {last} – Details in fehler.log", "error")
@@ -458,8 +462,27 @@ class AppController(Observable):
 
     # Beenden ------------------------------------------------------------------------------------------------------
     def running_work(self) -> list[str]:
-        """Laufende Verarbeitungen aller Werkzeuge (z. B. »PDF-Reparatur«, »Stapel«) – vor einem Update."""
-        return [work for hooks in self._tools.values() if (work := hooks.running_work())]
+        """Laufende Verarbeitungen (z. B. »PDF-Reparatur«, »Stapel«, »Sicherung«) – vor einem Update."""
+        sources = [hooks.running_work for hooks in self._tools.values()] + list(getattr(self, "_work_sources", []))
+        return [work for source in sources if (work := source())]
+
+    def register_work(self, source: Callable[[], str]) -> None:
+        """Weitere laufende Arbeit melden (Sicherung, Wiederherstellung, Diagnose-Export)."""
+        self.__dict__.setdefault("_work_sources", []).append(source)
+
+    def restart(self) -> bool:
+        """PDF Tool neu starten: wie Beenden (alles wird gespeichert), danach startet ``main`` die App
+        neu. ``False``, wenn das Beenden abgelehnt wurde (z. B. Rückfrage eines laufenden Stapels)."""
+        self.restart_requested = True
+        window = self.window
+        if window is not None:
+            window.close()
+            closed = bool(self.closing)
+        else:
+            closed = self.requestClose()
+        if not closed:
+            self.restart_requested = False
+        return closed
 
     @Slot(result=bool)
     def requestClose(self) -> bool:  # noqa: N802

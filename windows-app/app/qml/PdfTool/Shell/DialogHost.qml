@@ -144,6 +144,8 @@ T.Popup {
                             case "customer_fields": return customerFieldsContent
                             case "choose_template": return chooseTemplateContent
                             case "update_details": return updateContent
+                            case "text_input": return textInputContent
+                            case "restore_summary": return restoreSummaryContent
                             default: return null
                             }
                         }
@@ -206,4 +208,6 @@ T.Popup {
     Component { id: customerFieldsContent; CustomerFieldsContent {} }
     Component { id: chooseTemplateContent; ChooseTemplateContent {} }
     Component { id: updateContent; UpdateContent {} }
+    Component { id: textInputContent; TextInputContent {} }
+    Component { id: restoreSummaryContent; RestoreSummaryContent {} }
 }

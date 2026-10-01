@@ -27,7 +27,17 @@ und `app/tools/` (ohne Oberflächencode):
 - `tools/contract_overview/overview.py` – Excel-Prüfung, Bereitschaft, PDF-Felder (Einzel- und
   Stapelmodus), `preview.py` – Vorschau-PDF und Seitenbilder (PDFium),
   `customers/` – Kundenakte (Modelle, Abgleich, Speicher, Übernahme aus 2.3),
-  `batch/` – Stapel (Analyse, Auflösung, Verarbeitung), `history/` – Vertragsstände und Vergleich.
+  `batch/` – Stapel (Analyse, Auflösung, Verarbeitung), `history/` – Vertragsstände und Vergleich,
+  `templates/` – Vorlagen 2.0 (Modell mit ID und Schema-Version, Ablage je Datei, Übernahme aus
+  2.7, Vorrang `priority.py`), `rules/` – Regelwerk 2.0 (`models.py` Felder, Vergleiche, Aktionen;
+  `evaluate.py` Auswertung mit Spur und Vorschau; `repository.py` Ablage).
+- `storage.py` – gemeinsame Ablage: atomar schreiben (temporäre Datei, `fsync`, `os.replace` mit
+  kurzen Wiederholungen), sicher lesen, Schema-Versionen (`NewerSchema`), `JsonFolderStore` (je
+  Datensatz eine Datei; beschädigte oder neuere Dateien werden übersprungen und gemeldet).
+- `backup/` – Sicherung (`archive.py`), Wiederherstellung beim Start mit Journal und Rückabwicklung
+  (`restore.py`), automatische Sicherung und Aufbewahrung (`policy.py`).
+- `diagnostics/` – Systeminformationen, Datenprüfung, Bereinigung, Support-Paket, Protokoll
+  `pdf-tool.log` (`applog.py`), Aufräumen eigener temporärer Dateien.
 - `tools/pdf_repair/` – Analyse und Reparatur (`engine.py`), Arbeitsprozess (`process.py`, auch
   `deliver`: exklusives Speichern unter dem reservierten Namen), Dateiliste für eine oder mehrere
   PDFs (`batch.py`: Zustände `ItemState`, Namensregel `NameMode` AUTO/MANUAL, Windows-Namensprüfung,
@@ -50,12 +60,17 @@ Modul `PdfTool.Backend`:
 | `ThemeBackend` | `theme.ThemeController` | Hell/Dunkel, Akzentfarbe, Mica, Animationsprofil, Design-Tokens |
 | `Settings` | `settings.SettingsController` | Seite „Einstellungen“ (inkl. Kundenakte an/aus) |
 | `Dialogs` / `Notices` | `dialogs.DialogService` / `notices.NoticeCenter` | Dialoge in QML, InfoBars je Bereich |
-| `Contracts` | `contracts.overview.ContractOverviewController` | Übersicht erstellen, Darstellung, Vorlagen, Rich Text |
+| `Contracts` | `contracts.overview.ContractOverviewController` | Übersicht erstellen, Darstellung (geladene Vorlage, »Vorlage geändert«, Regelwerk), Rich Text |
+| `Templates` | `contracts.templates.TemplatesController` | Ansicht „Vorlagen“ (Liste ↔ Detail) |
+| `Rules` | `contracts.rules.RulesController` | Ansicht „Regeln“: Regelwerke, Regelkarten, Editor, Testmodus und Vorschau (im Hintergrund) |
 | `Customers` | `contracts.customers.CustomerController` | Kundenakte (nur geladen, wenn eingeschaltet) |
 | `Preview` | `contracts.preview.PreviewController` | Vorschau (Seitenbilder über `image://preview/…`) |
 | `Batch` | `contracts.batch.BatchController` | Stapel |
 | `Comparison` | `contracts.comparison.ComparisonController` | Vertragsvergleich |
 | `Repair` | `repair.RepairController` | PDF reparieren |
+| `Updates` | `updates.UpdatesController` | Updates (vor der Installation: Sicherung) |
+| `Backup` | `backups.BackupController` | Einstellungen → Sicherung & Wiederherstellung |
+| `Diagnose` | `diagnose.DiagnoseController` | Einstellungen → Diagnose |
 
 - **Properties** entstehen mit `base.prop()` (Wert + Änderungssignal, nur echte Änderungen
   melden); Python-Code kann mit `observe()` darauf hören.
@@ -130,9 +145,44 @@ von `windows-app/qmlres.py`).
 ## Start
 
 `app/start.py` → `qtapp.application.main()`:
-Konfiguration → Qt-Anwendung → Design (`ThemeController`) → Controller (`Runtime`) → QML-Engine →
-Fenster verdeckt (DWM-Cloaking) mit Lage und Titelleiste → Startseite → aufdecken mit dem ersten
-fertigen Bild → weitere Seiten laden.
+Protokoll (`pdf-tool.log`) → vorbereitete Wiederherstellung ausführen (`prepare_data`, vor dem
+Lesen jeder Datei) → Konfiguration → Qt-Anwendung → Design (`ThemeController`) → Controller
+(`Runtime`) → QML-Engine → Fenster verdeckt (DWM-Cloaking) mit Lage und Titelleiste → Startseite →
+aufdecken mit dem ersten fertigen Bild → weitere Seiten laden. Nach dem Start im Hintergrund:
+Update-Prüfung, automatische Sicherung (nach 15 s), Aufräumen alter temporärer Dateien (nach 30 s).
+Fordert eine Wiederherstellung den Neustart an, startet `main` die App neu – erst nachdem diese
+Instanz alles gespeichert hat.
+
+## Sicherung, Wiederherstellung und Diagnose (seit 2.8)
+
+- **Bereiche** (`backup/archive.py`, `AREAS`): Einstellungen (`gui-config.json`, `stapel.json`),
+  Kundenakten (`kundenakten.json`, `.bak`, `contract-history\`), Vorlagen (`vorlagen\`),
+  Regelwerke (`regelwerke\`). Nie: Protokolle, `sicherung.json`, andere Sicherungen, Dokumente.
+- **Erstellen:** ZIP in eine temporäre Datei im Zielordner, `fsync`, vollständige Nachprüfung, dann
+  `os.replace` – keine halbe Sicherung. Manifest mit Format-/App-Version, Art, Bereichen,
+  Schema-Versionen und SHA-256 je Datei.
+- **Prüfen:** Format- und Schema-Versionen (neuere → `BackupError(newer=True)`), nur Pfade in
+  Bereichen (kein `..`, kein Laufwerk), Mitglieder = Manifest, Größe und SHA-256 je Datei.
+- **Wiederherstellen:** `stage_restore` entpackt die gewählten Bereiche nach
+  `.wiederherstellung\` (jede Datei gegen ihre SHA-256 geprüft, sichtbar erst nach vollständigem
+  Entpacken); `apply_pending` läuft beim nächsten Start vor dem Laden der Daten und tauscht je
+  Bereich per Umbenennen aus (`.wiederherstellung-alt\`). Jeder Schritt steht vorher im Journal;
+  bei Fehlern oder nach einem Abbruch werden die Schritte rückwärts zurückgenommen; gelingt das nicht
+  vollständig, bleibt der alte Stand als `.wiederherstellung-nicht-zurueckgenommen-<Zeitpunkt>\`
+  erhalten (nie automatisch gelöscht, die Datenprüfung nennt ihn). Nach dem Erfolg
+  wird der alte Stand nur umbenannt (`.wiederherstellung-alt-<Kennung>\`) und von einem
+  Hintergrund-Thread gelöscht – der Start wartet nicht auf tausende Dateien. Ergebnis:
+  `wiederherstellung-ergebnis.json`.
+- **Automatisch** (`backup/policy.py`): höchstens alle 24 h und nur bei geändertem Datenstand
+  (Pfade, Größen, Änderungszeiten); Aufbewahrung 10/5/5 (automatisch/vor Update/vor
+  Wiederherstellung), manuelle nie; Status in `sicherung.json` (nicht Teil der Sicherung).
+- **Laufende Arbeit:** Sicherung, Wiederherstellung und Diagnose-Export melden sich über
+  `AppController.register_work` – „Jetzt installieren“ wartet darauf, und vor jeder Installation
+  entsteht eine Sicherung (`BackupController.backup_before_update`).
+- **Diagnose:** `diagnostics/checks.py` liest nur; das Support-Paket bereinigt Texte
+  (`sanitize.py`: Programm- und Datenordner als Platzhalter, sonstige Pfade als `<Pfad>.<Endung>`,
+  Benutzerordner, Benutzer- und Computername, E-Mail-Adressen, bekannte Firmen und Kundennummern
+  aus den eigenen Daten) und anonymisiert die Einstellungen (nur Schalter, Zahlen, Anzahlen).
 
 ## Updater (`app/updater`, seit 2.7.2)
 
@@ -200,7 +250,8 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 ## Tests
 
 - Kern: `tests/test_core.py`, `test_excel_bold.py`, `test_richtext.py`, `test_customers.py`,
-  `test_batch.py`, `test_history.py`, `test_pdf_repair.py`, `test_pdf_recovery.py`, `test_migration.py`.
+  `test_batch.py`, `test_history.py`, `test_pdf_repair.py`, `test_pdf_recovery.py`, `test_migration.py`,
+  `test_templates.py`, `test_rules.py`, `test_rules_pipeline.py`, `test_backup.py`, `test_diagnostics.py`.
 - Qt-Brücke und Oberfläche: `tests/test_qt_*.py` mit `tests/qtutil.py` (`Harness`: App wie beim
   Start, ohne Bildschirm mit `QT_QPA_PLATFORM=offscreen`). Jede Meldung der QML-Engine lässt einen
   Test scheitern.
@@ -209,7 +260,7 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 - PDF reparieren: `tests/test_pdf_repair_batch.py` (Liste, Zustände, Namen, Konflikte ohne Qt),
   `tests/test_qt_repair.py` (eine PDF wie bis 2.7.0, mehrere PDFs, Namen; bis zu 100 PDFs).
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
-  (`tests/fixtures/config_v22.json` … `config_v270.json`, dazu Kundenakten und ein Vertragsstand)
+  (`tests/fixtures/config_v22.json` … `config_v272.json`, dazu Kundenakten und ein Vertragsstand)
   in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.
 - Laufzeit und Setup: `tests/smoke_runtime.py` (`--part runtime` bzw. `--part ui`),
   `tests/smoke_installer.ps1` (in der CI).
@@ -217,11 +268,16 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 ## CI
 
 - **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Push/PR/Release): Tests (die Qt-Tests in
-  drei gleichzeitig laufenden Jobs auf eigenen Rechnern; Release und Anhängen erst nach allen Jobs) → Setup bauen →
+  vier gleichzeitig laufenden Jobs auf eigenen Rechnern; Release erst nach allen Jobs) → Setup bauen →
   Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen stabilen Version
   (`windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test
-  → QML-Smoke-Test → Release (nur manuell; `ersetzen` aktualisiert ein vorhandenes Release derselben
-  Version).
+  → QML-Smoke-Test → Release (manuell oder per Tag; unveränderlich – vorhandene Releases und Tags
+  werden nie überschrieben; ein stabiles Release setzt eine veröffentlichte Beta derselben Version
+  voraus, siehe [`docs/RELEASE.md`](../docs/RELEASE.md)).
 - **Deep Compatibility Test** (`.github/workflows/deep-compatibility.yml`, nur manuell): Upgrade von
   allen bzw. ausgewählten älteren stabilen Versionen (ab 2.2.0), je Version ein frischer Windows-Rechner.
+- **Beta-Update-Test** (`.github/workflows/beta-update-test.yml`, nur manuell nach dem Veröffentlichen
+  einer Beta): stabile Vorversion installieren, Kanal „Beta“; deren Updater findet die Beta bei
+  GitHub, lädt und prüft sie; das freigegebene Setup läuft still; danach Version, ein App-Eintrag,
+  Programmstart, Kanal, Einstellungen und Vorlagen (`tests/smoke_beta_update.py`).

@@ -92,12 +92,15 @@ SOURCE_TEXT = {
     resolver.SOURCE_EXCEL: "aus der Excel",
     resolver.SOURCE_BATCH: "Stapel-Einstellung",
     resolver.SOURCE_DEFAULT: "Standard",
+    resolver.SOURCE_DEFAULT_TEMPLATE: "Standardvorlage",
 }
+RULE_SET_AUTO = "Automatisch"
+RULE_SET_NONE = "Kein Regelwerk"
 HINT = "Strg+Enter  Bereite Übersichten erstellen   ·   Strg+O  Excel-Dateien hinzufügen   ·   Leertaste  auswählen"
 HELP_STEPS = (
     "Excel-Dateien hinzufügen (Strg+O), einen Ordner hinzufügen oder mehrere Dateien in das Fenster ziehen – jede Datei wird sofort geprüft.",
     "Bekannte Kunden werden am Rechnungsempfänger erkannt. Bei »Angaben erforderlich« den Eintrag öffnen und Firmenname und Kundennummer eintragen oder einen Kunden auswählen.",
-    "Zielordner, Standardvorlage und den Umgang mit vorhandenen PDFs unter »Ausgabe und Standards« festlegen.",
+    "Zielordner, Vorlage des Stapels und den Umgang mit vorhandenen PDFs unter »Ausgabe und Standards« festlegen.",
     "Auf »Bereite Übersichten erstellen« klicken oder Strg+Enter drücken – erstellt werden nur bereite Einträge.",
     "Im Ergebnis den Ausgabeordner öffnen; fehlgeschlagene Einträge lassen sich erneut versuchen.",
 )
@@ -254,6 +257,8 @@ class BatchController(Observable):
     customerModeChanged, customerMode = prop(str, "customerMode", "auto")
     itemRunningChanged, itemRunning = prop(bool, "itemRunning", False)
     itemTemplateChoicesChanged, itemTemplateChoices = prop(list, "itemTemplateChoices", [])
+    itemRuleSetChoicesChanged, itemRuleSetChoices = prop(list, "itemRuleSetChoices", [])
+    itemRuleSetChanged, itemRuleSet = prop(str, "itemRuleSet", RULE_SET_AUTO)
     itemTemplateChanged, itemTemplate = prop(str, "itemTemplate", TEMPLATE_AUTO)
     templateNoteChanged, templateNote = prop(str, "templateNote", "")
     itemLogoTextChanged, itemLogoText = prop(str, "itemLogoText", "")
@@ -504,11 +509,21 @@ class BatchController(Observable):
             footer=footer,
             regeln=tuple(dict(regel) for regel in self.app.state.regeln),
             logo=str(DEFAULT_LOGO),
+            regelwerk=c.rule_set_dict(),
+            regelwerk_name=c.ruleSetLabel,
+            vorlage_standard=c.defaultTemplate,
         )
 
     def resolve(self, item: BatchItem, for_preview: bool = False) -> resolver.Resolution:
         customers = self.tool.customers.customers if self.tool.customers.enabled else None
-        return resolver.resolve(item, customers, self.app.state.find_vorlage, self.settings, self.defaults(), for_preview=for_preview)
+        return resolver.resolve(item, customers, self.app.state.find_vorlage, self.settings, self.defaults(), for_preview=for_preview, find_rule_set=self.find_rule_set)
+
+    def find_rule_set(self, ref: str) -> dict | None:
+        store = self.app.state.rule_sets
+        rule_set = store.get(ref) if store is not None else None
+        if rule_set is None and store is not None:
+            rule_set = store.by_name(ref)
+        return rule_set.to_dict() if rule_set is not None else None
 
     def _update(self, item: BatchItem) -> resolver.Resolution:
         """Werte und Status eines Eintrags neu bestimmen (ein erstelltes Ergebnis bleibt)."""
@@ -772,13 +787,86 @@ class BatchController(Observable):
         if answer != dialog_service.PRIMARY:
             return
         value = str(result.get("value") or (names[0] if names else TEMPLATE_AUTO))
-        choice = None if value == TEMPLATE_AUTO else ("" if value == TEMPLATE_NONE else value)
+        choice = None if value == TEMPLATE_AUTO else ("" if value == TEMPLATE_NONE else self.template_ref(value))
         applied = self.apply_template(choice)
-        label = "automatisch (Kundenakte bzw. Stapel)" if choice is None else ("keine Vorlage" if choice == "" else f"„{choice}“")
+        label = "automatisch (Kundenakte, Stapel bzw. Standardvorlage)" if choice is None else ("keine Vorlage" if choice == "" else f"„{value}“")
         self.app.notify("batch_info", "success", f"Vorlage {label} für {applied} {'Eintrag' if applied == 1 else 'Einträge'} gesetzt.", auto_hide=6000)
 
     def template_names(self) -> list[str]:
-        return [str(entry.get("name", "")) for entry in self.app.state.vorlagen if entry.get("name")]
+        return sorted((str(entry.get("name", "")) for entry in self.app.state.vorlagen if entry.get("name")), key=str.casefold)
+
+    def template_ref(self, label: str) -> str:
+        """Anzeige (Name) → gespeicherter Verweis (ab 2.8 die ID der Vorlage)."""
+        entry = self.app.state.find_vorlage(label)
+        return str(entry.get("id") or label) if entry else label
+
+    def template_name(self, ref: str | None) -> str:
+        if not ref:
+            return ""
+        entry = self.app.state.find_vorlage(ref)
+        return str(entry.get("name", "")) if entry else ("gelöschte Vorlage" if not resolver.ref_label(ref) else ref)
+
+    def template_refs(self, template_id: str, name: str) -> int:
+        """Wie oft der Stapel diese Vorlage verwendet (Vorlage des Stapels, Einträge)."""
+        refs = (template_id, name)
+        return int(self.settings.template in refs) + sum(1 for item in self.items if item.overrides.template in refs)
+
+    def retarget_template(self, template_id: str, name: str, new_ref: str | None) -> None:
+        """Verweise ändern: ``new_ref`` = ID (nach Umbenennen) oder ``None`` (gelöscht: automatisch)."""
+        refs = (template_id, name)
+        changed = False
+        if self.settings.template in refs:
+            self.settings.template = new_ref or ""
+            changed = True
+        for item in self.items:
+            if item.overrides.template in refs and item.overrides.template != new_ref:
+                item.overrides.template = new_ref
+                changed = True
+        if changed:
+            self.app.schedule_save()
+            self._save_soon()
+
+    def rule_set_refs(self, rule_set_id: str) -> int:
+        """Wie viele Einträge dieses Regelwerk bewusst gewählt haben."""
+        return sum(1 for item in self.items if rule_set_id and item.overrides.rule_set == rule_set_id)
+
+    def retarget_rule_set(self, rule_set_id: str) -> None:
+        """Gelöschtes Regelwerk: Einträge, die es bewusst gewählt hatten, wieder »automatisch«."""
+        changed = False
+        for item in self.items:
+            if item.overrides.rule_set == rule_set_id:
+                item.overrides.rule_set = None
+                changed = True
+        if changed:
+            self._save_soon()
+            self.mark_stale()
+
+    def templates_changed(self) -> None:
+        """Vorlagen oder Standardvorlage geändert: Auswahllisten und Werte der Einträge neu bestimmen."""
+        self._refresh_settings()
+        if self.detailId and self.detailId in self.by_id:
+            self.refresh_detail(load_fields=False)
+        self.mark_stale()
+
+    def rule_set_names(self) -> list[tuple[str, str]]:
+        store = self.app.state.rule_sets
+        return [(rule_set.id, rule_set.name) for rule_set in store.rule_sets()] if store is not None else []
+
+    def apply_rule_set(self, ref: str | None, item_ids: list[str]) -> int:
+        """Regelwerk für Einträge setzen (``None`` = automatisch, ``""`` = keines)."""
+        count = 0
+        for item in (self.by_id[i] for i in item_ids if i in self.by_id):
+            if item.status is ItemStatus.PROCESSING or item.overrides.rule_set == ref:
+                continue
+            item.overrides.rule_set = ref
+            if item.done or (item.status is ItemStatus.FAILED and item.error):
+                item.reset_result()
+            self._update(item)
+            count += 1
+        if count:
+            self._changed()
+            self._save_soon()
+        return count
 
     # Einstellungen des Stapels ---------------------------------------------------------------------------------------
     def update_settings(self, **values) -> None:
@@ -810,7 +898,7 @@ class BatchController(Observable):
 
     @Slot(str)
     def setDefaultTemplate(self, label: str) -> None:  # noqa: N802
-        self.update_settings(template="" if label == TEMPLATE_NONE else label)
+        self.update_settings(template="" if label == TEMPLATE_NONE else self.template_ref(label))
 
     @Slot(str)
     def setConflict(self, value: str) -> None:  # noqa: N802
@@ -1308,7 +1396,8 @@ class BatchController(Observable):
             self.logoText, self.logoPath = "Installiertes Standardlogo", ""
         names = self.template_names()
         self.templateChoices = [TEMPLATE_NONE, *names]
-        self.templateValue = settings.template if settings.template in names else TEMPLATE_NONE
+        current = self.template_name(settings.template)
+        self.templateValue = current if current in names else TEMPLATE_NONE
         self.conflictValue = settings.conflict.value
         self.subfolders = bool(settings.subfolders)
         self.customerTarget = bool(settings.customer_target)
@@ -1535,13 +1624,21 @@ class BatchController(Observable):
         names = self.template_names()
         self.itemTemplateChoices = [TEMPLATE_AUTO, TEMPLATE_NONE, *names]
         chosen = item.overrides.template
-        self.itemTemplate = TEMPLATE_AUTO if chosen is None else (TEMPLATE_NONE if chosen == "" else chosen)
+        self.itemTemplate = TEMPLATE_AUTO if chosen is None else (TEMPLATE_NONE if chosen == "" else self.template_name(chosen))
+        rule_sets = self.rule_set_names()
+        self.itemRuleSetChoices = [RULE_SET_AUTO, RULE_SET_NONE, *(name for _id, name in rule_sets)]
+        own = item.overrides.rule_set
+        self.itemRuleSet = RULE_SET_AUTO if own is None else (RULE_SET_NONE if own == "" else next((name for ident, name in rule_sets if ident == own), "gelöschtes Regelwerk"))
         if res is None:
             return
         if res.template:
-            self.templateNote = f"Verwendet: Vorlage „{res.template}“ ({SOURCE_TEXT.get(res.template_source, res.template_source)}) · Kopf- und Fußzeile: {res.header_source}"
+            note = f"Verwendet: Vorlage „{res.template}“ ({SOURCE_TEXT.get(res.template_source, res.template_source)}) · Kopf- und Fußzeile: {res.header_source}"
         else:
-            self.templateNote = f"Keine Vorlage – es gilt die »Darstellung« · Kopf- und Fußzeile: {res.header_source}"
+            note = f"Keine Vorlage – es gilt die »Darstellung« · Kopf- und Fußzeile: {res.header_source}"
+        if res.rule_set:
+            source = SOURCE_TEXT.get(res.rule_set_source, res.rule_set_source)
+            note += f" · Regelwerk: „{res.rule_set}“ ({'Darstellung' if res.rule_set_source == resolver.SOURCE_DEFAULT else source})"
+        self.templateNote = note
         logo_name, logo_full = _caption(res.logo, "Kein Logo")
         self.itemLogoText = f"{logo_name}  ·  {SOURCE_TEXT.get(res.logo_source, res.logo_source)}" if res.logo else logo_name
         self.itemLogoPath = logo_full
@@ -1606,8 +1703,23 @@ class BatchController(Observable):
     def setItemTemplate(self, label: str) -> None:  # noqa: N802
         if not self.detailId:
             return
-        value = None if label == TEMPLATE_AUTO else ("" if label == TEMPLATE_NONE else label)
+        value = None if label == TEMPLATE_AUTO else ("" if label == TEMPLATE_NONE else self.template_ref(label))
         self.apply_template(value, [self.detailId])
+
+    @Slot(str)
+    def setItemRuleSet(self, label: str) -> None:  # noqa: N802
+        """Regelwerk dieses Eintrags: »Automatisch« (Vorlage bzw. Darstellung), keines oder ein bestimmtes."""
+        if not self.detailId:
+            return
+        if label == RULE_SET_AUTO:
+            value = None
+        elif label == RULE_SET_NONE:
+            value = ""
+        else:
+            value = next((ident for ident, name in self.rule_set_names() if name == label), None)
+            if value is None:
+                return
+        self.apply_rule_set(value, [self.detailId])
 
     @Slot()
     def pickItemLogo(self) -> None:  # noqa: N802

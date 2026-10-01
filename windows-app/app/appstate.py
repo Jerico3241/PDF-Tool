@@ -141,11 +141,11 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Updates direkt in der App: Einstellungen → Updates – automatische Prüfung im Hintergrund, Kanal Stable oder Beta, Download mit SHA-256-Prüfung und Installation über das Setup.",
-    "PDF reparieren: mehrere PDFs auf einmal, eigener Dateiname je PDF und sichere Nummerierung statt Überschreiben.",
-    "Oberfläche mit Qt 6 (Qt Quick) – modern, flüssig und scharf auf hochauflösenden Bildschirmen bis 200 %.",
-    "Animationen für Seitenwechsel, Navigation, Dialoge und Hinweise – einstellbar unter Einstellungen → Animationen: Vollständig, Reduziert oder Aus.",
-    "Alle bisherigen Funktionen bleiben erhalten. Keine manuelle Migration: Einstellungen, Kundenakten, Vorlagen, Regeln und Vertragsstände werden weiterverwendet.",
+    "Vorlagen 2.0: Eine Vorlage hält die ganze Darstellung fest – mit eigener Ansicht »Vorlagen«, Standardvorlage für neue Übersichten und »Vorlage geändert« in der »Darstellung«.",
+    "Regelwerk: Werte der Übersicht nach eigenen Regeln anpassen (WENN … DANN …) – Ansicht »Regeln« mit Testmodus und Vorschau vorher → nachher. Die Excel-Datei bleibt immer unverändert.",
+    "Sicherung & Wiederherstellung: Einstellungen, Kundenakten, Vorlagen und Regelwerke in einer Datei – manuell oder automatisch, Wiederherstellen mit Prüfung und Auswahl (Einstellungen).",
+    "Diagnose: Systeminformationen, Datenprüfung und ein Support-Paket ohne Kunden- oder Dokumentdaten (Einstellungen).",
+    "Dies ist eine Beta zum Testen. Alle bisherigen Funktionen bleiben erhalten; Vorlagen aus 2.7 werden einmalig übernommen.",
     "Alle Dateien werden lokal auf diesem PC verarbeitet – keine Cloud, keine Uploads. Die Update-Prüfung fragt nur bei GitHub nach neuen Versionen.",
 )
 
@@ -317,6 +317,11 @@ class State:
 
     Die Kundenhistorie bis 2.3 (``kunden``) übernimmt die Kundenakte 2.0 beim ersten Start
     (``tools/contract_overview/customers/migration.py``).
+
+    Vorlagen: Ab 2.8 liegen sie als Vorlagen 2.0 in eigenen Dateien (``templates``, eine
+    ``TemplateStore``). ``vorlagen``, ``save_vorlage``, ``find_vorlage`` und ``delete_vorlage``
+    arbeiten dann mit diesem Speicher – mit dem bisherigen Wörterbuch einer Vorlage (plus ``id``).
+    Ohne Speicher (reine Kerntests) gilt die bisherige Liste.
     """
 
     def __init__(self, cfg: dict) -> None:
@@ -327,7 +332,9 @@ class State:
         else:
             self.regeln = [dict(r) for r in DEFAULT_REGELN]
         self.pdfs = [p for p in cfg.get("pdfs", []) if isinstance(p, str)][:MAX_PDFS]
-        self.vorlagen = [v for v in cfg.get("vorlagen", []) if isinstance(v, dict) and v.get("name")]
+        self.templates = None  # TemplateStore (ab 2.8, ``attach_stores``)
+        self.rule_sets = None  # RuleSetStore (ab 2.8)
+        self._vorlagen = [v for v in cfg.get("vorlagen", []) if isinstance(v, dict) and v.get("name")]
         staende = cfg.get("staende", {})
         self.staende = staende if isinstance(staende, dict) else {}
         self.gesehen = str(cfg.get("gesehen", ""))
@@ -354,16 +361,59 @@ class State:
         rest = [alt for alt in items if str(alt.get("name", "")) != name]
         return ([entry] + rest)[:limit]
 
-    def save_vorlage(self, entry: dict) -> None:
-        self.vorlagen = self._upsert(self.vorlagen, entry, MAX_VORLAGEN)
+    def attach_stores(self, templates, rule_sets) -> None:
+        self.templates = templates
+        self.rule_sets = rule_sets
+
+    @property
+    def vorlagen(self) -> list[dict]:
+        """Vorlagen als bisherige Wörterbücher – zuletzt gespeicherte zuerst."""
+        if self.templates is None:
+            return self._vorlagen
+        return [template.to_entry() for template in self.templates.recent()]
+
+    @vorlagen.setter
+    def vorlagen(self, entries: list[dict]) -> None:
+        """Liste ersetzen (wie bis 2.7): neue Einträge anlegen, entfernte löschen."""
+        if self.templates is None:
+            self._vorlagen = list(entries)
+            return
+        wanted = [entry for entry in entries if isinstance(entry, dict) and entry.get("name")]
+        keep = {str(entry.get("id")) for entry in wanted if entry.get("id")}
+        names = {str(entry.get("name")) for entry in wanted}
+        for template in self.templates.templates():
+            if template.id not in keep and template.name not in names:
+                self.templates.delete(template.id)
+        for entry in reversed(wanted):
+            if not (entry.get("id") and self.templates.get(str(entry.get("id")))) and self.templates.by_name(str(entry.get("name"))) is None:
+                self.save_vorlage(entry)
+
+    def save_vorlage(self, entry: dict):
+        """Vorlage speichern – gleicher Name ersetzt die vorhandene (sie behält ihre ID)."""
+        if self.templates is None:
+            self._vorlagen = self._upsert(self._vorlagen, entry, MAX_VORLAGEN)
+            return None
+        from tools.contract_overview.templates.models import Template
+
+        existing = self.templates.get(entry.get("id")) if entry.get("id") else None
+        existing = existing or self.templates.by_name(str(entry.get("name", "")))
+        template = Template.from_entry(entry, template_id=existing.id if existing else None, created_at=existing.meta.created_at if existing else "")
+        return self.templates.update(template)
 
     def delete_vorlage(self, name: str) -> bool:
-        before = len(self.vorlagen)
-        self.vorlagen = [alt for alt in self.vorlagen if str(alt.get("name", "")) != name]
-        return len(self.vorlagen) != before
+        if self.templates is None:
+            before = len(self._vorlagen)
+            self._vorlagen = [alt for alt in self._vorlagen if str(alt.get("name", "")) != name]
+            return len(self._vorlagen) != before
+        template = self.templates.find(name)
+        return template is not None and self.templates.delete(template.id)
 
     def find_vorlage(self, name: str) -> dict | None:
-        return next((v for v in self.vorlagen if str(v.get("name", "")) == name), None)
+        """Vorlage per Name (bis 2.7) oder ID (ab 2.8)."""
+        if self.templates is None:
+            return next((v for v in self._vorlagen if str(v.get("name", "")) == name), None)
+        template = self.templates.find(name)
+        return template.to_entry() if template is not None else None
 
     def save_baustein(self, name: str, text: str, fmt: dict | None = None) -> None:
         entry = {"name": name, "text": text}

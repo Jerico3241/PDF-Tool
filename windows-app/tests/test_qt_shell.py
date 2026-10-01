@@ -27,7 +27,7 @@ def test_start_and_version(app) -> None:
 
 
 def test_navigation_all_pages_and_rapid_switching(app) -> None:
-    pages = ["create", "batch", "layout", "preview", "comparison", "customers", "repair", "settings", "home"]
+    pages = ["create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers", "repair", "settings", "home"]
     for page in pages:
         app.navigate(page, 0.3)
         assert app.app.currentPage == page

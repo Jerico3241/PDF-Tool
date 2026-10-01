@@ -24,12 +24,14 @@ ApplicationWindow {
         objectName: "shell"
         anchors.fill: parent
         focus: true
-        pages.order: ["home", "create", "layout", "preview", "batch", "comparison", "customers", "repair", "settings"]
+        pages.order: ["home", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings"]
         pages.components: ({
             "home": homePage,
             "create": createPage,
             "layout": layoutPage,
             "preview": previewPage,
+            "templates": templatesPage,
+            "rules": rulesPage,
             "batch": batchPage,
             "comparison": comparisonPage,
             "customers": customersPage,
@@ -41,6 +43,8 @@ ApplicationWindow {
     Component { id: createPage; CreatePage {} }
     Component { id: layoutPage; LayoutPage {} }
     Component { id: previewPage; PreviewPage {} }
+    Component { id: templatesPage; TemplatesPage {} }
+    Component { id: rulesPage; RulesPage {} }
     Component { id: batchPage; BatchPage {} }
     Component { id: comparisonPage; ComparisonPage {} }
     Component { id: customersPage; CustomersPage {} }

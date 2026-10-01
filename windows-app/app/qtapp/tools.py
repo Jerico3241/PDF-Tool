@@ -21,6 +21,8 @@ def build_tools(runtime) -> None:
             "Preview": contracts.preview,
             "Batch": contracts.batch,
             "Comparison": contracts.comparison,
+            "Templates": contracts.templates,
+            "Rules": contracts.rules,
         }
     )
     repair = RepairTool(app, runtime.cfg)

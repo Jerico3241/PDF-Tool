@@ -268,6 +268,19 @@ PPage {
             clickable: Contracts.readyKind !== "success" && Contracts.readyKind !== "busy"
             onActivated: Contracts.fixReadiness()
         }
+        // Gewähltes Regelwerk: nie eine stille Änderung – was es an der Excel ändert, steht hier.
+        PCollapse {
+            objectName: "ruleSetLine"
+            Layout.fillWidth: true
+            expanded: Contracts.ruleSetId !== "" && Rules.activeSummary !== ""
+            RowLayout {
+                width: parent.width
+                spacing: 8
+                PIcon { name: "filter"; color: Rules.activeTone === "caution" ? Theme.warning : Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 10 }
+                PText { text: Rules.activeSummary; tone: Rules.activeTone === "caution" ? "warning" : "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 8 }
+                PButton { kind: "subtle"; iconName: "open"; text: "Regeln ansehen"; tip: "Vorher → nachher in der Ansicht »Regeln«"; Layout.topMargin: 4; onClicked: Rules.openActive() }
+            }
+        }
         Flow {
             Layout.fillWidth: true
             Layout.topMargin: 12

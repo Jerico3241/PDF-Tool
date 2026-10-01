@@ -10,7 +10,11 @@ lokal auf dem PC verarbeitet. Entwickler und Inhaber: Jerico.
 - Live-PDF-Vorschau
 - Vertragsvergleich mit dem letzten Stand
 - optionale Kundenakte mit Wiedererkennung bekannter Kunden
+- Vorlagen für die Darstellung, mit Standardvorlage für neue Übersichten
+- Regelwerk: Werte der Übersicht nach eigenen Regeln anpassen (WENN … DANN …) – die Excel bleibt unverändert
 - PDF-Reparatur für eine oder mehrere Dateien, bis zur Rekonstruktion der Dokumentstruktur
+- Sicherung und Wiederherstellung aller Daten, lokal
+- Diagnose mit Support-Paket ohne Kunden- oder Dokumentdaten
 - In-App-Updates mit Stable- und Beta-Kanal
 
 Ausführlich: [docs/FUNKTIONEN.md](docs/FUNKTIONEN.md).

@@ -12,7 +12,7 @@ werden: PDFs (eine oder mehrere) öffnen „PDF reparieren“, eine Excel-Liste 
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
-| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | Fachlogik: `app/tools/contract_overview/` (`overview.py`, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` · Controller: `app/qtapp/contracts/` · Seiten: `app/qml/PdfTool/Pages/` |
+| **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, Regelwerk, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | Fachlogik: `app/tools/contract_overview/` (`overview.py`, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich, `templates/` für Vorlagen, `rules/` für das Regelwerk), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` · Controller: `app/qtapp/contracts/` · Seiten: `app/qml/PdfTool/Pages/` |
 | **PDF reparieren** | Analysiert beschädigte PDF-Dateien – eine oder mehrere auf einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen, bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten; Ausgabenamen je Datei, nie wird eine vorhandene Datei überschrieben | Fachlogik: `app/tools/pdf_repair/` (`batch.py` für Liste, Zustände und Ausgabenamen, `recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seiten: `app/qml/PdfTool/Pages/RepairPage.qml`, `RepairItem.qml` |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
@@ -24,8 +24,10 @@ unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – 
 
 ## Vertragsübersichten: Kundenakte und Kundenwiedererkennung
 
-Das Werkzeug hat die Ansichten **Übersicht erstellen**, **Stapel**, **Darstellung**, **Vorschau**
-und – mit eingeschalteter Kundenakte – **Kunden**. Die Kundenakte gehört ausschließlich zu
+Das Werkzeug hat die Ansichten **Übersicht erstellen**, **Stapel**, **Darstellung**, **Vorschau**,
+**Vorlagen**, **Regeln** und – mit eingeschalteter Kundenakte – **Vergleich** und **Kunden**. Reicht
+die Breite nicht für alle Ansichten, lässt sich die Ansichtsleiste verschieben; die gewählte Ansicht
+steht immer ganz im Bild. Die Kundenakte gehört ausschließlich zu
 „Vertragsübersichten“; „PDF reparieren“ bleibt davon unberührt.
 
 **Die Kundenakte ist optional (seit 2.6.1).** Einstellungen → **Vertragsübersichten** →
@@ -208,6 +210,97 @@ Texte), `app/qtapp/contracts/comparison.py` (Ablauf und Anzeige-Modell), `Compar
 - **Reine Anzeige:** Der Vergleich ändert die PDF nicht, druckt nichts in die Übersicht und löst
   keine neue Vorschau aus.
 
+## Vertragsübersichten: Vorlagen (seit 2.8)
+
+Eine **Vorlage** hält die ganze Darstellung fest: Seitenformat, Logo und Logo-Breite, Titel,
+Untertitel, Dateiname, Kopf- und Fußzeile mit Formatierung, Zyklus-Regeln und das Regelwerk. Jede
+Vorlage ist eine eigene Datei (`vorlagen\<ID>.json`) mit fester ID und Schema-Version; ihre
+Verwendung in Kundenakten und im Stapel verweist auf die ID – Umbenennen ändert nichts an diesen
+Verweisen. Code: `app/tools/contract_overview/templates/`, `app/qtapp/contracts/templates.py`.
+
+- **Ansicht „Vorlagen“:** Liste mit Suche, Detail mit Inhalt, Beschreibung und Verwendung;
+  „In die Darstellung laden“, „Laden und bearbeiten“, „Umbenennen …“, „Duplizieren“, „Löschen“.
+  Löschen nennt, wo die Vorlage verwendet wird; Kundenakten verwenden danach keine bevorzugte
+  Vorlage, der Stapel „Automatisch“, die Standardvorlage entfällt – nie bleibt ein Verweis ins Leere.
+- **„Darstellung“:** Auswahl der geladenen Vorlage. Weicht die Darstellung von ihr ab, erscheint
+  „Vorlage geändert“ mit „Vorlage aktualisieren“ (gleiche ID, neuer Inhalt), „Änderungen verwerfen“
+  und „Als neue Vorlage speichern“ (Name wird sofort geprüft, auch ohne Rücksicht auf
+  Groß-/Kleinschreibung). Bearbeitet wird eine Vorlage immer hier – kein zweiter Editor.
+- **Standardvorlage:** Wird für jede neue Übersicht geladen („Neue Übersicht“, rückgängig machbar)
+  und gilt im Stapel als vierte Stufe: Vorlage des Eintrags → bevorzugte Vorlage der Kundenakte →
+  Vorlage des Stapels → Standardvorlage → aktuelle Darstellung.
+- **Übernahme aus 2.7:** Beim ersten Start werden die Vorlagen der Einstellungen einmalig als
+  Vorlagen 2.0 übernommen; die bisherige Liste bleibt unverändert stehen. Beschädigte oder neuere
+  Vorlagendateien werden übersprungen und gemeldet, nie gelöscht.
+
+## Vertragsübersichten: Regelwerk (seit 2.8)
+
+Ein **Regelwerk** passt Werte der Übersicht nach festen Regeln an – „WENN die Beschreibung
+‚Energie‘ enthält, DANN die Art auf ‚Energievertrag‘ setzen“. Code:
+`app/tools/contract_overview/rules/` (`models.py`, `evaluate.py`, `repository.py`),
+`app/qtapp/contracts/rules.py`.
+
+- **Bedingungen:** auf die Felder der Übersicht – Text (Art, Beschreibung, Abrechnungszyklus,
+  Zahlungsart, Vertragsnummer: ist gleich, enthält, beginnt mit, endet mit, ist leer …), Zahl (Netto:
+  gleich, größer als, kleiner oder gleich …) und Datum (Beginn: vor, nach, am); verknüpft mit „alle“
+  oder „mindestens eine“. Ohne Bedingung gilt eine Regel für alle Verträge.
+- **Aktionen:** setzen, Text ersetzen (Groß-/Kleinschreibung egal), voranstellen, anhängen, leeren –
+  für Art, Beschreibung, Abrechnungszyklus und Zahlungsart. Vertragsnummer, Beginn und Netto ändert
+  kein Regelwerk. Es gibt keine Skripte, keinen Code und keine regulären Ausdrücke.
+- **Reihenfolge:** Die Regeln laufen von oben nach unten und prüfen die aktuellen Werte (einschließlich
+  der Änderungen früherer Regeln); ändern zwei Regeln dasselbe Feld, gilt die spätere. Gleiche
+  Eingaben ergeben immer dasselbe Ergebnis.
+- **Ansicht „Regeln“:** Regelwerke anlegen, umbenennen, duplizieren, ein- und ausschalten, löschen;
+  je Regel eine Karte mit lesbarer Zusammenfassung, visuellem Editor („WENN … DANN …“), nach oben und
+  unten verschieben, duplizieren, entfernen (mit „Rückgängig“), ein- und ausschalten. Gespeichert
+  wird automatisch. Unvollständige Regeln bleiben gespeichert, werden aber nie ausgeführt – die
+  Karte nennt den Grund.
+- **Testmodus und Vorschau:** Mit der geprüften Excel aus „Übersicht erstellen“ zeigt jede Regel, auf
+  wie viele Verträge sie zutrifft, die Vorschau vorher → nachher je Vertrag samt Konflikten.
+  Gerechnet wird im Hintergrund. Auch ein ausgeschaltetes Regelwerk oder eine ausgeschaltete Regel
+  zeigt, was sie täte.
+- **Wirkung:** Das Regelwerk der Übersicht wählt man in „Darstellung“ (oder es kommt mit einer
+  Vorlage). Es wirkt auf PDF, Vorschau, Stapel und den gespeicherten Vertragsstand – nie auf die
+  Excel-Datei. „Übersicht erstellen“ nennt, was es an der Excel ändert. Im Stapel hat jeder Eintrag
+  „Automatisch“ (Regelwerk der Vorlage, sonst der Darstellung), „Kein Regelwerk“ oder ein bestimmtes.
+  Ein fehlendes Regelwerk wird nie still ersetzt.
+
+## Sicherung und Wiederherstellung (seit 2.8)
+
+Einstellungen → „Sicherung & Wiederherstellung“. Code: `app/backup/`, `app/qtapp/backups.py`.
+
+- **Inhalt:** Einstellungen samt Darstellung, Textbausteinen und Zyklus-Regeln, Stapel, Kundenakten
+  mit Vertragsständen, Vorlagen und Regelwerke – in einer Datei `.pdtbackup` (ZIP mit
+  `manifest.json`: Format- und App-Version, Zeitpunkt, Art, Bereiche, je Datei Größe und SHA-256).
+  Nie enthalten: Excel- oder PDF-Dateien, Logos, Protokolle, andere Sicherungen.
+- **Erstellen:** atomar – die Datei entsteht als temporäre Datei, wird vollständig nachgeprüft und
+  erst dann sichtbar. „Jetzt sichern …“ legt sie in einem Ordner Ihrer Wahl ab (z. B. USB-Stick).
+- **Automatisch** (Standard: an): höchstens einmal am Tag und nur, wenn sich die Daten geändert
+  haben, dazu vor jedem Update und vor jeder Wiederherstellung; Ordner wählbar (Standard:
+  `%APPDATA%\PDF-Tool\Sicherungen`). Es bleiben die letzten 10 automatischen Sicherungen und je 5
+  vor Updates und Wiederherstellungen. Manuelle Sicherungen werden nie automatisch gelöscht.
+- **Wiederherstellen:** Sicherung wählen → vollständige Prüfung (Format, Pfade, Größen, SHA-256,
+  Schema-Versionen) → Zusammenfassung mit Auswahl der Bereiche → Sicherung des aktuellen Stands →
+  Neustart. Die Wiederherstellung läuft vor dem Laden der Daten, je Bereich atomar und mit Journal:
+  Scheitert ein Schritt oder bricht der Vorgang ab, wird alles zurückgenommen. Eine Sicherung einer
+  neueren Version wird nie eingespielt („Dieses Backup wurde mit einer neueren Version von PDF Tool
+  erstellt.“); ältere Datenstände übernimmt PDF Tool beim Laden wie bei einem Update.
+
+## Diagnose (seit 2.8)
+
+Einstellungen → „Diagnose“. Code: `app/diagnostics/`, `app/qtapp/diagnose.py`.
+
+- **Systeminformationen:** Version, Update-Kanal, Python, PySide6/Qt, Windows, Architektur, Daten-
+  und Programmordner, Reparatur-Engines, Versionen der Module.
+- **Datenprüfung:** liest Einstellungen, Kundenakten, Vorlagen, Regelwerke und Vertragsstände und
+  prüft Sicherungsordner, temporären Ordner und freien Speicher – ohne etwas zu verändern.
+- **Support-Paket:** ZIP mit Bericht, Versionen, anonymisierten Einstellungen (nur Schalter, Zahlen
+  und Anzahlen) und bereinigten Protokollen (Pfade zu Dokumenten, Benutzerordner, Benutzer- und
+  Computername, E-Mail-Adressen und bekannte Firmen entfernt). Nie enthalten: Kundendaten,
+  Vertragsinhalte, Passwörter, PDF- oder Excel-Inhalte, Logos. Es wird nichts versendet.
+- **Protokoll:** `pdf-tool.log` (INFO, WARNING, ERROR) mit Rotation (höchstens 1 MB, drei ältere
+  Dateien); eigene temporäre Dateien früherer Sitzungen werden beim Start aufgeräumt – nie fremde.
+
 ## Vertragsübersichten: Live-Vorschau
 
 Die Ansicht **Vorschau** erzeugt die PDF genau wie „PDF erstellen“, nur in einen privaten
@@ -232,7 +325,8 @@ Seitenzahl und Zoomstufe haben eine feste Breite, der Zustand („Vorschau wird 
   Schrift (Segoe UI Variable) und Animationsdauern (`app/qml/PdfTool/Style/`).
 - **Backend:** Python – die Fachlogik ist dieselbe wie bis 2.6.1 und enthält keinen Oberflächencode.
 - **Qt-Brücke:** `QObject`-Controller je Bereich (`app/qtapp/`: `App`, `Settings`, `Contracts`,
-  `Customers`, `Preview`, `Batch`, `Comparison`, `Repair`) sind die einzige Verbindung zwischen QML
+  `Customers`, `Preview`, `Batch`, `Comparison`, `Templates`, `Rules`, `Repair`, `Updates`, `Backup`,
+  `Diagnose`) sind die einzige Verbindung zwischen QML
   und Fachlogik; Listen (Stapel, Kunden, Vertragsänderungen, Vorlagen …) sind
   `QAbstractListModel`s mit gezielten Änderungen (`insertRows`/`removeRows`/`moveRows`/`dataChanged`)
   statt Neuaufbau.

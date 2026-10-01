@@ -150,7 +150,7 @@ def main() -> int:
 
     check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool"), "Werkzeuge der Oberfläche fehlen")
-    check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
+    check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
     check(overview.contract_summary(5, 3) == "5 aktive Verträge · 3 inaktiv ausgeblendet" and overview.contract_summary(1) == "1 aktiver Vertrag", "Statuszeile der Excel-Prüfung")
     print(f"App {appstate.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
     if args.part == "ui":

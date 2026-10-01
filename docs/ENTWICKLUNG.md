@@ -54,6 +54,12 @@ PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1, 2.7.0 mit Beispieldaten) läuft nur 
 Anforderung im manuellen Workflow [`deep-compatibility.yml`](../.github/workflows/deep-compatibility.yml)
 („Deep Compatibility Test“, je Vorversion ein frischer Windows-Rechner).
 
+Nach dem Veröffentlichen einer Beta prüft der manuelle Workflow
+[`beta-update-test.yml`](../.github/workflows/beta-update-test.yml) („Beta-Update-Test“) das Update
+aus Sicht der Anwender: veröffentlichte stabile Vorversion installieren, Kanal „Beta“; der Updater
+dieser Vorversion findet die Beta bei GitHub, lädt und prüft sie (Stable bietet sie nicht an); danach
+Version, ein App-Eintrag, Programmstart, Kanal, Einstellungen und Vorlagen (`tests/smoke_beta_update.py`).
+
 ## Tests
 
 ```powershell
@@ -71,11 +77,21 @@ Objektköpfen, inkrementelle Updates, Objektströme und eine Nachbildung einer r
 abgeschnittenen Datei. Echte Kundendateien liegen nie im Repository; eine lokale Beispieldatei lässt
 sich mit `PDF_TOOL_REAL_SAMPLE=<Pfad>` zusätzlich prüfen.
 
+Vorlagen, Regelwerk, Sicherung und Diagnose haben eigene Kerntests ohne Oberfläche:
+`test_templates.py` (Modell, Übernahme aus 2.7, Vorrang, beschädigte und neuere Dateien, 100
+Vorlagen), `test_rules.py` (alle Vergleiche und Aktionen, Reihenfolge, Konflikte, Vorschau,
+Determinismus, 500 Verträge × 100 Regeln), `test_rules_pipeline.py` (PDF, Vertragsstand, Stapel –
+die Excel bleibt unverändert), `test_backup.py` (Format, Prüfung, Beschädigung, neuere Versionen,
+Wiederherstellung mit Rückabwicklung und Abbruch, Aufbewahrung, großer Datenbestand) und
+`test_diagnostics.py` (Datenprüfung, Bereinigung, Support-Paket ohne Kunden- oder Dokumentdaten,
+Protokoll-Rotation, Aufräumen nur eigener Dateien).
+
 Die Oberflächentests (`test_qt_*.py`) starten die App wie beim echten Start – Controller, QML und
 Fenster (`tests/qtutil.py`) – und schlagen fehl, sobald die QML-Engine eine Warnung meldet
 (Bindungsschleifen, fehlende Properties …). Sie prüfen alle Abläufe von 2.6.1 an den Controllern
-(Excel-Prüfung, PDF, Rich Text mit Rückgängig/Wiederholen, Vorlagen, Kundenakte, Vorschau, Stapel
-mit 100 Dateien, Kundenliste mit Hunderten Einträgen, Vertragsvergleich, PDF reparieren) sowie
+(Excel-Prüfung, PDF, Rich Text mit Rückgängig/Wiederholen, Vorlagen, Regelwerk, Sicherung und
+Wiederherstellung samt Neustart, Diagnose, Kundenakte, Vorschau, Stapel mit 100 Dateien,
+Kundenliste mit Hunderten Einträgen, Vertragsvergleich, PDF reparieren) sowie
 Qt-Spezifisches: Listenmodelle ändern nur betroffene Zeilen, alle Seiten entstehen genau einmal,
 Animationsprofile, Hell/Dunkel, Fenstergrößen, das Laden der Oberfläche aus der eingebauten
 Ressource und dass kein Code mehr tkinter verwendet.
@@ -95,6 +111,11 @@ Ressource und dass kein Code mehr tkinter verwendet.
 6. Kundenakte aus → ein → aus → ein: Daten bleiben, keine doppelten Einträge; Stapel und PDF ohne
    Kundenakte.
 7. Animationsprofil „Vollständig“ → „Reduziert“ → „Aus“: wirkt sofort, ohne Neustart.
+8. Sicherung: „Jetzt sichern …“ auf einen USB-Stick, danach eine Vorlage ändern und
+   „Wiederherstellen …“ nur für „Vorlagen“: PDF Tool startet neu, die Vorlage ist wieder im alten
+   Stand, alle anderen Daten unverändert; auf der Startseite steht das Ergebnis.
+9. Diagnose: „Daten prüfen“ und „Support-Paket erstellen …“; das ZIP öffnen und prüfen, dass weder
+   Firmennamen noch Pfade zu Dokumenten darin stehen.
 
 Das App-Symbol entsteht mit `python windows-app/scripts/make_icons.py` (Windows-Symbol, Favicons
 und Logo der Downloadseite).

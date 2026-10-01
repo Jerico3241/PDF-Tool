@@ -143,6 +143,114 @@ PPage {
         wrap: true
     }
 
+    PSectionTitle { text: "Sicherung & Wiederherstellung" }
+
+    // Sicherung: Status, Jetzt sichern, Wiederherstellen, gesicherte Stände
+    PCard {
+        objectName: "backupCard"
+        Layout.fillWidth: true
+        title: "Sicherung"
+        iconName: "shield_checkmark"
+        subtitle: "Einstellungen, Kundenakten mit Vertragsständen, Vorlagen und Regelwerke in einer Datei (.pdtbackup) – lokal auf diesem PC, keine Cloud."
+        PFactList {
+            objectName: "backupStatus"
+            Layout.fillWidth: true
+            labelWidth: 210
+            facts: [
+                { "label": "Letzte automatische Sicherung", "value": Backup.lastAuto },
+                { "label": "Letzte manuelle Sicherung", "value": Backup.lastManual }
+            ]
+        }
+        PCollapse {
+            Layout.fillWidth: true
+            expanded: Backup.busy
+            ColumnLayout {
+                width: parent.width
+                spacing: 6
+                PText { objectName: "backupBusy"; text: Backup.busyText; Layout.topMargin: 10 }
+                PProgressBar { Layout.fillWidth: true; value: Backup.progress; indeterminate: Backup.progress <= 0 }
+            }
+        }
+        Flow {
+            Layout.fillWidth: true
+            Layout.topMargin: 12
+            spacing: 8
+            PButton { objectName: "backupNow"; kind: "accent"; iconName: "save"; text: "Jetzt sichern …"; tip: "Sicherung in einen Ordner Ihrer Wahl (z. B. USB-Stick)"; enabled: !Backup.busy; onClicked: Backup.backupNow() }
+            PButton { objectName: "restoreBackup"; iconName: "arrow_undo"; text: "Wiederherstellen …"; tip: "Sicherung wählen, prüfen und Bereiche wiederherstellen"; enabled: !Backup.busy; onClicked: Backup.restoreFrom() }
+            PButton { kind: "subtle"; iconName: "folder_open"; text: "Ordner öffnen"; tip: "Ordner der automatischen Sicherungen öffnen"; onClicked: Backup.openFolder() }
+        }
+        PInfoBar { Layout.fillWidth: true; notice: Notices.area("sicherung_info") }
+        PInfoBar {
+            objectName: "backupPending"
+            Layout.fillWidth: true
+            notice: null
+            shown: Backup.pending !== ""
+            severity: "info"
+            message: Backup.pending
+            closable: false
+            actions: ["Verwerfen"]
+            onActionTriggered: (index) => Backup.discardPending()
+        }
+        PText {
+            Layout.fillWidth: true
+            Layout.topMargin: 14
+            visible: Backup.recentModel.count > 0
+            text: "Gesicherte Stände im Ordner der automatischen Sicherungen"
+            textStyle: "bodyStrong"
+        }
+        Repeater {
+            model: Backup.recentModel
+            Rectangle {
+                required property int index
+                required property string path
+                required property string name
+                required property string kind
+                required property string date
+                required property string size
+                required property string version
+                Layout.fillWidth: true
+                Layout.topMargin: index === 0 ? 6 : 4
+                implicitHeight: 44
+                radius: Metrics.radiusControl
+                color: Theme.surfaceSecondary
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 4
+                    spacing: 10
+                    PText { text: date; Layout.preferredWidth: 140 }
+                    PText { text: kind + (version !== "" ? " · " + version : "") + " · " + size; textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
+                    PButton { kind: "subtle"; text: "Wiederherstellen …"; enabled: !Backup.busy; tip: name; onClicked: Backup.restore(path) }
+                }
+            }
+        }
+    }
+    PSettingsCard {
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        iconName: "clock"
+        title: "Automatisch sichern"
+        description: "Einmal am Tag, wenn sich etwas geändert hat, und vor jedem Update. Die letzten 10 automatischen Sicherungen bleiben erhalten – manuelle Sicherungen werden nie automatisch gelöscht."
+        PToggle {
+            objectName: "backupAutomaticToggle"
+            label: "Automatisch sichern"
+            checked: Backup.automatic
+            onToggled: Backup.setAutomatic(checked)
+        }
+    }
+    PSettingsCard {
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        iconName: "folder"
+        title: "Ordner der automatischen Sicherungen"
+        description: Backup.folderText
+        Row {
+            spacing: 4
+            PButton { text: "Ändern …"; onClicked: Backup.pickAutoFolder() }
+            PIconButton { iconName: "arrow_reset"; tip: "Standardordner verwenden"; onClicked: Backup.resetAutoFolder() }
+        }
+    }
+
     PSectionTitle { text: "Updates" }
 
     // Version, Zustand des Updaters, verfügbares Update mit Fortschritt und Aktionen
@@ -353,6 +461,79 @@ PPage {
             label: "Automatisch nach Updates suchen"
             checked: Updates.automatic
             onToggled: Updates.setAutomatic(checked)
+        }
+    }
+
+    PSectionTitle { text: "Diagnose" }
+
+    PCard {
+        objectName: "diagnoseCard"
+        Layout.fillWidth: true
+        title: "Diagnose"
+        iconName: "status"
+        subtitle: "Prüft Einstellungen und Daten von PDF Tool – lokal und ohne etwas zu verändern."
+        Flow {
+            Layout.fillWidth: true
+            spacing: 8
+            PButton { objectName: "runChecks"; kind: "accent"; iconName: "checkmark_circle"; text: "Daten prüfen"; busy: Diagnose.busy && Diagnose.busyText.indexOf("geprüft") >= 0; busyText: "Wird geprüft …"; enabled: !Diagnose.busy; onClicked: Diagnose.runChecks() }
+            PButton { objectName: "supportPackage"; iconName: "arrow_export"; text: "Support-Paket erstellen …"; tip: "ZIP mit Bericht und bereinigten Protokollen – ohne Kunden- oder Dokumentdaten, wird nicht versendet"; enabled: !Diagnose.busy; onClicked: Diagnose.createPackage() }
+            PButton { kind: "subtle"; iconName: "document_bullet_list"; text: "Protokolle öffnen"; tip: "Datenordner mit pdf-tool.log, fehler.log, stapel.log und pdf-repair.log"; onClicked: Diagnose.openLogs() }
+            PButton { kind: "subtle"; iconName: "delete"; text: "Temporäre Dateien aufräumen"; tip: "Entfernt nur eigene temporäre Dateien früherer Sitzungen"; onClicked: Diagnose.cleanupNow() }
+        }
+        PCollapse {
+            Layout.fillWidth: true
+            expanded: Diagnose.busy
+            ColumnLayout {
+                width: parent.width
+                PText { text: Diagnose.busyText; Layout.topMargin: 10 }
+                PProgressBar { Layout.fillWidth: true; indeterminate: true }
+            }
+        }
+        RowLayout {
+            objectName: "diagnoseVerdict"
+            Layout.fillWidth: true
+            Layout.topMargin: 12
+            visible: Diagnose.verdict !== ""
+            spacing: 8
+            PIcon { name: Theme.toneIcon(Diagnose.verdictKind); color: Theme.toneIconColor(Diagnose.verdictKind); Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                PText { text: Diagnose.verdict; textStyle: "bodyStrong"; wrap: true; Layout.fillWidth: true }
+                PText { text: Diagnose.lastRun; textStyle: "caption"; tone: "secondary" }
+            }
+        }
+        Repeater {
+            model: Diagnose.results
+            RowLayout {
+                required property var modelData
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                spacing: 8
+                PIcon { name: Theme.toneIcon(modelData.status); color: Theme.toneIconColor(modelData.status); size: 14; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
+                PText { text: modelData.label; Layout.preferredWidth: 150; Layout.alignment: Qt.AlignTop }
+                PText { text: modelData.detail; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+            }
+        }
+        PInfoBar { Layout.fillWidth: true; notice: Notices.area("diagnose_info") }
+        PText { text: "Systeminformationen"; textStyle: "bodyStrong"; Layout.topMargin: 16 }
+        // Feste Zeilen (Diagnose.factModel) – beim ersten Öffnen kommen nur die Werte hinzu
+        ColumnLayout {
+            objectName: "diagnoseFacts"
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            spacing: 4
+            Repeater {
+                model: Diagnose.factModel
+                RowLayout {
+                    required property string label
+                    required property string value
+                    Layout.fillWidth: true
+                    spacing: 12
+                    PText { text: label; textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 150; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
+                    PText { text: value; wrap: true; Layout.fillWidth: true }
+                }
+            }
         }
     }
 

@@ -47,7 +47,7 @@ AKTE = {
     "origin": "",
 }
 KUNDEN_SEITEN = {"customers", "comparison"}
-IMMER = ["create", "batch", "layout", "preview"]
+IMMER = ["create", "batch", "layout", "preview", "templates", "rules"]
 
 
 def seed(config_file: Path, extra: dict | None = None, akten: list[dict] | None = None) -> Path:

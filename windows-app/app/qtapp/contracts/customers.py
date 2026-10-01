@@ -70,6 +70,13 @@ PRIVACY = "Kundendaten und E-Mail-Zuordnungen werden ausschließlich lokal auf d
 EMPTY_TITLE = "Noch keine Kunden gespeichert."
 EMPTY_TEXT = "PDF Tool kann bekannte Rechnungsempfänger später automatisch wiedererkennen. Kundenakten entstehen, wenn Sie Kundendaten bewusst speichern – nach dem Erstellen einer Übersicht oder mit »Als Kundenakte speichern«."
 NO_TEMPLATE = "Keine Vorlage"
+
+
+def template_label(ref: str) -> str:
+    """»„Name“ « für Verweise per Name (bis 2.7); eine ID allein sagt dem Benutzer nichts."""
+    from tools.contract_overview.batch.resolver import ref_label
+
+    return ref_label(ref)
 SEARCH_DELAY = 200
 SAVE_DELAY = 600
 PICKER_DELAY = 180
@@ -688,11 +695,11 @@ class CustomerController(Observable):
         if customer.template:
             entry = self.state.find_vorlage(customer.template)
             if entry is None:
-                hints.append(f"Die bevorzugte Vorlage „{customer.template}“ gibt es nicht mehr.")
+                hints.append(f"Die bevorzugte Vorlage {template_label(customer.template)}gibt es nicht mehr.")
             elif customer.template_auto:
                 c.apply_vorlage(entry, texts=fresh, quiet=True)
-            elif c.vorlage.strip() != customer.template:
-                actions.append((f"Vorlage „{customer.template}“ anwenden", lambda e=entry: c.apply_vorlage(e)))
+            elif c.vorlageId != entry.get("id") or c.templateModified:
+                actions.append((f"Vorlage „{entry.get('name', '')}“ anwenden", lambda e=entry: c.apply_vorlage(e)))
         # 3. Stammdaten und Rechnungsempfänger
         for var, value in ((c.var_firma, customer.company), (c.var_kd, customer.number)):
             if value or switching:
@@ -971,9 +978,8 @@ class CustomerController(Observable):
         target = c.ziel.strip()
         if not target or _same_path(target, desktop_dir()):
             target = ""
-        template = c.vorlage.strip()
-        if not template or self.state.find_vorlage(template) is None:
-            template = ""
+        # Ab 2.8 per ID: Umbenennen der Vorlage trennt die Kundenakte nicht von ihr.
+        template = c.vorlageId if c.vorlageId and self.state.find_vorlage(c.vorlageId) is not None else ""
         kopf, fuss = c.header_rich(), c.footer_rich()
         header = _block(kopf) if not kopf.is_blank() else None
         footer = _block(fuss) if not fuss.is_blank() and fuss != default_footer_rich() else None
@@ -1032,8 +1038,8 @@ class CustomerController(Observable):
         target = fields["target_dir"]
         if target and not _same_path(target, customer.target_dir or ""):
             changes.append(("target_dir", customer.target_dir or "keiner", target))
-        if fields["template"] and fields["template"] != customer.template:
-            changes.append(("template", customer.template or "keine", fields["template"]))
+        if fields["template"] and fields["template"] != self._template_id(customer.template):
+            changes.append(("template", self._template_name(customer.template) or "keine", self._template_name(fields["template"])))
         kopf, fuss = c.header_rich(), c.footer_rich()
         stored_header = header_of(customer)
         if (stored_header is None and not kopf.is_blank()) or (stored_header is not None and stored_header != kopf):
@@ -1382,12 +1388,13 @@ class CustomerController(Observable):
             self.targetText, self.targetPath = (Path(customer.target_dir).name or customer.target_dir) + ("" if available else " – nicht verfügbar"), customer.target_dir
         else:
             self.targetText, self.targetPath = "Keiner – der aktuelle Zielordner wird verwendet", ""
-        templates = [str(entry.get("name", "")) for entry in self.state.vorlagen]
+        templates = sorted((str(entry.get("name", "")) for entry in self.state.vorlagen), key=str.casefold)
         values = [NO_TEMPLATE] + templates
-        if customer.template and customer.template not in templates:
-            values.append(customer.template)
+        current = self._template_name(customer.template)
+        if customer.template and current not in templates:
+            values.append(current)
         self.templateChoices = values
-        self.templateValue = customer.template or NO_TEMPLATE
+        self.templateValue = current or NO_TEMPLATE
         # Kopf- und Fußzeile
         texts = []
         if customer.header is None:
@@ -1562,7 +1569,41 @@ class CustomerController(Observable):
 
     @Slot(str)
     def setTemplate(self, label: str) -> None:  # noqa: N802
-        self._update(template="" if label == NO_TEMPLATE else label)
+        """Bevorzugte Vorlage (Anzeige: Name; gespeichert wird ab 2.8 die ID der Vorlage)."""
+        if label == NO_TEMPLATE:
+            self._update(template="")
+            return
+        entry = self.state.find_vorlage(label)
+        self._update(template=str(entry.get("id") or label) if entry else label)
+
+    def _template_id(self, ref: str) -> str:
+        entry = self.state.find_vorlage(ref) if ref else None
+        return str(entry.get("id") or ref) if entry else ref
+
+    def _template_name(self, ref: str) -> str:
+        """Anzeige eines Verweises: Name der Vorlage; eine fehlende Vorlage per ID: »gelöschte Vorlage«."""
+        if not ref:
+            return ""
+        entry = self.state.find_vorlage(ref)
+        if entry is not None:
+            return str(entry.get("name", ""))
+        return "gelöschte Vorlage" if not template_label(ref) else ref
+
+    def template_refs(self, template_id: str, name: str) -> list[str]:
+        """IDs der Kundenakten, die diese Vorlage verwenden (per ID oder per Name aus 2.7)."""
+        return [customer.id for customer in self.customers.all() if customer.template and customer.template in (template_id, name)]
+
+    def retarget_template(self, template_id: str, old_name: str, new_ref: str) -> int:
+        """Verweise auf eine Vorlage ändern: ``new_ref`` = ID (nach Umbenennen) oder "" (gelöscht)."""
+        ids = self.template_refs(template_id, old_name)
+        for customer_id in ids:
+            if new_ref:
+                self.customers.update(customer_id, template=new_ref)
+            else:
+                self.customers.update(customer_id, template="", template_auto=False)
+        if ids:
+            self.customers_changed()  # speichert und aktualisiert alle Anzeigen
+        return len(ids)
 
     @Slot(bool)
     def setTemplateAuto(self, value: bool) -> None:  # noqa: N802

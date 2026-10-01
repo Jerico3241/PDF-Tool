@@ -1,4 +1,4 @@
-"""Einstellungen älterer Versionen (2.2.0 … 2.7.0) → aktuelle Version: schnelle Migrationstests.
+"""Einstellungen älterer Versionen (2.2.0 … 2.7.2) → aktuelle Version: schnelle Migrationstests.
 
 Datenmigrationstest ≠ Installer-Upgrade-Test: Ob die App die Daten älterer Versionen versteht,
 prüft dieser Test direkt am Python-Code – in wenigen Sekunden, ohne ein altes Setup zu
@@ -19,6 +19,9 @@ Fixtures (``tests/fixtures``) – so, wie die jeweilige Version ihre Daten gesch
 * ``config_v261.json`` – 2.6.1: Kundenakte optional (hier eingeschaltet), »Animationen an«
 * ``config_v270.json`` – 2.7.0 (Qt-Oberfläche): so, wie 2.7.0 die 2.6.1-Daten gespeichert hat –
   dazu Animationsprofil und Fensterlage; ohne die Namensregel von »PDF reparieren« (neu in 2.7.1)
+* ``config_v272.json`` – 2.7.2: dazu die Namensregel von »PDF reparieren« (2.7.1) und die
+  Update-Einstellungen (Kanal Beta bestätigt); Vorlagen noch als Liste in den Einstellungen – 2.8
+  übernimmt sie einmalig als Vorlagen 2.0 (je Vorlage eine Datei), die Liste bleibt unverändert
 """
 
 from __future__ import annotations
@@ -37,15 +40,17 @@ from appstate import DEFAULT_FOOTER, baustein_rich, default_footer_rich
 from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE, RichText
 
 FIXTURES = Path(__file__).parent / "fixtures"
-VERSIONEN = ["v22", "v23", "v24", "v25", "v26", "v261", "v270"]
-MIT_KUNDENAKTEN = {"v24", "v25", "v26", "v261", "v270"}
-MIT_VERTRAGSSTAND = {"v26", "v261", "v270"}
-KUNDENAKTE_AN = {"v261", "v270"}  # seit 2.6.1 optional; in diesen Daten eingeschaltet
+VERSIONEN = ["v22", "v23", "v24", "v25", "v26", "v261", "v270", "v272"]
+MIT_KUNDENAKTEN = {"v24", "v25", "v26", "v261", "v270", "v272"}
+MIT_VERTRAGSSTAND = {"v26", "v261", "v270", "v272"}
+KUNDENAKTE_AN = {"v261", "v270", "v272"}  # seit 2.6.1 optional; in diesen Daten eingeschaltet
 KUNDE = "6f1c1d2e-0000-4000-8000-000000000024"
 STAND = "20260901T100000000000-d35c1e20.json"
 # Schlüssel, die die aktuelle Version bewusst ergänzt bzw. vereinheitlicht (alle anderen bleiben gleich):
 # die Fußzeile wird immer als bewusst gespeichert samt Formatierung geschrieben (fehlte sie: Standard).
 ERGAENZT = {"fusszeile", "fusszeile_format", "fusszeile_explizit"}
+# Seit 2.8: Vermerk der einmaligen Übernahme der Vorlagen (Vorlagen 2.0)
+NEU_28 = {"vorlagen_2"}
 
 
 def fixture(name: str) -> dict:
@@ -200,3 +205,32 @@ def test_customer_history_is_kept_until_customer_records_are_switched_on(alt, co
     assert alt_ag.footer is None  # leere Fußzeile aus der Historie wird keine eigene Fußzeile
     assert len(list((ordner / "sicherungen").glob("gui-config-vor-kundenakte-*.json"))) == 1  # Sicherung davor
     assert "kunden" not in json.loads(config_file.read_text(encoding="utf-8"))
+
+
+@alle(["v270", "v272"])
+def test_templates_become_templates_2_once_and_the_old_list_stays(alt, config_file: Path) -> None:
+    """Vorlagen bis 2.7 → Vorlagen 2.0: je Vorlage eine Datei (mit ID), einmalig; die bisherige Liste
+    in den Einstellungen bleibt unverändert stehen (eine ältere Version findet sie weiterhin)."""
+    from tools.contract_overview.templates.repository import FOLDER, TemplateStore
+
+    name, daten, holder = alt
+    h = holder["current"]
+    store = h.app.state.templates
+    assert sorted(t.name for t in store.templates()) == ["Alt ohne Fußzeile", "Quer"]
+    quer = store.by_name("Quer")
+    assert (quer.layout.format, quer.layout.titel, quer.header.text, quer.rules.cycle_list()) == ("quer", "Übersicht quer", "Kopf {kd}", [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}])
+    assert quer.rules.rule_set_id is None  # ältere Vorlage: legt kein Regelwerk fest
+    h.app.persist()
+    gespeichert = json.loads(config_file.read_text(encoding="utf-8"))
+    assert gespeichert["vorlagen"] == daten["vorlagen"] and gespeichert["vorlagen_2"]
+    dateien = sorted((config_file.parent / FOLDER).glob("*.json"))
+    assert len(dateien) == 2
+    # Zweiter Start: keine zweite Übernahme, gleiche IDs
+    h.close()
+    zweite = Harness(ui=False)
+    holder["current"] = zweite
+    assert sorted((config_file.parent / FOLDER).glob("*.json")) == dateien
+    assert zweite.app.state.templates.by_name("Quer").id == quer.id
+    if name == "v272":
+        assert zweite.updates.channel == "beta"  # der Beta-Kanal bleibt nach dem Update gewählt
+    assert TemplateStore(config_file.parent / FOLDER).load().problems == []

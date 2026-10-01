@@ -890,7 +890,9 @@ def test_filters_and_bulk_actions(ui_app, tmp_path: Path) -> None:
     klicken(h, "Vorlage anwenden …")  # Auswahl im Dialog: erste Vorlage
     pump(0.2)
     assert h.app.dialogs.history[-1]["kind"] == "choose_template"
-    assert [item.overrides.template for item in h.batch.items] == [None, "Quer", "Quer"]
+    # gespeichert wird ab 2.8 die ID der Vorlage – angezeigt ihr Name
+    assert [h.batch.template_name(item.overrides.template) or None for item in h.batch.items] == [None, "Quer", "Quer"]
+    assert h.batch.items[1].overrides.template == h.app.state.find_vorlage("Quer")["id"]
     klicken(h, "Auswahl entfernen")
     pump(0.2)
     assert [item.name for item in h.batch.items] == ["a.xlsx"]

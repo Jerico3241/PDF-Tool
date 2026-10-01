@@ -193,12 +193,12 @@ Item {
                         columns: 2
                         columnSpacing: 12
                         rowSpacing: 6
-                        PText { text: "Standardvorlage" }
+                        PText { text: "Vorlage des Stapels" }
                         PComboBox {
                             Layout.fillWidth: true
                             preferredWidth: 220
-                            label: "Standardvorlage"
-                            tip: "Vorlage für Einträge ohne eigene Vorlage und ohne Vorlage der Kundenakte"
+                            label: "Vorlage des Stapels"
+                            tip: "Vorlage für Einträge ohne eigene Vorlage und ohne Vorlage der Kundenakte – sonst gilt die Standardvorlage"
                             model: Batch.templateChoices
                             currentIndex: Batch.templateChoices.indexOf(Batch.templateValue)
                             onActivated: (index) => Batch.setDefaultTemplate(Batch.templateChoices[index])
@@ -521,17 +521,30 @@ Item {
             title: "Darstellung und Ausgabe"
             iconName: "document"
             subtitle: Batch.customerParts ? Batch.texts.outputText : Batch.texts.outputTextPlain
-            RowLayout {
+            GridLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                columns: 3
+                columnSpacing: 12
+                rowSpacing: 6
                 PText { text: "Vorlage" }
                 PComboBox {
                     preferredWidth: 240
                     label: "Vorlage"
-                    tip: "»Automatisch«: Vorlage der Kundenakte, sonst Standardvorlage des Stapels"
+                    tip: "»Automatisch«: Vorlage der Kundenakte, sonst die Vorlage des Stapels, sonst die Standardvorlage"
                     model: Batch.itemTemplateChoices
                     currentIndex: Batch.itemTemplateChoices.indexOf(Batch.itemTemplate)
                     onActivated: (index) => Batch.setItemTemplate(Batch.itemTemplateChoices[index])
+                }
+                Item { Layout.fillWidth: true }
+                PText { text: "Regelwerk" }
+                PComboBox {
+                    objectName: "itemRuleSet"
+                    preferredWidth: 240
+                    label: "Regelwerk"
+                    tip: "»Automatisch«: Regelwerk der Vorlage, sonst das der »Darstellung«"
+                    model: Batch.itemRuleSetChoices
+                    currentIndex: Batch.itemRuleSetChoices.indexOf(Batch.itemRuleSet)
+                    onActivated: (index) => Batch.setItemRuleSet(Batch.itemRuleSetChoices[index])
                 }
                 Item { Layout.fillWidth: true }
             }

@@ -1,0 +1,128 @@
+name: Beta-Update-Test
+
+# Update auf eine veröffentlichte Beta aus Sicht der Anwender – NUR manuell, nach dem
+# Veröffentlichen einer Beta (nie bei Commits, Pull Requests oder Releases):
+#
+# 1. frischer Windows-Rechner: veröffentlichtes Setup der stabilen Vorversion laden (nie neu
+#    bauen, Prüfsumme geprüft), still installieren, Benutzerdaten mit Update-Kanal „Beta“ anlegen
+# 2. der Updater DER VORVERSION fragt GitHub (nur lesend): Stable bietet keine Beta an; Beta bietet
+#    die erwartete Beta an, lädt sie, prüft sie per SHA-256 und gibt sie zur Installation frei
+# 3. das freigegebene Setup still ausführen (in der App startet es der Hilfsprozess sichtbar,
+#    sobald die App beendet ist – das prüft der Updater-E2E-Test im Workflow »Windows-Setup«)
+# 4. danach: Version, genau ein App-Eintrag, Programmstart, Update-Kanal und Einstellungen
+#    erhalten, Vorlagen übernommen, heruntergeladenes Setup aufgeräumt
+#
+# Ablauf und Prüfungen im Einzelnen: windows-app/tests/smoke_beta_update.py
+
+on:
+  workflow_dispatch:
+    inputs:
+      von:
+        description: "Installierte stabile Vorversion (X.Y.Z), z. B. 2.7.2"
+        type: string
+        required: true
+        default: "2.7.2"
+      beta:
+        description: "Erwartete Beta (X.Y.Z-beta.N), muss als Vorabversion veröffentlicht sein"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  beta-update:
+    name: "Beta-Update ${{ inputs.von }} → ${{ inputs.beta }}"
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      VON: ${{ inputs.von }}
+      BETA: ${{ inputs.beta }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Eingaben prüfen
+        shell: pwsh
+        run: |
+          if ($env:VON -notmatch '^\d+\.\d+\.\d+$') { throw "Vorversion muss X.Y.Z sein: $env:VON" }
+          if ($env:BETA -notmatch '^\d+\.\d+\.\d+-beta\.[1-9]\d*$') { throw "Beta muss X.Y.Z-beta.N sein: $env:BETA" }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA "PDF-Tool")) { throw "PDF Tool ist auf diesem Rechner schon installiert" }
+          if (Test-Path (Join-Path $env:APPDATA "PDF-Tool")) { throw "Es gibt schon Benutzerdaten von PDF Tool" }
+
+      - name: "Setup von PDF Tool ${{ inputs.von }} laden und prüfen (veröffentlichtes Release)"
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "vorversion"
+          gh release download "v$env:VON" --repo "${{ github.repository }}" --pattern "PDF-Tool-Setup-$env:VON.exe*" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Setup von PDF Tool $env:VON konnte nicht geladen werden" }
+          $setup = Join-Path $dir "PDF-Tool-Setup-$env:VON.exe"
+          $expected = ((Get-Content "$setup.sha256" -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Prüfsumme des Setups von PDF Tool $env:VON stimmt nicht: $actual" }
+          "PREVIOUS_SETUP=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: "PDF Tool ${{ inputs.von }} installieren, Benutzerdaten mit Kanal „Beta“ anlegen"
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "setup-vorversion.log"
+          $run = Start-Process -FilePath $env:PREVIOUS_SETUP -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40; throw "Installation von PDF Tool $env:VON fehlgeschlagen (Code $($run.ExitCode))" }
+          $app = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+          & "$app\runtime\python.exe" -s windows-app/tests/smoke_beta_update.py --phase vorbereiten
+          if ($LASTEXITCODE -ne 0) { throw "Benutzerdaten konnten nicht angelegt werden" }
+
+      - name: "Updater von PDF Tool ${{ inputs.von }}: Stable ohne Beta; Beta findet, lädt, prüft und gibt ${{ inputs.beta }} frei"
+        timeout-minutes: 20
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+          $result = Join-Path $env:RUNNER_TEMP "beta-update.json"
+          & "$app\runtime\python.exe" -s windows-app/tests/smoke_beta_update.py --phase suchen --app "$app\app" --installed $env:VON --expect $env:BETA --result $result
+          if ($LASTEXITCODE -ne 0) { throw "Updater von PDF Tool $env:VON: Beta nicht gefunden, geladen oder geprüft" }
+          "BETA_RESULT=$result" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: "Setup von PDF Tool ${{ inputs.beta }} ausführen (wie nach „Jetzt installieren“, hier still)"
+        timeout-minutes: 10
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $result = Get-Content $env:BETA_RESULT -Raw | ConvertFrom-Json
+          if ($result.version -ne $env:BETA) { throw "Freigegeben wurde $($result.version) statt $env:BETA" }
+          # Unabhängig vom Updater: gegen die veröffentlichte Prüfsummendatei
+          $dir = Join-Path $env:RUNNER_TEMP "beta-pruefsumme"
+          gh release download "v$env:BETA" --repo "${{ github.repository }}" --pattern "PDF-Tool-Setup-$env:BETA.exe.sha256" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Prüfsummendatei von PDF Tool $env:BETA konnte nicht geladen werden" }
+          $published = ((Get-Content (Join-Path $dir "PDF-Tool-Setup-$env:BETA.exe.sha256") -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash $result.setup -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $published -or $actual -ne $result.sha256) { throw "Prüfsumme stimmt nicht: Datei $actual, veröffentlicht $published, Updater $($result.sha256)" }
+          Write-Host "Setup $($result.setup) · $($result.size) Bytes · SHA-256 $actual (= veröffentlicht)"
+          $log = Join-Path $env:RUNNER_TEMP "setup-beta.log"
+          $run = Start-Process -FilePath $result.setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40; throw "Update auf PDF Tool $env:BETA fehlgeschlagen (Code $($run.ExitCode))" }
+
+      - name: "Nach dem Update: Version, App-Eintrag, Programmstart, Kanal, Einstellungen, Vorlagen"
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $root = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+          $old = "$([char]0x00DC)bersichten-Ersteller"
+          $entries = @(Get-ChildItem $root | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { $_.DisplayName -eq "PDF Tool" -or $_.DisplayName -eq $old -or $_.PSChildName -eq "Uebersichten-Ersteller" })
+          if ($entries.Count -ne 1) { throw "Erwartet genau einen App-Eintrag, gefunden: $($entries.Count)" }
+          if ($entries[0].DisplayVersion -ne $env:BETA) { throw "App-Eintrag nennt Version $($entries[0].DisplayVersion) statt $env:BETA" }
+          Write-Host "App-Eintrag: $($entries[0].DisplayName) $($entries[0].DisplayVersion)"
+          $app = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+          & "$app\runtime\python.exe" -s windows-app/tests/smoke_beta_update.py --phase danach --app "$app\app" --expect $env:BETA
+          if ($LASTEXITCODE -ne 0) { throw "Prüfung nach dem Update fehlgeschlagen" }
+          @(
+            "### Beta-Update-Test",
+            "- PDF Tool **$env:VON** (Kanal Beta) → **$env:BETA** über den Updater der Vorversion",
+            "- Stable bot keine Beta an; Beta: angeboten, geladen, SHA-256 geprüft, freigegeben, installiert",
+            "- danach: ein App-Eintrag, Programmstart, Kanal und Einstellungen erhalten, Vorlagen übernommen"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

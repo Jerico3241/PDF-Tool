@@ -3,7 +3,10 @@
 Vorrang (die erste vorhandene Angabe gilt):
 
 * **Vorlage:** 1. im Eintrag gewählt · 2. bevorzugte Vorlage der Kundenakte ·
-  3. Standardvorlage des Stapels · 4. keine (aktuelle »Darstellung«)
+  3. Vorlage des Stapels · 4. Standardvorlage · 5. keine (aktuelle »Darstellung«) –
+  dieselbe Reihenfolge wie ``templates.priority``
+* **Regelwerk:** 1. im Eintrag gewählt · 2. Regelwerk der geltenden Vorlage · 3. Regelwerk der
+  »Darstellung« (Einzelmodus). Fehlt das Regelwerk der Vorlage, gilt keines (mit Hinweis).
 * **Logo:** 1. im Eintrag gewählt · 2. Logo der Kundenakte · 3. Standardlogo des Stapels ·
   4. installiertes Standardlogo. Ein Logo aus einer Vorlage gilt auf der Stufe, auf der die
   Vorlage gewählt wurde – direkt nach dem Logo dieser Stufe.
@@ -37,6 +40,8 @@ from ..customers.texts import footer_of, header_of
 from ..customers.matching import MatchKind, MatchResult, normalize_email
 from ..customers.models import Customer
 from ..overview import FILE_CODES, Issue, excel_issues, output_issues, parse_width, pdf_fields, template_layout, template_rules
+from ..templates.models import ENTRY_RULE_SET, valid_id
+from ..templates.priority import Level, choose
 from .models import BatchItem, BatchSettings, CustomerMode, ItemStatus
 
 SOURCE_ITEM = "Eintrag"
@@ -44,10 +49,17 @@ SOURCE_CUSTOMER = "Kundenakte"
 SOURCE_BATCH = "Stapel"
 SOURCE_EXCEL = "Excel"
 SOURCE_DEFAULT = "Standard"
+SOURCE_DEFAULT_TEMPLATE = "Standardvorlage"
+SOURCE_TEMPLATE = "Vorlage"
 _BAD_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 PLACEHOLDER_KD = "–"  # wie in der Vorschau des Einzelmodus
 # Ohne diese Angaben gibt es auch keine Vorschau (fehlende Kundennummer o. Ä. zeigt die Vorschau als »–«)
-PREVIEW_BLOCKING = frozenset({"excel_missing", "file_missing", "unreadable", "columns_missing", "no_active", "pending", "logo_missing", "width_invalid", "template_missing"})
+PREVIEW_BLOCKING = frozenset({"excel_missing", "file_missing", "unreadable", "columns_missing", "no_active", "pending", "logo_missing", "width_invalid", "template_missing", "rule_set_missing"})
+
+
+def ref_label(ref: str) -> str:
+    """»„Name“ « für Verweise per Name (bis 2.7); eine ID allein sagt dem Benutzer nichts."""
+    return "" if valid_id(ref) and len(ref) >= 32 else f"„{ref}“ "
 
 
 @dataclass(frozen=True)
@@ -63,6 +75,9 @@ class Defaults:
     footer: RichText
     regeln: tuple[dict, ...]
     logo: str  # installiertes Standardlogo
+    regelwerk: dict | None = None  # Regelwerk der »Darstellung« (``RuleSet.to_dict()``)
+    regelwerk_name: str = ""
+    vorlage_standard: str = ""  # ID der Standardvorlage ("" = keine)
 
 
 @dataclass
@@ -80,8 +95,12 @@ class Resolution:
     number_source: str = ""
     email: str = ""
     email_source: str = ""
-    template: str = ""
+    template: str = ""  # Name der geltenden Vorlage ("" = keine)
+    template_id: str = ""
     template_source: str = SOURCE_DEFAULT
+    rule_set: str = ""  # Name des geltenden Regelwerks ("" = keines)
+    rule_set_id: str = ""
+    rule_set_source: str = ""
     logo: str = ""
     logo_source: str = ""
     folder: str = ""
@@ -143,11 +162,13 @@ def resolve(
     settings: BatchSettings,
     defaults: Defaults,
     for_preview: bool = False,
+    find_rule_set: Callable[[str], dict | None] | None = None,
 ) -> Resolution:
     """Geltende Werte eines Eintrags bestimmen (ohne etwas zu verändern).
 
     ``customers``: Speicher der Kundenakten – ``None``, wenn die Kundenakte ausgeschaltet ist
     (dann kein Abgleich, keine Kundenwerte; Angaben kommen aus dem Eintrag und der Excel).
+    ``find_template``/``find_rule_set``: Verweis (ID oder Name) → gespeicherte Daten oder ``None``.
     ``for_preview``: Auftrag auch dann bilden, wenn nur Angaben wie die Kundennummer fehlen –
     für die Vorschau (dieselbe Pipeline wie im Einzelmodus), nie für die Erstellung.
     """
@@ -219,27 +240,24 @@ def resolve(
         res.email, res.email_source = customer.primary_email, SOURCE_CUSTOMER
 
     # 5. Vorlage ---------------------------------------------------------------------------------------------
-    template_entry: dict | None = None
-    chain: list[tuple[str | None, str]] = [(ov.template, SOURCE_ITEM)]
+    chain = [Level(ov.template, SOURCE_ITEM, strict=True)]
     if customer is not None:
-        chain.append((customer.template or None, SOURCE_CUSTOMER))
-    chain.append((settings.template or None, SOURCE_BATCH))
-    for name, source in chain:
-        if name is None:
-            continue
-        if name == "":  # bewusst keine Vorlage (nur im Eintrag möglich)
-            res.template, res.template_source = "", source
-            break
-        entry = find_template(name)
-        if entry is None:
-            if source == SOURCE_ITEM:
-                issues.append(Issue("vorlage", "template_missing", f"Vorlage „{name}“ gibt es nicht mehr"))
-                break
-            notes.append(f"Vorlage „{name}“ ({source}) gibt es nicht mehr – es gilt die nächste Stufe.")
-            continue
-        template_entry = entry
-        res.template, res.template_source = name, source
-        break
+        chain.append(Level(customer.template or None, SOURCE_CUSTOMER))
+    chain.append(Level(settings.template or None, SOURCE_BATCH))
+    chain.append(Level(defaults.vorlage_standard or None, SOURCE_DEFAULT_TEMPLATE))
+    choice = choose(chain, find_template)
+    for ref, source in choice.missing:
+        if choice.blocked and source == SOURCE_ITEM:
+            issues.append(Issue("vorlage", "template_missing", f"Vorlage {ref_label(ref)}gibt es nicht mehr".replace("  ", " ")))
+        else:
+            notes.append(f"Vorlage {ref_label(ref)}({source}) gibt es nicht mehr – es gilt die nächste Stufe.")
+    template_entry = choice.entry
+    if template_entry is not None:
+        res.template = str(template_entry.get("name") or choice.ref)
+        res.template_id = str(template_entry.get("id") or choice.ref)
+        res.template_source = choice.source
+    elif choice.source == SOURCE_ITEM and not choice.blocked:  # bewusst keine Vorlage (nur im Eintrag möglich)
+        res.template, res.template_source = "", SOURCE_ITEM
     layout = template_layout(template_entry) if template_entry is not None else {}
 
     # 6. Logo ----------------------------------------------------------------------------------------------------
@@ -306,6 +324,31 @@ def resolve(
         header = own_header if own_header is not None else header
         footer = own_footer if own_footer is not None else footer  # nie eine leere Fußzeile der Akte
 
+    # 8b. Regelwerk: im Eintrag gewählt → Regelwerk der Vorlage → »Darstellung« ---------------------------------------
+    regelwerk: dict | None = defaults.regelwerk
+    res.rule_set, res.rule_set_source = (defaults.regelwerk_name, SOURCE_DEFAULT) if defaults.regelwerk else ("", "")
+    res.rule_set_id = str((defaults.regelwerk or {}).get("id") or "")
+    template_rule_set = template_entry.get(ENTRY_RULE_SET) if template_entry is not None else None
+    if ov.rule_set is not None:
+        ref, source, strict = ov.rule_set, SOURCE_ITEM, True
+    elif isinstance(template_rule_set, str):
+        ref, source, strict = template_rule_set, f"{SOURCE_TEMPLATE} „{res.template}“", False
+    else:
+        ref, source, strict = None, "", False
+    if ref is not None:
+        found = find_rule_set(ref) if (ref and find_rule_set is not None) else None
+        if ref == "":
+            regelwerk, res.rule_set, res.rule_set_id, res.rule_set_source = None, "", "", source
+        elif found is not None:
+            regelwerk, res.rule_set, res.rule_set_id, res.rule_set_source = found, str(found.get("name") or ""), str(found.get("id") or ref), source
+        elif strict:
+            issues.append(Issue("regelwerk", "rule_set_missing", "Das gewählte Regelwerk gibt es nicht mehr"))
+            regelwerk, res.rule_set, res.rule_set_id, res.rule_set_source = None, "", "", source
+        else:
+            # Wie beim Laden der Vorlage im Einzelmodus: kein fremdes Regelwerk an seiner Stelle.
+            notes.append(f"Das Regelwerk der Vorlage „{res.template}“ gibt es nicht mehr – es wird kein Regelwerk verwendet.")
+            regelwerk, res.rule_set, res.rule_set_id, res.rule_set_source = None, "", "", source
+
     # 9. Offene Punkte und Auftrag -------------------------------------------------------------------------------------
     choose_customer = any(issue.area == "kunde" for issue in issues)
     if not res.company and customer is None and usable and not choose_customer and not any(issue.code in FILE_CODES for issue in issues):
@@ -331,5 +374,6 @@ def resolve(
             header=header,
             footer=footer,
             regeln=regeln,
+            regelwerk=regelwerk,
         )
     return res
