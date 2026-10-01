@@ -58,7 +58,7 @@ jobs:
           - gruppe: Start, Navigation, Einstellungen, Verlauf, optionale Kundenakte
             dateien: resources bridge shell history optional
           - gruppe: Vertragsübersichten, Kopf- und Fußzeile, PDF reparieren
-            dateien: contracts richtext repair
+            dateien: contracts richtext caret repair
           - gruppe: Kundenakte, Stapel
             dateien: customers batch
     env:

@@ -86,6 +86,15 @@ unverändert seit 2.2. QML erhält kein eigenes Format.
 HTML, Markdown oder die Property `text` des Textfelds werden nie gelesen oder geschrieben;
 eingefügt wird nur reiner Text (`pastePlain`). Umschalt+Eingabe beginnt einen Absatz (`newParagraph`).
 
+`load_document` schreibt immer in *einem* Bearbeitungsblock: Einzeln verwirft `setBlockCharFormat`
+auf einem leeren Absatz dessen Zeilen-Layout, ohne es neu zu berechnen – das Textfeld setzte die
+Einfügemarke dann ersatzweise 10 px hoch oben links. Die Einfügemarke selbst ist `PTextCaret`
+(`cursorDelegate` von `PRichTextEditor`): Ihre Maße liefert `RichTextDocument` (`caretFont`,
+`caretAscent`, `caretDescent`, `caretBaseline` – Font Metrics der Schrift, die am Cursor entstünde,
+auch einer ohne Markierung gewählten, und Grundlinie der Zeile); der Strich liegt in ganzen
+Gerätepixeln. Der Platzhalter im leeren Feld verwendet dieselbe Schrift (`caretFont`) und die
+Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text beginnen an derselben Stelle.
+
 ## Hintergrundarbeit
 
 - `tasks.Worker.run(func, on_done, on_error)` – Excel-Prüfung, PDF-Erzeugung, Vorschau, Stapel,
@@ -134,6 +143,8 @@ fertigen Bild → weitere Seiten laden.
 - Qt-Brücke und Oberfläche: `tests/test_qt_*.py` mit `tests/qtutil.py` (`Harness`: App wie beim
   Start, ohne Bildschirm mit `QT_QPA_PLATFORM=offscreen`). Jede Meldung der QML-Engine lässt einen
   Test scheitern.
+- Einfügemarke: `tests/test_qt_caret.py` (Bild bei 100 %, Geometrie in Gerätepixeln bei 125 … 200 %
+  über `tests/caret_geometry.py` – je Skalierung ein eigener Prozess).
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
   (`tests/fixtures/config_v22.json` … `config_v261.json`, dazu Kundenakten und ein Vertragsstand)
   in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.

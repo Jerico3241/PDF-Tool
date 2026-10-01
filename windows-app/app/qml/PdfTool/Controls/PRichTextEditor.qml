@@ -8,6 +8,7 @@ import PdfTool.Style
 // »Papier« wie in der PDF. Der Inhalt samt Formatierung gehört dem Python-Modell ``document``
 // (``RichTextDocument``): Es liest jede Änderung sofort aus dem ``QTextDocument`` des Textfelds
 // zurück. Rückgängig und Wiederholen (Strg+Z / Strg+Y) gelten für Text und Formatierung.
+// Einfügemarke (``PTextCaret``) und Platzhalter richten sich nach der Schrift am Cursor.
 ColumnLayout {
     id: editor
     property QtObject document: null
@@ -174,12 +175,25 @@ ColumnLayout {
                 persistentSelection: true
                 Accessible.role: Accessible.EditableText
                 Accessible.name: editor.label
+                // Einfügemarke in der Höhe der aktuellen Schrift auf der Grundlinie (Maße aus Python,
+                // ``RichTextDocument.caret…``) – Kopf- und Fußzeile verwenden genau diese eine Logik
+                cursorDelegate: PTextCaret {
+                    textItem: area
+                    ascent: editor.document ? editor.document.caretAscent : 0
+                    descent: editor.document ? editor.document.caretDescent : 0
+                    lineBaseline: editor.document ? editor.document.caretBaseline : 0
+                    color: Theme.paperText
+                }
                 Component.onCompleted: if (editor.document) editor.document.attach(area.textDocument)
                 Component.onDestruction: if (editor.document) editor.document.detach()
                 onCursorPositionChanged: if (editor.document) editor.document.setCursor(cursorPosition, selectionStart, selectionEnd)
                 onSelectionStartChanged: if (editor.document) editor.document.setCursor(cursorPosition, selectionStart, selectionEnd)
                 onSelectionEndChanged: if (editor.document) editor.document.setCursor(cursorPosition, selectionStart, selectionEnd)
-                onCursorRectangleChanged: flick.ensureVisible(cursorRectangle)
+                onCursorRectangleChanged: {
+                    flick.ensureVisible(cursorRectangle)
+                    if (editor.document)
+                        editor.document.refreshCaret(cursorPosition)  // Zeile neu gesetzt: Grundlinie
+                }
                 Keys.onPressed: (event) => {
                     if (event.matches(StandardKey.Paste)) { editor.pastePlain(); event.accepted = true; return }
                     if (event.key === Qt.Key_Tab) { area.nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason); event.accepted = true; return }
@@ -197,12 +211,20 @@ ColumnLayout {
                     if (event.key === Qt.Key_E) { editor.document.setAlignment("center"); event.accepted = true; return }
                     if (event.key === Qt.Key_R) { editor.document.setAlignment("right"); event.accepted = true; return }
                 }
+                // Platzhalter im leeren Feld: dieselben Innenabstände, dieselbe Schrift und Ausrichtung
+                // wie der Text, der hier entsteht – Platzhalter, Einfügemarke und eingegebener Text
+                // beginnen an derselben Stelle und stehen auf derselben Grundlinie
                 Text {
+                    objectName: "placeholder"
                     x: area.leftPadding
                     y: area.topPadding
                     width: area.width - area.leftPadding - area.rightPadding
                     text: editor.placeholderText
-                    font: Typography.body
+                    font: editor.document && editor.document.caretFont ? editor.document.caretFont : Typography.body
+                    horizontalAlignment: {
+                        const align = editor.document ? editor.document.alignment : ""
+                        return align === "center" ? Text.AlignHCenter : (align === "right" ? Text.AlignRight : Text.AlignLeft)
+                    }
                     color: Theme.paperPlaceholder
                     elide: Text.ElideRight
                     textFormat: Text.PlainText

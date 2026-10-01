@@ -56,6 +56,13 @@ alles unter `windows-app/app/qml/`.
   (`height: Math.max(implicitHeight, flickable.height)`): Sonst bleibt es eine Zeile hoch, Qt zeichnet
   nur, was im Feld liegt, und Klicks darunter gehen verloren (`PRichTextEditor`, `PTextArea`;
   geprüft in `test_qt_richtext.py` mit echten Klicks und dem gezeichneten Bild).
+- **Einfügemarke in Textfeldern mit Formatierung:** `PTextCaret` als `cursorDelegate` statt der
+  Qt-Marke (die ist 1 logisches Pixel breit – bei 125 … 175 % über mehrere Gerätepixel verwischt –
+  und so hoch wie die ganze Zeile). Höhe aus den Font Metrics der Schrift am Cursor, Lage auf der
+  Grundlinie, Breite/Höhe/Kanten in ganzen Gerätepixeln; sichtbar nur mit Textfokus
+  (`cursorVisible`), Blinken nach `Qt.styleHints.cursorFlashTime`. Der Platzhalter verwendet
+  dieselbe Schrift und Ausrichtung wie der Text, der beim Tippen entsteht (Test:
+  `test_qt_caret.py`).
 - Neue Komponenten in das `qmldir` ihres Moduls eintragen – sonst fehlen sie in der Ressource des
   Setups (Test: `test_qt_resources.py`).
 
