@@ -7,7 +7,7 @@ was PDF Tool zur Laufzeit lädt:
 * Python-Module (``.pyd``): ``PYTHON_MODULES`` – genau die, die ``import PySide6.…`` der App
   (auch indirekt, z. B. QtQml → QtNetwork) lädt.
 * Qt-Plugins: ``PLUGINS`` – Fensterplattform, Bildformate (ICO für das Fenstersymbol, JPEG/WebP/SVG
-  für Logos und Symbole).
+  für Logos und Symbole), TLS über Schannel (HTTPS für die Update-Prüfung, seit 2.7.2).
 * QML-Module: ``QML_MODULES`` – ermittelt mit ``qmlimportscanner``; von Qt Quick Controls nur der
   Stil »Basic«, den die App fest einstellt.
 * DLLs: alle, die diese Dateien laut Importtabelle (auch verzögert geladen) brauchen – transitiv.
@@ -33,6 +33,7 @@ PLUGINS = (
     "imageformats/qsvg.dll",
     "imageformats/qwebp.dll",
     "iconengines/qsvgicon.dll",
+    "tls/qschannelbackend.dll",  # HTTPS für Updates (Zertifikate prüft Windows selbst)
 )
 # QML-Module (Ordner unter PySide6/qml); bei Qt Quick Controls nur Basic und die gemeinsamen Teile
 QML_MODULES = (

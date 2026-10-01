@@ -52,6 +52,7 @@ $target = Join-Path $env:LOCALAPPDATA "PDF-Tool"
 $data = Join-Path $env:APPDATA "PDF-Tool"
 $oldTarget = Join-Path $env:LOCALAPPDATA "Uebersichten-Ersteller"
 $oldData = Join-Path $env:APPDATA "Uebersichten-Ersteller"
+$updates = Join-Path $env:LOCALAPPDATA "PDF-Tool-Updates"
 $temp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
 $appName = "PDF Tool"
 $oldAppName = "$([char]0x00DC)bersichten-Ersteller"
@@ -65,7 +66,7 @@ $env:UE_DATA_DIR = $null
 $env:UE_CONFIG_FILE = $null
 
 # Ordner, die vor dem Test nicht existierten, werden am Ende entfernt (nie vorhandene Benutzerdaten).
-$created = @($target, $data, $oldTarget, $oldData) | Where-Object { -not (Test-Path $_) }
+$created = @($target, $data, $oldTarget, $oldData, $updates) | Where-Object { -not (Test-Path $_) }
 
 function Install([string]$file, [string]$name) {
     $log = Join-Path $temp "setup-$name.log"
@@ -159,7 +160,7 @@ if ($Previous) {
 
 Write-Host "1. Stille Installation: $Setup"
 $log = Install $Setup "installation"
-foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
+foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
     if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
 }
 # Seit 2.7.0 ohne Tk-Oberflaeche: auch bei einem Update bleiben keine alten Programmteile zurueck
@@ -238,6 +239,13 @@ if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Ra
 Stop-Process -Id $app.Id -Force
 Start-Sleep -Seconds 2
 Write-Host "   App lief ohne Fehler"
+# Die automatische Update-Pruefung laeuft wenige Sekunden nach dem Start im Hintergrund (nur lesend).
+# Offline oder bei einem Anfragelimit bleibt sie still - das ist nur ein Hinweis, kein Fehler.
+if (Test-Path (Join-Path $updates "releases.json")) {
+    Write-Host "   Automatische Update-Pruefung im Hintergrund: erfolgreich (HTTPS zu GitHub)"
+} else {
+    Write-Host "   Hinweis: keine automatische Update-Pruefung erfolgt (offline oder GitHub-Anfragelimit)"
+}
 
 if ($Previous -and $previousKind -eq "2.3") {
     # Seit 2.6.1 ist die Kundenakte optional und zunaechst aus: der Kundenverlauf bleibt unangetastet.
@@ -333,6 +341,7 @@ if (Test-Path (Join-Path $target "runtime")) { throw "Laufzeit ist nach der Dein
 if (Test-Path $shortcut) { throw "Verknuepfung ist nach der Deinstallation noch vorhanden" }
 if ((AppEntries).Count -ne 0) { throw "Eintrag unter 'Installierte Apps' ist nach der Deinstallation noch vorhanden" }
 if ($Previous -and -not (Test-Path (Join-Path $data "gui-config.json"))) { throw "Stille Deinstallation hat Benutzerdaten geloescht" }
+if (Get-ChildItem $updates -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "PDF-Tool-Setup-*" -or $_.Name -eq "releases.json" }) { throw "Heruntergeladene Updates sind nach der Deinstallation noch vorhanden" }
 
 # Aufraeumen: nur, was dieser Test angelegt hat
 foreach ($dir in $created) { if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue } }

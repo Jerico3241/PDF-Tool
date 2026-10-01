@@ -239,7 +239,7 @@ def test_versions_are_consistent() -> None:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "2.7.1"
+    assert appstate.VERSION == version == "2.7.2"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]
@@ -254,9 +254,23 @@ def test_versions_are_consistent() -> None:
             assert version not in datei.read_text(encoding="utf-8"), datei.name
     seite = (root.parent / "src" / "components" / "landing-page.tsx").read_text(encoding="utf-8")
     assert "windows-app/VERSION?raw" in seite and version not in seite
-    haupt = (root.parent / "README.md").read_text(encoding="utf-8")
-    assert f"PDF Tool {version}" in haupt
     assert (root / "release-notes" / f"{version}.md").is_file()
+
+
+def test_readme_stays_a_short_introduction() -> None:
+    """README-Regel: Die README.md stellt PDF Tool kurz vor – keine Versionsnummer, die bei jedem
+    Release geändert werden müsste, keine Release-Historie, keine Test- oder CI-Berichte."""
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    haupt = (root.parent / "README.md").read_text(encoding="utf-8")
+    assert len(haupt.splitlines()) <= 80
+    assert version not in haupt
+    assert not re.search(r"(?i)neu in (version )?\d", haupt)
+    assert [line for line in haupt.splitlines() if line.startswith("## ")] == ["## Funktionen", "## Oberfläche", "## Datenschutz", "## Installation", "## Entwicklung", "## Lizenz"]
+    for link in re.findall(r"\]\(((?:docs|windows-app)/[^)#]+)\)", haupt) + ["THIRD_PARTY_LICENSES.md"]:
+        assert (root.parent / link).exists(), link
 
 
 # SHA-256 des Hottgenroth-Logos der Vertragsübersichten (Dokument-Branding, kein App-Branding)

@@ -2,6 +2,33 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 2.7.2
+
+## In-App Updates
+
+- PDF Tool kann jetzt direkt in der Anwendung nach Updates suchen
+- Updates können direkt heruntergeladen werden
+- Downloads werden per SHA-256 überprüft
+- Installation erfolgt weiterhin sicher über das PDF-Tool-Setup
+
+## Stable- und Beta-Kanal
+
+- Stable bleibt der Standard
+- Beta kann optional aktiviert werden
+- Beta-Nutzer erhalten Vorabversionen zum Testen
+- Stable-Nutzer erhalten ausschließlich freigegebene Releases
+
+## Hintergrundprüfung
+
+- automatische Updateprüfung
+- blockiert den Programmstart nicht
+- Offline-Betrieb bleibt vollständig möglich
+
+## Korrekturen
+
+- Eine Rückfrage direkt nach einem Dialog mit Inhalt (z. B. nach den Update-Details) übernahm
+  dessen Höhe und zeigte eine große leere Fläche; sie ist jetzt so hoch wie ihr Text.
+
 # PDF Tool 2.7.1
 
 ## PDF reparieren: mehrere PDFs

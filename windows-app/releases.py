@@ -11,8 +11,9 @@ Aufruf (in der CI, mit der GitHub-CLI ``gh``)::
     python windows-app/releases.py all --json          # z. B. ["2.2.0", "2.3.0", …]
     python windows-app/releases.py all --only 2.4.0,2.5.0 --json
 
-Stabil heißt: Tag ``vMAJOR.MINOR.PATCH`` ohne Vorabkennung (``-rc1`` …), weder Entwurf noch
-Vorabversion. Die aktuelle Version steht in ``windows-app/VERSION``.
+Stabil heißt: Tag ``vMAJOR.MINOR.PATCH`` ohne Vorabkennung (``-beta.1`` …), weder Entwurf noch
+Vorabversion. Die aktuelle Version steht in ``windows-app/VERSION`` – auch eine Beta
+(``2.8.0-beta.1``): Ihr Update-Test startet bei der letzten stabilen Version vor 2.8.0.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from typing import Iterable
 HERE = Path(__file__).resolve().parent
 OLDEST_SUPPORTED = (2, 2, 0)  # älteste Vorversion, die smoke_installer.ps1 installieren und prüfen kann
 _TAG = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+_BETA = re.compile(r"^\d+\.\d+\.\d+-beta\.[1-9]\d*$")
 
 Version = tuple[int, int, int]
 
@@ -66,9 +68,11 @@ def older_stable(current: Version, versions: Iterable[Version], oldest: Version 
 
 
 def current_version() -> Version:
-    version = parse((HERE / "VERSION").read_text(encoding="utf-8"))
+    """Zahlenteil der Version aus ``windows-app/VERSION`` (bei einer Beta ``2.8.0-beta.1`` → ``(2, 8, 0)``)."""
+    text = (HERE / "VERSION").read_text(encoding="utf-8").strip()
+    version = parse(text.split("-", 1)[0]) if "-" in text and _BETA.match(text) else parse(text)
     if version is None:
-        raise SystemExit("windows-app/VERSION enthält keine Version MAJOR.MINOR.PATCH")
+        raise SystemExit("windows-app/VERSION enthält keine Version MAJOR.MINOR.PATCH bzw. MAJOR.MINOR.PATCH-beta.N")
     return version
 
 

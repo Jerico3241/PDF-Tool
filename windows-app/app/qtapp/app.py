@@ -70,6 +70,7 @@ class ToolHooks(Protocol):
     def autosave(self) -> None: ...
     def changed(self) -> None: ...
     def confirm_close(self) -> bool: ...
+    def running_work(self) -> str: ...
     def close(self) -> None: ...
 
 
@@ -260,7 +261,7 @@ class AppController(Observable):
         self.dialogs.show(
             "about",
             "Über",
-            {"name": APP_NAME, "version": VERSION, "developer": DEVELOPER, "text": ABOUT_TEXT, "quote": ABOUT_QUOTE, "author": ABOUT_QUOTE_AUTHOR},
+            {"name": APP_NAME, "version": VERSION, "beta": "-beta" in VERSION, "developer": DEVELOPER, "text": ABOUT_TEXT, "quote": ABOUT_QUOTE, "author": ABOUT_QUOTE_AUTHOR},
             width=520,
         )
 
@@ -456,6 +457,10 @@ class AppController(Observable):
         save_config(data)
 
     # Beenden ------------------------------------------------------------------------------------------------------
+    def running_work(self) -> list[str]:
+        """Laufende Verarbeitungen aller Werkzeuge (z. B. »PDF-Reparatur«, »Stapel«) – vor einem Update."""
+        return [work for hooks in self._tools.values() if (work := hooks.running_work())]
+
     @Slot(result=bool)
     def requestClose(self) -> bool:  # noqa: N802
         """Fenster soll schließen: Werkzeuge dürfen nachfragen (z. B. laufender Stapel)."""

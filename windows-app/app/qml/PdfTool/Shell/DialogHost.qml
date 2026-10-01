@@ -120,6 +120,7 @@ T.Popup {
                         Layout.fillWidth: true
                         Layout.leftMargin: 24
                         Layout.rightMargin: 24
+                        Layout.bottomMargin: body.item ? 0 : 24
                     }
                     Loader {
                         id: body
@@ -127,6 +128,10 @@ T.Popup {
                         Layout.leftMargin: 24
                         Layout.rightMargin: 24
                         Layout.bottomMargin: 24
+                        // Ohne Inhalt (z. B. Rückfrage nach einem Dialog mit Inhalt) keine Höhe: ein Loader
+                        // behielte sonst die Höhe seines vorigen Inhalts.
+                        Layout.preferredHeight: item ? item.implicitHeight : 0
+                        visible: item !== null
                         focus: true
                         sourceComponent: {
                             switch (popup.kind) {
@@ -138,6 +143,7 @@ T.Popup {
                             case "customer_update": return customerUpdateContent
                             case "customer_fields": return customerFieldsContent
                             case "choose_template": return chooseTemplateContent
+                            case "update_details": return updateContent
                             default: return null
                             }
                         }
@@ -199,4 +205,5 @@ T.Popup {
     Component { id: customerUpdateContent; CustomerUpdateContent {} }
     Component { id: customerFieldsContent; CustomerFieldsContent {} }
     Component { id: chooseTemplateContent; ChooseTemplateContent {} }
+    Component { id: updateContent; UpdateContent {} }
 }

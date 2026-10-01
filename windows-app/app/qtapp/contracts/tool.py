@@ -176,6 +176,11 @@ class ContractsTool:
     def confirm_close(self) -> bool:
         return self.batch.confirm_close()
 
+    def running_work(self) -> str:
+        if self.batch.running_now:
+            return "Stapel"
+        return "PDF-Erstellung" if self.overview.busy else ""
+
     def close(self) -> None:
         # Kundenakten werden nie automatisch angelegt – nur eine offene Eingabe in »Kunden« sichern.
         self.customers.flush()

@@ -1029,6 +1029,9 @@ class RepairTool:
     def confirm_close(self) -> bool:
         return True
 
+    def running_work(self) -> str:
+        return "PDF-Reparatur" if self.controller.busy or self.controller.running else ""
+
     def close(self) -> None:
         self.controller.close()
 

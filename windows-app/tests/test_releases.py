@@ -74,3 +74,98 @@ def test_command_line(tmp_path: Path, capsys) -> None:
 @pytest.mark.parametrize("value,expected", [("v2.6.1", (2, 6, 1)), ("2.10.0", (2, 10, 0)), ("v2.7.0-rc1", None), ("2.7", None), ("", None)])
 def test_parse(value: str, expected) -> None:
     assert releases.parse(value) == expected
+
+
+def test_previous_stable_for_272_is_271_and_betas_never_count() -> None:
+    """Normaler Workflow für 2.7.2: Clean Install und genau 2.7.1 → 2.7.2 (keine historische Kette)."""
+    published = [{"tagName": "v2.7.1", "isDraft": False, "isPrerelease": False}, {"tagName": "v2.7.2-beta.1", "isDraft": False, "isPrerelease": True}] + PUBLISHED
+    versions = releases.stable_versions(published)
+    assert releases.previous_stable((2, 7, 2), versions) == (2, 7, 1)
+
+
+def test_beta_version_file_is_understood(tmp_path, monkeypatch) -> None:
+    """VERSION »2.8.0-beta.1«: der Update-Test startet bei der letzten stabilen Version vor 2.8.0."""
+    (tmp_path / "VERSION").write_text("2.8.0-beta.1\n", encoding="utf-8")
+    monkeypatch.setattr(releases, "HERE", tmp_path)
+    assert releases.current_version() == (2, 8, 0)
+    published = [{"tagName": "v2.7.2", "isDraft": False, "isPrerelease": False}, {"tagName": "v2.8.0-beta.0", "isDraft": False, "isPrerelease": True}]
+    assert releases.previous_stable(releases.current_version(), releases.stable_versions(published)) == (2, 7, 2)
+    (tmp_path / "VERSION").write_text("2.8.0-rc1\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        releases.current_version()
+
+
+# --- Release-Dateien prüfen (release_check.py) --------------------------------------------------------------------------
+
+_check_spec = importlib.util.spec_from_file_location("release_check", ROOT / "release_check.py")
+release_check = importlib.util.module_from_spec(_check_spec)
+_check_spec.loader.exec_module(release_check)
+
+
+@pytest.mark.parametrize("version,ok", [("2.7.2", True), ("2.8.0-beta.1", True), ("2.8.0-beta.12", True), ("2.8.0-beta.0", False), ("2.8.0-beta", False), ("2.8.0-rc.1", False), ("2.8.0-beta.1+b5", False), ("v2.8.0", False), ("2.8", False), ("2.08.0", False)])
+def test_release_versions(version, ok) -> None:
+    assert release_check.valid_version(version) is ok
+
+
+def test_beta_is_a_prerelease_and_stable_is_not() -> None:
+    assert release_check.outputs("2.8.0-beta.1") == {
+        "version": "2.8.0-beta.1",
+        "tag": "v2.8.0-beta.1",
+        "title": "PDF Tool 2.8.0-beta.1",
+        "prerelease": "true",
+        "setup": "PDF-Tool-Setup-2.8.0-beta.1.exe",
+        "checksum": "PDF-Tool-Setup-2.8.0-beta.1.exe.sha256",
+        "notes": "windows-app/release-notes/2.8.0-beta.1.md",
+    }
+    assert release_check.outputs("2.7.2")["prerelease"] == "false" and release_check.outputs("2.7.2")["tag"] == "v2.7.2"
+    assert release_check.numeric_version("2.8.0-beta.1") == "2.8.0"
+
+
+def _setup_bytes(numeric: str) -> bytes:
+    import struct
+
+    major, minor, patch = (int(part) for part in numeric.split("."))
+    info = b"\xbd\x04\xef\xfe" + struct.pack("<I", 0x10000) + struct.pack("<II", (major << 16) | minor, patch << 16)
+    return b"MZ" + b"\0" * 200 + info + b"\0" * 4000
+
+
+def _dist(tmp_path, version: str, numeric: str | None = None, line: str | None = None):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    name = f"PDF-Tool-Setup-{version}.exe"
+    data = _setup_bytes(numeric or release_check.numeric_version(version))
+    (dist / name).write_bytes(data)
+    digest = __import__("hashlib").sha256(data).hexdigest()
+    (dist / (name + ".sha256")).write_bytes((line if line is not None else f"{digest}  {name}\n").encode("ascii"))
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    (notes / f"{version}.md").write_text("# Notes", encoding="utf-8")
+    return dist, notes, digest
+
+
+@pytest.mark.parametrize("version", ["2.7.2", "2.8.0-beta.1"])
+def test_release_files_are_validated(tmp_path, version) -> None:
+    dist, notes, _digest = _dist(tmp_path, version)
+    assert release_check.check(dist, version, notes, min_size=0) == []
+
+
+def test_release_check_finds_every_problem(tmp_path) -> None:
+    dist, notes, digest = _dist(tmp_path, "2.7.2", line=f"{'0' * 64}  PDF-Tool-Setup-2.7.1.exe\n")
+    problems = release_check.check(dist, "2.7.2", notes, min_size=0)
+    assert "Prüfsumme gehört nicht zum Setup" in problems
+    assert any("nennt 'PDF-Tool-Setup-2.7.1.exe'" in problem for problem in problems)
+    (dist / "PDF-Tool-Setup-2.7.2.exe.sha256").write_text(f"{digest}\n", encoding="ascii")  # nur der Hash: nicht das vereinbarte Format
+    assert any("Format" in problem for problem in release_check.check(dist, "2.7.2", notes, min_size=0))
+    (dist / "PDF-Tool-Setup-2.7.2.exe.sha256").unlink()
+    assert release_check.check(dist, "2.7.2", notes, min_size=0) == ["Prüfsummendatei fehlt: PDF-Tool-Setup-2.7.2.exe.sha256"]
+    (dist / "PDF-Tool-Setup-2.7.1.exe").write_bytes(b"MZ")
+    assert any("Unerwartete Dateien" in problem for problem in release_check.check(dist, "2.7.2", notes, min_size=0))
+    assert release_check.check(dist, "2.7.2-rc.1", notes) == ["VERSION ist ungültig: '2.7.2-rc.1' (erlaubt: X.Y.Z oder X.Y.Z-beta.N)"]
+
+
+def test_release_check_compares_the_file_version_and_notes(tmp_path) -> None:
+    dist, notes, _digest = _dist(tmp_path, "2.7.2", numeric="2.7.1")
+    (notes / "2.7.2.md").unlink()
+    problems = release_check.check(dist, "2.7.2", notes, min_size=0)
+    assert "Dateiversion des Setups ist 2.7.1, erwartet 2.7.2" in problems
+    assert "Release Notes fehlen: release-notes/2.7.2.md" in problems

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.7.1
+Version 2.7.2
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
@@ -20,13 +20,28 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.7.1.exe
+PDF-Tool-Setup-2.7.2.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
 qpdf, pypdfium2 mit PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
 andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.7.2 – In-App Updates
+-------------------------------------
+PDF Tool findet neue Versionen jetzt selbst und installiert sie auf Wunsch.
+- Einstellungen → Updates: aktuelle Version, Update-Kanal (Stable oder
+  Beta), automatische Prüfung (ein/aus), letzte Prüfung und „Nach Updates
+  suchen“.
+- Die automatische Prüfung läuft höchstens einmal täglich im Hintergrund –
+  der Start wartet nie darauf, ohne Internet passiert nichts.
+- Ist eine neue Version da, erscheint oben ein Hinweis: „Details“ zeigt die
+  Neuerungen, „Herunterladen“ lädt das Setup mit Fortschrittsanzeige.
+- Jedes heruntergeladene Setup wird per SHA-256 mit der veröffentlichten
+  Prüfsumme verglichen. Stimmt sie nicht, wird nichts installiert.
+- „Jetzt installieren“ beendet PDF Tool und startet das Setup. Während einer
+  laufenden Verarbeitung (z. B. PDF-Reparatur, Stapel) wartet PDF Tool damit.
 
 Neu in Version 2.7.1 – PDF Repair Batch
 ---------------------------------------
@@ -193,8 +208,25 @@ Einstellungen → Apps → Installierte Apps.
 
 Aktualisieren
 -------------
-Einfach das neue Setup ausführen. Die vorhandene Installation wird ersetzt,
-es entsteht keine zweite Installation. Ihre Daten bleiben erhalten.
+Ab Version 2.7.2 meldet PDF Tool neue Versionen selbst: Einstellungen →
+Updates → „Nach Updates suchen“, oder der Hinweis nach der automatischen
+Prüfung. „Herunterladen“ und danach „Jetzt installieren“ – PDF Tool beendet
+sich, das Setup startet und aktualisiert die vorhandene Installation. Am
+Ende kann PDF Tool direkt wieder gestartet werden.
+
+Update-Kanal: „Stable“ (Standard) erhält nur freigegebene Versionen. „Beta“
+erhält zusätzlich Vorabversionen zum Testen – Beta-Versionen können Fehler
+enthalten und sind nicht vollständig freigegeben. Ein Wechsel von Beta zurück
+zu Stable installiert nie eine ältere Version; er wirkt, sobald eine neuere
+stabile Version erscheint.
+
+Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
+Die vorhandene Installation wird ersetzt, es entsteht keine zweite
+Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 2.7.1 auf 2.7.2: Das Setup ersetzt nur die
+Programmdateien. Alle Einstellungen und Daten bleiben unverändert. Der
+Update-Kanal ist danach „Stable“, die automatische Prüfung eingeschaltet.
 
 Update vom Übersichten-Ersteller (bis 2.2): Das Setup erkennt die
 vorhandene Installation und aktualisiert sie – unter „Installierte Apps“
@@ -600,8 +632,10 @@ eine neue PDF übertragen – Text ist dann nicht mehr durchsuchbar oder
 kopierbar, Links, Formulare und Lesezeichen fehlen.
 
 Datenschutz: Die Verarbeitung erfolgt vollständig lokal auf diesem PC; es
-wird nichts hochgeladen. Zwischendateien entstehen nur im temporären Ordner
-von Windows und werden danach gelöscht. Das Protokoll pdf-repair.log im
+wird nichts hochgeladen. (Die einzige Internetverbindung von PDF Tool ist
+die Update-Prüfung bei GitHub – ohne Dateien oder persönliche Daten.)
+Zwischendateien entstehen nur im temporären Ordner von Windows und werden
+danach gelöscht. Das Protokoll pdf-repair.log im
 Datenordner enthält technische Befunde, aber keine PDF-Inhalte, keine
 vollständigen Pfade und keine Passwörter.
 
@@ -684,12 +718,11 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Push auf windows-latest
-(.github/workflows/windows-setup.yml), prüft es (auch die Updates vom
-Übersichten-Ersteller 2.2.0 und von PDF Tool 2.3.0, 2.4.0 und 2.5.0 mit
-Beispieldaten) und
-stellt es als Artefakt bereit; bei einem veröffentlichten Release wird es
-zusätzlich angehängt.
+(.github/workflows/windows-setup.yml), prüft es (Clean Install, Update von
+der vorherigen stabilen Version, Updater-Test) und stellt es als Artefakt
+bereit. Releases (Stable und Beta) veröffentlicht derselbe Workflow – siehe
+docs/RELEASE.md im Repository.

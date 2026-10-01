@@ -4,7 +4,7 @@
 
 Ablauf:
  1. alte Build-Dateien bereinigen (build/, dist/)
- 2. Version aus windows-app/VERSION lesen und prüfen
+ 2. Version aus windows-app/VERSION lesen und prüfen (``X.Y.Z`` oder Beta ``X.Y.Z-beta.N``)
  3. Windows-Python (python.org) laden und prüfen
  4. Python-Pakete aus runtime-requirements.txt laden (win_amd64, mit Prüfsummen),
     darunter PySide6-Essentials (Qt 6, Qt Quick) in exakt gepinnter Version
@@ -14,9 +14,11 @@ Ablauf:
     siehe qmlres.py) – lose QML-Dateien kommen nicht ins Setup
  7. Assistentenbilder aus assets/icon.ico erzeugen
  8. Inno Setup (ISCC.exe) aufrufen
- 9. Setup prüfen, SHA-256 schreiben, optional signieren
+ 9. Setup prüfen, SHA-256 schreiben, optional signieren; Release-Dateien prüfen
+    (``release_check.py``: Namen, Version, Prüfsumme gehört exakt zum Setup)
 
-Ergebnis:  windows-app/dist/PDF-Tool-Setup-<Version>.exe (+ .sha256)
+Ergebnis:  windows-app/dist/PDF-Tool-Setup-<Version>.exe (+ .sha256), z. B.
+           PDF-Tool-Setup-2.7.2.exe bzw. PDF-Tool-Setup-2.8.0-beta.1.exe
 
 Voraussetzungen (Windows):
   * Python 3.13 (64 Bit) mit pip, Pillow und PySide6-Essentials (gleiche Version wie in
@@ -41,7 +43,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -53,6 +54,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qmlres  # noqa: E402 - QML-Oberfläche als Qt-Ressource
 import qtruntime  # noqa: E402 - PySide6 verschlanken
+import release_check  # noqa: E402 - Versionsformat und Prüfung der Release-Dateien
 
 ROOT = Path(__file__).resolve().parent
 APP = ROOT / "app"
@@ -118,6 +120,8 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/PySide6/QtQuick.pyd",
     "runtime/Lib/site-packages/PySide6/QtQuickControls2.pyd",
     "runtime/Lib/site-packages/PySide6/QtSvg.pyd",
+    "runtime/Lib/site-packages/PySide6/QtNetwork.pyd",
+    "runtime/Lib/site-packages/PySide6/plugins/tls/qschannelbackend.dll",
     "runtime/Lib/site-packages/PySide6/Qt6Core.dll",
     "runtime/Lib/site-packages/PySide6/Qt6Quick.dll",
     "runtime/Lib/site-packages/PySide6/Qt6QuickControls2Basic.dll",
@@ -150,6 +154,21 @@ REQUIRED_PAYLOAD = [
     "app/qtapp/contracts/batch.py",
     "app/qtapp/contracts/comparison.py",
     "app/qtapp/contracts/tool.py",
+    "app/qtapp/updates.py",
+    "app/updater/__init__.py",
+    "app/updater/semver.py",
+    "app/updater/models.py",
+    "app/updater/policy.py",
+    "app/updater/github.py",
+    "app/updater/verifier.py",
+    "app/updater/state.py",
+    "app/updater/schedule.py",
+    "app/updater/store.py",
+    "app/updater/notes.py",
+    "app/updater/transport.py",
+    "app/updater/service.py",
+    "app/updater/installer.py",
+    "app/updater/launch.py",
     "app/tools/__init__.py",
     "app/tools/registry.py",
     "app/tools/contract_overview/preview.py",
@@ -201,8 +220,8 @@ def fail(text: str) -> None:
 
 def read_version() -> str:
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        fail(f"VERSION hat kein gültiges Format (x.y.z): {version!r}")
+    if not release_check.valid_version(version):
+        fail(f"VERSION hat kein gültiges Format (X.Y.Z oder X.Y.Z-beta.N): {version!r}")
     return version
 
 
@@ -446,6 +465,7 @@ def to_iscc_path(path: Path, iscc: list[str]) -> str:
 def run_iscc(iscc: list[str], version: str) -> Path:
     defines = {
         "AppVersion": version,
+        "AppNumericVersion": release_check.numeric_version(version),
         "PayloadDir": to_iscc_path(PAYLOAD, iscc),
         "OutputDir": to_iscc_path(DIST, iscc),
         "WizardDir": to_iscc_path(WIZARD, iscc),
@@ -472,8 +492,8 @@ def validate(setup: Path, version: str) -> None:
     ms = int.from_bytes(data[index + 8 : index + 12], "little")
     ls = int.from_bytes(data[index + 12 : index + 16], "little")
     found = f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}"
-    if found != version:
-        fail(f"Dateiversion der Setup-Datei ist {found}, erwartet {version}")
+    if found != release_check.numeric_version(version):
+        fail(f"Dateiversion der Setup-Datei ist {found}, erwartet {release_check.numeric_version(version)}")
     if setup.name != f"{SETUP_PREFIX}-{version}.exe":
         fail(f"Unerwarteter Dateiname: {setup.name}")
 
@@ -509,7 +529,11 @@ def main() -> None:
     sign(setup)
     validate(setup, version)
     checksum = sha256(setup)
-    (setup.parent / (setup.name + ".sha256")).write_text(f"{checksum}  {setup.name}\n", encoding="utf-8")
+    # Format wie ``sha256sum``: <Hash><2 Leerzeichen><Dateiname><LF> – so liest es auch der Updater
+    (setup.parent / (setup.name + ".sha256")).write_bytes(release_check.checksum_line(checksum, setup.name).encode("ascii"))
+    problems = release_check.check(DIST, version)
+    if problems:
+        fail("Release-Dateien sind nicht in Ordnung: " + "; ".join(problems))
     log(f"Fertig: {setup} ({setup.stat().st_size / 1e6:.1f} MB)")
     log(f"SHA-256: {checksum}")
 

@@ -70,6 +70,14 @@ def open_path(path: str | Path) -> None:
     winsys.open_path(path)
 
 
+def open_url(url: str) -> bool:
+    """Adresse im Standardbrowser öffnen (nur nach einem Klick; geprüft wird vorher beim Aufrufer)."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+
+    return bool(QDesktopServices.openUrl(QUrl(url)))
+
+
 def copy_text(text: str) -> None:
     from PySide6.QtGui import QGuiApplication
 
