@@ -54,6 +54,12 @@ Vorlagen, Regeln und Vertragsstände werden weiterverwendet.
   in jeder Zeile, Umschalt+Eingabe beginnt wieder einen Absatz; der Inhalt wird nach jeder Änderung
   sofort ins Python-Modell übernommen (gespeichert wird weiterhin verzögert), »Kopfzeile speichern«
   und »Fußzeile speichern« aktualisieren die Vorschau. Dasselbe gilt für das Notizfeld der Kundenakte.
+- Einfügemarke in Kopf- und Fußzeile an Schrift und Grundlinie ausgerichtet
+  – so hoch wie die Schrift am Cursor (Ober- plus Unterlänge, geprüft mit 8 bis 24 pt), auf der Grundlinie der
+  Zeile, in ganzen Gerätepixeln (100 bis 200 % gleich schmal und scharf); im leeren Feld nicht mehr
+  10 px hoch oben links, sondern dort, wo der Text entsteht – auch zentriert. Der Platzhalter steht in
+  derselben Schrift und Ausrichtung wie der spätere Text. Sichtbar nur mit Textfokus; die
+  Formatleiste zeigt in einer Leerzeile deren eigenes Format.
 - Startseite visuell symmetrisch überarbeitet
   – beide Werkzeugkarten exakt gleich breit und hoch, gleicher Innenaufbau, »Öffnen« und
   Tastenkürzel auf einer Linie, Gruppe mittig mit gleichem Abstand links und rechts, Titel und

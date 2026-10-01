@@ -38,6 +38,7 @@ PStatusLine 1.0 PStatusLine.qml
 PSwatch 1.0 PSwatch.qml
 PText 1.0 PText.qml
 PTextArea 1.0 PTextArea.qml
+PTextCaret 1.0 PTextCaret.qml
 PTextField 1.0 PTextField.qml
 PTextMenu 1.0 PTextMenu.qml
 PToggle 1.0 PToggle.qml

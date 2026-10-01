@@ -31,7 +31,7 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import QObject, Qt, Slot
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextDocument, QTextFormat
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextDocument, QTextFormat
 from PySide6.QtQuick import QQuickTextDocument
 
 from richtext import ALIGNMENTS, FONT_SIZES, TEXT_COLOR, CharStyle, RichText, size_text, valid_color, valid_size
@@ -164,12 +164,18 @@ def document_rich(doc: QTextDocument, default: CharStyle, align: str) -> RichTex
 
 
 def load_document(doc: QTextDocument, rich: RichText, undoable: bool) -> None:
-    """``RichText`` in das Dokument schreiben – bei ``undoable`` als ein Rückgängig-Schritt."""
+    """``RichText`` in das Dokument schreiben – bei ``undoable`` als ein Rückgängig-Schritt.
+
+    Immer in *einem* Bearbeitungsblock: Das Dokument meldet die Änderung dann als Ganzes und setzt
+    jeden Absatz neu. Einzeln verwirft ``setBlockCharFormat`` auf einem leeren Absatz dessen
+    Zeilen-Layout, ohne es neu zu berechnen (Qt meldet eine Änderung der Länge 0). Ohne Zeile
+    zeichnet das Textfeld die Einfügemarke mit fester Höhe (10 px) oben links – auch in einem
+    zentrierten Absatz und unabhängig von der Schriftgröße.
+    """
     cursor = QTextCursor(doc)
-    if undoable:
-        cursor.beginEditBlock()
-    else:
+    if not undoable:
         doc.setUndoRedoEnabled(False)
+    cursor.beginEditBlock()
     try:
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.removeSelectedText()
@@ -182,9 +188,8 @@ def load_document(doc: QTextDocument, rich: RichText, undoable: bool) -> None:
             for run_start, run_end, style in rich.runs(start, end):
                 cursor.insertText(rich.text[run_start:run_end], char_format(style))
     finally:
-        if undoable:
-            cursor.endEditBlock()
-        else:
+        cursor.endEditBlock()
+        if not undoable:
             doc.setUndoRedoEnabled(True)  # leerer Rückgängig-Verlauf nach dem Laden
 
 
@@ -206,6 +211,12 @@ class RichTextDocument(Observable):
     moreColorsChanged, moreColors = prop(list, "moreColors", [])
     attachedChanged, attached = prop(bool, "attached", False)
     revisionChanged, revision = prop(int, "revision", 0)
+    # Einfügemarke und Platzhalter (``PTextCaret``, ``PRichTextEditor``): Schrift des Texts, der am
+    # Cursor entstünde, deren Ober- und Unterlänge und die Grundlinie ab Oberkante der Zeile
+    caretFontChanged, caretFont = prop(QFont, "caretFont", None)
+    caretAscentChanged, caretAscent = prop(float, "caretAscent", 0.0)
+    caretDescentChanged, caretDescent = prop(float, "caretDescent", 0.0)
+    caretBaselineChanged, caretBaseline = prop(float, "caretBaseline", 0.0)
 
     def __init__(self, default: CharStyle, align: str, initial: RichText, on_change: Callable[[], None] | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -337,20 +348,23 @@ class RichTextDocument(Observable):
         return (start, end) if end > start else None
 
     def insert_style(self, offset: int) -> CharStyle:
-        """Format für an ``offset`` eingegebenen Text: das Zeichen davor, am Absatzanfang das danach."""
+        """Format für an ``offset`` eingegebenen Text – so, wie das Textfeld es vergibt: das Zeichen
+        davor, am Absatzanfang das danach. In einem leeren Absatz sein eigenes Format: im Dokument
+        das Absatzzeichen davor (``document_rich``), beim ersten Absatz das Format seines Blocks."""
         if self.pending is not None:
             return self.pending
         rich = self.rich()
         text = rich.text
-        if 0 < offset <= len(text) and text[offset - 1] != "\n":
+        offset = max(0, min(offset, len(text)))
+        if offset > 0 and text[offset - 1] != "\n":
             return rich.styles[offset - 1]
         if offset < len(text) and text[offset] != "\n":
             return rich.styles[offset]
-        if 0 <= offset < len(text):
-            return rich.styles[offset]
-        if offset > 0 and rich.styles:
-            return rich.styles[min(offset, len(rich.styles)) - 1]
-        return self.default
+        if offset > 0:
+            return rich.styles[offset - 1]  # leerer Absatz
+        if self._doc is not None:
+            return style_of(self._doc.firstBlock().charFormat(), self.default)  # leerer erster Absatz
+        return rich.paragraph_style(0, 0)  # wie beim Laden (``load_document``)
 
     def current(self) -> tuple[set[CharStyle], set[str]]:
         """Formate und Ausrichtungen der Markierung (ohne Markierung: am Cursor)."""
@@ -384,6 +398,39 @@ class RichTextDocument(Observable):
         self.fontSize = size_text(size) if size is not None else ""
         self.color = common("color") or ""
         self.alignment = next(iter(aligns)) if len(aligns) == 1 else ""
+        self._refresh_caret(self._cursor[0])
+
+    # Einfügemarke -------------------------------------------------------------------------------
+    @Slot(int)
+    def refreshCaret(self, position: int) -> None:  # noqa: N802
+        """Das Textfeld hat Einfügestelle oder Zeile neu gesetzt (``cursorRectangle``)."""
+        self._refresh_caret(position)
+
+    def _refresh_caret(self, position: int) -> None:
+        """Maße der Einfügemarke aus den Font Metrics der Schrift, die an ``position`` entstünde –
+        dieselbe, die die Formatleiste zeigt (auch eine ohne Markierung gewählte)."""
+        font = char_format(self.insert_style(position)).font()
+        metrics = QFontMetricsF(font)
+        ascent, descent = metrics.ascent(), metrics.descent()
+        self.caretFont = font
+        self.caretAscent = ascent
+        self.caretDescent = descent
+        self.caretBaseline = self._caret_baseline(position, ascent)
+
+    def _caret_baseline(self, position: int, ascent: float) -> float:
+        """Grundlinie ab Oberkante der Zeile am Cursor – dort, wo sie nach dem nächsten Zeichen liegt:
+        in einer leeren Zeile bei der Oberlänge der neuen Schrift, sonst bei der der Zeile (wie das
+        Textfeld sie gesetzt hat; eine größere neue Schrift schiebt sie nach unten)."""
+        if self._doc is None:
+            return ascent
+        block = self._doc.findBlock(max(0, position))
+        if not block.isValid() or block.length() <= 1:
+            return ascent
+        layout = block.layout()
+        if layout.lineCount() == 0:
+            return ascent
+        line = layout.lineForTextPosition(position - block.position())
+        return max(ascent, line.ascent()) if line.isValid() else ascent
 
     def apply(self, change: Callable[[CharStyle], CharStyle], merge: QTextCharFormat) -> None:
         """Formatierung der Markierung ändern – ohne Markierung für den nächsten eingegebenen Text."""
