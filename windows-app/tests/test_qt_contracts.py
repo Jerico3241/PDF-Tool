@@ -113,11 +113,16 @@ def waehle(auswahl, index: int) -> None:
     pump(0.05)
 
 
+def vorlagen_namen(o) -> list[str]:
+    """Namen der Vorlagen in der Auswahlliste (das Modell ist ab 2.8 nach der ID geordnet)."""
+    return [o.templates.item(key)["name"] for key in o.templates.keys()]
+
+
 def waehle_vorlage(h, name: str) -> None:
     """Gespeicherte Vorlage in der Auswahlliste der Ansicht »Darstellung« wählen."""
-    index = h.overview.templates.indexOf(name)
-    assert index >= 0, name
-    waehle(element(h.item("page_layout"), label="Gespeicherte Vorlage"), index)
+    namen = vorlagen_namen(h.overview)
+    assert name in namen, name
+    waehle(element(h.item("page_layout"), label="Geladene Vorlage"), namen.index(name))
 
 
 def waehle_baustein(h, name: str) -> None:
@@ -255,7 +260,7 @@ def alte_konfig(request, config_file: Path) -> dict:
 def test_start_and_version(ui_app) -> None:
     h = ui_app
     assert h.window.title() == appstate.APP_NAME == "PDF Tool"
-    assert h.app.version == appstate.VERSION == "2.7.2"
+    assert h.app.version == appstate.VERSION  # die Versionsnummer selbst prüft test_core
     assert h.app.currentPage == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert h.item("createPdf").property("text") == "PDF erstellen"
 
@@ -363,7 +368,7 @@ def test_templates_blocks_rules_history(ui_app) -> None:
     setze_kopf(h, "Kopf A")
     o.saveVorlage()
     assert state.find_vorlage("Standard")["kopfzeile"] == "Kopf A"
-    assert "Standard" in o.templates.keys()
+    assert "Standard" in vorlagen_namen(o)
     o.titel = "Anders"
     setze_kopf(h, "")
     waehle_vorlage(h, "Standard")
@@ -371,7 +376,7 @@ def test_templates_blocks_rules_history(ui_app) -> None:
     assert o.header_text() == "Kopf A"
     o.deleteVorlage()
     assert state.find_vorlage("Standard") is None
-    assert "Standard" not in o.templates.keys()
+    assert "Standard" not in vorlagen_namen(o)
     # Textbaustein
     o.baustein = "Bank"
     setze_fuss(h, "IBAN DE00")
@@ -423,7 +428,9 @@ def test_persist_keeps_205_keys(backend, config_file: Path) -> None:
     h.overview.firma = "Persist GmbH"
     h.app.persist()
     daten = lies(config_file)
-    for key in ("firmenname", "kundennummer", "rechnungsempfaenger", "excel", "logo", "zielordner", "dateiname", "format", "logo_breite", "titel", "untertitel", "fusszeile", "kopfzeile", "baustein_name", "bausteine", "pdfs", "regeln", "vorlagen", "staende", "gesehen", "pdf_oeffnen", "theme", "accent"):
+    # Vorlagen liegen ab 2.8 in eigenen Dateien (test_templates.py); eine vorhandene Liste
+    # »vorlagen« bleibt unverändert stehen (test_config_migration.py).
+    for key in ("firmenname", "kundennummer", "rechnungsempfaenger", "excel", "logo", "zielordner", "dateiname", "format", "logo_breite", "titel", "untertitel", "fusszeile", "kopfzeile", "baustein_name", "bausteine", "pdfs", "regeln", "staende", "gesehen", "pdf_oeffnen", "theme", "accent"):
         assert key in daten, key
     assert daten["firmenname"] == "Persist GmbH"
     # Die Kundenhistorie bis 2.3 lebt als Kundenakte weiter (kundenakten.json), nicht in gui-config.json.

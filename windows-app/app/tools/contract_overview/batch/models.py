@@ -81,7 +81,8 @@ def path_key(path) -> str:
 class Overrides:
     """Im Eintrag bewusst gesetzte Werte. ``None`` heißt: übernehmen (Kundenakte, Excel, Stapel).
 
-    ``template=""`` bedeutet bewusst »keine Vorlage«.
+    ``template=""`` bedeutet bewusst »keine Vorlage«, ``rule_set=""`` bewusst »kein Regelwerk«.
+    Vorlagen und Regelwerke werden ab 2.8 über ihre ID angegeben (Namen aus 2.7 gelten weiter).
     """
 
     company: str | None = None
@@ -90,6 +91,7 @@ class Overrides:
     template: str | None = None
     logo: str | None = None
     target_dir: str | None = None
+    rule_set: str | None = None
 
     def to_dict(self) -> dict:
         return {item.name: getattr(self, item.name) for item in fields(self) if getattr(self, item.name) is not None}

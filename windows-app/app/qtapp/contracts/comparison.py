@@ -226,6 +226,11 @@ class ComparisonView(Observable):
         self.on_copy()
 
 
+def rule_set_key(rule_set) -> str:
+    """Schlüssel des Regelwerks für den Zwischenspeicher der Anzeige ("" = keines)."""
+    return f"{rule_set.id}:{rule_set.fingerprint()}" if rule_set is not None else ""
+
+
 class ComparisonController(Observable):
     """Vertragsstände speichern und vergleichen (Einzelmodus und Stapel)."""
 
@@ -308,11 +313,11 @@ class ComparisonController(Observable):
 
     # Einzelmodus -----------------------------------------------------------------------------------------------
     def current_contracts(self) -> tuple[ContractRecord, ...] | None:
-        """Verträge der geprüften Excel mit den aktuellen Zyklus-Regeln (wie in der PDF)."""
+        """Verträge der geprüften Excel mit den aktuellen Zyklus-Regeln und dem Regelwerk (wie in der PDF)."""
         result = self.c.analysis_for_current()
         if not result or not result.get("ok"):
             return None
-        return records_from(result.get("vertraege") or (), self.app.state.regeln)
+        return records_from(result.get("vertraege") or (), self.app.state.regeln, self.c.rule_set())
 
     def refresh(self) -> None:
         """Gesammelt aktualisieren (nach Prüfung, Kundenwechsel, Regeln, Export)."""
@@ -350,6 +355,7 @@ class ComparisonController(Observable):
             excel,
             id(result),
             json.dumps(self.app.state.regeln, sort_keys=True, default=str),
+            rule_set_key(self.c.rule_set()),
             self.history_version,
             self._baseline,
             tuple(sorted(self._saved)),
@@ -359,7 +365,8 @@ class ComparisonController(Observable):
             return  # nichts geändert: keine Berechnung, keine neue Anzeige
         self._state = state
         self._source = result  # hält das Ergebnis fest (die id im Schlüssel bleibt eindeutig)
-        contracts = records_from(result.get("vertraege") or (), self.app.state.regeln)
+        # Verglichen werden die Werte, die tatsächlich in der PDF stünden – nach dem Regelwerk.
+        contracts = records_from(result.get("vertraege") or (), self.app.state.regeln, self.c.rule_set())
         if customer is None:
             self.comparison = None
             view.show_message("info", NO_CUSTOMER, "Vertragsvergleich")
@@ -418,18 +425,19 @@ class ComparisonController(Observable):
         if customer is None:
             return None
         rules = (resolution.fields or {}).get("regeln") if resolution.fields else None
+        rule_set = (resolution.fields or {}).get("regelwerk") if resolution.fields else None
         if rules is None:
             rules = default_rules
         saved = self._batch_saved.get(item.id)
         chosen = self._batch_baselines.get(item.id)
-        key = (item.stamp, customer.id, json.dumps(rules, sort_keys=True, default=str), self.history_version, saved, chosen)
+        key = (item.stamp, customer.id, json.dumps(rules, sort_keys=True, default=str), json.dumps(rule_set, sort_keys=True, default=str), self.history_version, saved, chosen)
         cached = self._batch_comparisons.get(item.id)
         if cached is not None and cached[0] == key:
             return cached[1]
         snapshots = self.snapshots(customer.id)
         earlier = [snapshot for snapshot in snapshots if snapshot.id != saved]
         baseline = next((s for s in snapshots if s.id == chosen), None) or (earlier[0] if earlier else None)
-        comparison = compare(baseline, records_from(item.analysis.contracts, rules)) if baseline is not None else None
+        comparison = compare(baseline, records_from(item.analysis.contracts, rules, rule_set)) if baseline is not None else None
         self._batch_comparisons[item.id] = (key, comparison)
         return comparison
 

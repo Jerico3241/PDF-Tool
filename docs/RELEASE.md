@@ -31,6 +31,23 @@ von `sha256sum` – 64 Hex-Zeichen, zwei Leerzeichen, Dateiname, Zeilenende:
 Ohne Prüfsumme oder mit falscher Prüfsumme installiert die App nichts. Ein Release ohne passende
 Dateien bieten die Kanäle nicht an. Entwürfe (Drafts) sehen weder Stable noch Beta.
 
+## Verbindliche Regel: Beta vor Stable
+
+- **Jede neue Funktionsversion beginnt als Beta** `X.Y.Z-beta.1` – als GitHub-Vorabversion mit
+  eigenem Setup und eigener Prüfsummendatei.
+- **Weitere Betas** (`-beta.2`, `-beta.3` …) beheben Fehler. Eine veröffentlichte Beta wird nie
+  überschrieben oder ersetzt.
+- **Stable erst nach ausdrücklichem Test und ausdrücklicher Freigabe** – als eigens gebautes Release
+  aus `windows-app/VERSION` `X.Y.Z`, nie eine umbenannte Beta.
+- **Patch-Hotfix ohne Beta** (`X.Y.Z` mit Z > 0) nur nach ausdrücklicher Entscheidung. Änderungen an
+  PDF-Verarbeitung, Datenformaten, Installer, Updater, Sicherung/Wiederherstellung, Qt/QML, Regeln,
+  Vorlagen oder Persistenz gehen immer zuerst als Beta hinaus.
+
+Der Release-Workflow setzt die Regel durch (Schritt „Beta vor Stable“): Ein stabiles Release bricht
+ab, wenn es keine veröffentlichte Beta derselben Version gibt (`vX.Y.Z-beta.N`, Vorabversion, kein
+Entwurf). Einzige Ausnahme: ein manueller Lauf mit `hotfix_ohne_beta: true` für eine Patch-Version
+(Z > 0) – eine neue Funktionsversion (`X.Y.0`) kann nie ohne Beta Stable werden.
+
 ## Ablauf
 
 Beispiel 2.8.0:
@@ -50,11 +67,14 @@ v2.8.0-beta.1  →  testen  →  Fehler gefunden  →  v2.8.0-beta.2  →  teste
 
    oder den Workflow „Windows-Setup“ auf `main` mit `release: true` starten. Der Workflow baut das
    Setup, führt alle Tests und Installer-Prüfungen aus und veröffentlicht danach eine
-   **GitHub-Vorabversion** mit Setup und Prüfsumme.
+   **GitHub-Vorabversion** mit Setup und Prüfsumme. Anschließend den Workflow „Beta-Update-Test“
+   starten (z. B. `von: 2.7.2`, `beta: 2.8.0-beta.1`): Er aktualisiert eine installierte stabile
+   Version über ihren eigenen Updater im Kanal „Beta“ und prüft das Ergebnis.
 2. **Weitere Betas** genauso mit `2.8.0-beta.2`, `2.8.0-beta.3` …
-3. **Stable veröffentlichen:** bewusst und erst nach dem Test – `windows-app/VERSION` auf `2.8.0`,
-   Release Notes `2.8.0.md`, Pull Request, dann Tag `v2.8.0` (bzw. Workflow mit `release: true`).
-   Es entsteht ein **normales Release**, das „Latest“ wird.
+3. **Stable veröffentlichen:** bewusst und erst nach Test und Freigabe – `windows-app/VERSION` auf
+   `2.8.0`, Release Notes `2.8.0.md`, Pull Request, dann Tag `v2.8.0` (bzw. Workflow mit
+   `release: true`). Der Workflow baut das Setup neu und prüft, dass eine Beta von `2.8.0`
+   veröffentlicht ist. Es entsteht ein **normales Release**, das „Latest“ wird.
 
 Eine Beta wird nie automatisch zu Stable: Der Kanal eines Releases folgt allein aus der Version in
 `windows-app/VERSION`, die ein Mensch per Pull Request ändert.

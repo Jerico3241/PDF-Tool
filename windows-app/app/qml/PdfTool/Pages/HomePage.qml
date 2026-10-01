@@ -20,6 +20,15 @@ PPage {
     centered: true
     maxContentWidth: Metrics.homeMaxWidth
 
+    // Hinweise nach dem Start (z. B. Ergebnis einer Wiederherstellung)
+    PInfoBar {
+        objectName: "homeInfo"
+        Layout.fillWidth: true
+        Layout.bottomMargin: shown ? Metrics.s12 : 0
+        topMargin: 0
+        notice: Notices.area("home_info")
+    }
+
     Item {
         id: grid
         objectName: "homeGrid"

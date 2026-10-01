@@ -19,5 +19,5 @@ ColumnLayout {
         onActivated: (index) => root.value = root.options[index]
         focus: true
     }
-    PText { text: "»Automatisch«: bevorzugte Vorlage der Kundenakte, sonst die Standardvorlage des Stapels. Eine hier gewählte Vorlage hat Vorrang vor beiden."; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+    PText { text: "»Automatisch«: bevorzugte Vorlage der Kundenakte, sonst die Vorlage des Stapels, sonst die Standardvorlage. Eine hier gewählte Vorlage hat Vorrang vor allen."; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
 }

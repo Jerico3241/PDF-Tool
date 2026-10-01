@@ -278,6 +278,16 @@ def vertrag_art(bemerkung) -> str:
     return _ART_MARKUP[vertrag_art_name(bemerkung)]
 
 
+def auswerter(regelwerk):
+    """Regelwerk eines PDF-Auftrags übersetzen (``None``/ungültig: ohne Regelwerk)."""
+    if not regelwerk:
+        return None
+    from tools.contract_overview.rules.evaluate import evaluator_for
+
+    evaluator = evaluator_for(regelwerk)
+    return evaluator if evaluator.active else None
+
+
 @dataclass(frozen=True)
 class Vertragsdaten:
     """Ein aktiver Vertrag, wie er in der Excel steht (Rohwerte).
@@ -296,7 +306,7 @@ class Vertragsdaten:
     zeile: int | None = None  # Excel-Zeile – nur zur Information, nie Identität
 
     def anzeige(self, regeln=None) -> dict[str, str]:
-        """Die Werte genau so, wie sie in der Vertragsübersicht erscheinen."""
+        """Die Werte der Vertragsübersicht ohne Regelwerk (Zyklus-Regeln: ``regeln``)."""
         _lade_pandas()
         return {
             "art": vertrag_art_name(self.bemerkung),
@@ -307,6 +317,14 @@ class Vertragsdaten:
             "netto": fmt_euro(self.netto),
             "zahlungsart": fmt_zahlungsart(self.zahlungsart),
         }
+
+    def ausgabe(self, regeln=None, regelwerk=None) -> dict[str, str]:
+        """Die Werte genau so, wie sie in der Vertragsübersicht erscheinen – nach den Zyklus-Regeln
+        und dem Regelwerk (``rules.evaluate.Evaluator``; ``None``: ohne Regelwerk)."""
+        werte = self.anzeige(regeln)
+        if regelwerk is not None and regelwerk.active:
+            werte = regelwerk.apply_contract(self, werte).values
+        return werte
 
 
 def _rohtext(value) -> str | None:
@@ -409,6 +427,8 @@ class PdfAuftrag:
     fusszeile_format: dict | None = None
     kopfzeile_format: dict | None = None
     regeln: list | None = None
+    # Regelwerk 2.0 (``RuleSet.to_dict()``) – wirkt nur auf die Werte der PDF, nie auf die Excel
+    regelwerk: dict | None = None
     pdf_oeffnen: bool = False
     status: Callable[[str], None] | None = None
     # Genaue Ausgabedatei (statt Zielordner + Dateiname), z. B. nach einer Namenskonflikt-Prüfung
@@ -808,6 +828,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     else:
         rechnungsempfaenger = "–"
     zyklus_regeln = DEFAULT_REGELN if auftrag.regeln is None else auftrag.regeln
+    regelwerk = auswerter(auftrag.regelwerk)
 
     firmenname = auftrag.firmenname.strip()
     jetzt = datetime.now()
@@ -828,7 +849,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     else:
         prepared = img.convert("RGB")
     w_px, h_px = prepared.size
-    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp = tempfile.NamedTemporaryFile(prefix="pdf-tool-logo-", suffix=".png", delete=False)
     logo_path = tmp.name
     tmp.close()
     temp_pdf: Path | None = None
@@ -982,14 +1003,15 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
                 fett = stile.bold(quelle, excel_spalte.get(spalte))
                 return Paragraph(markup, cell_style_strong if fett else cell_style)
 
-            werte = vertrag.anzeige(zyklus_regeln)
+            werte = vertrag.ausgabe(zyklus_regeln, regelwerk)
             table_data.append(
                 [
-                    # Art wird aus der Bemerkung abgeleitet und übernimmt deren Formatierung.
-                    zelle(_ART_MARKUP[werte["art"]], col_bemerkung),
+                    # Art wird aus der Bemerkung abgeleitet und übernimmt deren Formatierung;
+                    # eine vom Regelwerk gesetzte Art erscheint als Text (maskiert, nie als Markup).
+                    zelle(_ART_MARKUP.get(werte["art"]) or escape_markup(werte["art"]), col_bemerkung),
                     zelle(escape_markup(werte["nummer"]), col_vertrag),
                     zelle(escape_markup(werte["beschreibung"]), col_bemerkung),
-                    zelle(werte["beginn"], col_beginn),
+                    zelle(escape_markup(werte["beginn"]), col_beginn),
                     zelle(escape_markup(werte["zyklus"]), col_zyklus),
                     zelle(escape_markup(werte["netto"]), col_netto),
                     zelle(escape_markup(werte["zahlungsart"]), col_zahlung),

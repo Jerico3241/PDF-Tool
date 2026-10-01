@@ -10,7 +10,8 @@ vollständig lokal – keine Cloud, keine Uploads.
 **Vertragsstände** enthalten nur, was ohnehin in der erstellten Übersicht steht, und bleiben auf
 diesem PC. Protokolle enthalten weder Vertragsdaten noch Verläufe von Kunden; Fehler beim Speichern
 eines Stands werden ohne Vertragsinhalte protokolliert. Wer die Benutzerdaten sichert, sichert den
-Ordner `%APPDATA%\PDF-Tool` vollständig – `contract-history` gehört dazu.
+Ordner `%APPDATA%\PDF-Tool` vollständig – `contract-history` gehört dazu – oder nutzt die eingebaute
+Sicherung (siehe unten).
 
 **Die Kundenakte ist optional** (Standard: aus). Ist sie ausgeschaltet, werden keine Kundendaten
 automatisch gespeichert oder abgeglichen, und `kundenakten.json` wird nicht gelesen; vorhandene
@@ -31,3 +32,19 @@ Updates suchen“. Dabei werden keine Dateien, keine Einstellungen und keine per
 „PDF-Tool/<Version>“. Heruntergeladen wird nur auf Klick; Setups liegen in
 `%LOCALAPPDATA%\PDF-Tool-Updates` und werden nach einem Update aufgeräumt bzw. bei der
 Deinstallation entfernt.
+
+**Sicherungen (seit 2.8):** Eine Sicherung (`.pdtbackup`) enthält Einstellungen, Kundenakten mit
+Vertragsständen, Vorlagen und Regelwerke dieses PCs – nie Excel- oder PDF-Dateien, Logos oder
+Protokolle. Sie bleibt lokal: automatisch im Ordner `%APPDATA%\PDF-Tool\Sicherungen` (wählbar),
+manuell dort, wo Sie sie ablegen. Keine Cloud, keine Uploads. Eine Sicherung enthält
+personenbezogene Daten der Kundenakten – bitte entsprechend aufbewahren. Der Status der
+Sicherungen steht in `sicherung.json` im Datenordner.
+
+**Diagnose und Support-Paket (seit 2.8):** Die Datenprüfung liest nur und ändert nichts. Das
+Support-Paket entsteht nur auf Klick, bleibt auf diesem PC und wird nie versendet. Es enthält einen
+Bericht (Versionen, Windows, Ergebnis der Prüfung), Einstellungen ohne persönliche Inhalte und
+bereinigte Protokolle: Pfade zu Dokumenten, der Benutzerordner, Benutzer- und Computername,
+E-Mail-Adressen sowie Firmen und Kundennummern der Kundenakten sind entfernt. Nie enthalten:
+Kundendaten, Vertragsinhalte, Texte von Vorlagen, Regelwerken, Kopf- und Fußzeilen, Passwörter,
+PDF- oder Excel-Dateien und deren Inhalte, Logos. Das Protokoll `pdf-tool.log` enthält Abläufe
+(Start, Sicherung, Updates, Fehler), keine Inhalte.

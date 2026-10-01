@@ -28,6 +28,9 @@ from updater.service import UpdateService
 from updater.store import UpdateStore
 from updater.transport import HttpClient
 
+# Szenario aller Tests: installiert ist 2.7.2 – unabhängig von der Version dieses Stands
+# (einzelne Tests setzen eine andere installierte Version).
+INSTALLED = "2.7.2"
 NOTES = "## Neu\n\n- Schnellere Analyse\n- Details auf [GitHub](https://github.com/Jerico3241/PDF-Tool)\n\n<script>alert(1)</script>\n![x](https://tracker.example/p.png)"
 
 
@@ -43,6 +46,7 @@ def start(request, qt_application, config_file: Path, monkeypatch, server, tmp_p
     """``start(profile="full", auto=False, **config)`` – App mit Updater am lokalen Testserver."""
     harnesses: list[Harness] = []
     folder = tmp_path / "updates"
+    monkeypatch.setattr(updates, "VERSION", INSTALLED)
 
     def create(app, installed):
         client = HttpClient(UrlPolicy.loopback(server.port), user_agent="PDF-Tool/Test", system_proxy=False)
@@ -458,8 +462,12 @@ def test_94_slow_download_keeps_the_ui_responsive(start, server):
     assert longest < 0.5, f"Oberfläche blockiert ({longest:.2f} s)"
 
 
-def test_about_shows_the_full_version(start):
+def test_about_shows_the_full_version(start, monkeypatch):
+    from qtapp import app as appmodule
+
     h = start()
-    h.app.showAbout()
-    data = h.app.dialogs.history[-1]["data"]
-    assert data["version"] == "2.7.2" and data["beta"] is False
+    for version, beta in (("2.8.0-beta.1", True), ("2.8.0", False)):
+        monkeypatch.setattr(appmodule, "VERSION", version)
+        h.app.showAbout()
+        data = h.app.dialogs.history[-1]["data"]
+        assert data["version"] == version and data["beta"] is beta

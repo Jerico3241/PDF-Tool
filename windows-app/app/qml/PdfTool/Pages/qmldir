@@ -11,6 +11,8 @@ LayoutPage 1.0 LayoutPage.qml
 PreviewPage 1.0 PreviewPage.qml
 ComparisonPage 1.0 ComparisonPage.qml
 CustomersPage 1.0 CustomersPage.qml
+TemplatesPage 1.0 TemplatesPage.qml
+RulesPage 1.0 RulesPage.qml
 BatchPage 1.0 BatchPage.qml
 RepairPage 1.0 RepairPage.qml
 RepairItem 1.0 RepairItem.qml

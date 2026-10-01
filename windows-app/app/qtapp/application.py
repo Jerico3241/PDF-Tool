@@ -48,6 +48,7 @@ _REGISTERED: dict[str, type] = {}
 _ENGINES: dict[int, dict[str, QObject]] = {}  # Kennung der Engine → Controller ihrer Laufzeit
 _ENGINE_KEY = "pdftoolRuntime"
 _engine_ids = iter(range(1, 1 << 30))
+GC_TIME_LIMIT = "QV4_GC_TIMELIMIT"  # Zeitscheibe der QML-Speicherbereinigung in ms, 0 = in einem Zug
 
 
 def _message_handler(mode, context, message) -> None:
@@ -96,6 +97,18 @@ class Runtime(QObject):
 
         self.updates = UpdatesController(self.app, cfg, self)
         self.singletons["Updates"] = self.updates
+        # Sicherung & Wiederherstellung, Diagnose (Einstellungen) – Arbeit im Hintergrund nach dem Start
+        from .backups import BackupController
+        from .diagnose import DiagnoseController
+
+        self.backup = BackupController(self.app, self)
+        self.diagnose = DiagnoseController(self.app, self.backup, self.updates, self)
+        self.updates.backup = self.backup
+        for controller in (self.backup, self.diagnose):
+            self.app.register_work(controller.running_work)
+        self.singletons["Backup"] = self.backup
+        self.singletons["Diagnose"] = self.diagnose
+        self.app.observe("ready", lambda ready: (self.backup.start(), self.diagnose.start()) if ready else None)
         # Windows-Einstellungen (Design, Akzentfarbe, Animationseffekte) sofort übernehmen
         from . import system
 
@@ -158,6 +171,11 @@ def _engine_warnings(errors) -> None:
 
 def create_engine(runtime: Runtime) -> QQmlApplicationEngine:
     register_backend(runtime.singletons)
+    # Speicherbereinigung der QML-Engine in einem Zug statt in Zeitscheiben (Qt liest die Variable
+    # beim Anlegen der Engine). Mit der schrittweisen Bereinigung von Qt 6.11 können Objekte, die
+    # beim Laden der Seiten im Hintergrund entstehen, ihre QML-Funktionen verlieren – ein
+    # »Connections« stürzt dann beim Fertigstellen ab.
+    os.environ.setdefault(GC_TIME_LIMIT, "0")
     engine = QQmlApplicationEngine()
     key = next(_engine_ids)
     engine.setProperty(_ENGINE_KEY, key)
@@ -231,9 +249,56 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow
     return window
 
 
+def prepare_data():
+    """Vor dem Laden der Einstellungen: eine vorbereitete Wiederherstellung ausführen (oder eine
+    unterbrochene zurücknehmen). Das Ergebnis zeigt die App nach dem Start an.
+
+    Den beiseitegelegten bisherigen Stand (bei vielen Vertragsständen tausende Dateien) löscht ein
+    Hintergrund-Thread – der Start wartet nicht darauf."""
+    import threading
+
+    from backup import restore
+    from storage import data_root
+
+    try:
+        root = data_root()
+        outcome = restore.apply_pending(root)
+        if restore.leftovers(root):
+            threading.Thread(target=restore.remove_leftovers, args=(root,), name="pdftool-wiederherstellung-reste", daemon=True).start()
+        return outcome
+    except Exception:  # noqa: BLE001 - der Start darf daran nie scheitern
+        traceback.print_exc()
+        return None
+
+
+def start_log() -> None:
+    """Protokoll ``pdf-tool.log`` im Datenordner einrichten und den Start vermerken."""
+    import platform
+
+    from appstate import VERSION
+    from diagnostics import applog, info
+    from storage import data_root
+
+    applog.setup(data_root())
+    try:
+        from PySide6 import __version__ as pyside
+        from PySide6.QtCore import qVersion
+
+        qt = f"PySide6 {pyside}, Qt {qVersion()}"
+    except Exception:  # noqa: BLE001
+        qt = "Qt unbekannt"
+    applog.get("app").info("PDF Tool %s gestartet (Python %s, %s, %s)", VERSION, platform.python_version(), qt, info.os_brief())
+
+
 def main(argv: list[str] | None = None) -> int:
     winsys.register_app_identity()
     qInstallMessageHandler(_message_handler)
+    start_log()
+    outcome = prepare_data()
+    if outcome is not None:
+        from diagnostics.applog import get as get_log
+
+        get_log("sicherung").log(20 if outcome.ok else 40, "Wiederherstellung beim Start: %s", outcome.message)
     cfg = load_config()
     qt_app = create_application(argv)
     runtime = Runtime(cfg)
@@ -251,4 +316,24 @@ def main(argv: list[str] | None = None) -> int:
     # Die QML-Engine endet vor den Controllern, an die ihre Bindungen gebunden sind.
     del engine
     sys.excepthook = sys.__excepthook__
+    from diagnostics.applog import get as get_log
+
+    get_log("app").info("PDF Tool beendet")
+    if getattr(runtime.app, "restart_requested", False):
+        restart_app()
     return code
+
+
+def restart_app() -> None:
+    """PDF Tool neu starten (z. B. nach dem Vorbereiten einer Wiederherstellung). Erst wenn diese
+    Instanz alles gespeichert hat – die neue liest beim Start den neuen Stand."""
+    import subprocess
+
+    args = [sys.executable, *sys.orig_argv[1:]] if getattr(sys, "orig_argv", None) else [sys.executable, *sys.argv]
+    flags = 0
+    if sys.platform == "win32":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    try:
+        subprocess.Popen(args, cwd=os.getcwd(), close_fds=True, creationflags=flags)
+    except OSError:
+        traceback.print_exc()

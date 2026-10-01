@@ -1,9 +1,10 @@
 name: Windows-Setup
 
 # Normaler Lauf (Push, Pull Request, Release):
-#   1. Tests – Kernlogik, Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.0),
-#      PDF reparieren, Updater (lokaler Testserver, nie Live-GitHub); die Qt-Oberflächentests
-#      laufen gleichzeitig in drei eigenen Jobs (je ein eigener Rechner)
+#   1. Tests – Kernlogik, Vorlagen, Regelwerk, Sicherung/Wiederherstellung, Diagnose,
+#      Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.2), PDF reparieren, Updater
+#      (lokaler Testserver, nie Live-GitHub); die Qt-Oberflächentests laufen gleichzeitig in vier
+#      eigenen Jobs (je ein eigener Rechner)
 #   2. Setup bauen (prüft Setup, Prüfsumme, Version und Release Notes)
 #   3. Clean-Install-Test der neuen Version
 #   4. Upgrade-Test: unmittelbar vorherige stabile Version → neue Version (nach SemVer ermittelt,
@@ -13,7 +14,10 @@ name: Windows-Setup
 #      Hilfsprozess (Inno-Setup-Attrappe); nur lesend HTTPS zu GitHub (Schannel)
 #   8. Release – manuell (»release«) oder durch einen Tag vX.Y.Z bzw. vX.Y.Z-beta.N auf main:
 #      Beta-Versionen werden GitHub-Vorabversionen, stabile Versionen normale Releases;
-#      veröffentlichte Releases und Tags werden nie überschrieben oder verschoben
+#      veröffentlichte Releases und Tags werden nie überschrieben oder verschoben.
+#      Beta vor Stable: Ein stabiles Release setzt eine veröffentlichte Beta derselben Version
+#      voraus (vX.Y.Z-beta.N). Nur ein Patch-Hotfix (Z > 0) darf nach ausdrücklicher Entscheidung
+#      (»hotfix_ohne_beta«) direkt Stable werden – eine neue Funktionsversion (X.Y.0) nie.
 # Keine historische Update-Matrix: ältere Versionen prüft nur der manuelle Workflow
 # »Deep Compatibility Test« (deep-compatibility.yml).
 
@@ -37,6 +41,10 @@ on:
     inputs:
       release:
         description: "Nach bestandenen Prüfungen das Release v<Version> (»PDF Tool <Version>«) mit Setup und SHA-256 veröffentlichen"
+        type: boolean
+        default: false
+      hotfix_ohne_beta:
+        description: "Nur Patch-Hotfix X.Y.Z (Z > 0) nach ausdrücklicher Entscheidung: Stable ohne vorherige Beta veröffentlichen"
         type: boolean
         default: false
 
@@ -64,6 +72,8 @@ jobs:
             dateien: contracts richtext repair
           - gruppe: Kundenakte, Stapel, Einfügemarke
             dateien: customers batch caret
+          - gruppe: Vorlagen, Regelwerk, Sicherung und Diagnose
+            dateien: templates rules backup
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -97,12 +107,13 @@ jobs:
 
       - name: Absturzanalyse der Qt-Tests (nur nach einem Fehler – nativer Aufrufstapel mit cdb)
         if: failure()
-        timeout-minutes: 20
+        timeout-minutes: 30
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QSG_INFO: "1" # Grafik-API und Render-Schleife ausgeben
           PDFTOOL_QML_DEBUG: "1" # alle Qt-Meldungen ausgeben
+          PDFTOOL_LAYOUT_DEBUG: "1" # bei »Detected recursive rearrange«: letzte Layout-Schritte und alle Karten
         run: |
           $cdb = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Debuggers\x64\cdb.exe"
           if (-not (Test-Path $cdb)) { Write-Host "cdb.exe nicht vorhanden – keine Absturzanalyse"; exit 0 }
@@ -140,19 +151,22 @@ jobs:
       - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern)
         run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py -q -p no:cacheprovider
 
+      - name: 1. Tests (Vorlagen 2.0, Regelwerk 2.0 samt PDF-Pipeline, Sicherung und Wiederherstellung, Diagnose und Support-Paket)
+        run: python -m pytest windows-app/tests/test_templates.py windows-app/tests/test_rules.py windows-app/tests/test_rules_pipeline.py windows-app/tests/test_backup.py windows-app/tests/test_diagnostics.py -v -p no:cacheprovider
+
       - name: 1. Tests (Updater mit lokalem Testserver – Download, SHA-256, Abbruch, Offline, Zeitlimits, Weiterleitungen, Cache, Hilfsprozess)
         timeout-minutes: 10 # normal unter einer Minute; ein hängender Test bricht früh ab
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_updater_flow.py -v -p no:cacheprovider
 
-      - name: 1. Tests (Datenmigration älterer Einstellungen 2.2.0 … 2.7.0 – Fixtures statt alter Setups)
+      - name: 1. Tests (Datenmigration älterer Einstellungen 2.2.0 … 2.7.2 – Fixtures statt alter Setups)
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_config_migration.py -v -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
-        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py -q -p no:cacheprovider
+        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh
@@ -330,6 +344,32 @@ jobs:
       - name: Release-Dateien prüfen (Version, Namen, Prüfsumme, Release Notes; Beta → Vorabversion)
         id: check
         run: python3 windows-app/release_check.py dist --github-output "$GITHUB_OUTPUT"
+
+      - name: Beta vor Stable (stabiles Release nur nach einer veröffentlichten Beta derselben Version)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+          PRERELEASE: ${{ steps.check.outputs.prerelease }}
+          HOTFIX: ${{ github.event_name == 'workflow_dispatch' && inputs.hotfix_ohne_beta }}
+        run: |
+          set -euo pipefail
+          if [ "${PRERELEASE}" = "true" ]; then
+            echo "Beta ${TAG}: wird als Vorabversion veröffentlicht."
+            exit 0
+          fi
+          betas="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.prerelease and (.draft | not) and (.tag_name | startswith(\"${TAG}-beta.\"))) | .tag_name")"
+          if [ -n "${betas}" ]; then
+            echo "Veröffentlichte Betas von ${TAG}:"
+            echo "${betas}"
+            exit 0
+          fi
+          patch="${TAG##*.}"
+          if [ "${HOTFIX}" = "true" ] && [ "${patch}" != "0" ]; then
+            echo "Patch-Hotfix ${TAG} ohne vorherige Beta – ausdrücklich bestätigt (hotfix_ohne_beta)."
+            exit 0
+          fi
+          echo "Sicherheitsabbruch: Für ${TAG} gibt es keine veröffentlichte Beta (${TAG}-beta.N). Jede neue Version beginnt als Beta; Stable erst nach Test und ausdrücklicher Freigabe." >&2
+          exit 1
 
       - name: Unveränderliches Release erstellen (Beta → Vorabversion, Stable → »Latest«)
         env:

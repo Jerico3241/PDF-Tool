@@ -174,7 +174,7 @@ def run_job(job: Job, cancelled: Callable[[], bool], analyze: Callable = analyze
                 target = unique_path(planned, job.created)
                 notes = [note for note in notes if not note.startswith(f"»{planned.name}«")]
                 notes.append(f"»{planned.name}« gab es schon – gespeichert als »{target.name}«.")
-        contracts = records_from(auftrag.vertraege, job.fields.get("regeln"))
+        contracts = records_from(auftrag.vertraege, job.fields.get("regeln"), job.fields.get("regelwerk"))
         return result(ItemStatus.WARNING if notes else ItemStatus.SUCCESS, output=str(path), notes=tuple(notes), contracts=contracts)
     except Abgebrochen:
         return result(ItemStatus.READY, cancelled=True)

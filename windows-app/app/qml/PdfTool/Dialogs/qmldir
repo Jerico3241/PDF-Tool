@@ -8,3 +8,5 @@ CustomerUpdateContent 1.0 CustomerUpdateContent.qml
 CustomerFieldsContent 1.0 CustomerFieldsContent.qml
 ChooseTemplateContent 1.0 ChooseTemplateContent.qml
 UpdateContent 1.0 UpdateContent.qml
+TextInputContent 1.0 TextInputContent.qml
+RestoreSummaryContent 1.0 RestoreSummaryContent.qml

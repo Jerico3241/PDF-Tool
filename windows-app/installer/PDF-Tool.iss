@@ -134,7 +134,7 @@ de.DesktopIcon=Verknüpfung auf dem &Desktop erstellen
 de.ShortcutGroup=Verknüpfungen:
 de.UpdateWelcome=PDF Tool %1 wird auf Version {#AppVersion} aktualisiert.%n%nEinstellungen, Kundenakten, Vertragsstände, Vorlagen, Textbausteine, Zyklus-Regeln und der gespeicherte Stapel bleiben erhalten.%n%nBitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
 de.RenameWelcome=Der {#OldAppName} %1 wird auf Version {#AppVersion} aktualisiert und heißt ab jetzt »PDF Tool«.%n%nNeu ist das Werkzeug »PDF reparieren«. Einstellungen, Vorlagen, Textbausteine, Zyklus-Regeln und der Kundenverlauf werden übernommen; vorher wird eine Sicherung angelegt.%n%nDie Verknüpfungen heißen danach »PDF Tool«. Bitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
-de.RemoveUserData=Sollen auch Ihre gespeicherten Einstellungen, Vorlagen, Kundenakten, Vertragsstände, der gespeicherte Stapel und die Protokolle gelöscht werden?%n%nWählen Sie »Nein«, um sie für eine spätere Neuinstallation zu behalten. Erstellte und reparierte PDF-Dateien sowie Ihre Excel-Listen werden in keinem Fall gelöscht.
+de.RemoveUserData=Sollen auch Ihre gespeicherten Einstellungen, Vorlagen, Regelwerke, Kundenakten, Vertragsstände, der gespeicherte Stapel, die automatischen Sicherungen im Datenordner und die Protokolle gelöscht werden?%n%nWählen Sie »Nein«, um sie für eine spätere Neuinstallation zu behalten. Erstellte und reparierte PDF-Dateien, Ihre Excel-Listen und Sicherungen außerhalb des Datenordners werden in keinem Fall gelöscht.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:ShortcutGroup}"

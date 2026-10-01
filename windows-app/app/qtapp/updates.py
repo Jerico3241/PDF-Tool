@@ -150,6 +150,7 @@ class UpdatesController(Observable):
         self._dismissed = ""  # Version, deren Hinweisleiste in dieser Sitzung ausgeblendet ist
         self._banner_ready = False
         self._helper = None
+        self.backup = None  # BackupController: Sicherung vor der Installation
         self.set_quietly("channel", Channel.from_config(cfg.get("update_kanal")).value)
         self.set_quietly("automatic", cfg.get("update_automatisch") is not False)
         self.service = create_service(app, self.installed)
@@ -323,6 +324,21 @@ class UpdatesController(Observable):
             self._block_for_work(work)
             return
         self.workHint = ""
+        if self.backup is not None:
+            # Vor jedem Update: aktueller Stand als Sicherung (im Hintergrund), dann die Installation
+            self.app.set_status("Sicherung vor dem Update …", "busy")
+            if not self.backup.backup_before_update(self._install_after_backup):
+                self._block_for_work(["Sicherung"])
+            return
+        self.service.begin_install(self._launch)
+
+    def _install_after_backup(self) -> None:
+        if self.service.state is not S.READY:
+            return
+        work = self._running_work()
+        if work:
+            self._block_for_work(work)
+            return
         self.service.begin_install(self._launch)
 
     def _launch(self, path, digest: str) -> None:

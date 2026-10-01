@@ -2,14 +2,16 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.7.2
+Version 2.8.0-beta.1 (Beta)
 
 Werkzeuge für PDF-Dateien:
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
   vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
   bekannte Kunden an der Rechnungsempfänger-E-Mail wiedererkennen, und
-  einem Vergleich mit dem letzten Vertragsstand des Kunden.
+  einem Vergleich mit dem letzten Vertragsstand des Kunden; mit Vorlagen
+  für die Darstellung und einem Regelwerk, das Werte der Übersicht nach
+  eigenen Regeln anpasst (die Excel-Datei bleibt dabei unverändert).
 - PDF reparieren: analysiert beschädigte PDF-Dateien – eine oder mehrere auf
   einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen; bei
   Bedarf baut es die Dokumentstruktur aus den noch vorhandenen Objekten neu
@@ -20,13 +22,37 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.7.2.exe
+PDF-Tool-Setup-2.8.0-beta.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
 qpdf, pypdfium2 mit PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
 andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 2.8 (Beta) – Vorlagen, Regelwerk, Sicherung, Diagnose
+---------------------------------------------------------------------
+Diese Beta erscheint nur im Update-Kanal „Beta“. Die stabile Version 2.8.0
+folgt nach dem Test.
+- Vorlagen 2.0: Eine Vorlage hält die ganze Darstellung fest (Logo, Format,
+  Titel, Dateiname, Kopf- und Fußzeile, Zyklus-Regeln, Regelwerk). Neue
+  Ansicht „Vorlagen“ zum Suchen, Anwenden, Umbenennen, Duplizieren und
+  Löschen; eine Standardvorlage wird für jede neue Übersicht geladen.
+- „Vorlage geändert“: Weicht die Darstellung von der geladenen Vorlage ab,
+  zeigt „Darstellung“ das an – mit „Vorlage aktualisieren“, „Als neue
+  Vorlage speichern“ und „Änderungen verwerfen“.
+- Regelwerk: Regeln „WENN … DANN …“ passen Werte der Übersicht an, z. B.
+  „WENN die Beschreibung ‚Energie‘ enthält, DANN die Art auf
+  ‚Energievertrag‘ setzen“. Neue Ansicht „Regeln“ mit Testmodus („Trifft
+  auf 7 von 18 Verträgen zu“) und Vorschau vorher → nachher. Keine Skripte,
+  kein Code; die Excel-Datei wird nie verändert.
+- Sicherung & Wiederherstellung (Einstellungen): Einstellungen, Kundenakten
+  mit Vertragsständen, Vorlagen und Regelwerke in einer Datei (.pdtbackup)
+  – manuell oder automatisch (einmal täglich bei Änderungen und vor jedem
+  Update). Wiederherstellen mit Prüfung, Auswahl der Bereiche und
+  Sicherung des aktuellen Stands; PDF Tool startet dafür neu.
+- Diagnose (Einstellungen): Systeminformationen, Datenprüfung und ein
+  Support-Paket ohne Kunden- oder Dokumentdaten, das nicht versendet wird.
 
 Neu in Version 2.7.2 – In-App Updates
 -------------------------------------
@@ -223,6 +249,13 @@ stabile Version erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 2.7.2 auf 2.8.0 Beta 1 (Kanal „Beta“): Das Setup
+ersetzt nur die Programmdateien. Vorlagen bis 2.7 werden beim ersten Start
+einmalig als Vorlagen 2.0 übernommen (je Vorlage eine Datei im Ordner
+„vorlagen“); die bisherige Liste bleibt unverändert. Alle übrigen
+Einstellungen und Daten bleiben unverändert. Vor jedem weiteren Update
+sichert PDF Tool Ihre Daten automatisch.
 
 Update von PDF Tool 2.7.1 auf 2.7.2: Das Setup ersetzt nur die
 Programmdateien. Alle Einstellungen und Daten bleiben unverändert. Der

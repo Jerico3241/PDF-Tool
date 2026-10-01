@@ -42,13 +42,12 @@ Item {
         NumberAnimation { id: fadeAnim; duration: Motion.fade; easing.type: Motion.decelerate }
     }
 
-    Connections {
-        target: root.notice
-        ignoreUnknownSignals: true
-        function onSerialChanged() {
-            if (root.shown && root.animate && Motion.enabled && root.opacity > 0.99)
-                refresh.restart()
-        }
+    // Neuer Inhalt in einem sichtbaren Hinweis: kurz überblenden. Eigener Signal-Handler statt
+    // »Connections« (siehe PProgressRing – Hinweise stecken in fast jeder Seite).
+    readonly property int noticeSerial: notice ? notice.serial : 0
+    onNoticeSerialChanged: {
+        if (root.shown && root.animate && Motion.enabled && root.opacity > 0.99)
+            refresh.restart()
     }
     SequentialAnimation {
         id: refresh
