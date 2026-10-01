@@ -84,6 +84,52 @@ def _windows_settings(monkeypatch):
     monkeypatch.setattr(winsys, "mica_supported", lambda: False)
 
 
+class FakeHelper:
+    """Statt des echten Hilfsprozesses (Tests starten nie ein Setup)."""
+
+    def __init__(self) -> None:
+        self.terminated = False
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+
+class FakeLauncher:
+    def __init__(self, calls: list) -> None:
+        self.calls = calls
+
+    def start(self, setup, sha256, wait_pid, log=None):
+        helper = FakeHelper()
+        self.calls.append({"setup": setup, "sha256": sha256, "pid": wait_pid, "log": log, "helper": helper})
+        return helper
+
+
+@pytest.fixture(autouse=True)
+def _updates_offline(monkeypatch, tmp_path_factory):
+    """Tests gehen nie ins Internet und starten nie ein Setup: Der Updater der App fragt eine nicht
+    erreichbare lokale Adresse (offline), Downloads landen in einem eigenen Testordner, der
+    Hilfsprozess ist eine Attrappe. Tests des Updaters setzen ``updates.create_service`` selbst."""
+    folder = tmp_path_factory.mktemp("updates")
+    monkeypatch.setenv("UE_UPDATE_DIR", str(folder))
+    try:
+        from qtapp import updates
+    except ImportError:  # ohne PySide6 (reine Kerntests)
+        return
+    from updater.policy import UrlPolicy
+    from updater.service import UpdateService
+    from updater.store import UpdateStore
+    from updater.transport import HttpClient
+
+    def offline(app, installed):
+        client = HttpClient(UrlPolicy.loopback(1), user_agent="PDF-Tool-Test", system_proxy=False)
+        return UpdateService(installed, client, UpdateStore(folder), app.worker.run, releases_url="http://127.0.0.1:1/releases")
+
+    calls: list = []
+    monkeypatch.setattr(updates, "create_service", offline)
+    monkeypatch.setattr(updates, "create_launcher", lambda: FakeLauncher(calls))
+    monkeypatch.setattr(updates, "LAUNCHES", calls, raising=False)
+
+
 @pytest.fixture(scope="session")
 def qt_application():
     """Die eine QApplication des Testlaufs (Qt erlaubt nur eine je Prozess)."""
@@ -109,6 +155,10 @@ def _prepare(config_file: Path, monkeypatch, profile: str, extra: dict | None = 
     opened: list[str] = []
     monkeypatch.setattr(files, "open_path", lambda path: opened.append(str(path)))
     monkeypatch.setattr(files, "OPENED", opened, raising=False)
+    # Links (Release Notes) nur protokollieren – nie einen Browser öffnen
+    urls: list[str] = []
+    monkeypatch.setattr(files, "open_url", lambda url: urls.append(str(url)) or True)
+    monkeypatch.setattr(files, "URLS", urls, raising=False)
 
 
 @pytest.fixture(params=["full", "off"], ids=["animationen", "ohne-animationen"])

@@ -91,6 +91,11 @@ class Runtime(QObject):
         }
         self.preview_lookup: Callable[[str], object] = lambda _ident: None
         self._build_tools()
+        # Updates: Prüfung erst nach dem ersten Bild im Hintergrund – der Start wartet nie auf das Netzwerk
+        from .updates import UpdatesController
+
+        self.updates = UpdatesController(self.app, cfg, self)
+        self.singletons["Updates"] = self.updates
         # Windows-Einstellungen (Design, Akzentfarbe, Animationseffekte) sofort übernehmen
         from . import system
 

@@ -27,7 +27,11 @@ ColumnLayout {
             spacing: 0
             Layout.fillWidth: true
             PText { text: root.data_.name || ""; textStyle: "bodyLarge" }
-            PText { text: "Version " + (root.data_.version || ""); tone: "secondary" }
+            RowLayout {
+                spacing: 8
+                PText { objectName: "aboutVersion"; text: "Version " + (root.data_.version || ""); tone: "secondary" }
+                PBadge { text: root.data_.beta ? "Beta" : ""; tone: "accent" }
+            }
             PText { text: "Entwickler und Inhaber: " + (root.data_.developer || ""); tone: "secondary"; Layout.topMargin: 2 }
         }
     }

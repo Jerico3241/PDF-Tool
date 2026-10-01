@@ -36,11 +36,19 @@
 #define UninstallKey       "Software\Microsoft\Windows\CurrentVersion\Uninstall\{" + AppGuid + "}_is1"
 #define LegacyUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\Uebersichten-Ersteller"
 
-; Version zentral aus windows-app/VERSION
+; Version zentral aus windows-app/VERSION – stabil »2.7.2« oder Beta »2.8.0-beta.1«
 #ifndef AppVersion
   #define VersionHandle FileOpen(AddBackslash(SourcePath) + "..\VERSION")
   #define AppVersion Trim(FileRead(VersionHandle))
   #expr FileClose(VersionHandle)
+#endif
+; Windows-Dateiversionen bestehen nur aus Zahlen: bei einer Beta der Teil vor »-« (2.8.0-beta.1 → 2.8.0)
+#ifndef AppNumericVersion
+  #if Pos("-", AppVersion) > 0
+    #define AppNumericVersion Copy(AppVersion, 1, Pos("-", AppVersion) - 1)
+  #else
+    #define AppNumericVersion AppVersion
+  #endif
 #endif
 #ifndef PayloadDir
   #define PayloadDir AddBackslash(SourcePath) + "..\build\payload"
@@ -63,9 +71,10 @@ AppComments={#AppExeComment}
 ; Auch die laufende Vorversion (Übersichten-Ersteller) wird erkannt
 AppMutex={#AppMutexName},{#OldMutexName}
 SetupMutex={#AppMutexName}.Setup
-VersionInfoVersion={#AppVersion}.0
-VersionInfoProductVersion={#AppVersion}
+VersionInfoVersion={#AppNumericVersion}.0
+VersionInfoProductVersion={#AppNumericVersion}
 VersionInfoTextVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
 VersionInfoProductName={#AppName}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} Setup
@@ -180,6 +189,11 @@ Type: filesandordirs; Name: "{app}\assets"
 Type: files; Name: "{app}\fehler.log"
 Type: files; Name: "{app}\start.log"
 Type: dirifempty; Name: "{app}"
+; Heruntergeladene Updates (seit 2.7.2) – nur die eigenen Dateien, keine Benutzerdaten
+Type: files; Name: "{localappdata}\PDF-Tool-Updates\PDF-Tool-Setup-*"
+Type: files; Name: "{localappdata}\PDF-Tool-Updates\releases.json"
+Type: files; Name: "{localappdata}\PDF-Tool-Updates\update-start.log"
+Type: dirifempty; Name: "{localappdata}\PDF-Tool-Updates"
 
 [Code]
 const

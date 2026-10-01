@@ -141,12 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Neue Oberfläche: PDF Tool läuft jetzt mit Qt 6 (Qt Quick) – moderner, flüssiger und scharf auf hochauflösenden Bildschirmen bis 200 %.",
-    "Echte Animationen für Seitenwechsel, Navigation, Menüs, Dialoge, aufklappende Bereiche, Hinweise, Schaltflächen und Schalter – einstellbar unter Einstellungen → Animationen: Vollständig, Reduziert oder Aus.",
-    "Effizientere Listen: Stapel, Kunden und Vertragsänderungen ändern nur die betroffenen Zeilen – auch mit Hunderten Einträgen flüssig.",
-    "Vorschau mit Seiten blättern, Zoom, »An Breite anpassen« und »Ganze Seite«; »PDF reparieren« mit neuer, übersichtlicher Oberfläche.",
-    "Alle Funktionen aus 2.6.1 bleiben erhalten. Keine manuelle Migration: Einstellungen, Kundenakten, Vorlagen, Regeln und Vertragsstände werden weiterverwendet.",
-    "Alles bleibt lokal auf diesem PC – keine Cloud, keine Uploads.",
+    "Updates direkt in der App: Einstellungen → Updates – automatische Prüfung im Hintergrund, Kanal Stable oder Beta, Download mit SHA-256-Prüfung und Installation über das Setup.",
+    "PDF reparieren: mehrere PDFs auf einmal, eigener Dateiname je PDF und sichere Nummerierung statt Überschreiben.",
+    "Oberfläche mit Qt 6 (Qt Quick) – modern, flüssig und scharf auf hochauflösenden Bildschirmen bis 200 %.",
+    "Animationen für Seitenwechsel, Navigation, Dialoge und Hinweise – einstellbar unter Einstellungen → Animationen: Vollständig, Reduziert oder Aus.",
+    "Alle bisherigen Funktionen bleiben erhalten. Keine manuelle Migration: Einstellungen, Kundenakten, Vorlagen, Regeln und Vertragsstände werden weiterverwendet.",
+    "Alle Dateien werden lokal auf diesem PC verarbeitet – keine Cloud, keine Uploads. Die Update-Prüfung fragt nur bei GitHub nach neuen Versionen.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]

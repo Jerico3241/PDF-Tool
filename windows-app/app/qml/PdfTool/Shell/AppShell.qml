@@ -113,12 +113,20 @@ FocusScope {
             border.width: 1
             border.color: Theme.layerStroke
 
-            PageHost {
-                id: host
+            // Hinweisleiste für Updates über den Seiten (die Seiten rücken einmal um ihre Höhe)
+            UpdateBanner {
+                id: updateBanner
                 x: 1
                 y: 1
                 width: shell.width - nav.targetWidth - 1
-                height: shell.height - 1 - status.height
+                height: implicitHeight
+            }
+            PageHost {
+                id: host
+                x: 1
+                y: 1 + updateBanner.height
+                width: shell.width - nav.targetWidth - 1
+                height: shell.height - 1 - status.height - updateBanner.height
             }
             StatusBar {
                 id: status

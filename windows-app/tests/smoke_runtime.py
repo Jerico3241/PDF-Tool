@@ -6,9 +6,10 @@ Aufruf mit der zu prüfenden Laufzeit (nicht mit einem System-Python):
     %LOCALAPPDATA%\\PDF-Tool\\runtime\\python.exe -s smoke_runtime.py --app ...\\app --ui
 
 Geprüft wird:
-1. Import aller Laufzeitmodule (PySide6 mit Qt Quick, numpy, pandas, openpyxl, xlrd, reportlab,
-   PIL, pikepdf mit qpdf, pypdfium2 mit PDFium, pypdf) und der App-Module beider Werkzeuge;
-   tkinter ist nicht mehr Teil der Laufzeit (seit 2.7.0)
+1. Import aller Laufzeitmodule (PySide6 mit Qt Quick und Qt Network, numpy, pandas, openpyxl,
+   xlrd, reportlab, PIL, pikepdf mit qpdf, pypdfium2 mit PDFium, pypdf) und der App-Module beider
+   Werkzeuge und des Updaters (Ende-zu-Ende samt HTTPS: smoke_updater.py); tkinter ist nicht mehr
+   Teil der Laufzeit (seit 2.7.0)
 2. Vertragsübersichten: eine echte PDF aus einer Excel mit fett formatierter Zelle und
    formatierter Fußzeile; Kundenakte 2.0 (Übernahme einer Kundenhistorie aus 2.3 mit
    Sicherung, Wiedererkennung per E-Mail, Speichern) und Live-Vorschau (PDF im
@@ -79,6 +80,7 @@ def main() -> int:
     work = Path(tempfile.mkdtemp(prefix="pdf-tool-smoke-"))
     # Einstellungen der Prüfung in einem eigenen Ordner (vor dem Import von appstate setzen)
     os.environ["UE_DATA_DIR"] = str(work / "daten")
+    os.environ["UE_UPDATE_DIR"] = str(work / "updates")  # Downloads des Updaters nie in den echten Ordner
     sys.path.insert(0, str(app_dir))
 
     # 1. Module
@@ -86,7 +88,7 @@ def main() -> int:
 
     check(importlib.util.find_spec("tkinter") is None, "tkinter gehört nicht mehr zur Laufzeit (Qt-Oberfläche)")
     import PySide6
-    from PySide6 import QtCore, QtGui, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
+    from PySide6 import QtCore, QtGui, QtNetwork, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
     import numpy
     import openpyxl
     import pandas
@@ -125,6 +127,22 @@ def main() -> int:
     from tools.pdf_repair import process as repair_process
     from tools.pdf_repair.models import Condition, Method, RepairStatus
     from tools.pdf_repair.recovery import lenient, rebuild, scanner
+    from qtapp import updates as qt_updates
+    from updater import github as update_github
+    from updater import installer as update_installer
+    from updater import launch as update_launch
+    from updater import notes as update_notes
+    from updater import service as update_service
+    from updater.policy import UrlPolicy
+    from updater.semver import Version
+
+    # Updater: Module, Adressregel, sichere Release Notes (HTTPS mit Schannel prüft smoke_updater.py)
+    check(Version.parse(appstate.VERSION) > Version.parse("2.7.1"), "Version für den Updater nicht lesbar")
+    check(UrlPolicy.github().allows(update_github.RELEASES_URL) and not UrlPolicy.github().allows("http://github.com/x"), "Adressregel des Updaters")
+    check(update_installer.LAUNCH_SCRIPT.is_file(), "Hilfsprozess launch.py fehlt")
+    check("<script" not in "".join(block["html"] for block in update_notes.render("<script>x</script> **ok**")), "Release Notes werden nicht maskiert")
+    check(hasattr(update_service, "UpdateService") and hasattr(qt_updates, "UpdatesController"), "Updater fehlt")
+    print(f"Updater: Quelle {update_github.REPOSITORY} (ID {update_github.REPOSITORY_ID}), Kanäle Stable/Beta")
 
     check(lenient.available(), "pypdf fehlt in der Laufzeit (dritte Engine)")
     check(hasattr(qt_comparison, "ComparisonView") and qt_comparison.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")

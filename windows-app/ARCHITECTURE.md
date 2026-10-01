@@ -60,7 +60,8 @@ Modul `PdfTool.Backend`:
 - **Properties** entstehen mit `base.prop()` (Wert + Änderungssignal, nur echte Änderungen
   melden); Python-Code kann mit `observe()` darauf hören.
 - **Werkzeuge** melden sich mit `ToolHooks` beim `AppController` an (Strg+Enter, Strg+O, Strg+F,
-  F1, Drag & Drop, Speichern, Beenden) – `qtapp/contracts/tool.py`, `qtapp/repair.py`.
+  F1, Drag & Drop, Speichern, Beenden, laufende Verarbeitung vor einem Update) –
+  `qtapp/contracts/tool.py`, `qtapp/repair.py`.
 - **Singletons je Engine:** `application.register_backend()` registriert jeden Namen einmal;
   jede QML-Engine erhält die Controller ihrer eigenen Laufzeit (Tests starten viele nacheinander).
   Die Controller gehören der Laufzeit (`Runtime`) und leben länger als die Engine.
@@ -132,6 +133,59 @@ von `windows-app/qmlres.py`).
 Konfiguration → Qt-Anwendung → Design (`ThemeController`) → Controller (`Runtime`) → QML-Engine →
 Fenster verdeckt (DWM-Cloaking) mit Lage und Titelleiste → Startseite → aufdecken mit dem ersten
 fertigen Bild → weitere Seiten laden.
+
+## Updater (`app/updater`, seit 2.7.2)
+
+Der Updater ist kein Werkzeug, sondern eine eigene Schicht: Logik in `app/updater/`, Anzeige im
+Controller `app/qtapp/updates.py` (QML: `Updates`), Oberfläche in `Shell/UpdateBanner.qml`,
+`Pages/SettingsPage.qml` (Abschnitt „Updates“) und `Dialogs/UpdateContent.qml`. QML ruft nie
+GitHub auf, lädt nichts, berechnet keine Prüfsumme und vergleicht keine Versionen.
+
+| Modul | Aufgabe |
+| --- | --- |
+| `semver.py` | Versionen nach SemVer 2.0.0 (Vorabversionen, nie Textvergleich) |
+| `models.py` | `Channel` (STABLE/BETA), `UpdateState`, `ErrorKind`, `Release`, `Asset` |
+| `github.py` | Release-Liste lesen; Kanal filtern; Assets nach fester Namenskonvention; höchste neuere Version |
+| `policy.py` | erlaubte Adressen: nur HTTPS, nur `api.github.com`, `github.com`, `*.githubusercontent.com`; höchstens 5 Weiterleitungen |
+| `transport.py` | Qt Network (Windows: Schannel, System-Proxy): Zeitlimits, Größenlimits, geprüfte Weiterleitungen, Abbruch, gedrosselter Fortschritt |
+| `verifier.py` | Prüfsummendatei lesen, SHA-256 berechnen und vergleichen |
+| `state.py` | Zustandsautomat; `READY` nur nach `VERIFYING` |
+| `schedule.py` | 24-Stunden-Regel ab der letzten *erfolgreichen* Prüfung |
+| `store.py` | `%LOCALAPPDATA%\PDF-Tool-Updates`: `.part`, verifiziertes Setup, `.sha256`, `releases.json`; Aufräumen nur eigener Dateien |
+| `notes.py` | Release Notes (Markdown) als maskierte Blöcke – nur `<b>`, `<i>`, `<code>`, `<br>`, `https`-Links |
+| `service.py` | Ablauf prüfen → herunterladen → verifizieren → bereit → Installation vorbereiten (asynchron, Hashing im Hintergrund-Thread) |
+| `installer.py`, `launch.py` | Hilfsprozess: wartet auf das Ende der App, prüft das Setup erneut, startet es (ShellExecute) |
+
+**Quelle:** `https://api.github.com/repositories/1382108244/releases` – die feste ID von
+`Jerico3241/PDF-Tool`. Eine Umbenennung des Repositories ändert nichts, ein anderes Repository mit
+demselben Namen wird nie gelesen. Downloads kommen von der Download-Adresse des jeweiligen Releases
+(`github.com/<Repository>/releases/download/<Tag>/…`), die aus dessen Seite abgeleitet und geprüft
+wird. Eine Prüfung ist genau eine API-Anfrage (das Anfragelimit von 60 pro Stunde reicht weit).
+
+**Kein zusätzliches Manifest:** Version (Tag), Kanal (Vorabversion), Dateiname, Größe und
+Download-Adresse liefert die Release-API, die Prüfsumme die `.sha256`-Datei; GitHub nennt
+zusätzlich einen eigenen SHA-256-Wert der Datei, der – wenn vorhanden – gegengeprüft wird. Ein
+`update.json` hätte dieselben Angaben ein zweites Mal enthalten (und hätte auseinanderlaufen können),
+ohne die Prüfung sicherer zu machen.
+
+**Ablauf:** Automatische Prüfungen laufen unsichtbar (kein `CHECKING`, Fehler still), manuelle
+sichtbar. Das Ergebnis der letzten Prüfung liegt in `releases.json`; so bleibt ein Angebot nach einem
+Neustart sichtbar, und ein Kanalwechsel wirkt sofort ohne neue Anfrage. Download: zuerst die
+Prüfsumme, dann das Setup als `.part`; erst nach bestandener SHA-256-Prüfung wird daraus das Setup.
+Ein bereits verifiziertes Setup wird nicht erneut geladen, aber vor der Verwendung erneut geprüft.
+
+**Installation:** „Jetzt installieren“ prüft laufende Arbeiten (`ToolHooks.running_work`), prüft
+Datei und Prüfsumme im Hintergrund, startet `pythonw -I launch.py --setup … --sha256 … --wait <PID>`
+(vom App-Prozess gelöst) und schließt das Fenster wie über das Schließen-Kreuz. Lehnt ein Werkzeug
+das Beenden ab, wird der Hilfsprozess beendet und das Update bleibt bereit. Das Inno-Setup ersetzt
+die Programmdateien (gleiche AppId) und bietet am Ende „PDF Tool starten“ an. Die App ersetzt nie
+eigene Dateien. Einstellungen: `update_kanal`, `update_automatisch`, `update_letzte_pruefung`,
+`update_beta_bestaetigt` in `gui-config.json` (fehlt etwas: Stable, automatisch ein).
+
+**Tests:** `test_updater.py` (ohne Netzwerk), `test_updater_flow.py` (lokaler Testserver
+`tests/updateserver.py`), `test_qt_updates.py` (Oberfläche), `smoke_updater.py` (Windows, eingebettete
+Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer dem lesenden Teil von
+`smoke_updater.py --live` in der CI.
 
 ## Ein neues Werkzeug hinzufügen
 
