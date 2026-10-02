@@ -67,6 +67,16 @@ class ShowOp:
     advance: float = 0.0  # Breite im Textraum (gemäß Schriftbreiten)
 
 
+@dataclass
+class ImageOp:
+    """Bild auf der obersten Ebene: ``Do`` eines Bild- oder Formular-XObjects bzw. Inline-Bild."""
+
+    index: int  # Position in ``PageContent.instructions``
+    name: str  # Ressourcenname (z. B. ``/Im0``) – leer bei Inline-Bildern
+    ctm: Matrix  # CTM beim Zeichnen (bildet das Einheitsquadrat bzw. den Formularraum ab)
+    kind: str  # "image", "inline" oder "form"
+
+
 def _num(value) -> float:
     try:
         return float(value)
@@ -82,8 +92,10 @@ class PageContent:
         self.page = page
         self.instructions = list(pikepdf.parse_content_stream(page))
         self.fonts = fonts
+        self.xobjects = page_xobjects(page)
         self.codecs: dict[str, FontCodec] = {}
         self.shows: list[ShowOp] = []
+        self.images: list[ImageOp] = []
         self._interpret()
 
     def codec(self, font: str) -> FontCodec | None:
@@ -101,10 +113,18 @@ class PageContent:
         bt = -1
         for index, ins in enumerate(self.instructions):
             if isinstance(ins, pikepdf.ContentStreamInlineImage):
+                self.images.append(ImageOp(index, "", ctm, "inline"))
                 continue
             op = str(ins.operator)
             ops = list(ins.operands)
-            if op == "q":
+            if op == "Do" and ops:
+                xobject = self.xobjects.get(str(ops[0]))
+                subtype = xobject.get("/Subtype") if isinstance(xobject, pikepdf.Stream) else None
+                if subtype == pikepdf.Name.Image:
+                    self.images.append(ImageOp(index, str(ops[0]), ctm, "image"))
+                elif subtype == pikepdf.Name.Form:
+                    self.images.append(ImageOp(index, str(ops[0]), ctm, "form"))
+            elif op == "q":
                 stack.append((ctm, TextState(**state.__dict__)))
             elif op == "Q":
                 if stack:
@@ -320,6 +340,27 @@ def page_fonts(page: pikepdf.Object) -> dict[str, pikepdf.Object]:
     if not isinstance(fonts, pikepdf.Dictionary):
         return {}
     return {str(name): font for name, font in fonts.items() if isinstance(font, pikepdf.Dictionary)}
+
+
+def page_xobjects(page: pikepdf.Object) -> dict[str, pikepdf.Object]:
+    """XObjects der Seite (samt vererbter Ressourcen): ``/Im0`` → Stream."""
+    from .document import inherited
+
+    resources = inherited(page, "/Resources")
+    xobjects = resources.get("/XObject") if isinstance(resources, pikepdf.Dictionary) else None
+    if not isinstance(xobjects, pikepdf.Dictionary):
+        return {}
+    return {str(name): obj for name, obj in xobjects.items() if isinstance(obj, pikepdf.Stream)}
+
+
+def invert(m: Matrix) -> Matrix:
+    """Inverse Matrix (wirft ``ValueError``, wenn sie nicht umkehrbar ist)."""
+    a, b, c, d, e, f = m
+    det = a * d - b * c
+    if abs(det) < 1e-12:
+        raise ValueError("Matrix nicht umkehrbar")
+    ia, ib, ic, id_ = d / det, -b / det, -c / det, a / det
+    return (ia, ib, ic, id_, -(e * ia + f * ic), -(e * ib + f * id_))
 
 
 def fmt(value: float) -> str:

@@ -213,6 +213,58 @@ def with_images(path: Path) -> Path:
     return path
 
 
+def direct_image(path: Path, rotate: int = 0) -> Path:
+    """Bild-XObject direkt auf der Seite (``q … cm /Im1 Do Q``) und etwas Text."""
+    from PIL import Image
+
+    photo = Image.new("RGB", (40, 20), (30, 160, 60))
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=A4)
+    image = pdf.make_stream(photo.tobytes(), Type=Name.XObject, Subtype=Name.Image, Width=40, Height=20, ColorSpace=Name.DeviceRGB, BitsPerComponent=8)
+    page.Resources = Dictionary(Font=Dictionary(F1=_helvetica(pdf)), XObject=Dictionary(Im1=image))
+    page.Contents = pdf.make_stream(b"q 200 0 0 100 100 500 cm /Im1 Do Q\nBT /F1 12 Tf 100 450 Td (Bildunterschrift) Tj ET\n")
+    if rotate:
+        page.Rotate = rotate
+    pdf.save(path)
+    return path
+
+
+def image_in_form(path: Path) -> Path:
+    """Bild in einem Formular-XObject (wie es manche Programme für Logos schreiben)."""
+    from PIL import Image
+
+    photo = Image.new("RGB", (30, 20), (30, 160, 60))
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=A4)
+    image = pdf.make_stream(photo.tobytes(), Type=Name.XObject, Subtype=Name.Image, Width=30, Height=20, ColorSpace=Name.DeviceRGB, BitsPerComponent=8)
+    form = pdf.make_stream(b"q 180 0 0 120 0 0 cm /Im0 Do Q", Type=Name.XObject, Subtype=Name.Form, BBox=Array([0, 0, 180, 120]), Resources=Dictionary(XObject=Dictionary(Im0=image)))
+    page.Resources = Dictionary(XObject=Dictionary(Fm1=form))
+    page.Contents = pdf.make_stream(b"q 1 0 0 1 72 600 cm /Fm1 Do Q\n")
+    pdf.save(path)
+    return path
+
+
+def two_tone_png(path: Path, alpha: bool = False) -> Path:
+    """PNG 60×40: obere Hälfte rot, untere blau (zum Prüfen der Ausrichtung); optional mit
+    durchsichtigem rechten Drittel."""
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (60, 40), (0, 0, 255, 255))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, 59, 19), fill=(255, 0, 0, 255))
+    if alpha:
+        draw.rectangle((40, 0, 59, 39), fill=(0, 0, 0, 0))
+    image.save(path, "PNG")
+    return path
+
+
+def photo_jpeg(path: Path, size: tuple[int, int] = (80, 60)) -> Path:
+    from PIL import Image
+
+    Image.new("RGB", size, (200, 120, 40)).save(path, "JPEG", quality=90)
+    return path
+
+
 def structured(path: Path) -> Path:
     """Lesezeichen, Link, Notiz-Anmerkung, Anhang, Metadaten, Ebenen und Sprungziel."""
     standard_text(path, pages=3)
