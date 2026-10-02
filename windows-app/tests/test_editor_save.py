@@ -265,7 +265,9 @@ def test_folder_without_write_permission_on_windows(tmp_path: Path) -> None:
     path = samples.with_xmp(folder / "acl.pdf")
     original = path.read_bytes()
     doc, history = edited(path)
-    deny = subprocess.run(["icacls", str(folder), "/deny", "*S-1-1-0:(W,D,DC)"], capture_output=True, text=True)
+    # Nur Schreiben im Ordner verweigern: Dateien und Unterordner anlegen, darin löschen – lesen und auflisten
+    # bleiben erlaubt (»W« enthielte auch SYNCHRONIZE und sperrte damit sogar das Auflisten)
+    deny = subprocess.run(["icacls", str(folder), "/deny", "*S-1-1-0:(WD,AD,DC)"], capture_output=True, text=True)
     try:
         if deny.returncode != 0:
             pytest.skip(f"icacls: {deny.stdout} {deny.stderr}")
