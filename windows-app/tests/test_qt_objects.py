@@ -216,6 +216,7 @@ def test_table_cells_ctrl_click_marquee_and_delete_only_the_selection(reader_app
     pump(0.2)
     assert chosen(doc) == ["Pos.", "Anz.", "Leistung", "Stückpreis", "Gesamtpreis"]
     # Nur zwei Zellen behalten und löschen
+    others = {text: segment(doc, text)["view"] for text in ("Gesamtpreis", "Wartung Software")}
     click(h, page_point(h, 0, *center(segment(doc, "Stückpreis")["view"])))
     click(h, page_point(h, 0, *center(segment(doc, "120,00")["view"])), Qt.KeyboardModifier.ControlModifier)
     key(h, Qt.Key.Key_Delete)
@@ -224,8 +225,8 @@ def test_table_cells_ctrl_click_marquee_and_delete_only_the_selection(reader_app
     assert [item["text"] for item in segments(doc)] == ["Pos.", "Anz.", "Leistung", "Gesamtpreis", "1", "2", "Wartung Software", "240,00"]
     assert doc.objectSelection == []
     # Die anderen Zellen stehen unverändert an ihrem Platz
-    assert segment(doc, "Gesamtpreis")["view"][0] == pytest.approx(430.0, abs=0.2)
-    assert segment(doc, "Wartung Software")["view"][0] == pytest.approx(152.0, abs=0.2)
+    for text, view in others.items():
+        assert segment(doc, text)["view"] == pytest.approx(view, abs=0.05), text
     # Rückgängig bringt beide zurück
     key(h, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     settle(h)
@@ -238,6 +239,7 @@ def test_drag_moves_only_the_selection_one_to_one_and_undo_restores(reader_app, 
     doc = open_pdf(h, path, whole_page=True)
     objects_tool(h, doc)
     line = segment(doc, "50829 Köln")
+    firma = segment(doc, "Firma")["view"]  # Lage hängt von den Schriftmaßen ab (PDFium je System) – vorher messen
     start = page_point(h, 0, *center(line["view"]))
     click(h, start)
     scale = doc.scale
@@ -248,7 +250,7 @@ def test_drag_moves_only_the_selection_one_to_one_and_undo_restores(reader_app, 
     assert moved["view"][0] - line["view"][0] == pytest.approx(60, abs=1.5)
     assert moved["view"][1] - line["view"][1] == pytest.approx(30, abs=1.5)
     # Die übrigen Zeilen bleiben, wo sie waren
-    assert segment(doc, "Firma")["view"][:2] == pytest.approx([72.0, 71.6], abs=0.2)
+    assert segment(doc, "Firma")["view"] == pytest.approx(firma, abs=0.05)
     assert chosen(doc) == ["50829 Köln"] and doc.undoText != ""
     key(h, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     settle(h)
@@ -357,6 +359,7 @@ def test_context_menu_edit_delete_and_whole_paragraph(reader_app, tmp_path: Path
     doc = open_pdf(h, samples.object_address(tmp_path / "menue2.pdf"), whole_page=True)
     objects_tool(h, doc)
     street = segment(doc, "Von-Hünefeld-Str. 3")
+    city = segment(doc, "50829 Köln")["view"]  # Lage hängt von den Schriftmaßen ab (PDFium je System) – vorher messen
     right_click(h, page_point(h, 0, *center(street["view"])))
     _page, menu, entries = object_menu(h)
     edit = entries["Bearbeiten"]
@@ -374,7 +377,7 @@ def test_context_menu_edit_delete_and_whole_paragraph(reader_app, tmp_path: Path
     click(h, window_point(delete, delete.width() / 2, delete.height() / 2))
     settle(h)
     assert wait_until(lambda: [item["text"] for item in doc.objectPages.get("0", {}).get("segments", [])] == ["Firma", "Hottgenroth Software AG", "50829 Köln"], 20)
-    assert segment(doc, "50829 Köln")["view"][1] == pytest.approx(113.6, abs=0.2)  # der Ort rückt nicht nach
+    assert segment(doc, "50829 Köln")["view"] == pytest.approx(city, abs=0.05)  # der Ort rückt nicht nach
     # Wiederholen nach Rückgängig
     key(h, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     settle(h)
