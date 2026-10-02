@@ -67,14 +67,21 @@ $appKey = Join-Path $uninstallRoot "{59C40061-D5E5-446D-ACB4-E077D3C71E1A}_is1"
 # »Oeffnen mit« (seit 3.0.0): eigene ProgID; die Standard-App fuer .pdf bleibt unveraendert
 $progIdKey = "HKCU:\Software\Classes\PDFTool.Dokument"
 $openWithKey = "HKCU:\Software\Classes\.pdf\OpenWithProgids"
+function RegValue([string]$path, [string]$name) {
+    if (-not (Test-Path $path)) { return "<keiner>" }
+    $value = [string](Get-Item -LiteralPath $path).GetValue($name)
+    if ([string]::IsNullOrEmpty($value)) { return "<keiner>" }
+    return $value
+}
 function PdfDefault() {
-    $key = "HKCU:\Software\Classes\.pdf"
-    if (-not (Test-Path $key)) { return "<keiner>" }
-    $value = (Get-Item -LiteralPath $key).GetValue("")
-    if ($null -eq $value) { return "<leer>" }
-    return [string]$value
+    # Standard-App fuer .pdf: Standardwert von Classes\.pdf und die Wahl des Benutzers (UserChoice).
+    # Ein Schluessel ohne Wert gilt wie kein Schluessel: »Oeffnen mit« legt .pdf\OpenWithProgids an.
+    $classes = RegValue "HKCU:\Software\Classes\.pdf" ""
+    $choice = RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.pdf\UserChoice" "ProgId"
+    return "$classes / $choice"
 }
 $pdfDefaultBefore = PdfDefault
+$pdfKeyBefore = Test-Path "HKCU:\Software\Classes\.pdf"
 $env:UE_DATA_DIR = $null
 $env:UE_CONFIG_FILE = $null
 
@@ -384,6 +391,7 @@ if ((AppEntries).Count -ne 0) { throw "Eintrag unter 'Installierte Apps' ist nac
 if (Test-Path $progIdKey) { throw "Eintrag fuer 'Oeffnen mit' ist nach der Deinstallation noch vorhanden" }
 if ((Test-Path $openWithKey) -and ($null -ne (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))) { throw ".pdf\OpenWithProgids enthaelt nach der Deinstallation noch PDF Tool" }
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Standard-App fuer PDF-Dateien nach der Deinstallation veraendert" }
+if (-not $pdfKeyBefore -and (Test-Path "HKCU:\Software\Classes\.pdf")) { throw "Der vom Setup angelegte Schluessel .pdf ist nach der Deinstallation noch vorhanden" }
 if ($Previous -and -not (Test-Path (Join-Path $data "gui-config.json"))) { throw "Stille Deinstallation hat Benutzerdaten geloescht" }
 if (Get-ChildItem $updates -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "PDF-Tool-Setup-*" -or $_.Name -eq "releases.json" }) { throw "Heruntergeladene Updates sind nach der Deinstallation noch vorhanden" }
 

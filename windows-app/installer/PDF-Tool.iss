@@ -193,7 +193,9 @@ Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueNam
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\assets\icon.ico"""
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\runtime\pythonw.exe"" -s -OO ""{app}\app\start.py"" ""%1"""
-Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#PdfProgId}"; ValueData: ""; Flags: uninsdeletevalue
+; .pdf und .pdf\OpenWithProgids nur entfernen, wenn sie danach leer sind (Einträge anderer Programme bleiben)
+Root: HKCU; Subkey: "Software\Classes\.pdf"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#PdfProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
 Filename: "{app}\runtime\pythonw.exe"; Parameters: "-s -OO ""{app}\app\start.py"""; WorkingDir: "{app}\app"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
