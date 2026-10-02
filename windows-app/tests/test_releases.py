@@ -169,3 +169,163 @@ def test_release_check_compares_the_file_version_and_notes(tmp_path) -> None:
     problems = release_check.check(dist, "2.7.2", notes, min_size=0)
     assert "Dateiversion des Setups ist 2.7.1, erwartet 2.7.2" in problems
     assert "Release Notes fehlen: release-notes/2.7.2.md" in problems
+
+
+# --- Release Candidate (release_candidate.py): Build once → Test → Release exakt dieses Artifact ------------------
+
+_rc_spec = importlib.util.spec_from_file_location("release_candidate", ROOT / "release_candidate.py")
+release_candidate = importlib.util.module_from_spec(_rc_spec)
+_rc_spec.loader.exec_module(release_candidate)
+
+CI_COMMIT = "abc123" + "0" * 34  # erfolgreich auf main geprüft
+RELEASE_COMMIT = "abc124" + "0" * 34  # ein anderer Commit
+RUN = 4711
+
+
+def _candidate(tmp_path, version: str = "3.0.0-beta.1", commit: str = CI_COMMIT, run: int = RUN):
+    dist, notes, digest = _dist(tmp_path, version)
+    assert release_candidate.write(dist, commit, run, 1, version, notes, min_size=0) == []
+    return dist, notes, digest
+
+
+def _run(sha: str, run_id: int, number: int, **changes) -> dict:
+    run = {"id": run_id, "run_number": number, "run_attempt": 1, "head_sha": sha, "head_branch": "main", "event": "push", "status": "completed", "conclusion": "success"}
+    run.update(changes)
+    return run
+
+
+def _artifact(sha: str, run_id: int, **changes) -> dict:
+    artifact = {"id": 99, "name": release_candidate.artifact_name(sha), "expired": False, "workflow_run": {"id": run_id, "head_sha": sha, "head_branch": "main"}}
+    artifact.update(changes)
+    return artifact
+
+
+def test_release_candidate_is_bound_to_commit_run_and_setup(tmp_path) -> None:
+    dist, notes, digest = _candidate(tmp_path)
+    manifest = json.loads((dist / release_candidate.MANIFEST).read_text(encoding="utf-8"))
+    assert manifest == {"format": 1, "commit": CI_COMMIT, "run_id": RUN, "run_attempt": 1, "version": "3.0.0-beta.1", "setup": "PDF-Tool-Setup-3.0.0-beta.1.exe", "sha256": digest}
+    assert release_candidate.artifact_name(CI_COMMIT) == f"PDF-Tool-Release-Candidate-{CI_COMMIT}"
+    assert release_candidate.verify(dist, CI_COMMIT, RUN, "3.0.0-beta.1", notes, min_size=0) == []
+
+
+def test_ci_of_another_commit_never_releases(tmp_path) -> None:
+    """CI erfolgreich für abc123, Release-Commit abc124 → ablehnen (nur CI-Commit == Release-Commit)."""
+    dist, notes, _digest = _candidate(tmp_path)
+    problems = release_candidate.verify(dist, RELEASE_COMMIT, RUN, "3.0.0-beta.1", notes, min_size=0)
+    assert f"Release Candidate gehört zu Commit {CI_COMMIT}, nicht zum Release-Commit {RELEASE_COMMIT}" in problems
+    assert release_candidate.candidate_runs({"workflow_runs": [_run(CI_COMMIT, RUN, 7)]}, RELEASE_COMMIT) == []
+    assert release_candidate.candidate_artifact({"artifacts": [_artifact(CI_COMMIT, RUN)]}, RELEASE_COMMIT, RUN) is None
+    # auch ein umbenanntes Artifact eines anderen Commits zählt nicht: entscheidend ist der Lauf dahinter
+    renamed = _artifact(CI_COMMIT, RUN, name=release_candidate.artifact_name(RELEASE_COMMIT))
+    assert release_candidate.candidate_artifact({"artifacts": [renamed]}, RELEASE_COMMIT, RUN) is None
+
+
+def test_only_successful_main_runs_of_exactly_this_commit_count() -> None:
+    runs = {"workflow_runs": [
+        _run(CI_COMMIT, 1, 10),
+        _run(CI_COMMIT, 2, 12, event="workflow_dispatch"),  # manueller main-Lauf, neuer
+        _run(CI_COMMIT, 3, 13, conclusion="failure"),
+        _run(CI_COMMIT, 4, 14, status="in_progress", conclusion=None),
+        _run(CI_COMMIT, 5, 15, event="pull_request", head_branch="feature/x"),
+        _run(CI_COMMIT, 6, 16, head_branch="feature/x", event="workflow_dispatch"),
+        _run(CI_COMMIT[:7], 7, 17),
+        _run(RELEASE_COMMIT, 8, 18),
+    ]}
+    assert release_candidate.candidate_runs(runs, CI_COMMIT) == [2, 1]
+    assert release_candidate.candidate_runs(runs, CI_COMMIT[:7]) == []  # nie eine Kurzform
+
+
+def test_expired_or_foreign_artifacts_are_never_used() -> None:
+    assert release_candidate.candidate_artifact({"artifacts": [_artifact(CI_COMMIT, RUN)]}, CI_COMMIT, RUN) == 99
+    assert release_candidate.candidate_artifact({"artifacts": [_artifact(CI_COMMIT, RUN, expired=True)]}, CI_COMMIT, RUN) is None
+    assert release_candidate.candidate_artifact({"artifacts": [_artifact(CI_COMMIT, RUN + 1)]}, CI_COMMIT, RUN) is None
+    assert release_candidate.candidate_artifact({"artifacts": [_artifact(CI_COMMIT, RUN, name="PDF-Tool-Setup-" + CI_COMMIT)]}, CI_COMMIT, RUN) is None
+    feature = _artifact(CI_COMMIT, RUN, workflow_run={"id": RUN, "head_sha": CI_COMMIT, "head_branch": "feature/x"})
+    assert release_candidate.candidate_artifact({"artifacts": [feature]}, CI_COMMIT, RUN) is None
+
+
+def test_tampered_or_mixed_candidates_are_rejected(tmp_path) -> None:
+    dist, notes, _digest = _candidate(tmp_path)
+    setup = dist / "PDF-Tool-Setup-3.0.0-beta.1.exe"
+    # anderer Lauf, andere Version des Commits
+    assert any("nicht aus dem geprüften main-Lauf" in p for p in release_candidate.verify(dist, CI_COMMIT, RUN + 1, "3.0.0-beta.1", notes, min_size=0))
+    assert any("VERSION des Commits ist 3.0.0" in p for p in release_candidate.verify(dist, CI_COMMIT, RUN, "3.0.0", notes, min_size=0))
+    # nachträglich verändertes Setup: Prüfsumme und Manifest passen nicht mehr
+    setup.write_bytes(setup.read_bytes() + b"\0")
+    problems = release_candidate.verify(dist, CI_COMMIT, RUN, "3.0.0-beta.1", notes, min_size=0)
+    assert "Prüfsumme gehört nicht zum Setup" in problems and "SHA-256 des Setups weicht vom Manifest ab" in problems
+    # fremde Datei im Artifact, fehlendes Manifest
+    (tmp_path / "zwei").mkdir()
+    dist2, notes2, _ = _candidate(tmp_path / "zwei")
+    (dist2 / "notiz.txt").write_text("x", encoding="utf-8")
+    assert release_candidate.verify(dist2, CI_COMMIT, RUN, "3.0.0-beta.1", notes2, min_size=0) == ["Unerwartete Dateien: notiz.txt"]
+    (dist2 / "notiz.txt").unlink()
+    (dist2 / release_candidate.MANIFEST).unlink()
+    assert release_candidate.verify(dist2, CI_COMMIT, RUN, "3.0.0-beta.1", notes2, min_size=0) == ["Manifest fehlt: release-candidate.json"]
+    assert release_candidate.verify(dist2, "abc124", RUN, "3.0.0-beta.1", notes2, min_size=0)[0].startswith("Ungültiger Commit")
+
+
+def test_write_refuses_a_failed_check(tmp_path) -> None:
+    dist, notes, _digest = _dist(tmp_path, "3.0.0-beta.1", line=f"{'0' * 64}  PDF-Tool-Setup-3.0.0-beta.1.exe\n")
+    assert "Prüfsumme gehört nicht zum Setup" in release_candidate.write(dist, CI_COMMIT, RUN, 1, "3.0.0-beta.1", notes, min_size=0)
+    assert not (dist / release_candidate.MANIFEST).exists()
+
+
+def test_release_candidate_command_line(tmp_path, monkeypatch, capsys) -> None:
+    root = tmp_path / "checkout"
+    (root / "windows-app" / "release-notes").mkdir(parents=True)
+    (root / "windows-app" / "VERSION").write_text("3.0.0-beta.1\n", encoding="utf-8")
+    (root / "windows-app" / "release-notes" / "3.0.0-beta.1.md").write_text("# Notes", encoding="utf-8")
+    dist, _notes, digest = _dist(tmp_path, "3.0.0-beta.1")
+    monkeypatch.setattr(release_candidate, "MIN_SIZE", 0)  # künstliches Setup statt 70 MB
+    assert release_candidate.main(["write", str(dist), "--commit", CI_COMMIT, "--run", str(RUN), "--attempt", "2", "--root", str(root)]) == 0
+    output = tmp_path / "github_output"
+    assert release_candidate.main(["verify", str(dist), "--commit", CI_COMMIT, "--run", str(RUN), "--root", str(root), "--github-output", str(output)]) == 0
+    values = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
+    assert values["tag"] == "v3.0.0-beta.1" and values["prerelease"] == "true" and values["sha256"] == digest
+    assert values["notes"] == str(root / "windows-app" / "release-notes" / "3.0.0-beta.1.md")
+    assert release_candidate.main(["verify", str(dist), "--commit", RELEASE_COMMIT, "--run", str(RUN), "--root", str(root)]) == 1
+    runs = tmp_path / "runs.json"
+    runs.write_text(json.dumps({"workflow_runs": [_run(CI_COMMIT, RUN, 3)]}), encoding="utf-8")
+    capsys.readouterr()
+    assert release_candidate.main(["runs", str(runs), "--commit", CI_COMMIT]) == 0 and capsys.readouterr().out.split() == [str(RUN)]
+    assert release_candidate.main(["runs", str(runs), "--commit", RELEASE_COMMIT]) == 1
+    artifacts = tmp_path / "artifacts.json"
+    artifacts.write_text(json.dumps({"artifacts": [_artifact(CI_COMMIT, RUN)]}), encoding="utf-8")
+    assert release_candidate.main(["artifact", str(artifacts), "--commit", CI_COMMIT, "--run", str(RUN)]) == 0 and capsys.readouterr().out.split() == ["99"]
+    assert release_candidate.main(["artifact", str(artifacts), "--commit", RELEASE_COMMIT, "--run", str(RUN)]) == 1
+
+
+# --- Workflows: ein Veröffentlichungsweg, kein Neubau beim Release, Härtung erhalten --------------------------------
+
+WORKFLOWS = ROOT.parent / ".github" / "workflows"
+
+
+def test_actions_stay_pinned_to_commit_shas_and_checkouts_keep_no_credentials() -> None:
+    import re
+
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        for uses in re.findall(r"uses:\s*(\S+)", text):
+            assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", uses), f"{path.name}: {uses}"
+        assert text.count("actions/checkout@") == text.count("persist-credentials: false"), path.name
+
+
+def test_release_workflow_publishes_the_tested_artifact_without_rebuilding() -> None:
+    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    trigger = text.split("on:", 1)[1].split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in trigger and "push:" not in trigger and "release:" not in trigger and "pull_request" not in trigger
+    for forbidden in ("build.py", "pytest", "ISCC", "upload-artifact", "--clobber", "git push", "git tag"):
+        assert forbidden not in text, forbidden
+    assert "run-id: ${{ steps.run.outputs.run }}" in text and "release_candidate.py verify" in text
+    assert "refs/heads/main" in text and "merge-base --is-ancestor" in text and "hotfix_ohne_beta" in text
+
+
+def test_setup_workflow_is_the_only_tester_and_stores_the_candidate_per_commit() -> None:
+    text = (WORKFLOWS / "windows-setup.yml").read_text(encoding="utf-8")
+    trigger = text.split("\non:", 1)[1].split("\npermissions:", 1)[0]
+    assert "tags:" not in trigger and "release:" not in trigger and "inputs:" not in trigger
+    assert "pull_request:" in trigger and "branches: [main]" in trigger
+    assert "name: PDF-Tool-Release-Candidate-${{ github.sha }}" in text and "retention-days: 90" in text
+    assert "needs: [qt-tests, setup]" in text and "contents: write" not in text
+    assert "gh release create" not in text and "gh release upload" not in text  # veröffentlicht nie selbst

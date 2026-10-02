@@ -286,14 +286,18 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 
 ## CI
 
-- **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Push/PR/Release): Tests (die Qt-Tests in
-  fünf gleichzeitig laufenden Jobs auf eigenen Rechnern; Release erst nach allen Jobs) → Setup bauen →
+- **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Pull Request, Push auf `main` und manuell):
+  Tests (die Qt-Tests in fünf gleichzeitig laufenden Jobs auf eigenen Rechnern) → Setup bauen →
   Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen stabilen Version
   (`windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test
-  → QML-Smoke-Test → Release (manuell oder per Tag; unveränderlich – vorhandene Releases und Tags
-  werden nie überschrieben; ein stabiles Release setzt eine veröffentlichte Beta derselben Version
-  voraus, siehe [`docs/RELEASE.md`](../docs/RELEASE.md)).
+  → QML-Smoke-Test → Updater-E2E-Test → auf `main` nach allen Jobs: Release Candidate
+  `PDF-Tool-Release-Candidate-<Commit-SHA>` (Setup, Prüfsumme, Manifest; `windows-app/release_candidate.py`).
+- **Release** (`.github/workflows/release.yml`, nur manuell auf `main`): veröffentlicht den Release
+  Candidate des erfolgreichen main-Laufs für genau den Release-Commit – ohne neuen Build und ohne
+  erneute Tests; unveränderlich (vorhandene Releases und Tags werden nie überschrieben); ein stabiles
+  Release setzt eine veröffentlichte Beta derselben Version voraus, siehe
+  [`docs/RELEASE.md`](../docs/RELEASE.md).
 - **Deep Compatibility Test** (`.github/workflows/deep-compatibility.yml`, nur manuell): Upgrade von
   allen bzw. ausgewählten älteren stabilen Versionen (ab 2.2.0), je Version ein frischer Windows-Rechner.
 - **Update-Test** (`.github/workflows/update-test.yml`, nur manuell nach dem Veröffentlichen einer
