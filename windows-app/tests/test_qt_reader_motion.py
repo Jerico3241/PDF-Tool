@@ -14,11 +14,12 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QObject, QPoint, QPointF, Qt
+from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 import editorsamples as samples
 from conftest import _prepare, pump, wait_until
-from test_qt_reader import click, ctrl_wheel, open_pdf, page_item, prop, reader, settle, window_point
+from test_qt_reader import click, ctrl_wheel, open_pdf, page_item, page_point, prop, reader, settle, window_point
 
 LEFT = Qt.MouseButton.LeftButton
 NO_MOD = Qt.KeyboardModifier.NoModifier
@@ -165,6 +166,65 @@ def test_context_menu_fades_and_grows_and_the_tool_marker_follows(motion_app, tm
     click(h, window_point(h.item("readerToolImage"), 10, 10))
     pump(0.5)
     assert doc.tool == "image" and abs(center_x(marker) - center_x(h.item("readerToolImage"))) < 1.5
+
+
+# --- Miniaturen ------------------------------------------------------------------------------------------------
+def test_reused_thumbnail_rows_never_show_another_page_and_fade_in(motion_app, tmp_path: Path) -> None:
+    h = motion_app
+    r = reader(h)
+    first = open_pdf(h, samples.big(tmp_path / "erstes.pdf", pages=120))
+    second = open_pdf(h, samples.big(tmp_path / "zweites.pdf", pages=120))
+    r.showLeftPanel("thumbs")
+    thumbs = h.item("readerThumbnails")
+    pump(0.6)
+
+    def images() -> list:
+        """(Zeile, Bild) der sichtbaren Zeilen – die Zeile mit, sonst verfällt der Python-Verweis aufs Bild."""
+        top, found = thumbs.property("contentY"), []
+        for row in thumbs.property("contentItem").childItems():
+            if row.property("index") is None or not row.isVisible() or row.y() + row.height() <= top or row.y() >= top + thumbs.height():
+                continue
+            found += [(row, item) for item in row.findChildren(QQuickItem) if item.property("asynchronous") is True]
+        return found
+
+    seen = []
+
+    def watch(action, switching: bool = False) -> None:
+        # In jedem Durchlauf der Ereignisschleife: Eine Zeile ohne fertiges Bild ihrer Seite zeigt nichts – auch
+        # nicht kurz die Miniatur der vorigen Seite oder (Dokumentwechsel) des anderen Dokuments. Am Ende alle da.
+        action()
+        for _ in range(40):
+            for _row, image in images():
+                opacity = image.property("opacity")
+                seen.append(opacity)
+                assert opacity == 0 or image.property("ready"), "altes Bild in einer wiederverwendeten Zeile"
+                assert opacity == 0 or not switching or image.property("progress") == 1, "Miniatur des anderen Dokuments"
+            pump(0.01)
+        assert wait_until(lambda: all(image.property("opacity") == 1 for _row, image in images()), 5)
+
+    for step in (1500, 1500, -700, 700, -700):
+        watch(lambda: thumbs.setProperty("contentY", max(0, thumbs.property("contentY") + step)))
+    for doc in (first, second):
+        watch(lambda: r.activate(doc.docId), switching=True)
+    assert between(seen, 0, 1, 0.01) == (profile(h) != "off")  # blendet ein, außer bei »Aus«
+
+
+# --- Formularfelder --------------------------------------------------------------------------------------------
+def test_form_field_focus_ring_fades_in_and_out(motion_app, tmp_path: Path) -> None:
+    h = motion_app
+    doc = open_pdf(h, samples.form(tmp_path / "formular.pdf"), whole_page=True)
+    doc.setTool("form")
+    settle(h)
+    name = next(w for w in doc.fieldPages["0"] if w["name"] == "name")
+    ring = [item for item in h.items("readerFieldFocus") if item.parentItem().parentItem().objectName() == "readerField_name"][0]
+    assert ring.property("opacity") == 0
+    QTest.mouseClick(h.window, LEFT, NO_MOD, page_point(h, 0, (name["view"][0] + name["view"][2]) / 2, (name["view"][1] + name["view"][3]) / 2))
+    shown = trace(lambda: ring.property("opacity"), 0.3)
+    QTest.keyClick(h.window, Qt.Key.Key_Escape)  # Eingabe beendet: die Tastatur geht zurück an die Seite
+    hidden = trace(lambda: ring.property("opacity"), 0.3)
+    assert between(shown + hidden, 0, 1, 0.01) == (profile(h) != "off")  # blendet weich, außer bei »Aus«
+    assert shown[-1] == 1 and hidden[-1] == 0
+    assert h.item("readerView").hasActiveFocus()
 
 
 # --- Seiten organisieren ---------------------------------------------------------------------------------------

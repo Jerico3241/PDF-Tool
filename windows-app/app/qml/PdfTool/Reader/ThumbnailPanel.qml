@@ -8,7 +8,8 @@ import PdfTool.Controls
 // Miniaturen aller Seiten – virtualisiert (nur sichtbare entstehen und werden gerendert, mit
 // niedriger Priorität nach den Seiten der Ansicht). Klick springt zur Seite; die aktuelle Seite
 // ist markiert und bleibt im Blick. Ein fertiges Bild blendet kurz über das weiße Blatt ein (keine
-// Bewegung); wird eine Zeile für eine andere Seite wiederverwendet, ist das alte Bild sofort weg.
+// Bewegung); zeigt eine wiederverwendete Zeile eine andere Seite oder ein anderes Dokument, ist das alte
+// Bild sofort weg (PageImage).
 // Die Markierung der aktuellen Seite wechselt weich (Rahmenfarbe, Fläche, Strich links).
 ListView {
     id: list
@@ -46,8 +47,6 @@ ListView {
         readonly property bool current: list.doc !== null && list.doc.currentPage === index
         width: list.width
         height: thumbHeight + 32
-        ListView.onReused: image.ready = false
-        onIndexChanged: image.ready = false
         Accessible.role: Accessible.ListItem
         Accessible.name: "Seite " + (index + 1)
         Accessible.selected: current
@@ -69,20 +68,11 @@ ListView {
             border.width: row.current ? 2 : 1
             border.color: row.current ? Theme.accent : Theme.border
             Behavior on border.color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
-            Image {
+            PageImage {
                 id: image
-                // erstes fertiges Bild dieser Seite: kurz einblenden; neue Fassungen (Änderung) tauschen ohne Blinken
-                property bool ready: false
                 anchors.fill: parent
                 anchors.margins: row.current ? 2 : 1
-                asynchronous: true
-                retainWhileLoading: true
-                cache: false
-                smooth: true
                 source: list.doc ? "image://pdfpage/" + list.doc.docId + "/" + row.index + "/" + Math.round(paper.width * list.ratio) + "/" + list.doc.revision + "/thumb" : ""
-                onStatusChanged: if (status === Image.Ready) ready = true
-                opacity: ready ? 1 : 0
-                Behavior on opacity { enabled: Motion.enabled && image.ready; NumberAnimation { duration: Motion.renderFade; easing.type: Motion.decelerate } }
             }
         }
         PText {

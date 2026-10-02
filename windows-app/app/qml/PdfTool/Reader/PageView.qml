@@ -44,7 +44,6 @@ Item {
         // Beim Wechsel des Dokuments kann die Seite noch zum vorigen gehören – dann nichts anfragen
         if (base === "" || page >= doc.pageCount) {
             pageImage.source = ""
-            pageImage.ready = false
             dropPrevious()
             shownPage = -1
             shownBase = ""
@@ -54,7 +53,6 @@ Item {
         if (width < 16) return  // Ansicht noch nicht angeordnet
         if (shownPage !== page || shownBase !== base) {
             pageImage.source = ""  // andere Seite oder anderes Dokument: nicht das Bild der vorigen zeigen
-            pageImage.ready = false
             dropPrevious()
             shownPage = page
             shownBase = base
@@ -102,28 +100,18 @@ Item {
         border.width: 1
         border.color: Theme.border
     }
-    Image {
+    PageImage {
         id: pageImage
         // erstes Bild dieser Seite an diesem Platz: kurz einblenden; neue Fassungen (Zoom, Änderung) ohne Blinken
-        property bool ready: false
         anchors.fill: parent
-        asynchronous: true
-        retainWhileLoading: true
-        cache: false
-        smooth: true
         mipmap: false
         fillMode: Image.Stretch
-        onStatusChanged: {
-            if (status === Image.Error) root.dropPrevious()
-            if (status !== Image.Ready) return
-            ready = true
-            if (root.crossfading) {
-                root.crossfading = false
-                previousFade.restart()
-            }
+        onStatusChanged: if (status === Image.Error) root.dropPrevious()
+        onImageReady: {
+            if (!root.crossfading) return
+            root.crossfading = false
+            previousFade.restart()
         }
-        opacity: ready ? 1 : 0
-        Behavior on opacity { enabled: Motion.enabled && pageImage.ready; NumberAnimation { duration: Motion.renderFade; easing.type: Motion.decelerate } }
     }
     ShaderEffectSource {
         id: previousImage
@@ -530,6 +518,7 @@ Item {
             required property var modelData
             field: modelData
             doc: root.doc
+            host: root.host
             s: root.s
             z: 10
         }

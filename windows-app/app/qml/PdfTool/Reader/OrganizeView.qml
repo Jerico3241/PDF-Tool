@@ -284,8 +284,7 @@ FocusScope {
                     offsetX = root.cellX(at) - root.cellX(index)
                     offsetY = root.cellY(at) - root.cellY(index)
                 }
-                GridView.onReused: { image.ready = false; settled = root.settleSerial; place(index, false); opacity = 1; scale = 1 }
-                onIndexChanged: image.ready = false
+                GridView.onReused: { settled = root.settleSerial; place(index, false); opacity = 1; scale = 1 }
                 z: lifted ? 3 : 0
 
                 // nach einer Änderung: sobald das neue Bild da ist, an die neue Lage (gleitend oder einrastend)
@@ -338,27 +337,18 @@ FocusScope {
                     scale: cell.removing ? Motion.menuScale : 1
                     Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
                     Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
-                    Image {
+                    PageImage {
                         id: image
-                        // erstes fertiges Bild dieser Zelle: kurz einblenden; neue Fassungen ohne Blinken
-                        property bool ready: false
+                        // ``fresh``: das Bild gehört zur aktuellen Fassung (nach einer Änderung erst dann an die neue Lage)
                         property int loadedRevision: -1
                         readonly property bool fresh: loadedRevision === root.revision
                         anchors.fill: parent
                         anchors.margins: 1
-                        asynchronous: true
-                        retainWhileLoading: true
-                        cache: false
-                        smooth: true
                         source: root.doc ? "image://pdfpage/" + root.doc.docId + "/" + cell.index + "/" + Math.round(thumb.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
-                        onStatusChanged: {
-                            if (status !== Image.Ready) return
-                            ready = true
+                        onImageReady: {
                             loadedRevision = root.revision
                             cell.settle()
                         }
-                        opacity: ready ? 1 : 0
-                        Behavior on opacity { enabled: Motion.enabled && image.ready; NumberAnimation { duration: Motion.renderFade; easing.type: Motion.decelerate } }
                     }
                 }
                 PText {

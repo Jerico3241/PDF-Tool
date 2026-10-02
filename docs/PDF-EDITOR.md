@@ -76,6 +76,9 @@ Was sich bewegt („Vollständig“):
 - **Seitenbilder und Miniaturen:**
   - Ein neues Bild blendet kurz über dem weißen Blatt ein, nur über die Deckkraft.
   - Nach einer Änderung (Text, Kommentar, Rückgängig) blendet das alte Bild über dem neuen aus.
+  - Zeigt ein Platz eine andere Seite (Scrollen, wiederverwendete Zeile, anderes Dokument), ist das
+    alte Bild im selben Moment weg, und bis zum neuen steht das weiße Blatt. Ausblenden ist dabei nie
+    animiert, nur das Einblenden (`Reader/PageImage.qml`).
   - Die Markierung der aktuellen Miniatur wechselt weich.
 - **Zoom:** Über Schaltflächen, Menü und Tastatur gleitet die Darstellung kurz vom alten zum neuen
   Maßstab (167 ms). Aufbau und Lage gelten dabei sofort, nur die fertigen Inhalte werden skaliert.
@@ -89,6 +92,9 @@ Was sich bewegt („Vollständig“):
   - Gelöschte Seiten blenden aus, eingefügte ein, die übrigen rücken nach.
   - Jede Zelle wechselt erst an ihre neue Stelle, wenn ihr neues Bild da ist. So steht nie eine falsche
     Seite an einer Stelle.
+- **Formularfelder:** Die Fokusmarkierung (kräftigerer Rahmen) blendet kurz ein und aus, ohne Glühen.
+  Fläche und Eingabe wechseln sofort, sonst schiene der Wert aus dem PDF kurz durch. Nach der
+  Eingabetaste oder Escape hat wieder die Seite die Tastatur.
 - **Hinweise und Ablegen:**
   - InfoBars gleiten ein und aus.
   - Eine über die Ansicht gezogene PDF zeigt eine Ablagefläche, die weich ein- und ausblendet.
@@ -389,6 +395,9 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   - Seitenleisten: gleiten, blenden oder schalten sofort; nach schnellem Umschalten gilt der letzte
     Zustand
   - Auswahl im Kopf, Dokument-Tabs (Markierung, Punkt für „ungespeichert“), Kontextmenü, Werkzeug
+  - Miniaturen: Beim schnellen Scrollen und beim Wechsel des Dokuments zeigt keine Zeile ein fremdes
+    Bild, am Ende sind alle sichtbar; Einblenden außer bei „Aus“
+  - Formularfelder: Die Fokusmarkierung blendet außer bei „Aus“; nach Escape hat die Seite die Tastatur
   - Seiten organisieren: Vorschau beim Ziehen, Einrasten, Löschen
   - Zoom gleitet nur über Schaltflächen; Strg+Mausrad und Scrollen bleiben direkt
   - Suchtreffer, Ablagefläche
