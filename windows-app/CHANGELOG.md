@@ -2,6 +2,32 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# In Arbeit (nach 3.0.0-beta.1)
+
+Änderungen für die nächste Beta – die Versionsnummer bleibt bis dahin 3.0.0-beta.1.
+
+## Behoben
+
+- PDF Editor: Speichern schlug bei PDFs mit XMP-Metadaten (die meisten PDFs aus Office-Programmen,
+  Acrobat oder Scannern) mit „Das Dokument konnte nicht geschrieben werden.“ fehl. Ursache: Beim
+  Schreiben wollte pikepdf die PDF-Version in den XMP-Metadaten nachtragen und brauchte dafür lxml,
+  das nicht zum Programm gehört. Die XMP-Metadaten bleiben jetzt beim Speichern unverändert. Davon
+  betroffen waren auch die Sitzungssicherung für ungespeicherte Änderungen und „Eigenschaften“
+  (meldete fälschlich beschädigte XMP-Metadaten) – beides funktioniert wieder, Titel, Autor, Thema
+  und Stichwörter werden in Info und XMP gemeinsam geändert
+- Speichern meldet Fehler verständlich und bietet „Speichern unter …“ direkt an: Datei
+  schreibgeschützt, keine Schreibberechtigung am Speicherort, Datei in einem anderen Programm
+  geöffnet (genau geprüft statt vermutet), Datenträger voll; technische Angaben stehen ohne Pfad
+  und ohne Inhalte im Protokoll
+- die gespeicherte Datei wird nach dem Ersetzen wie beim Öffnen nachgeprüft; erst dann gilt das
+  Dokument als gespeichert („*“ verschwindet), bei einem Fehler bleibt es ungespeichert und
+  Rückgängig bleibt möglich
+- je Dokument läuft höchstens ein Speichervorgang: mehrfaches Strg+S schreibt die Datei einmal,
+  „Speichern“ beim Schließen während eines laufenden Speicherns wartet darauf
+- Speichern wartet nicht mehr auf eine laufende Suche (die Suche läuft danach weiter); Ansicht,
+  Seite, Zoom, Seitenleisten und Tabs bleiben beim Speichern unverändert
+- Werkzeugleiste: „Speichern …“ während des Speicherns, danach kurz „Gespeichert“ – ohne Dialog
+
 # PDF Tool 3.0.0-beta.1
 
 Beta zum Testen (Kanal „Beta“). Neues Werkzeug „PDF Reader & Editor“.

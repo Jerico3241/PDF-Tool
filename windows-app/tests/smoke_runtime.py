@@ -21,7 +21,9 @@ Geprüft wird:
 3. PDF Reader & Editor (seit 3.0.0): Text direkt im PDF ändern (Originalschrift), Text mit einem
    Zeichen außerhalb von WinAnsi hinzufügen (eingebettete Teilmenge einer Systemschrift über
    fontTools), leere Seite einfügen, unter neuem Namen speichern (geprüft) – das Original bleibt
-   unverändert;
+   unverändert; ein PDF mit XMP-Metadaten (wie die meisten echten PDFs) bearbeiten, über das
+   Original speichern (Strg+S), Eigenschaften ändern, schließen, neu öffnen, Änderung prüfen und
+   die Seite zeichnen – ohne lxml, das nicht zur Laufzeit gehört;
    PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen – auch
    ohne »_repariert« (nummeriert, das Original bleibt);
@@ -30,7 +32,7 @@ Geprüft wird:
 4. Oberfläche: die QML-Oberfläche aus der eingebauten Ressource (qml_rc) laden, ohne dass die
    QML-Engine etwas meldet; mit ``--ui`` zusätzlich der Programmstart wie per Verknüpfung
    (Hauptfenster mit Startseite, Werkzeuge und die Ansichten »Stapel« und »Vorschau« öffnen,
-   eine PDF im PDF Reader öffnen;
+   eine PDF im PDF Reader öffnen, kommentieren, speichern, schließen und wieder öffnen;
    Kundenakte standardmäßig aus, »Kunden« erst nach dem Einschalten – ohne Neustart;
    Einstellungen werden gespeichert). ``--offscreen`` prüft ohne sichtbares Fenster.
 
@@ -398,6 +400,46 @@ def main() -> int:
     check("4712" in seite and "4711" not in seite and "Čeština" in seite, "Text nach dem Speichern nicht wie bearbeitet")
     print(f"PDF Editor: {ergebnis.label}; neuer Text mit {neu.font}; gespeichert {gespeichert.path.name} ({gespeichert.size} Bytes)")
 
+    # Über das Original speichern (Strg+S) – PDF mit XMP-Metadaten: in 3.0.0-beta.1 scheiterte das,
+    # weil pikepdf dafür lxml geladen hätte, das nicht zur Laufzeit gehört
+    from tools.pdf_editor import metadata as editor_metadata
+    from tools.pdf_editor import xmp as editor_xmp
+
+    try:
+        import lxml  # noqa: F401
+    except ImportError:
+        pass
+    else:
+        check(False, "lxml ist Teil der Laufzeit – die Prüfung ohne lxml wäre wertlos")
+    mit_xmp = write_xmp_pdf(work / "editor-xmp.pdf")
+    vorher = mit_xmp.read_bytes()
+    dokument = EditorDocument.open(str(mit_xmp))
+    verlauf = editor_commands.History()
+    block = next(b for b in textedit.analyze(dokument, 0) if "4711" in b.text)
+    textedit.edit_block(dokument, verlauf, block, "Rechnung Nr. 4712")
+    erste = editor_save.save(dokument, mit_xmp, backup_dir=work / "editor-sicherungen")
+    check(erste.backup is not None and erste.backup.read_bytes() == vorher, "Sicherung des vorherigen Stands fehlt")
+    check(not dokument.dirty, "Dokument nach dem Speichern noch geändert")
+    editor_metadata.update(dokument, verlauf, title="Geändert", author="Smoke-Test")
+    editor_save.save(dokument, mit_xmp, backup_dir=work / "editor-sicherungen")
+    dokument.close()
+    wieder = EditorDocument.open(str(mit_xmp))  # schließen und neu öffnen wie in der App
+    try:
+        check(wieder.page_count == 1, f"Seiten nach dem Speichern: {wieder.page_count}")
+        check(editor_xmp.read(wieder.pdf.Root.Metadata.read_bytes()).get("title") == "Geändert", "XMP-Metadaten nicht angeglichen")
+    finally:
+        wieder.close()
+    gelesen = pypdfium2.PdfDocument(str(mit_xmp))
+    try:
+        seite = gelesen[0]
+        check("4712" in seite.get_textpage().get_text_range(), "Änderung nach dem erneuten Öffnen nicht vorhanden")
+        bild = seite.render(scale=0.5).to_pil().convert("L")
+        check(bild.getextrema()[0] < 128, "bearbeitete Seite lässt sich nicht zeichnen")
+    finally:
+        gelesen.close()
+    check(not list(work.glob(".*.tmp")), "temporäre Dateien liegen geblieben")
+    print("PDF Editor: PDF mit XMP-Metadaten über das Original gespeichert, neu geöffnet und gezeichnet (ohne lxml)")
+
     if args.part == "runtime":
         print("OK")
         return 0
@@ -406,6 +448,34 @@ def main() -> int:
 
     print("OK")
     return 0
+
+
+XMP_PACKET = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" pdf:Producer="Smoke" pdf:PDFVersion="1.7"/>
+<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title><rdf:Alt><rdf:li xml:lang="x-default">Probe</rdf:li></rdf:Alt></dc:title></rdf:Description>
+</rdf:RDF></x:xmpmeta>
+<?xpacket end="w"?>"""
+
+
+def write_xmp_pdf(path: Path, pages: int = 1) -> Path:
+    """PDF mit Text (»Rechnung Nr. 4711«) und XMP-Metadaten – ohne lxml geschrieben."""
+    import pikepdf
+    from reportlab.pdfgen import canvas as rl_canvas
+
+    blatt = rl_canvas.Canvas(str(path))
+    for _ in range(pages):
+        blatt.setFont("Helvetica", 14)
+        blatt.drawString(72, 760, "Rechnung Nr. 4711")
+        blatt.showPage()
+    blatt.save()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        stream = pdf.make_stream(XMP_PACKET.encode("utf-8"))
+        stream.Type = pikepdf.Name.Metadata
+        stream.Subtype = pikepdf.Name.XML
+        pdf.Root.Metadata = stream
+        pdf.save(path, fix_metadata_version=False)
+    return path
 
 
 def qml_check(app_dir: Path, qt_application, full: bool) -> None:
@@ -479,26 +549,55 @@ def ui_probe(qt_application, full: bool) -> None:
         shown["customers"] = app.currentPage
         runtime.settings.setCustomerRecords(False)
 
-    sample = Path(tempfile.mkdtemp(prefix="pdf-tool-reader-")) / "Probe.pdf"
-    import pikepdf
+    sample = write_xmp_pdf(Path(tempfile.mkdtemp(prefix="pdf-tool-reader-")) / "Probe.pdf", pages=2)
+    controller = runtime.reader.controller
 
-    with pikepdf.new() as probe:
-        probe.add_blank_page()
-        probe.add_blank_page()
-        probe.save(sample)
+    def until(name: str, condition, timeout: float = 45.0):
+        """Schritt, der wartet, bis ``condition()`` gilt (sonst Fehler nach ``timeout``)."""
+        deadline = time.monotonic() + timeout
+
+        def wait() -> None:
+            if condition():
+                return
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"Zeitüberschreitung: {name}")
+            actions.insert(0, wait)
+
+        return wait
+
+    def opened() -> bool:
+        return controller.current is not None and controller.opening == 0 and controller.engine.idle()
 
     def reader() -> None:
         app.openTool("reader")
         shown["reader"] = app.currentPage
-        runtime.reader.controller.open_paths([str(sample)])
+        controller.open_paths([str(sample)])
 
-    def reader_wait() -> None:
-        pass
+    def reader_edit() -> None:
+        shown["reader_pages"] = controller.current.pageCount
+        controller.current.addNote(0, 100, 100, "Smoke-Test")
+
+    def reader_save() -> None:
+        shown["reader_dirty"] = controller.current.dirty
+        controller.current.saveDocument()  # wie Strg+S
+
+    def reader_saved() -> bool:
+        current = controller.current
+        return current is not None and not current.saving and not current.busy and controller.engine.idle()
+
+    def reader_close() -> None:
+        notice = app.notices.get("reader")
+        shown["reader_error"] = notice.message if notice.shown and notice.severity == "error" else ""
+        shown["reader_saved"] = not controller.current.dirty
+        controller.closeCurrent()
+        shown["reader_closed"] = controller.tabs.count == 0
+        controller.open_paths([str(sample)])
 
     def reader_check() -> None:
-        current = runtime.reader.controller.current
-        shown["reader_pages"] = current.pageCount if current is not None else 0
-        runtime.reader.controller.closeCurrent()
+        current = controller.current
+        shown["reader_reopened"] = current.pageCount if current is not None else 0
+        shown["reader_note"] = any(item.get("contents") == "Smoke-Test" for item in current.annotations) if current is not None else False
+        controller.closeCurrent()
 
     def finish() -> None:
         shown["customers_after"] = app.currentPage
@@ -507,9 +606,14 @@ def ui_probe(qt_application, full: bool) -> None:
         window.close()
         qt.quit()
 
-    actions = [first, tools, views, records_off, records_on, open_customers, reader, reader_wait, reader_wait, reader_check, finish] if full else [first, finish]
+    actions = [
+        first, tools, views, records_off, records_on, open_customers,
+        reader, until("PDF öffnen", opened), reader_edit, until("Kommentar", lambda: opened() and controller.current.dirty),
+        reader_save, until("Speichern", reader_saved), reader_close, until("erneut öffnen", lambda: opened() and bool(controller.current.annotations)),
+        reader_check, finish,
+    ] if full else [first, finish]
     QTimer.singleShot(2500, lambda: step(actions))
-    QTimer.singleShot(60000, qt.quit)  # Sicherheitsnetz
+    QTimer.singleShot(120000, qt.quit)  # Sicherheitsnetz
     qt.exec()
     qt_application.finish_incubation(engine_qml)  # wie beim Beenden der App
     del engine_qml
@@ -525,6 +629,8 @@ def ui_probe(qt_application, full: bool) -> None:
         check(shown.get("records") is False and shown.get("customers_blocked") is True and shown.get("customers_off") == "preview", "Kundenakte ist nicht standardmäßig aus bzw. »Kunden« ohne Kundenakte erreichbar")
         check(shown.get("customers") == "customers" and shown.get("customers_after") != "customers", "Kundenakte lässt sich nicht ohne Neustart ein- und ausschalten")
         check(shown.get("reader") == "reader" and shown.get("reader_pages") == 2, f"PDF Reader: Seite {shown.get('reader')}, {shown.get('reader_pages')} Seiten geöffnet")
+        check(shown.get("reader_dirty") is True and shown.get("reader_saved") is True and not shown.get("reader_error"), f"PDF Reader: Speichern fehlgeschlagen – {shown.get('reader_error')!r}")
+        check(shown.get("reader_closed") is True and shown.get("reader_reopened") == 2 and shown.get("reader_note") is True, "PDF Reader: Änderung nach Schließen und erneutem Öffnen nicht vorhanden")
     config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
     check(config.is_file() and isinstance(json.loads(config.read_text(encoding="utf-8")), dict), "Einstellungen wurden beim Beenden nicht gespeichert")
     print(f"Oberfläche: Fenster sichtbar, {'Werkzeuge und Ansichten geprüft, ' if full else ''}beendet nach {time.monotonic() - started:.1f} s")

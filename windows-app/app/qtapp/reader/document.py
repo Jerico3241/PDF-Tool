@@ -7,7 +7,11 @@ Kommentare, Formularfelder, Rückgängig-Titel) und schickt jede Arbeit an den A
 
 from __future__ import annotations
 
+import hashlib
 import itertools
+import os
+import time
+import traceback
 from typing import Any, Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -27,6 +31,7 @@ VIEW_MARGIN = 16
 VIEW_MODES = ("continuous", "single", "two", "continuousTwo")
 TOOLS = ("select", "editText", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form")
 RECOVERY_DELAY_MS = 4000
+SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
 SEARCH_LIMIT = 5000
 LISTED_HITS = 500
 _ids = itertools.count(1)
@@ -56,6 +61,8 @@ class DocumentController(Observable):
     toolChanged, tool = prop(str, "tool", "select")
     busyChanged, busy = prop(bool, "busy", False)
     busyTextChanged, busyText = prop(str, "busyText", "")
+    savingChanged, saving = prop(bool, "saving", False)  # Speichern läuft (je Dokument nie zweimal gleichzeitig)
+    saveStateChanged, saveState = prop(str, "saveState", "")  # "saving", kurz "saved", sonst ""
     # Rückgängig
     undoTextChanged, undoText = prop(str, "undoText", "")
     redoTextChanged, redoText = prop(str, "redoText", "")
@@ -118,6 +125,8 @@ class DocumentController(Observable):
         self._search_serial = 0
         self._viewport = (900.0, 700.0, 1.0)
         self._pending: dict[str, Task] = {}
+        self._save_next: dict | None = None  # Speicheranfrage während eines laufenden Speicherns
+        self._failure_details = ""  # Traceback des zuletzt fehlgeschlagenen Auftrags (Protokoll)
         self._closing = False
         self.state: dict = {}
 
@@ -225,6 +234,7 @@ class DocumentController(Observable):
                 self.busy = False
                 self.busyText = ""
             if failed is not None and not isinstance(exc, (MemoryError,)):
+                self._failure_details = details
                 failed(exc)
                 return
             self.report(exc, details)
@@ -547,11 +557,11 @@ class DocumentController(Observable):
         state = {"cancelled": False}
         self._search_state = state
 
-        def work(session):
-            found = 0
-            for done, page in enumerate(order):
+        def work(session, first: int, found: int):
+            for done in range(first, len(order)):
                 if state["cancelled"] or session.closed:
-                    return found
+                    return found, None
+                page = order[done]
                 hits = session.search_page(page, text, match_case, whole_word)
                 excerpts = []
                 if hits:
@@ -559,10 +569,19 @@ class DocumentController(Observable):
                 found += len(hits)
                 engine.post(self._search_page_done, serial, page, hits, excerpts, (done + 1) / max(1, total))
                 if found >= SEARCH_LIMIT:
-                    return found
-            return found
+                    return found, None
+                if done + 1 < len(order) and engine.urgent():
+                    return found, done + 1  # Vorrang für Speichern, Bearbeiten und sichtbare Seiten – danach weiter
+            return found, None
 
-        self._search_task = self.run(work, lambda found: self._search_finished(serial, found), refresh=False, priority=BACKGROUND)
+        def step(result) -> None:
+            found, resume = result
+            if resume is None:
+                self._search_finished(serial, found)
+            elif not state["cancelled"] and serial == self._search_serial:
+                self._search_task = self.run(lambda session: work(session, resume, found), step, refresh=False, priority=BACKGROUND)
+
+        self._search_task = self.run(lambda session: work(session, 0, 0), step, refresh=False, priority=BACKGROUND)
 
     def _search_page_done(self, serial: int, page: int, hits: list, excerpts: list, progress: float) -> None:
         if serial != self._search_serial:
@@ -1051,41 +1070,112 @@ class DocumentController(Observable):
         self.loadAnnotations()
 
     def save(self, target: str | None = None, *, force: bool = False, then: Callable[[bool], None] | None = None) -> None:
-        """Speichern (``target`` = Speichern unter). ``then(erfolgreich)`` danach."""
+        """Speichern (``target`` = Speichern unter). ``then(erfolgreich)`` danach.
+
+        Je Dokument läuft höchstens ein Speichervorgang. Anfragen währenddessen (mehrfaches Strg+S,
+        »Speichern« beim Schließen) werden zu einer zusammengefasst und danach ausgeführt – nach
+        einem Fehler nur »Speichern unter«, ein einfaches Speichern nicht noch einmal."""
+        if self.saving:
+            queued = self._save_next or {"target": None, "force": False, "then": []}
+            if target:
+                queued["target"] = target
+            queued["force"] = force
+            if then is not None:
+                queued["then"].append(then)
+            self._save_next = queued
+            return
         if not target and not self.path:
             target = self.reader.pick_save_pdf(self.name or "Dokument.pdf", "Speichern unter")
             if not target:
                 if then:
                     then(False)
+                self._next_save(False)
                 return
+        self.saving = True
+        self.saveState = "saving"
+        self.app.timers.cancel(f"reader:saved:{self.ident}")
+        started = time.monotonic()
 
         def failed(exc: BaseException) -> None:
+            self.saving = False
+            self.saveState = ""
             if isinstance(exc, ExternalChange):
-                answer, _data = self.app.dialogs.ask("confirm", "Datei wurde von außen geändert", "Die Datei wurde seit dem Öffnen von einem anderen Programm verändert. Überschreiben oder unter neuem Namen speichern?", primary="Überschreiben", secondary="Speichern unter …", close="Abbrechen", danger=True)
-                if answer == "primary":
-                    self.save(target, force=True, then=then)
+                retry = self._ask_overwrite(target)
+                if retry is not None:
+                    self.save(retry[0], force=retry[1], then=then)
                     return
-                if answer == "secondary":
-                    other = self.reader.pick_save_pdf(self.name, "Speichern unter")
-                    if other:
-                        self.save(other, then=then)
-                        return
-                if then:
-                    then(False)
-                return
-            self.report(exc)
+            else:
+                self._report_save_error(exc)
             if then:
                 then(False)
+            self._next_save(False)
 
         def done(result) -> None:
+            self.saving = False
+            self.saveState = "saved"
+            self.app.timers.later(f"reader:saved:{self.ident}", SAVED_SHOWN_MS, self._saved_shown)
             self.app.timers.cancel(f"reader:recovery:{self.ident}")
-            backup = f" Sicherung des vorherigen Stands: {result['backup']}" if result.get("backup") else ""
-            self.app.notify("reader", "success", f"Gespeichert: {result['path']}.{backup}", title="Gespeichert", auto_hide=6000)
-            self.reader.remember_recent(result["path"])
+            if result.get("unchanged"):
+                self.app.set_status(f"Keine Änderungen – »{result['name']}« ist gespeichert.", "success")
+            else:
+                backup = " – Sicherung des vorherigen Stands angelegt" if result.get("backup") else ""
+                self.app.set_status(f"Gespeichert: {result['name']}{backup}", "success")
+                _log().info("Gespeichert (%s): %d KB, %d Seiten geprüft, Sicherung %s, %d ms", _where(result["path"]), max(1, result["size"] // 1024), result["checked"], "ja" if result.get("backup") else "nein", (time.monotonic() - started) * 1000)
+                self.reader.remember_recent(result["path"])
             if then:
                 then(True)
+            self._next_save(True)
 
         self.run(lambda session: session.save(target, force=force), done, busy="Wird gespeichert und geprüft …", failed=failed, key="save")
+
+    def _next_save(self, ok: bool) -> None:
+        """Nach dem Speichern: eine wartende Anfrage ausführen (zusammengefasst)."""
+        queued, self._save_next = self._save_next, None
+        if queued is None or self._closing:
+            return
+        callbacks = queued["then"]
+
+        def then(result: bool) -> None:
+            for callback in callbacks:
+                callback(result)
+
+        if queued["target"] or ok:
+            # Einfaches Speichern: der Arbeitsthread speichert nur, wenn es noch Änderungen gibt
+            self.save(queued["target"], force=queued["force"], then=then if callbacks else None)
+        else:
+            then(False)
+
+    def _saved_shown(self) -> None:
+        if self.saveState == "saved":
+            self.saveState = ""
+
+    def _ask_overwrite(self, target: str | None) -> tuple[str | None, bool] | None:
+        """Datei wurde von außen geändert: überschreiben (``(Ziel, True)``), unter neuem Namen
+        (``(neues Ziel, False)``) oder abbrechen (``None``)."""
+        answer, _data = self.app.dialogs.ask("confirm", "Datei wurde von außen geändert", "Die Datei wurde seit dem Öffnen von einem anderen Programm verändert. Überschreiben oder unter neuem Namen speichern?", primary="Überschreiben", secondary="Speichern unter …", close="Abbrechen", danger=True)
+        if answer == "primary":
+            return target, True
+        if answer == "secondary":
+            other = self.reader.pick_save_pdf(self.name, "Speichern unter")
+            if other:
+                return other, False
+        return None
+
+    def _report_save_error(self, exc: BaseException) -> None:
+        """Speicherfehler: verständlicher Text (bei Bedarf mit »Speichern unter …«), technische
+        Angaben ins Protokoll – ohne Pfad und ohne Inhalte. Der ungespeicherte Stand bleibt."""
+        where = _where(self.path)
+        if isinstance(exc, SaveFailed):
+            _log().warning("Speichern fehlgeschlagen (%s): %s", where, exc.log_text())
+            actions = [("Speichern unter …", self.saveDocumentAs)] if exc.save_as else []
+            self.app.notify("reader", "error", str(exc), title="Speichern nicht möglich", actions=actions)
+            return
+        if isinstance(exc, (EditorError, OSError)):
+            _log().warning("Speichern fehlgeschlagen (%s): %s%s", where, type(exc).__name__, _os_codes(exc))
+            message = str(exc) if isinstance(exc, EditorError) else f"Die Datei konnte nicht geschrieben werden ({exc.strerror or 'Ein-/Ausgabefehler'}). Die Originaldatei ist unverändert."
+            self.app.notify("reader", "error", message, title="Speichern nicht möglich", actions=[("Speichern unter …", self.saveDocumentAs)])
+            return
+        self.report(exc, self._failure_details or "".join(traceback.format_exception(exc)))  # unerwartet: Traceback in fehler.log
 
     @Slot()
     def saveDocument(self) -> None:  # noqa: N802
@@ -1103,7 +1193,11 @@ class DocumentController(Observable):
 
     def _write_recovery(self) -> None:
         if self.dirty and not self._closing:
-            self.run(lambda session: session.write_recovery(), None, refresh=False, priority=BACKGROUND, failed=lambda _exc: None, key="recovery")
+            self.run(lambda session: session.write_recovery(), None, refresh=False, priority=BACKGROUND, failed=self._recovery_failed, key="recovery")
+
+    def _recovery_failed(self, exc: BaseException) -> None:
+        # Die Sitzungssicherung ist Hintergrundarbeit: kein Hinweis, aber nie stillschweigend verloren
+        _log().warning("Sitzungssicherung fehlgeschlagen (%s): %s%s", _where(self.path), type(exc).__name__, _os_codes(exc))
 
     # Drucken ------------------------------------------------------------------------------------------------------
     @Slot()
@@ -1169,3 +1263,27 @@ def _excerpts(session, page: int, query: str, match_case: bool, whole_word: bool
         text = textlayer.text(session.document, page, before, hit.count + (hit.start - before) + 30)
         result.append(" ".join(text.split()))
     return result
+
+
+def _log():
+    from diagnostics.applog import get
+
+    return get("reader")
+
+
+def _where(path: str | None) -> str:
+    """Datei fürs Protokoll – ohne Namen und Ordner: Endung und eine Kurzkennung des Pfads (gleiche
+    Datei → gleiche Kennung)."""
+    if not path:
+        return "ohne Speicherort"
+    key = hashlib.sha256(os.path.normcase(os.path.abspath(str(path))).encode("utf-8", "replace")).hexdigest()[:8]
+    return f"*{os.path.splitext(str(path))[1].lower() or '.pdf'} #{key}"
+
+
+def _os_codes(exc: BaseException) -> str:
+    if not isinstance(exc, OSError):
+        return ""
+    codes = [f"errno={exc.errno}"] if exc.errno is not None else []
+    if getattr(exc, "winerror", None) is not None:
+        codes.append(f"WinError={exc.winerror}")
+    return " · " + " · ".join(codes) if codes else ""

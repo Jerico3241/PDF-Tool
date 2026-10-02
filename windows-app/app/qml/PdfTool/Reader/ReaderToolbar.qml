@@ -87,8 +87,18 @@ Rectangle {
             iconName: "save"
             tip: "Speichern (Strg+S)"
             enabled: root.doc !== null && !root.doc.busy && (root.doc.dirty || root.doc.path === "")
-            busy: root.doc !== null && root.doc.busy && root.doc.busyText.indexOf("gespeichert") >= 0
+            busy: root.doc !== null && root.doc.saving
             onClicked: root.doc.saveDocument()
+        }
+        // »Speichern …« → »Gespeichert« (kurz), ohne Dialog; feste Breite: die Leiste springt nicht
+        PCrossfadeText {
+            objectName: "readerSaveState"
+            Layout.preferredWidth: saveStateWidth.advanceWidth + 4
+            Layout.fillHeight: true
+            font: Typography.caption
+            color: Theme.textSecondary
+            text: root.doc === null ? "" : (root.doc.saveState === "saving" ? "Speichern …" : (root.doc.saveState === "saved" ? "Gespeichert" : ""))
+            TextMetrics { id: saveStateWidth; font: Typography.caption; text: "Speichern …" }
         }
         PIconButton { objectName: "readerPrint"; iconName: "print"; tip: "Drucken (Strg+P)"; enabled: root.doc !== null; onClicked: root.doc.printDocument() }
         Separator {}

@@ -246,12 +246,17 @@ class EditorDocument:
     def serialize(self, *, for_view: bool = False, keep_encryption: bool = False) -> bytes:
         """Aktuellen Stand als PDF-Bytes. Für die Darstellung schnell und ohne Verschlüsselung
         (bleibt im Speicher); zum Speichern mit Kompression und – auf Wunsch – mit der
-        Verschlüsselung der Datei (Besitzerpasswort und Berechtigungen bleiben erhalten)."""
+        Verschlüsselung der Datei (Besitzerpasswort und Berechtigungen bleiben erhalten).
+
+        Immer ``fix_metadata_version=False``: Sonst liest pikepdf beim Schreiben die XMP-Metadaten
+        mit lxml, um dort die PDF-Version nachzutragen – lxml gehört nicht zur Laufzeit der App
+        (runtime-requirements.txt), und jedes PDF mit XMP-Metadaten ließe sich nicht speichern.
+        Die XMP-Metadaten bleiben deshalb unverändert (Eigenschaften ändern: ``metadata.update``)."""
         buffer = io.BytesIO()
         if for_view:
             self.pdf.save(buffer, encryption=False, compress_streams=False, fix_metadata_version=False, object_stream_mode=pikepdf.ObjectStreamMode.preserve)
         else:
-            self.pdf.save(buffer, encryption=True if (keep_encryption and self.encrypted) else False, compress_streams=True, object_stream_mode=pikepdf.ObjectStreamMode.preserve)
+            self.pdf.save(buffer, encryption=True if (keep_encryption and self.encrypted) else False, compress_streams=True, fix_metadata_version=False, object_stream_mode=pikepdf.ObjectStreamMode.preserve)
         return buffer.getvalue()
 
     def _close_view(self) -> None:

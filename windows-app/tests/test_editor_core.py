@@ -281,8 +281,9 @@ def test_failed_write_leaves_the_original_untouched(tmp_path: Path, monkeypatch)
         monkeypatch.setattr(save, "_replace", no_replace)
         with pytest.raises(SaveFailed) as error:
             save.save(doc, path)
-        assert "anderen Programm" in str(error.value)
-        assert path.read_bytes() == original and not list(tmp_path.glob(".*.tmp"))
+        # Art genau bestimmt (test_editor_save.py): unter Windows entscheidet die Probe mit Löschrecht
+        assert error.value.kind in ("FILE_LOCKED", "DIRECTORY_NOT_WRITABLE") and error.value.save_as and error.value.phase == "replace"
+        assert path.read_bytes() == original and not list(tmp_path.glob(".*.tmp")) and doc.dirty is False
     finally:
         doc.close()
 

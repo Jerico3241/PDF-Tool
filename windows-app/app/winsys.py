@@ -327,3 +327,35 @@ def open_path(path: str | Path) -> None:
     import subprocess
 
     subprocess.Popen(["xdg-open", str(path)])
+
+
+# --- Dateien ---------------------------------------------------------------
+@_safe("unknown")
+def replace_access(path: str | Path) -> str:
+    """Ließe sich die Datei jetzt ersetzen? Öffnet sie probeweise mit Löschrecht (wie es
+    ``MoveFileEx`` beim Ersetzen braucht) und schließt sie sofort wieder.
+
+    ``"ok"``, ``"in_use"`` (ein anderes Programm hält sie ohne Freigabe zum Löschen offen),
+    ``"denied"`` (keine Berechtigung), ``"missing"`` – sonst ``"unknown"`` (auch außerhalb von Windows)."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel32.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    delete, share_all, open_existing, normal = 0x00010000, 0x00000007, 3, 0x00000080
+    handle = create(str(path), delete, share_all, None, open_existing, normal, None)
+    if handle is None or handle == ctypes.c_void_p(-1).value:
+        error = ctypes.get_last_error()
+        if error in (32, 33):  # ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION
+            return "in_use"
+        if error == 5:  # ERROR_ACCESS_DENIED
+            return "denied"
+        if error in (2, 3):  # Datei oder Pfad nicht gefunden
+            return "missing"
+        return "unknown"
+    close = kernel32.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close(handle)
+    return "ok"

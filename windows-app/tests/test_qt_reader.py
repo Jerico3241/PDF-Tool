@@ -786,3 +786,335 @@ def test_no_document_text_in_settings_or_logs(reader_app, tmp_path: Path, config
     for file in files:
         if file.stat().st_size < 5_000_000:
             assert b"Gesamtbetrag" not in file.read_bytes(), f"Dokumenttext in {file}"
+
+
+# --- Speichern (Release-Blocker in 3.0.0-beta.1) ----------------------------------------------------------------
+# Wie im installierten Programm ohne lxml: pikepdf hätte beim Schreiben die XMP-Metadaten mit lxml
+# angepasst – jedes PDF mit XMP ließ sich nicht speichern (»Das Dokument konnte nicht geschrieben werden.«).
+@pytest.fixture
+def no_lxml(monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "lxml", None)
+    monkeypatch.setitem(sys.modules, "lxml.etree", None)
+
+
+def edit_invoice(h, doc, new: str = "4712", old: str = "4711") -> None:
+    """Rechnungsnummer auf Seite 1 direkt im PDF ändern (Werkzeug »Text bearbeiten«)."""
+    doc.setTool("editText")
+    settle(h)
+    block = next(b for b in doc.blocks if old in b["text"])
+    doc.editBlock(0, block["id"], block["text"].replace(old, new), {})
+    settle(h)
+    doc.setTool("select")
+    settle(h)
+    assert doc.dirty
+
+
+def save_error(h):
+    notice = h.app.notices.get("reader")
+    return notice if notice.shown and notice.severity == "error" else None
+
+
+def assert_saved(h, doc, path: Path, before: str, pages: int = 1) -> None:
+    """Gespeichert und gültig: nicht mehr geändert, Datei neu, öffnet in pikepdf und PDFium, rendert."""
+    import pypdfium2
+
+    assert not doc.dirty and digest(path) != before and save_error(h) is None
+    with pikepdf.open(path) as saved:
+        assert len(saved.pages) == pages
+    view = pypdfium2.PdfDocument(str(path))
+    try:
+        assert len(view) == pages and view[0].render(scale=0.3).to_pil().getextrema() != ((255, 255), (255, 255), (255, 255))
+    finally:
+        view.close()
+    assert not [p.name for p in path.parent.iterdir() if p.name.endswith(".tmp")]
+
+
+def test_a_ctrl_s_saves_keeps_the_view_and_undo(reader_app, tmp_path: Path, no_lxml) -> None:
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Rechnung.pdf", pages=3)
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    doc.setViewMode("single")
+    doc.setZoom(150)
+    doc.goTo(1)
+    reader(h).leftPanel = "outline"
+    settle(h)
+    view = (doc.currentPage, doc.zoom, doc.viewMode, reader(h).leftPanel, reader(h).currentKey, reader(h).tabs.count)
+    before = digest(path)
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    assert_saved(h, doc, path, before, pages=3)
+    assert "4712" in page_text(path) and "4711" not in page_text(path)
+    # Kein Zurück zur Startseite, Ansicht und Seitenleiste wie vorher; »Gespeichert« ohne Dialog
+    assert (doc.currentPage, doc.zoom, doc.viewMode, reader(h).leftPanel, reader(h).currentKey, reader(h).tabs.count) == view
+    assert h.app.currentPage == "reader" and doc.saveState == "saved"
+    assert h.item("readerSaveState").property("text") == "Gespeichert"
+    assert reader(h).tabs.items()[0]["dirty"] is False
+    assert wait_until(lambda: doc.saveState == "", 5)
+    # Rückgängig bleibt möglich – danach wieder ungespeichert
+    assert doc.undoText
+    doc.undo()
+    settle(h)
+    assert doc.dirty
+
+
+def test_b_toolbar_save_button(reader_app, tmp_path: Path, no_lxml) -> None:
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Toolbar.pdf")
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    button = h.item("readerSave")
+    assert button.property("enabled") is True
+    before = digest(path)
+    click(h, window_point(button, button.width() / 2, button.height() / 2))
+    settle(h)
+    assert_saved(h, doc, path, before)
+    assert button.property("enabled") is False  # nichts mehr zu speichern
+
+
+def test_c_saved_change_is_there_after_closing_and_reopening(reader_app, tmp_path: Path, no_lxml) -> None:
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Wieder öffnen.pdf", pages=2)
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    doc.saveDocument()
+    settle(h)
+    assert not doc.dirty
+    assert reader(h).closeTab(doc.ident) is True
+    settle(h)
+    again = open_pdf(h, path)
+    assert again.pageCount == 2 and not again.dirty
+    again.setTool("editText")
+    settle(h)
+    assert any("4712" in block["text"] for block in again.blocks) and not any("4711" in block["text"] for block in again.blocks)
+
+
+def test_d_failed_save_keeps_original_unsaved_state_and_undo(reader_app, tmp_path: Path, monkeypatch, no_lxml) -> None:
+    from tools.pdf_editor import save as save_engine
+
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Fehler.pdf")
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    before, undo = digest(path), doc.undoText
+
+    def broken(*_args, **_kwargs):
+        raise OSError(5, "Ein-/Ausgabefehler")
+
+    monkeypatch.setattr(save_engine, "_replace", broken)
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    error = save_error(h)
+    assert error is not None and error.title == "Speichern nicht möglich" and "unverändert" in error.message
+    assert error.actions == ["Speichern unter …"]
+    assert digest(path) == before and doc.dirty and doc.undoText == undo and doc.saveState == ""
+    assert reader(h).tabs.items()[0]["dirty"] is True
+    monkeypatch.undo()
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)  # Ursache behoben: jetzt klappt es
+    settle(h)
+    assert not doc.dirty and "4712" in page_text(path)
+
+
+def test_e_read_only_file_offers_save_as(reader_app, tmp_path: Path, no_lxml) -> None:
+    import os
+    import stat
+
+    from qtapp import files
+
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Nur lesen.pdf")
+    os.chmod(path, stat.S_IREAD)
+    try:
+        doc = open_pdf(h, path)
+        edit_invoice(h, doc)
+        before = digest(path)
+        key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+        settle(h)
+        error = save_error(h)
+        assert error is not None and error.message == "Die Datei ist schreibgeschützt. Verwenden Sie »Speichern unter«, um eine bearbeitete Kopie zu erstellen."
+        assert doc.dirty and digest(path) == before
+        copy = tmp_path / "Bearbeitete Kopie.pdf"
+        files.RESPONSES.append(str(copy))
+        error.trigger(0)  # »Speichern unter …« direkt aus der Meldung
+        settle(h)
+        assert not doc.dirty and Path(doc.path) == copy and doc.name == copy.name and "4712" in page_text(copy)
+        assert digest(path) == before
+    finally:
+        os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+
+
+def test_f_folder_without_write_permission(reader_app, tmp_path: Path, monkeypatch, no_lxml) -> None:
+    import errno
+
+    from tools.pdf_editor import save as save_engine
+
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Ordner ohne Rechte.pdf")
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    before = digest(path)
+
+    def denied(file, mode="r", *args, **kwargs):
+        if str(file).endswith(".tmp") and "x" in mode:
+            raise PermissionError(errno.EACCES, "Zugriff verweigert")
+        return open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(save_engine, "open", denied, raising=False)
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    error = save_error(h)
+    assert error is not None and error.message.startswith("PDF Tool hat keine Schreibberechtigung für diesen Speicherort.")
+    assert error.actions == ["Speichern unter …"] and doc.dirty and digest(path) == before
+
+
+def test_g_file_locked_by_another_program(reader_app, tmp_path: Path, monkeypatch, no_lxml) -> None:
+    import errno
+    import sys
+
+    from tools.pdf_editor import save as save_engine
+
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Gesperrt.pdf")
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    before = digest(path)
+    other = None
+    if sys.platform == "win32":
+        other = open(path, "rb")  # echtes anderes Handle ohne Freigabe zum Löschen
+    else:
+        def locked(*_args, **_kwargs):
+            exc = PermissionError(errno.EACCES, "Der Prozess kann nicht auf die Datei zugreifen")
+            exc.winerror = 32  # ERROR_SHARING_VIOLATION wie unter Windows
+            raise exc
+
+        monkeypatch.setattr(save_engine, "_replace", locked)
+    try:
+        key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+        settle(h)
+        error = save_error(h)
+        assert error is not None and error.message.startswith("Die Datei wird möglicherweise von einem anderen Programm verwendet.")
+        assert "Schreibberechtigung" not in error.message and doc.dirty
+    finally:
+        if other is not None:
+            other.close()
+    assert digest(path) == before
+
+
+def test_h_i_save_while_pages_and_thumbnails_render(reader_app, tmp_path: Path, no_lxml) -> None:
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Viele Seiten.pdf", pages=40)
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    reader(h).leftPanel = "thumbs"  # Miniaturen werden im Hintergrund gezeichnet
+    doc.setZoom(400)  # neue Seitenbilder in hoher Auflösung
+    before = digest(path)
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)  # sofort – während gezeichnet wird
+    settle(h)
+    assert_saved(h, doc, path, before, pages=40)
+
+
+def test_j_save_while_search_runs(reader_app, tmp_path: Path, monkeypatch, no_lxml) -> None:
+    from qtapp.reader.session import Session
+
+    h = reader_app
+    path = samples.big(tmp_path / "Suche.pdf", pages=400)
+    doc = open_pdf(h, path)
+    doc.addNote(0, 100, 100, "Prüfen")
+    settle(h)
+    assert doc.dirty
+    searched: list[int] = []
+    at_save: list[int] = []
+    search_page, save_session = Session.search_page, Session.save
+    monkeypatch.setattr(Session, "search_page", lambda self, page, *args: searched.append(page) or search_page(self, page, *args))
+    monkeypatch.setattr(Session, "save", lambda self, *args, **kwargs: at_save.append(len(searched)) or save_session(self, *args, **kwargs))
+    before = digest(path)
+    doc.search("SuchwortTreffer", False, False)
+    assert wait_until(lambda: len(searched) >= 3, 30) and doc.searchRunning
+    doc.saveDocument()
+    assert wait_until(lambda: not doc.dirty and not doc.saving, 60)
+    assert wait_until(lambda: not doc.searchRunning, 120)
+    settle(h)
+    # Gespeichert, als die Suche erst einen Teil der Seiten hatte: sie gibt Vorrang und läuft danach weiter
+    assert at_save and at_save[0] < 400 and len(searched) == 400
+    assert doc.searchCount == 8  # Seiten 8, 58, 108 … 358
+    assert save_error(h) is None and digest(path) != before
+
+
+def test_k_repeated_ctrl_s_saves_once_without_races(reader_app, tmp_path: Path, monkeypatch, no_lxml) -> None:
+    from qtapp import dialogs
+    from tools.pdf_editor import save as save_engine
+
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Schnell.pdf", pages=5)
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    calls = []
+    real = save_engine.save
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(save_engine, "save", counted)
+    before = digest(path)
+    for _ in range(5):
+        QTest.keyClick(h.window, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    assert len(calls) == 1  # ein Schreibvorgang; die übrigen Anfragen fanden nichts mehr zu speichern
+    assert_saved(h, doc, path, before, pages=5)
+    # »Speichern« beim Schließen, während noch gespeichert wird: wartet und schließt danach
+    edit_invoice(h, doc, new="4713", old="4712")
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
+    doc.saveDocument()
+    assert doc.saving
+    reader(h).closeTab(doc.ident)
+    settle(h)
+    assert reader(h).tabs.count == 0 and len(calls) == 2 and "4713" in page_text(path)
+
+
+def test_l_saving_one_tab_leaves_the_other_alone(reader_app, tmp_path: Path, no_lxml) -> None:
+    h = reader_app
+    a_path = samples.with_xmp(tmp_path / "A.pdf")
+    b_path = samples.with_xmp(tmp_path / "B.pdf", pages=2)
+    a = open_pdf(h, a_path)
+    edit_invoice(h, a)
+    b = open_pdf(h, b_path)
+    edit_invoice(h, b, new="4799")
+    reader(h).activate(a.ident)
+    settle(h)
+    a_before, b_before = digest(a_path), digest(b_path)
+    b_view = (b.currentPage, b.zoom, b.viewMode, b.undoText)
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    assert_saved(h, a, a_path, a_before)
+    assert b.dirty and digest(b_path) == b_before and (b.currentPage, b.zoom, b.viewMode, b.undoText) == b_view
+    assert {item["key"]: item["dirty"] for item in reader(h).tabs.items()} == {a.ident: False, b.ident: True}
+    reader(h).activate(b.ident)
+    settle(h)
+    key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    assert_saved(h, b, b_path, b_before, pages=2)
+    assert "4799" in page_text(b_path) and "4712" in page_text(a_path)
+
+
+def test_m_save_as_writes_a_new_file_and_switches_to_it(reader_app, tmp_path: Path, no_lxml) -> None:
+    from qtapp import files
+
+    h = reader_app
+    path = samples.with_xmp(tmp_path / "Original.pdf", pages=2)
+    doc = open_pdf(h, path)
+    edit_invoice(h, doc)
+    before = digest(path)
+    copy = tmp_path / "Kopie" / "Neu gespeichert.pdf"
+    copy.parent.mkdir()
+    files.RESPONSES.append(str(copy))
+    doc.saveDocumentAs()
+    settle(h)
+    assert not doc.dirty and Path(doc.path) == copy and doc.name == "Neu gespeichert.pdf"
+    assert reader(h).tabs.items()[0]["name"] == "Neu gespeichert.pdf"
+    assert digest(path) == before and "4711" in page_text(path)  # Original unverändert
+    assert "4712" in page_text(copy)
+    with pikepdf.open(copy) as saved:
+        assert len(saved.pages) == 2

@@ -345,9 +345,14 @@ class Session:
         return command.title if command is not None else ""
 
     def save(self, target: str | None, force: bool = False) -> dict:
+        """Sicher speichern (``tools.pdf_editor.save``). Ohne Änderungen am selben Ort: nichts zu tun
+        (z. B. ein weiteres Strg+S direkt nach dem Speichern) – die Datei bleibt, wie sie ist."""
         path = Path(target) if target else self.document.path
         if path is None:
             raise EditorError("Für dieses Dokument gibt es noch keinen Speicherort.")
+        same = self.document.path is not None and save._same(self.document.path, path)  # noqa: SLF001
+        if same and not self.document.dirty and not force and path.is_file():
+            return {"path": str(path), "size": 0, "backup": "", "name": self.document.name, "checked": 0, "unchanged": True}
         result = save.save(self.document, path, backup_dir=recovery.backups_dir(), force=force)
         if self.recovery is not None:
             self.recovery.discard()
@@ -355,7 +360,7 @@ class Session:
         if self.recovered_from is not None:
             recovery.discard_session(self.recovered_from)
             self.recovered_from = None
-        return {"path": str(result.path), "size": result.size, "backup": str(result.backup or ""), "name": self.document.name}
+        return {"path": str(result.path), "size": result.size, "backup": str(result.backup or ""), "name": self.document.name, "checked": result.checked_pages, "unchanged": False}
 
     def write_recovery(self) -> bool:
         """Ungespeicherten Stand sichern (für den Fall eines Absturzes)."""
