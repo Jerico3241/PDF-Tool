@@ -26,6 +26,7 @@ Rectangle {
     readonly property string hint: {
         switch (tool) {
         case "editText": return "Einen Textblock anklicken, um ihn zu ändern. Blau gestrichelt: direkt im PDF änderbar · orange: wird neu gesetzt oder überlagert."
+        case "objects": return "Text oder Bild anklicken, erneut klicken wählt ein Wort. Doppelklick ändert den Text, Ziehen verschiebt; Strg+Klick oder ein Rahmen wählt mehrere."
         case "addText": return "In die Seite klicken und schreiben."
         case "image": return root.imageSelected ? (selected.editable ? "Ziehen verschiebt, die Ecken ändern die Größe (Umschalt: frei)." : (selected.reason || "Dieses Bild lässt sich nicht ändern.")) : "Bild anklicken – oder einen Rahmen aufziehen und ein Bild einfügen."
         case "highlight": return "Text markieren: mit der Maus über den Text ziehen."
@@ -122,7 +123,7 @@ Rectangle {
         PText {
             Layout.fillWidth: true
             Layout.leftMargin: 8
-            text: root.tool === "editText" && root.doc && root.doc.lastMode !== "" ? root.hint + "   Zuletzt: " + root.doc.lastMode : root.hint
+            text: (root.tool === "editText" || root.tool === "objects") && root.doc && root.doc.lastMode !== "" ? root.hint + "   Zuletzt: " + root.doc.lastMode : root.hint
             textStyle: "caption"
             tone: root.imageSelected && !root.selected.editable ? "warning" : "secondary"
             elide: Text.ElideRight

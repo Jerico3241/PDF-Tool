@@ -388,3 +388,142 @@ def damaged(path: Path) -> Path:
     noise = random.Random(4711).randbytes(20000)
     path.write_bytes(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n" + noise)
     return path
+
+
+# --- Objekt bearbeiten: Testfälle A–L -------------------------------------------------------------------------
+def _page_with(pdf: pikepdf.Pdf, content: bytes, fonts: dict | None = None, xobjects: dict | None = None) -> pikepdf.Object:
+    page = pdf.add_blank_page(page_size=A4)
+    resources = Dictionary(Font=Dictionary(fonts or {"/F1": _helvetica(pdf)}))
+    if xobjects:
+        resources.XObject = Dictionary(xobjects)
+    page.Resources = resources
+    page.Contents = pdf.make_stream(content)
+    return page
+
+
+def _font(pdf: pikepdf.Pdf, base: str) -> pikepdf.Object:
+    return pdf.make_indirect(Dictionary(Type=Name.Font, Subtype=Name.Type1, BaseFont=Name("/" + base), Encoding=Name.WinAnsiEncoding))
+
+
+def object_line(path: Path) -> Path:
+    """A: eine einfache Textzeile."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"BT /F1 14 Tf 72 760 Td (Rechnung Nr. 4711) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_address(path: Path) -> Path:
+    """B/F: Adresse – vier sichtbare Zeilen in **einem** Textobjekt (ein BT … ET, Zeilen per Td)."""
+    pdf = pikepdf.new()
+    _page_with(pdf, (
+        "BT /F1 11 Tf 72 760 Td (Firma) Tj 0 -14 Td (Hottgenroth Software AG) Tj "
+        "0 -14 Td (Von-H\xfcnefeld-Str. 3) Tj 0 -14 Td (50829 K\xf6ln) Tj ET\n"
+    ).encode("cp1252"))
+    pdf.save(path)
+    return path
+
+
+def object_split_word(path: Path) -> Path:
+    """C: ein Wort aus mehreren Textoperatoren (»Hott« + »genroth«), danach » Software AG«."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"BT /F1 12 Tf 72 760 Td (Hott) Tj (genroth) Tj ( Software AG) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_kerned_words(path: Path) -> Path:
+    """Wortabstände als TJ-Verschiebung ohne Leerzeichen – wie viele Programme sie schreiben."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"BT /F1 12 Tf 72 760 Td [(Hottgenroth) -280 (Software) -280 (AG)] TJ ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_fonts(path: Path) -> Path:
+    """D: mehrere Wörter einer Zeile in unterschiedlichen Schriften."""
+    pdf = pikepdf.new()
+    fonts = {"/F1": _helvetica(pdf), "/F2": _font(pdf, "Helvetica-Bold"), "/F3": _font(pdf, "Times-Italic")}
+    _page_with(pdf, b"BT /F1 12 Tf 72 760 Td (Normal ) Tj /F2 12 Tf (Fett ) Tj /F3 12 Tf (Kursiv) Tj ET\n", fonts)
+    pdf.save(path)
+    return path
+
+
+def object_table(path: Path) -> Path:
+    """E/51: Tabellenkopf und -zeile, jede Zelle ein eigener Operator an eigener Stelle."""
+    pdf = pikepdf.new()
+    head = [(72, "Pos."), (112, "Anz."), (152, "Leistung"), (330, "St\xfcckpreis"), (430, "Gesamtpreis")]
+    row = [(72, "1"), (112, "2"), (152, "Wartung Software"), (330, "120,00"), (430, "240,00")]
+    parts = []
+    for y, cells in ((760, head), (742, row)):
+        for x, text in cells:
+            parts.append(f"BT /F1 10 Tf {x} {y} Td ({text}) Tj ET")
+    _page_with(pdf, ("\n".join(parts) + "\n").encode("cp1252"))
+    pdf.save(path)
+    return path
+
+
+def object_table_one_operator(path: Path) -> Path:
+    """Tabellenzeile in einem einzigen TJ: Spalten nur durch große Verschiebungen getrennt."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"BT /F1 10 Tf 72 760 Td [(Pos.) -2400 (Anz.) -2400 (Leistung) -9000 (Gesamt)] TJ ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_colored_background(path: Path) -> Path:
+    """G: Text auf farbiger Fläche."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"q 0.80 0.88 1 rg 60 740 300 40 re f Q\nBT /F1 14 Tf 72 755 Td (Auf blauer Fl\xe4che) Tj ET\nBT /F1 12 Tf 72 700 Td (Daneben) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_text_on_image(path: Path) -> Path:
+    """H: Text über einem Bild (Farbverlauf)."""
+    from PIL import Image
+
+    image = Image.new("RGB", (300, 60))
+    image.putdata([(int(255 * x / 299), 120, 255 - int(255 * x / 299)) for _y in range(60) for x in range(300)])
+    pdf = pikepdf.new()
+    picture = pdf.make_stream(image.tobytes(), Type=Name.XObject, Subtype=Name.Image, Width=300, Height=60, ColorSpace=Name.DeviceRGB, BitsPerComponent=8)
+    _page_with(pdf, b"q 300 0 0 60 72 730 cm /Im1 Do Q\nBT 1 1 1 rg /F1 16 Tf 84 752 Td (Text auf Bild) Tj ET\n", xobjects={"/Im1": picture})
+    pdf.save(path)
+    return path
+
+
+def object_scaled_matrix(path: Path) -> Path:
+    """Text mit Schriftgröße 1 und skalierender Textmatrix (wie viele PDF-Programme schreiben):
+    sichtbar 11 pt, eine Zeile mit drei Wörtern."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"BT /F1 1 Tf 11 0 0 11 72 760 Tm 0.05 Tc (Rechnung Nr. 4711) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_repeated(path: Path) -> Path:
+    """L: mehrere gleiche Wörter nebeneinander."""
+    pdf = pikepdf.new()
+    _page_with(pdf, b"BT /F1 12 Tf 72 760 Td (Test Test Test) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def object_rotated(path: Path) -> Path:
+    """I/40/41: die Adresse (wie B) auf Seiten mit /Rotate 90, 180, 270, mit CropBox ≠ MediaBox und mit
+    CropBox und /Rotate 90 zusammen."""
+    source = object_address(path.with_name(path.stem + "-quelle.pdf"))
+    src = pikepdf.open(source)
+    pdf = pikepdf.new()
+    for angle, crop in ((90, None), (180, None), (270, None), (0, [40, 650, 400, 800]), (90, [40, 650, 400, 800])):
+        pdf.pages.append(src.pages[0])
+        page = pdf.pages[-1]
+        page.Rotate = angle  # immer setzen: eine kopierte Seite übernimmt sonst die Werte der vorigen Kopie
+        if crop:
+            page.CropBox = Array(crop)
+        elif "/CropBox" in page.obj:
+            del page.obj["/CropBox"]
+    pdf.save(path)
+    src.close()
+    source.unlink()
+    return path

@@ -48,7 +48,12 @@ Item {
         requestedWidth = wantedWidth
         pageImage.source = base + wantedWidth + "/" + revision
     }
-    onPageChanged: { widthTimer.stop(); requestImage(); detailTimer.restart() }
+    onPageChanged: {
+        widthTimer.stop()
+        requestImage()
+        detailTimer.restart()
+        if (wantsObjects) doc.loadObjects(page)  // Objektmodus: auch die neue Seite dieses Platzes analysieren
+    }
     onRevisionChanged: requestImage()
     onBaseChanged: requestImage()
     // Kleine Zoomschritte gesammelt (kurz warten), große Sprünge und das erste Bild sofort
@@ -176,6 +181,86 @@ Item {
     readonly property var selected: doc ? doc.selectedObject : ({})
     readonly property bool selectedHere: selected.page === page && selected.kind !== undefined
 
+    // --- Objekt bearbeiten: Objekte dieser Seite, Auswahl, Treffer -----------------------------------------
+    readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (doc.objectPages[key] || null) : null
+    readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images) : []
+    // Räumlicher Index: Objekte je waagerechtem Band von 24 pt (Anzeige-Punkte, einmal je Seitenstand) –
+    // beim Bewegen der Maus wird nur das Band unter dem Zeiger geprüft, nicht jedes Objekt der Seite
+    readonly property real objectBand: 24
+    readonly property var objectIndex: {
+        var bands = ({})
+        for (var i = 0; i < objectItems.length; ++i) {
+            var r = objectItems[i].view
+            for (var b = Math.floor((r[1] - 1) / objectBand); b <= Math.floor((r[3] + 1) / objectBand); ++b)
+                (bands[b] = bands[b] || []).push(objectItems[i])
+        }
+        return bands
+    }
+    function objectsNear(v) { return objectIndex[Math.floor(v / objectBand)] || [] }
+    function segmentAt(u, v) {
+        var near = objectsNear(v), texts = []
+        for (var i = 0; i < near.length; ++i)
+            if (near[i].kind === "text") texts.push(near[i])
+        return smallestAt(texts, u, v, 1)
+    }
+    readonly property var objectSelected: {
+        if (!doc || tool !== "objects") return []
+        var mine = []
+        for (var i = 0; i < doc.objectSelection.length; ++i)
+            if (doc.objectSelection[i].page === page) mine.push(doc.objectSelection[i])
+        return mine
+    }
+    // Objekte nachladen, sobald diese Seite im Objektmodus sichtbar ist (auch nach einem Seitenwechsel des Platzes)
+    readonly property bool wantsObjects: tool === "objects" && objectsHere === null && page >= 0 && doc !== null && visible
+    onWantsObjectsChanged: if (wantsObjects) doc.loadObjects(page)
+    function isChosen(id) {
+        for (var i = 0; i < objectSelected.length; ++i)
+            if (objectSelected[i].id === id) return true
+        return false
+    }
+    // Objekt unter dem Zeiger: im gewählten Segment das Wort darunter (Wörter erst nach dem ersten Klick)
+    function objectAt(u, v) {
+        var hit = smallestAt(objectsNear(v), u, v, 1)
+        var single = objectSelected.length === 1 ? objectSelected[0] : null
+        if (hit && single && hit.words && (single.id === hit.id || single.segment === hit.id)) {
+            var word = smallestAt(hit.words, u, v, 1)
+            if (word && hit.words.length > 1)
+                return { id: word.id, kind: "word", text: word.text, view: word.view, segment: hit.id, font: hit.font, size: hit.size, color: hit.color, native: hit.native, reason: hit.reason }
+        }
+        return hit
+    }
+    function caretAt(item, u) {
+        // Cursor an der angeklickten Stelle (anteilig im Wort – Schriften mit Unterschneidung genügt das)
+        var words = item.words || [{ text: item.text, view: item.view }]
+        var offset = 0
+        for (var i = 0; i < words.length; ++i) {
+            var w = words[i]
+            if (u <= w.view[2] || i === words.length - 1) {
+                var share = Math.max(0, Math.min(1, (u - w.view[0]) / Math.max(0.1, w.view[2] - w.view[0])))
+                return offset + Math.round(share * w.text.length)
+            }
+            offset += w.text.length + 1
+        }
+        return item.text.length
+    }
+    function editObject(item, u) {
+        if (!item || item.kind === "image" || !host) return
+        host.openEditor({ kind: "object", page: page, rect: item.view, text: item.text, object: item, caret: u === undefined ? item.text.length : caretAt(item, u) })
+    }
+    function editParagraph(item) {
+        if (!item || !host || !doc) return
+        host.pendingBlock = { page: page, u: (item.view[0] + item.view[2]) / 2, v: (item.view[1] + item.view[3]) / 2 }
+        doc.setTool("editText")
+        doc.loadBlocks(page)
+    }
+    onBlocksHereChanged: {
+        var wanted = host ? host.pendingBlock : null
+        if (!wanted || wanted.page !== page || blocksHere.length === 0) return
+        host.pendingBlock = null
+        var block = smallestAt(blocksHere, wanted.u, wanted.v, 2)
+        if (block) host.openEditor({ kind: "block", page: page, rect: block.view, block: block, text: block.text })
+    }
+
     // --- Kommentare (Werkzeug »Auswählen«) -----------------------------------------------------------
     Repeater {
         model: root.tool === "select" ? root.annotationsHere : []
@@ -259,6 +344,97 @@ Item {
                 }
             }
         }
+    }
+
+    // --- Objekt bearbeiten: Hover, Auswahl, Ziehen, Auswahlrechteck ------------------------------------------
+    // Nur das Objekt unter dem Zeiger erhält einen dezenten Rahmen – die Seite bleibt lesbar
+    Rectangle {
+        id: objectHover
+        objectName: "readerObjectHover"
+        readonly property var item: root.tool === "objects" && pointer.hoverItem && pointer.action === "" && !root.isChosen(pointer.hoverItem.id) ? pointer.hoverItem : null
+        visible: item !== null
+        x: item ? item.view[0] * root.s - 2 : 0
+        y: item ? item.view[1] * root.s - 2 : 0
+        width: item ? (item.view[2] - item.view[0]) * root.s + 4 : 0
+        height: item ? (item.view[3] - item.view[1]) * root.s + 4 : 0
+        radius: 2
+        color: "transparent"
+        border.width: 1
+        border.color: item && item.native === false ? Theme.warning : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.75)
+    }
+    Repeater {
+        model: root.objectSelected
+        Item {
+            id: chosenBox
+            required property var modelData
+            readonly property bool moving: pointer.action === "moveObjects"
+            readonly property bool resizing: modelData.kind === "image" && pointer.action === "resizeImage" && pointer.preview !== null
+            readonly property var r: resizing ? pointer.preview : modelData.view
+            objectName: "readerObjectSelection"
+            x: (r[0] + (moving ? pointer.du : 0)) * root.s - 3
+            y: (r[1] + (moving ? pointer.dv : 0)) * root.s - 3
+            width: (r[2] - r[0]) * root.s + 6
+            height: (r[3] - r[1]) * root.s + 6
+            z: 5
+            // Neue Auswahl sanft einblenden (kurz; Animationen aus: sofort)
+            opacity: 0
+            Component.onCompleted: opacity = 1
+            Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
+            // Beim Ziehen: Inhalt 1:1 mit dem Zeiger, Original abgeblendet
+            Rectangle {
+                parent: root
+                visible: chosenBox.moving
+                x: chosenBox.modelData.view[0] * root.s - 1
+                y: chosenBox.modelData.view[1] * root.s - 1
+                width: (chosenBox.modelData.view[2] - chosenBox.modelData.view[0]) * root.s + 2
+                height: (chosenBox.modelData.view[3] - chosenBox.modelData.view[1]) * root.s + 2
+                color: Theme.paper
+                opacity: 0.65
+                z: 4
+            }
+            ShaderEffectSource {
+                anchors.fill: parent
+                anchors.margins: 3
+                visible: chosenBox.moving
+                live: chosenBox.moving
+                sourceItem: pageImage
+                sourceRect: Qt.rect(chosenBox.modelData.view[0] * root.s, chosenBox.modelData.view[1] * root.s, (chosenBox.modelData.view[2] - chosenBox.modelData.view[0]) * root.s, (chosenBox.modelData.view[3] - chosenBox.modelData.view[1]) * root.s)
+            }
+            Rectangle {
+                anchors.fill: parent
+                radius: 2
+                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, chosenBox.moving ? 0.04 : 0.08)
+                border.width: 2
+                border.color: chosenBox.modelData.native === false ? Theme.warning : Theme.accent
+            }
+            // Anfasser an den Ecken (Bilder: Größe ändern; Seitenverhältnis bleibt, Umschalt: frei)
+            Repeater {
+                model: chosenBox.modelData.kind === "image" && chosenBox.modelData.editable && root.objectSelected.length === 1 ? 4 : 0
+                Rectangle {
+                    required property int index
+                    width: Metrics.readerHandle
+                    height: Metrics.readerHandle
+                    radius: 2
+                    x: (index % 2 === 0 ? 3 : chosenBox.width - 3) - width / 2
+                    y: (index < 2 ? 3 : chosenBox.height - 3) - height / 2
+                    color: Theme.surface
+                    border.width: 2
+                    border.color: Theme.accent
+                }
+            }
+        }
+    }
+    Rectangle {
+        objectName: "readerObjectMarquee"
+        visible: pointer.action === "marquee" && (root.dragX1 - root.dragX0 > 2 || root.dragY1 - root.dragY0 > 2)
+        x: root.dragX0
+        y: root.dragY0
+        width: root.dragX1 - root.dragX0
+        height: root.dragY1 - root.dragY0
+        z: 6
+        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.08)
+        border.width: 1
+        border.color: Theme.accent
     }
 
     // --- Formularfelder (Werkzeug »Formular ausfüllen«) ---------------------------------------------------
@@ -347,9 +523,10 @@ Item {
         anchors.fill: parent
         enabled: root.page >= 0 && root.tool !== "form"
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image"
+        hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects"
         cursorShape: {
             switch (root.tool) {
+            case "objects": return hoverCorner ? Qt.SizeFDiagCursor : (hoverItem ? (hoverItem.native === false && hoverItem.kind !== "image" ? Qt.PointingHandCursor : Qt.SizeAllCursor) : Qt.ArrowCursor)
             case "select": return hoverKey !== "" ? Qt.SizeAllCursor : Qt.IBeamCursor
             case "highlight": case "underline": case "strikeout": return Qt.IBeamCursor
             case "editText": return hoverKey !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -358,8 +535,15 @@ Item {
             }
         }
 
-        property string action: ""      // text, moveAnnotation, moveImage, resizeImage, stroke, shape, placeImage
+        property string action: ""      // text, moveAnnotation, moveImage, resizeImage, stroke, shape, placeImage, moveObjects, marquee
         property string hoverKey: ""
+        property var hoverItem: null    // Objekt unter dem Zeiger (Objekt bearbeiten)
+        property bool hoverCorner: false
+        property bool drill: false      // erneuter Klick aufs gewählte Segment: beim Loslassen das Wort wählen
+        property string drilledFrom: ""  // Segment, aus dem der letzte Klick ins Wort gewechselt hat (Doppelklick)
+        property real drilledAt: 0
+        property string narrowTo: ""    // Klick ohne Ziehen auf ein Objekt einer Mehrfachauswahl: nur noch dieses
+        property bool additive: false
         property real startU: 0
         property real startV: 0
         property real endU: 0
@@ -380,12 +564,28 @@ Item {
             if (!pressed) { updateHover(p); return }
             root.dragTo(p, mouse)
         }
-        onExited: hoverKey = ""
+        onExited: { hoverKey = ""; hoverItem = null; hoverCorner = false }
         onPressed: (mouse) => root.press(point(mouse), mouse)
         onReleased: (mouse) => root.release(point(mouse), mouse)
         onDoubleClicked: (mouse) => {
             var p = point(mouse)
             if (root.tool === "select" && root.doc) root.doc.selectWord(root.page, p.u, p.v)
+            if (root.tool === "objects" && root.doc) {
+                // Doppelklick: genau dieses Segment (bzw. ein zuvor gewähltes Wort) bearbeiten – nicht den Absatz.
+                // Hat erst der erste Klick des Doppelklicks ins Wort gewechselt, gilt wieder das Segment.
+                action = ""
+                var hit = root.segmentAt(p.u, p.v)
+                if (!hit) return
+                var single = root.objectSelected.length === 1 ? root.objectSelected[0] : null
+                var drilledNow = drilledFrom === hit.id && Date.now() - drilledAt <= Qt.styleHints.mouseDoubleClickInterval + 50
+                drilledFrom = ""
+                if (single && single.kind === "word" && single.segment === hit.id && !drilledNow) {
+                    root.editObject(single, p.u)
+                    return
+                }
+                if (!root.isChosen(hit.id)) root.doc.selectObject(root.page, hit.id, false)
+                root.editObject(hit, p.u)
+            }
         }
         onCanceled: { action = ""; preview = null; strokePath = [] }
 
@@ -400,6 +600,11 @@ Item {
             } else if (root.tool === "image") {
                 hit = root.smallestAt(root.imagesHere, p.u, p.v, 0)
                 hoverKey = hit ? "image" + hit.index : ""
+            } else if (root.tool === "objects") {
+                hoverCorner = root.selectedCorner(p) >= 0
+                hit = hoverCorner ? null : root.objectAt(p.u, p.v)
+                hoverItem = hit
+                hoverKey = hit ? hit.id : ""
             }
         }
     }
@@ -412,6 +617,24 @@ Item {
         pointer.du = pointer.dv = 0
         pointer.action = ""
         if (mouse.button === Qt.RightButton) {
+            if (tool === "objects" && objectsHere) {
+                // Rechtsklick: die bestehende Auswahl bleibt (gewählte Zeile bleibt Zeile, gewähltes Wort
+                // bleibt Wort); ein anderes Objekt wird gewählt – ins Wort wechselt nur der Linksklick
+                var target = smallestAt(objectsNear(p.v), p.u, p.v, 1)
+                if (target) {
+                    var one = objectSelected.length === 1 ? objectSelected[0] : null
+                    if (one && one.kind === "word" && one.segment === target.id) {
+                        var word = smallestAt(target.words, p.u, p.v, 1)
+                        if (word && word.id !== one.id) doc.selectObject(page, word.id, false)
+                    } else if (!isChosen(target.id)) {
+                        doc.selectObject(page, target.id, false)
+                    }
+                    var menu = target.kind === "image" ? imageObjectMenu : textObjectMenu
+                    menu.u = p.u
+                    menu.popup(pointer, mouse.x, mouse.y)
+                    return
+                }
+            }
             contextMenu.u = p.u
             contextMenu.v = p.v
             contextMenu.popup(pointer, mouse.x, mouse.y)
@@ -441,6 +664,40 @@ Item {
             var block = smallestAt(blocksHere, p.u, p.v, 2)
             if (block) host.openEditor({ kind: "block", page: page, rect: block.view, block: block, text: block.text })
             else host.editing = null
+            return
+        }
+        case "objects": {
+            if (!objectsHere) { doc.loadObjects(page); return }
+            var handle = selectedCorner(p)
+            if (handle >= 0) {
+                pointer.corner = handle
+                pointer.target = selectedImage()
+                pointer.action = "resizeImage"
+                return
+            }
+            var hit = smallestAt(objectsNear(p.v), p.u, p.v, 1)
+            pointer.additive = (mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) !== 0
+            pointer.drill = false
+            if (!hit) {
+                if (!pointer.additive) doc.clearObjectSelection()
+                pointer.action = "marquee"
+                return
+            }
+            if (mouse.modifiers & Qt.ControlModifier) {
+                doc.selectObject(page, hit.id, true)  // Strg+Klick: hinzufügen bzw. entfernen
+                return
+            }
+            var single = objectSelected.length === 1 ? objectSelected[0] : null
+            pointer.narrowTo = objectSelected.length > 1 && isChosen(hit.id) && !pointer.additive ? hit.id : ""
+            if (single && single.kind === "word" && single.segment === hit.id) {
+                var word = smallestAt(hit.words, p.u, p.v, 1)
+                if (word && word.id !== single.id) doc.selectObject(page, word.id, false)
+            } else if (single && single.id === hit.id && hit.kind === "text") {
+                pointer.drill = true  // erneuter Klick aufs gewählte Segment: Wort wählen (ohne Ziehen)
+            } else if (!isChosen(hit.id)) {
+                doc.selectObject(page, hit.id, false)
+            }
+            pointer.action = "moveObjects"
             return
         }
         case "addText":
@@ -480,6 +737,8 @@ Item {
         }
     }
     function selectedImage() {
+        if (tool === "objects")
+            return objectSelected.length === 1 && objectSelected[0].kind === "image" ? objectSelected[0] : null
         if (!(selectedHere && selected.kind === "image")) return null
         for (var i = 0; i < imagesHere.length; ++i)
             if (imagesHere[i].index === selected.index) return imagesHere[i]
@@ -553,7 +812,28 @@ Item {
             if (moved) doc.moveImage(page, pointer.target.index, pointer.du, pointer.dv)
             break
         case "resizeImage":
-            if (pointer.preview) doc.resizeImage(page, pointer.target.index, pointer.preview)
+            if (pointer.preview) {
+                if (tool === "objects") doc.resizeObjectImage(page, pointer.target.index, pointer.preview)
+                else doc.resizeImage(page, pointer.target.index, pointer.preview)
+            }
+            break
+        case "moveObjects":
+            if (moved) {
+                doc.moveObjects(pointer.du, pointer.dv)
+            } else if (pointer.narrowTo !== "") {
+                doc.selectObject(page, pointer.narrowTo, false)
+            } else if (pointer.drill) {
+                var segment = segmentAt(p.u, p.v)
+                var word = segment && segment.words.length > 1 ? smallestAt(segment.words, p.u, p.v, 1) : null
+                if (word) {
+                    doc.selectObject(page, word.id, false)
+                    pointer.drilledFrom = segment.id
+                    pointer.drilledAt = Date.now()
+                }
+            }
+            break
+        case "marquee":
+            if (big) doc.selectObjectsIn(page, rect, pointer.additive)
             break
         case "stroke":
             if (pointer.stroke.length >= 2) doc.addInk(page, [pointer.stroke])
@@ -577,6 +857,41 @@ Item {
         pointer.stroke = []
     }
 
+    // Kontextmenüs im Objektmodus (Text, Bild) – keine dauerhafte Leiste
+    PMenu {
+        id: textObjectMenu
+        objectName: "readerObjectMenu"
+        property real u: 0
+        readonly property var chosen: root.objectSelected
+        readonly property var first: chosen.length ? chosen[0] : null
+        PMenuItem {
+            text: "Bearbeiten"
+            iconName: "edit"
+            enabled: textObjectMenu.chosen.length === 1
+            onTriggered: {
+                var item = textObjectMenu.first, u = textObjectMenu.u
+                textObjectMenu.afterClose = function() { root.editObject(item, u) }
+            }
+        }
+        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; enabled: textObjectMenu.chosen.length === 1; onTriggered: root.editParagraph(textObjectMenu.first) }
+        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyObjects() }
+        PMenuItem { text: "Ausschneiden"; iconName: "document_dismiss"; onTriggered: root.doc.cutObjects() }
+        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: textObjectMenu.chosen.length === 1; onTriggered: root.doc.duplicateObject() }
+        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: "Eigenschaften"; iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
+    }
+    PMenu {
+        id: imageObjectMenu
+        objectName: "readerImageObjectMenu"
+        property real u: 0
+        readonly property var first: root.objectSelected.length ? root.objectSelected[0] : null
+        readonly property bool editable: first !== null && first.kind === "image" && first.editable === true
+        PMenuItem { text: "Ersetzen …"; iconName: "image"; enabled: imageObjectMenu.editable; onTriggered: root.doc.replaceImage(root.page, imageObjectMenu.first.index) }
+        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: imageObjectMenu.editable; onTriggered: root.doc.rotateImage(root.page, imageObjectMenu.first.index, true) }
+        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: imageObjectMenu.editable; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: "Eigenschaften"; iconName: "image"; onTriggered: Reader.showRightPanel("properties") }
+    }
+
     // Kontextmenü der Seite
     PMenu {
         id: contextMenu
@@ -589,7 +904,14 @@ Item {
         PMenuItem { text: "Markieren"; iconName: "highlight"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("highlight") }
         PMenuItem { text: "Unterstreichen"; iconName: "text_underline"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("underline") }
         PMenuItem { text: "Durchstreichen"; iconName: "text_strikethrough"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("strikeout") }
-        PMenuItem { text: "Notiz hier hinzufügen"; iconName: "comment"; onTriggered: root.host.openEditor({ kind: "note", page: root.page, rect: [contextMenu.u, contextMenu.v, contextMenu.u + 220, contextMenu.v + 80], text: "" }) }
+        PMenuItem {
+            text: "Notiz hier hinzufügen"
+            iconName: "comment"
+            onTriggered: {
+                var request = { kind: "note", page: root.page, rect: [contextMenu.u, contextMenu.v, contextMenu.u + 220, contextMenu.v + 80], text: "" }
+                contextMenu.afterClose = function() { root.host.openEditor(request) }
+            }
+        }
         PMenuItem { text: "Seite drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages([root.page], 90) }
     }
 }

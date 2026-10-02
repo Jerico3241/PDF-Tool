@@ -6,7 +6,7 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // Befehlsleiste des Readers: Datei (Öffnen, Speichern, Drucken), Rückgängig/Wiederholen, Werkzeuge
-// (Auswählen, Text bearbeiten, Text hinzufügen, Bilder, Kommentieren, Zeichnen, Formular),
+// (Auswählen, Text bearbeiten, Objekt bearbeiten, Text hinzufügen, Bilder, Kommentieren, Zeichnen, Formular),
 // rechts Ansicht, Seiten organisieren, Suchen, Seitenleisten und »Mehr«. Bei schmalem Fenster
 // wandern die rechten Einträge in »Mehr«.
 Rectangle {
@@ -118,7 +118,8 @@ Rectangle {
         }
         Separator {}
         ToolButton { objectName: "readerToolSelect"; toolKey: "select"; iconName: "cursor"; tip: "Auswählen: Text markieren und kopieren, Kommentare verschieben" }
-        ToolButton { objectName: "readerToolEditText"; toolKey: "editText"; iconName: "text_edit_style"; tip: "Text bearbeiten" }
+        ToolButton { objectName: "readerToolEditText"; toolKey: "editText"; iconName: "text_edit_style"; tip: "Text bearbeiten: Absätze mit Cursor ändern, ergänzen, umbrechen" }
+        ToolButton { objectName: "readerToolObjects"; toolKey: "objects"; iconName: "select_object"; tip: "Objekt bearbeiten: Text und andere PDF-Inhalte einzeln auswählen und bearbeiten." }
         ToolButton { objectName: "readerToolAddText"; toolKey: "addText"; iconName: "text_add"; tip: "Text hinzufügen" }
         ToolButton { objectName: "readerToolImage"; toolKey: "image"; iconName: "image"; tip: "Bilder: auswählen, verschieben, Größe ändern, einfügen" }
         // Kommentieren und Zeichnen: zuletzt benutztes Werkzeug + Auswahl

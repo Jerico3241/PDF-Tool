@@ -3,8 +3,16 @@ import QtQuick.Templates as T
 import PdfTool.Style
 
 // Kontextmenü: blendet mit Deckkraft und leichter Bewegung ein (120–160 ms).
+// ``afterClose``: Aktion, die erst nach dem Ausblenden läuft – etwa einen Editor öffnen. Beim Schließen gibt
+// das Menü den Tastaturfokus zurück; ein schon geöffneter Editor verlöre ihn sonst wieder.
 T.Menu {
     id: control
+    property var afterClose: null
+    onClosed: {
+        var run = afterClose
+        afterClose = null
+        if (run) run()
+    }
     implicitWidth: Math.max(200, contentItem.implicitWidth + leftPadding + rightPadding)
     implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding
     margins: 8

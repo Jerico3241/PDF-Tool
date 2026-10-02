@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools.pdf_editor import annotations, commands, export, forms, images, metadata, outline, pages, recovery, render, save, textedit, textlayer
+from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
 from tools.pdf_editor.geometry import normalize
@@ -39,6 +40,7 @@ class Session:
         self.recovered_from: recovery.SessionInfo | None = None
         self._texts: dict[int, PageText] = {}
         self._blocks: dict[int, tuple[int, list]] = {}
+        self._objects: dict[int, object_edit.PageObjects] = {}  # Objektmodell je Seite (Stand des Dokuments)
         self.closed = False
 
     # Öffnen, Zustand --------------------------------------------------------------------------------------
@@ -174,6 +176,79 @@ class Session:
         x, y = self.document.geometry(page).to_page(u, v)
         outcome = textedit.add_text(self.document, self.history, page, x, y, text, style=_text_style(style), width=width)
         return {"mode": outcome.mode, "label": "Text hinzugefügt", "notes": list(outcome.notes), "font": outcome.font}
+
+    # Objekt bearbeiten ------------------------------------------------------------------------------------------
+    def page_objects(self, page: int) -> object_edit.PageObjects:
+        """Segmente, Wörter (und Bilder) einer Seite – je Stand des Dokuments einmal analysiert."""
+        cached = self._objects.get(page)
+        if cached is None or cached.revision != self.document.revision:
+            cached = object_edit.analyze(self.document, page)
+            self._objects[page] = cached
+            if len(self._objects) > 12:
+                self._objects.pop(next(iter(self._objects)))
+        return cached
+
+    def objects(self, page: int) -> dict:
+        if not 0 <= page < self.document.page_count:
+            return {"page": page, "revision": self.document.revision, "segments": [], "images": [], "message": ""}
+        return object_edit.describe(self.document, self.page_objects(page))
+
+    def _object_result(self, outcome, page: int) -> dict:
+        geo = self.document.geometry(page)
+        return {"mode": outcome.mode, "label": outcome.label, "notes": list(outcome.notes), "view": list(geo.rect_to_view(outcome.bounds)), "page": page}
+
+    def object_edit(self, page: int, ident: str, text: str) -> dict:
+        return self._object_result(object_edit.edit_text(self.document, self.history, self.page_objects(page), ident, text), page)
+
+    def object_delete(self, page: int, idents: list[str]) -> dict:
+        return self._object_result(object_edit.delete(self.document, self.history, self.page_objects(page), list(idents)), page)
+
+    def _page_shift(self, page: int, du: float, dv: float) -> tuple[float, float]:
+        """Verschiebung in der Anzeige (Punkte) → Seitenkoordinaten (Drehung der Seite berücksichtigt)."""
+        geo = self.document.geometry(page)
+        x0, y0 = geo.to_page(0.0, 0.0)
+        x1, y1 = geo.to_page(du, dv)
+        return x1 - x0, y1 - y0
+
+    def object_move(self, page: int, idents: list[str], du: float, dv: float) -> dict:
+        dx, dy = self._page_shift(page, du, dv)
+        return self._object_result(object_edit.move(self.document, self.history, self.page_objects(page), list(idents), dx, dy), page)
+
+    def object_style(self, page: int, idents: list[str], name: str, value) -> dict:
+        kwargs = {"size": {"size": float(value)}, "spacing": {"spacing": float(value)}, "color": {"color": _rgb(str(value))}}.get(name)
+        if kwargs is None or (name == "color" and kwargs["color"] is None):
+            raise EditorError("Diese Eigenschaft lässt sich nicht ändern.")
+        return self._object_result(object_edit.restyle(self.document, self.history, self.page_objects(page), list(idents), **kwargs), page)
+
+    def object_duplicate(self, page: int, ident: str) -> dict:
+        dx, dy = self._page_shift(page, 12.0, 12.0)  # in der Anzeige nach rechts unten versetzt
+        return self._object_result(object_edit.duplicate(self.document, self.history, self.page_objects(page), ident, (dx, dy)), page)
+
+    def object_align(self, page: int, idents: list[str], how: str) -> dict:
+        """Ausrichten in der Anzeige (links, rechts, oben, unten) – auch auf gedrehten Seiten."""
+        found = self.page_objects(page)
+        views = {item["id"]: item["view"] for item in object_edit.describe(self.document, found)["segments"]}
+        boxes = {}
+        for ident in idents:
+            segment_id, _, word = ident.partition("/")
+            if word:
+                segment = found.segment(segment_id)
+                match = next((w for w in segment.words if w.id == ident), None)
+                boxes[ident] = list(self.document.geometry(page).rect_to_view(match.bounds)) if match else None
+            else:
+                boxes[ident] = views.get(ident)
+        boxes = {key: value for key, value in boxes.items() if value}
+        if len(boxes) < 2:
+            raise EditorError("Zum Ausrichten mindestens zwei Objekte auswählen.")
+        index = {"left": 0, "top": 1, "right": 2, "bottom": 3}.get(how)
+        if index is None:
+            raise EditorError("Unbekannte Ausrichtung.")
+        edge = (min if index in (0, 1) else max)(box[index] for box in boxes.values())
+        shifts = {}
+        for ident, box in boxes.items():
+            du, dv = (edge - box[index], 0.0) if index in (0, 2) else (0.0, edge - box[index])
+            shifts[ident] = self._page_shift(page, du, dv)
+        return self._object_result(object_edit.move_each(self.document, self.history, found, shifts), page)
 
     # Bilder ---------------------------------------------------------------------------------------------------
     def images(self, page: int) -> list[dict]:

@@ -81,6 +81,105 @@ Teilmenge eingebettet und nur, wenn ihre Lizenz es erlaubt (OS/2 `fsType`). Schr
 aus PDFs extrahiert oder weitergegeben. Passt ein längerer Text nicht in den Bereich, fragt PDF Tool:
 »Zeilen anfügen« oder »Schrift verkleinern«.
 
+## Objekt bearbeiten – einzelne Zeilen, Segmente, Wörter und Bilder
+
+Eigenes Werkzeug neben »Text bearbeiten« (`tools/pdf_editor/objects.py`). »Text bearbeiten« ändert
+einen logischen Absatz mit Cursor und Umbruch. »Objekt bearbeiten« wählt die kleinsten sinnvollen
+Einheiten, wie sie im PDF stehen: eine Zeile einer Adresse, eine Tabellenzelle, ein Wort oder ein
+Bild. Jede Einheit lässt sich einzeln ändern, verschieben, formatieren und löschen. Alles andere auf
+der Seite bleibt, wo es ist.
+
+**Segmentierung (nur ein Modell – die Datei ändert sich erst mit einer Aktion).** PDFium liefert je
+Zeichen Box, Ursprung auf der Grundlinie, Schrift, Größe, Farbe, Richtung und das Textobjekt (einen
+Textoperator `Tj`/`TJ`/`'`/`"`). Gruppiert wird nach Geometrie, nicht nach Operatoren. Eine
+sichtbare Zeile besteht oft aus mehreren Operatoren, ein Operator enthält manchmal mehrere Zeilen
+oder Spalten:
+
+1. **Zeilen:** Zeichen gleicher Richtung auf derselben Grundlinie (Abstand ≤ 35 % der
+   Schriftgröße), in Schreibrichtung fortlaufend.
+2. **Segmente:** innerhalb einer Zeile Trennung an großen Lücken (≥ 0,9 Geviert – Tabellenspalten,
+   abgesetzte Werte) und an Wechseln von Schrift, Größe (> 15 %), Farbe oder Darstellungsart.
+3. **Wörter:** innerhalb eines Segments an Leerzeichen *oder* an geometrischen Lücken ≥ 0,15 Geviert.
+   Viele PDFs setzen Wortabstände als TJ-Verschiebung ohne Leerzeichen.
+
+Alle Toleranzen sind relativ zur Schriftgröße in Seitenkoordinaten, also unabhängig von Zoom und
+DPI. Unsichtbarer Text (Darstellungsart 3, etwa die Texterkennung über einem Scan) ist kein Objekt.
+Auf Seiten ohne Text steht »Auf dieser Seite wurde kein bearbeitbarer PDF-Text erkannt.«. Bilder
+bleiben dort trotzdem wählbar. OCR gibt es nicht.
+
+**Zuordnung zum Inhaltsstrom.** Die Textobjekte von PDFium werden den Textoperatoren zugeordnet
+(gleiche Reihenfolge, gleicher Text). Danach werden je Operator die Codes einzeln den Zeichen
+zugeordnet. Das gilt nur, wenn die Anzahl übereinstimmt und die Schrift sich sicher kodieren lässt
+(einfache Schriften, CID mit Identity-H). Ein so zugeordnetes Segment ist **direkt änderbar**. Für
+alle anderen nennt das Modell den Grund, zum Beispiel »Der Text liegt in einem eingebetteten
+Formular-Objekt.«.
+
+**Änderungen im Inhaltsstrom (nativ, `NATIVE`).** Betroffene Operatoren werden an Code-Grenzen in
+Teile zerlegt. Das ist rein syntaktisch, die Darstellung bleibt identisch. Danach werden nur die
+Zielteile geändert:
+
+| Aktion | Wie |
+| --- | --- |
+| Text ändern | neuer Text in der Originalschrift (Kodierung und Glyphen geprüft). Wird ein Wort mitten im Segment länger oder kürzer, rückt nur der Rest *dieses* Segments nach. |
+| Löschen | der Teil wird zu einer reinen Verschiebung gleicher Breite; ein gelöschtes Wort nimmt seinen Wortabstand mit. |
+| Verschieben | eigene Textmatrix (`Tm`) für den Teil; danach gelten Text- und Zeilenmatrix wie vorher. |
+| Größe, Farbe, Zeichenabstand | Zustand nur für den Teil, danach wiederhergestellt; immer genau eine Eigenschaft je Schritt. |
+| Duplizieren | dieselben Codes mit derselben Schrift, Größe, Farbe und Transformation versetzt daneben. |
+| Ausrichten | mehrere Segmente links, rechts, oben oder unten bündig (ein Schritt für Rückgängig). |
+
+**Neu gesetzt (`RECONSTRUCTED`)**, wenn der Originalschrift Zeichen fehlen (z. B. »Č« in einer
+WinAnsi-Schrift): Die Originalzeichen werden nativ entfernt, der neue Text wird an derselben
+Grundlinie in einer passenden Schrift gesetzt (wie bei »Text bearbeiten«).
+
+**Überlagerung (`OVERLAY`)** nur als letzter Ausweg, wenn der Text keinem Operator sicher zugeordnet
+ist (Formular-XObjects, unklare Struktur). Das Rechteck hat die gemessene Hintergrundfarbe. Es ist
+nie pauschal weiß, aber einfarbig: Auf Bildern und Verläufen bleibt es sichtbar. Der Originaltext
+bleibt in der Datei, die Überlagerung ist **keine Schwärzung**. Verschieben und Formatieren gibt es
+nur nativ.
+
+Jede Änderung wird wie bei »Text bearbeiten« geprüft:
+- Die Darstellung hat sich nur im betroffenen Bereich geändert.
+- Der neue Text ist lesbar, der alte entfernt.
+- Beim Verschieben und Formatieren sind die Zeichen der Seite dieselben.
+
+Scheitert die Prüfung, wird die Änderung vollständig zurückgenommen. Jede Aktion ist ein Schritt
+für Rückgängig/Wiederholen. Gespeichert wird über denselben sicheren Weg wie jede andere Änderung.
+Eine Analyse eines älteren Seitenstands ändert nie etwas (Revisionsprüfung).
+
+**Bedienung.**
+- **Maus:**
+  - Zeigen hebt nur das Objekt unter dem Zeiger dezent hervor.
+  - Klick wählt eine Zeile bzw. ein Segment, ein weiterer Klick darauf ein Wort.
+  - Doppelklick bearbeitet genau dieses Segment, mit dem Cursor an der Klickstelle.
+  - Strg+Klick fügt Objekte hinzu oder entfernt sie; ein Rahmen auf freier Fläche wählt alle
+    Objekte, die überwiegend darin liegen.
+  - Ziehen verschiebt die Auswahl 1:1 mit dem Zeiger.
+- **Tastatur:**
+  - Pfeiltasten verschieben um 1 pt, mit Umschalt um 10 pt; das ergibt einen Schritt.
+  - Entf löscht, Eingabe oder F2 bearbeitet.
+  - Strg+C, Strg+X und Strg+D kopieren, schneiden aus und duplizieren.
+  - Tab wählt das nächste Objekt der Seite, Esc hebt die Auswahl auf.
+- **Kontextmenü:** Bearbeiten, Text bearbeiten (ganzer Absatz), Kopieren, Ausschneiden,
+  Duplizieren, Löschen und Eigenschaften; für Bilder Ersetzen, Drehen und Löschen.
+- **Eigenschaften (rechte Seitenleiste):**
+  - Text: Schrift und Drehung (nur Anzeige), Größe, Zeichenabstand, Farbe, Position.
+  - Bild: Position, Größe, Ersetzen, Drehen.
+  - Mehrere Objekte: Ausrichten, gemeinsame Größe und Farbe.
+  - Die Seitenleiste öffnet sich mit dem Modus und schließt sich beim Verlassen wieder.
+
+Verlassen des Modus hebt die Auswahl auf. Bilder sind im Objektmodus wie im Bildwerkzeug
+verschiebbar, skalierbar (Ecken), drehbar, ersetzbar und löschbar.
+
+**Treffer und Leistung.** Die Oberfläche bekommt je Seite alle Objekte in Anzeige-Punkten
+(Seitendrehung, CropBox und MediaBox sind eingerechnet). Die Treffer prüft sie selbst, ohne bei
+jeder Mausbewegung nachzufragen:
+- Ein Bandindex (24 pt hohe Streifen) begrenzt die Prüfung auf die Objekte unter dem Zeiger.
+- Bei Überlappung gewinnt das kleinste Objekt.
+- Die Toleranz beträgt 1 pt.
+
+Analysiert werden nur die aktuelle Seite und ihre Nachbarn, im Arbeitsthread. Das Ergebnis gilt je
+Seitenstand (Revision), sonst wird neu analysiert.
+
 ## Bilder, Seiten, Anmerkungen, Formulare
 
 - **Bilder:** auswählen, verschieben, Größe ändern (Seitenverhältnis bleibt, Umschalt: frei),
@@ -188,6 +287,17 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
 - Oberfläche: `tests/test_qt_reader.py` – Maus und Tastatur wie von Hand (Auswahl, Zoom mit
   Strg+Mausrad, Text ändern, Zeichnen, Bilder, Formulare, Seiten organisieren, Speichern, Passwort,
   beschädigte und signierte PDFs, »Öffnen mit«, Sitzungssicherung, Datenschutz).
+- Objekt bearbeiten:
+  - `tests/test_editor_objects.py` (Engine):
+    - Fälle A–L: Zeile, mehrere Zeilen in einem Textobjekt, Wort aus mehreren Runs,
+      unterschiedliche Schriften, Tabelle (auch in einem einzigen TJ), Adresse, farbiger
+      Hintergrund, Text auf Bild, gedrehte Seiten mit CropBox, Teilschrift, CID-Schrift,
+      gleiche Wörter
+    - Regression »Hottgenroth Software GmbH«, Tabelle, Speichern → Schließen → Öffnen
+  - `tests/test_qt_objects.py` (Oberfläche):
+    - Zeigen, Klick, Wort, Doppelklick, Strg+Klick, Rahmen, Ziehen, Tastatur
+    - Kontextmenü, Eigenschaften, Bilder
+    - Zoom 50–400 %, gedrehte Seiten, Tabs, Animationsprofile
 - Laufzeit und Setup: `tests/smoke_runtime.py` (Text direkt ändern, Schrift-Teilmenge einbetten,
   speichern) und `tests/smoke_installer.ps1` (»Öffnen mit«, zweiter Start reicht die PDF weiter,
   Standard-App für PDF unverändert, Deinstallation entfernt die Einträge).
@@ -202,3 +312,14 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
 - XFA-Formulare: nur der AcroForm-Teil; PDF-JavaScript (Berechnungen, Prüfungen) läuft nie.
 - Text in Type3-Schriften und mit anderen CMaps als Identity-H/V wird nicht direkt geändert (neu
   gesetzt oder überlagert – der Hinweis nennt den Weg).
+- Objekt bearbeiten:
+  - **Direkt änderbar** ist nur Text, dessen Codes sich eindeutig den Zeichen zuordnen lassen.
+    Das sind einfache Schriften und CID-Schriften mit Identity-H.
+  - **Nur überlagert** werden Text in Formular-XObjects, senkrechter Text (Identity-V),
+    Type3-Schriften und Seiten mit unklarer Struktur. Diese Texte lassen sich weder verschieben
+    noch formatieren.
+  - **Schrift** und **Drehung** werden angezeigt, aber nicht geändert.
+  - **Noch nicht enthalten:** Vektorobjekte (Linien, Rechtecke, Pfade), Einrasten beim Ziehen und
+    manuelles Gruppieren.
+  - **Bilder** wie im Bildwerkzeug: Bilder in Formular-XObjects und Inline-Bilder werden nur
+    geändert, wo das sicher möglich ist.

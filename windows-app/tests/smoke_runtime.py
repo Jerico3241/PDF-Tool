@@ -440,6 +440,28 @@ def main() -> int:
     check(not list(work.glob(".*.tmp")), "temporäre Dateien liegen geblieben")
     print("PDF Editor: PDF mit XMP-Metadaten über das Original gespeichert, neu geöffnet und gezeichnet (ohne lxml)")
 
+    # Objekt bearbeiten: Adresse in einem einzigen Textobjekt – nur die gewählte Zeile ändern (direkt im
+    # PDF), speichern, neu öffnen; die übrigen Zeilen bleiben unverändert
+    from tools.pdf_editor import objects as editor_objects
+
+    adresse = write_address_pdf(work / "editor-adresse.pdf")
+    dokument = EditorDocument.open(str(adresse))
+    gefunden = editor_objects.analyze(dokument, 0)
+    zeilen = [segment.text for segment in gefunden.segments]
+    check(zeilen == ["Firma", "Hottgenroth Software AG", "Von-Hünefeld-Str. 3", "50829 Köln"], f"Objekt bearbeiten: Segmente {zeilen}")
+    zeile = next(segment for segment in gefunden.segments if segment.text == "Hottgenroth Software AG")
+    ergebnis = editor_objects.edit_text(dokument, editor_commands.History(), gefunden, zeile.id, "Hottgenroth Software GmbH")
+    check(ergebnis.mode == editor_objects.NATIVE, f"Objekt bearbeiten: nicht direkt geändert ({ergebnis.label})")
+    editor_save.save(dokument, adresse)
+    dokument.close()
+    wieder = EditorDocument.open(str(adresse))
+    try:
+        zeilen = [segment.text for segment in editor_objects.analyze(wieder, 0).segments]
+    finally:
+        wieder.close()
+    check(zeilen == ["Firma", "Hottgenroth Software GmbH", "Von-Hünefeld-Str. 3", "50829 Köln"], f"Objekt bearbeiten: nach dem Speichern {zeilen}")
+    print("PDF Editor: Objekt bearbeiten – nur die gewählte Zeile direkt geändert, gespeichert und neu geöffnet")
+
     if args.part == "runtime":
         print("OK")
         return 0
@@ -456,6 +478,23 @@ XMP_PACKET = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title><rdf:Alt><rdf:li xml:lang="x-default">Probe</rdf:li></rdf:Alt></dc:title></rdf:Description>
 </rdf:RDF></x:xmpmeta>
 <?xpacket end="w"?>"""
+
+
+def write_address_pdf(path: Path) -> Path:
+    """Adresse in einem einzigen Textobjekt (ein BT … ET, vier sichtbare Zeilen) – wie viele
+    Rechnungsprogramme sie schreiben."""
+    import pikepdf
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(595, 842))
+    font = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica, Encoding=pikepdf.Name.WinAnsiEncoding))
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page.Contents = pdf.make_stream((
+        "BT /F1 11 Tf 72 760 Td (Firma) Tj 0 -14 Td (Hottgenroth Software AG) Tj "
+        "0 -14 Td (Von-H\xfcnefeld-Str. 3) Tj 0 -14 Td (50829 K\xf6ln) Tj ET\n"
+    ).encode("cp1252"))
+    pdf.save(path)
+    return path
 
 
 def write_xmp_pdf(path: Path, pages: int = 1) -> Path:
