@@ -52,6 +52,16 @@ QtObject {
     readonly property int toolCardPadding: 20
     readonly property int toolIconBox: 48         // Symbolfläche (quadratisch)
 
+    // PDF Reader & Editor
+    readonly property int readerTabHeight: 36
+    readonly property int readerTabMaxWidth: 220
+    readonly property int readerToolbarHeight: 48
+    readonly property int readerPanelWidth: 272
+    readonly property int readerThumbPanelWidth: 196
+    readonly property int readerViewMargin: 16    // wie VIEW_MARGIN in qtapp/reader/document.py
+    readonly property int readerNarrowFrom: 820   // schmaler: Seitenleisten liegen über der Ansicht
+    readonly property int readerHandle: 10        // Anfasser zum Ändern der Bildgröße
+
     // Responsive Zustände (Fensterbreite in geräteunabhängigen Pixeln)
     readonly property int wideFrom: 1008
     readonly property int mediumFrom: 820

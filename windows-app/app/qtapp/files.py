@@ -56,6 +56,17 @@ def open_files(title: str, directory: str, filters: str) -> list[str]:
     return list(paths or [])
 
 
+def save_file(title: str, suggestion: str, filters: str) -> str:
+    """Speichern unter: Pfad (vorgeschlagener Name im Ordner) – leer bei Abbruch."""
+    answer = _answer("")
+    if answer is not None:
+        return str(answer)
+    from PySide6.QtWidgets import QFileDialog
+
+    path, _filter = QFileDialog.getSaveFileName(None, title, suggestion, filters)
+    return path or ""
+
+
 def pick_folder(title: str, directory: str) -> str:
     answer = _answer("")
     if answer is not None:

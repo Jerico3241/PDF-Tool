@@ -134,6 +134,10 @@ class ThemeController(Observable):
         tokens["subtle_pressed_rgba"] = _rgba(palette.subtle_color, palette.subtle_pressed_alpha)
         tokens["smoke"] = "#4D000000" if not palette.dark else "#66000000"  # Abdunkelung hinter Dialogen
         tokens["shadow"] = "#24000000" if not palette.dark else "#52000000"
+        # PDF Reader: Fläche hinter den Seiten; Treffer liegen auf dem weißen Papier (in jedem Design gleich)
+        tokens["viewer"] = "#E6E6E6" if not palette.dark else "#191919"
+        tokens["search_hit"] = "#66FFC400"
+        tokens["search_hit_current"] = "#FF8A00"
         self.dark = palette.dark
         self.colors = tokens
         self.accentName = design.accent_name(self.accentChoice)

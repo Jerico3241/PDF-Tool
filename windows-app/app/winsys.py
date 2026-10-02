@@ -307,6 +307,16 @@ def register_app_identity() -> None:
     _mutex_handle = kernel32.CreateMutexW(None, False, APP_MUTEX)
 
 
+@_safe(False)
+def allow_foreground() -> bool:
+    """»Öffnen mit« bei laufender App: Der neue Prozess (vom Explorer gestartet, darf in den
+    Vordergrund) erlaubt der laufenden App, ihr Fenster nach vorn zu holen."""
+    import ctypes
+
+    ASFW_ANY = -1
+    return bool(ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY))
+
+
 def open_path(path: str | Path) -> None:
     """Datei oder Ordner mit der Standardanwendung öffnen. Löst OSError aus."""
     import os

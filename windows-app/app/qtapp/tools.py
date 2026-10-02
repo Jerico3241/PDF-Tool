@@ -7,6 +7,7 @@ from __future__ import annotations
 def build_tools(runtime) -> None:
     """Controller der Werkzeuge anlegen und als QML-Singletons eintragen."""
     from .contracts.tool import ContractsTool
+    from .reader.controller import ReaderTool
     from .repair import RepairTool
 
     app = runtime.app
@@ -28,4 +29,9 @@ def build_tools(runtime) -> None:
     repair = RepairTool(app, runtime.cfg)
     runtime.repair = repair
     runtime.singletons["Repair"] = repair.controller
+    app.repair_tool = repair  # beschädigte PDF aus dem Reader an »PDF reparieren« übergeben
+    reader = ReaderTool(app, runtime.cfg)
+    runtime.reader = reader
+    runtime.singletons["Reader"] = reader.controller
+    runtime.image_providers["pdfpage"] = reader.controller.provider
     contracts.start()

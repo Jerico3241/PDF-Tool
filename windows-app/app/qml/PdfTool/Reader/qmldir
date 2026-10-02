@@ -1,0 +1,18 @@
+module PdfTool.Reader
+ReaderPage 1.0 ReaderPage.qml
+ReaderStart 1.0 ReaderStart.qml
+ReaderTabs 1.0 ReaderTabs.qml
+ReaderToolbar 1.0 ReaderToolbar.qml
+ToolOptions 1.0 ToolOptions.qml
+DocumentView 1.0 DocumentView.qml
+PageView 1.0 PageView.qml
+TextEditor 1.0 TextEditor.qml
+FieldOverlay 1.0 FieldOverlay.qml
+ColorChooser 1.0 ColorChooser.qml
+ViewControls 1.0 ViewControls.qml
+LeftPanel 1.0 LeftPanel.qml
+ThumbnailPanel 1.0 ThumbnailPanel.qml
+OutlinePanel 1.0 OutlinePanel.qml
+SearchPanel 1.0 SearchPanel.qml
+CommentsPanel 1.0 CommentsPanel.qml
+OrganizeView 1.0 OrganizeView.qml

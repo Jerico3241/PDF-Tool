@@ -73,6 +73,12 @@ QtObject {
     readonly property color errorHover: c.critical_hover || "#CA4034"
     readonly property color errorPressed: c.critical_pressed || "#CF554B"
 
+    // PDF Reader: Fläche hinter den Seiten, Suchtreffer (auf dem Papier) und Textauswahl
+    readonly property color viewer: c.viewer || "#E6E6E6"
+    readonly property color searchHit: c.search_hit || "#66FFC400"
+    readonly property color searchHitCurrent: c.search_hit_current || "#FF8A00"
+    readonly property color selection: Qt.rgba(accent.r, accent.g, accent.b, 0.32)
+
     // Papier der Kopf-/Fußzeilen-Editoren (wie in der PDF – auch im dunklen Design weiß)
     readonly property color paper: "#FFFFFF"
     readonly property color paperText: "#333333"

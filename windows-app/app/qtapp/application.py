@@ -91,6 +91,7 @@ class Runtime(QObject):
             "Notices": self.app.notices,
         }
         self.preview_lookup: Callable[[str], object] = lambda _ident: None
+        self.image_providers: dict[str, Callable[[], object]] = {}  # weitere Bildquellen der Werkzeuge (je Engine neu)
         self._build_tools()
         # Updates: Prüfung erst nach dem ersten Bild im Hintergrund – der Start wartet nie auf das Netzwerk
         from .updates import UpdatesController
@@ -187,6 +188,8 @@ def create_engine(runtime: Runtime) -> QQmlApplicationEngine:
     engine.addImageProvider("appicon", AppIconProvider(ICON_FILE))
     engine.addImageProvider("mica", MicaProvider(runtime.theme.mica))
     engine.addImageProvider("preview", PreviewProvider(lambda ident: runtime.preview_lookup(ident)))
+    for name, factory in runtime.image_providers.items():
+        engine.addImageProvider(name, factory())
     engine.warnings.connect(_engine_warnings)
     url, import_path = qml_source()
     engine.addImportPath(import_path)
@@ -301,6 +304,14 @@ def main(argv: list[str] | None = None) -> int:
         get_log("sicherung").log(20 if outcome.ok else 40, "Wiederherstellung beim Start: %s", outcome.message)
     cfg = load_config()
     qt_app = create_application(argv)
+    # »Öffnen mit«: PDFs aus der Befehlszeile – läuft PDF Tool schon, öffnet die laufende App sie
+    from . import instance
+
+    paths = instance.pdf_arguments((argv if argv is not None else sys.argv)[1:])
+    if paths:
+        winsys.allow_foreground()
+        if instance.forward(paths):
+            return 0
     runtime = Runtime(cfg)
 
     def report(kind, value, tb) -> None:
@@ -309,7 +320,20 @@ def main(argv: list[str] | None = None) -> int:
 
     sys.excepthook = report
     engine = create_engine(runtime)
-    show_window(runtime, engine)
+    window = show_window(runtime, engine)
+    reader = runtime.reader.controller
+
+    def open_received(received: list[str]) -> None:
+        if window.visibility() == window.Visibility.Minimized:
+            window.showNormal()
+        window.raise_()
+        window.requestActivate()
+        reader.open_external(received)
+
+    server = instance.InstanceServer(open_received, runtime)
+    runtime.app.at_shutdown(server.close)
+    if paths:
+        reader.open_external(paths)
     code = qt_app.exec()
     runtime.app.shutdown()
     finish_incubation(engine)

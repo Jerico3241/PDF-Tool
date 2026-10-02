@@ -146,6 +146,8 @@ T.Popup {
                             case "update_details": return updateContent
                             case "text_input": return textInputContent
                             case "restore_summary": return restoreSummaryContent
+                            case "password": return passwordContent
+                            case "reader_properties": return readerPropertiesContent
                             default: return null
                             }
                         }
@@ -210,4 +212,6 @@ T.Popup {
     Component { id: updateContent; UpdateContent {} }
     Component { id: textInputContent; TextInputContent {} }
     Component { id: restoreSummaryContent; RestoreSummaryContent {} }
+    Component { id: passwordContent; PasswordContent {} }
+    Component { id: readerPropertiesContent; ReaderPropertiesContent {} }
 }

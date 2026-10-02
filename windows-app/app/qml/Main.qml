@@ -4,6 +4,7 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Shell
 import PdfTool.Pages
+import PdfTool.Reader
 
 // Hauptfenster von PDF Tool. Das Fenster bleibt verborgen, bis Python Lage und Titelleiste
 // gesetzt hat; es erscheint mit dem ersten vollständig gezeichneten Bild.
@@ -24,9 +25,10 @@ ApplicationWindow {
         objectName: "shell"
         anchors.fill: parent
         focus: true
-        pages.order: ["home", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings"]
+        pages.order: ["home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings"]
         pages.components: ({
             "home": homePage,
+            "reader": readerPage,
             "create": createPage,
             "layout": layoutPage,
             "preview": previewPage,
@@ -40,6 +42,7 @@ ApplicationWindow {
         })
     }
     Component { id: homePage; HomePage {} }
+    Component { id: readerPage; ReaderPage {} }
     Component { id: createPage; CreatePage {} }
     Component { id: layoutPage; LayoutPage {} }
     Component { id: previewPage; PreviewPage {} }
