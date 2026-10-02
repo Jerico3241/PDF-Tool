@@ -580,6 +580,7 @@ Item {
     // Kontextmenü der Seite
     PMenu {
         id: contextMenu
+        objectName: "readerContextMenu"
         property real u: 0
         property real v: 0
         readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage === root.page

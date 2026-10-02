@@ -7,6 +7,8 @@ import PdfTool.Controls
 // Leiste unter der Befehlsleiste: Einstellungen und Befehle des gewählten Werkzeugs (Farbe,
 // Strichstärke, Schriftgröße; Bild einfügen, drehen, ersetzen, Reihenfolge, löschen) und ein
 // kurzer Hinweis, was ein Klick in die Seite tut. Nur sichtbar, wenn es etwas zu sagen gibt.
+// Eine Textauswahl blendet hier nichts ein: Kopieren, Markieren, Unterstreichen und Durchstreichen
+// stehen im Kontextmenü der Seite (Rechtsklick), Strg+C kopiert.
 Rectangle {
     id: root
     objectName: "readerToolOptions"
@@ -15,12 +17,11 @@ Rectangle {
     readonly property var selected: doc ? doc.selectedObject : ({})
     readonly property bool imageSelected: tool === "image" && selected.kind === "image"
     readonly property bool annotationSelected: tool === "select" && selected.kind === "annotation"
-    readonly property bool textSelected: doc !== null && doc.selectionPage >= 0
     readonly property bool coloredTool: ["addText", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox"].indexOf(tool) >= 0
     readonly property bool strokeTool: ["ink", "rect", "ellipse", "line", "arrow"].indexOf(tool) >= 0
     readonly property bool sizeTool: tool === "addText" || tool === "textbox"
     readonly property string toolColor: doc ? (tool === "highlight" ? doc.markColor : doc.toolColor) : "#000000"
-    readonly property bool shown: doc !== null && (tool !== "select" || annotationSelected || textSelected)
+    readonly property bool shown: doc !== null && (tool !== "select" || annotationSelected)
 
     readonly property string hint: {
         switch (tool) {
@@ -100,11 +101,6 @@ Rectangle {
             currentIndex: root.doc ? Math.max(0, indexOfValue(root.doc.fontSize)) : 2
             onActivated: (index) => root.doc.fontSize = model[index].value
         }
-        // Text ausgewählt (Werkzeug »Auswählen«)
-        PButton { visible: root.textSelected && root.tool === "select"; iconName: "copy"; text: "Kopieren"; onClicked: root.doc.copySelection() }
-        PButton { visible: root.textSelected && root.tool === "select"; iconName: "highlight"; text: "Markieren"; onClicked: root.doc.markSelection("highlight") }
-        PIconButton { visible: root.textSelected && root.tool === "select"; iconName: "text_underline"; tip: "Unterstreichen"; onClicked: root.doc.markSelection("underline") }
-        PIconButton { visible: root.textSelected && root.tool === "select"; iconName: "text_strikethrough"; tip: "Durchstreichen"; onClicked: root.doc.markSelection("strikeout") }
         // Kommentar ausgewählt
         PButton { visible: root.annotationSelected; iconName: "delete"; text: "Kommentar löschen"; onClicked: root.doc.deleteAnnotation(root.selected.key) }
         // Bilder
