@@ -301,6 +301,21 @@ def test_encryption_is_kept_on_save(tmp_path: Path) -> None:
     reopened.close()
 
 
+def test_backup_of_an_old_file_is_kept_after_startup_cleanup(tmp_path: Path) -> None:
+    """Die Sicherung zählt ab dem Zeitpunkt der Sicherung – nicht ab dem Alter der Originaldatei
+    (eine seit Monaten unveränderte PDF darf ihre Sicherung beim nächsten Start nicht verlieren)."""
+    path = samples.standard_text(tmp_path / "alt.pdf")
+    old = time.time() - 90 * 24 * 3600
+    os.utime(path, (old, old))
+    folder = tmp_path / "sicherungen"
+    doc = EditorDocument.open(path)
+    result = save.save(doc, path, backup_dir=folder)
+    doc.close()
+    assert result.backup is not None and result.backup.exists()
+    assert save.cleanup_backups(folder) == 0
+    assert result.backup.exists()
+
+
 def test_backups_are_limited_and_cleaned(tmp_path: Path) -> None:
     path = samples.standard_text(tmp_path / "b.pdf")
     folder = tmp_path / "sicherung"

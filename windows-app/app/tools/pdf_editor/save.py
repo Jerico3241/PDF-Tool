@@ -224,7 +224,9 @@ def _backup(target: Path, backup_dir: Path) -> Path:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     key = hashlib.sha256(str(target.resolve()).encode("utf-8", "replace")).hexdigest()[:10]
     destination = backup_dir / f"{target.stem[:60]}-{key}-{stamp}.pdf"
-    shutil.copy2(target, destination)
+    shutil.copyfile(target, destination)
+    # Zeitpunkt der Sicherung (nicht der der Originaldatei): danach richten sich Reihenfolge und Aufräumen
+    os.utime(destination, None)
     olds = sorted(backup_dir.glob(f"*-{key}-*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
     for old in olds[BACKUPS_PER_FILE:]:
         _remove(old)
