@@ -139,6 +139,57 @@ def complex_content(path: Path) -> Path:
     return path
 
 
+def _helvetica(pdf: pikepdf.Pdf) -> pikepdf.Object:
+    return pdf.make_indirect(Dictionary(Type=Name.Font, Subtype=Name.Type1, BaseFont=Name.Helvetica, Encoding=Name.WinAnsiEncoding))
+
+
+def form_xobject_text(path: Path) -> Path:
+    """Text in einem Formular-XObject (wie ein eingebetteter Briefkopf) und Text direkt auf der Seite."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=A4)
+    font = _helvetica(pdf)
+    head = pdf.make_stream(b"BT /F1 12 Tf 0 10 Td (Briefkopf Muster AG) Tj ET", Type=Name.XObject, Subtype=Name.Form, BBox=Array([0, 0, 300, 40]), Resources=Dictionary(Font=Dictionary(F1=font)))
+    page.Resources = Dictionary(Font=Dictionary(F1=font), XObject=Dictionary(X1=head))
+    page.Contents = pdf.make_stream(b"q 1 0 0 1 72 770 cm /X1 Do Q\nBT /F1 12 Tf 72 700 Td (Text auf der Seite) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def scanned_with_ocr(path: Path) -> Path:
+    """»Gescannte« Seite: Bild mit Schrift, darüber unsichtbarer Text einer Texterkennung (Tr 3)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("L", (600, 100), 244)  # leicht grauer »Papier«-Hintergrund
+    ImageDraw.Draw(image).text((10, 25), "Rechnung 123", fill=20, font=ImageFont.truetype(str(vera_path()), 48))
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=A4)
+    scan = pdf.make_stream(image.tobytes(), Type=Name.XObject, Subtype=Name.Image, Width=600, Height=100, ColorSpace=Name.DeviceGray, BitsPerComponent=8)
+    page.Resources = Dictionary(Font=Dictionary(F1=_helvetica(pdf)), XObject=Dictionary(Im1=scan))
+    page.Contents = pdf.make_stream(b"q 300 0 0 50 72 700 cm /Im1 Do Q\nBT 3 Tr /F1 22 Tf 77 714 Td (Rechnung 123) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def scaled_text(path: Path) -> Path:
+    """Schriftgröße 1 mit skalierter Textmatrix (wirksam 12 pt) – wie bei manchen Programmen."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=A4)
+    page.Resources = Dictionary(Font=Dictionary(F1=_helvetica(pdf)))
+    page.Contents = pdf.make_stream(b"BT /F1 1 Tf 12 0 0 12 72 760 Tm (Skalierter Text) Tj ET\nBT /F1 10 Tf 72 700 Td (Zweite Zeile) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
+def vertical_text(path: Path) -> Path:
+    """Senkrechter Text (Textmatrix um 90° gedreht) neben waagerechtem Text."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=A4)
+    page.Resources = Dictionary(Font=Dictionary(F1=_helvetica(pdf)))
+    page.Contents = pdf.make_stream(b"BT /F1 12 Tf 0 1 -1 0 60 300 Tm (Senkrechter Rand) Tj ET\nBT /F1 12 Tf 100 700 Td (Waagerecht) Tj ET\n")
+    pdf.save(path)
+    return path
+
+
 def with_images(path: Path) -> Path:
     """Ein JPEG und ein PNG mit Transparenz (über ReportLab, Bilder per PIL erzeugt)."""
     from PIL import Image, ImageDraw
@@ -174,10 +225,10 @@ def structured(path: Path) -> Path:
     link = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Link, Rect=Array([72, 50, 200, 70]), Border=Array([0, 0, 0]), Dest=Array([pdf.pages[2].obj, Name.Fit])))
     note = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([400, 760, 420, 780]), Contents=String("Bitte prüfen"), Name=Name.Comment, C=Array([1, 0.8, 0])))
     pdf.pages[0].Annots = pdf.make_indirect(Array([link, note]))
-    pdf.attachments["notiz.txt"] = pikepdf.AttachedFileSpec(pdf, b"Anhang zum Test", mime_type="text/plain")
     layer = pdf.make_indirect(Dictionary(Type=Name.OCG, Name=String("Wasserzeichen")))
     pdf.Root.OCProperties = Dictionary(OCGs=Array([layer]), D=Dictionary(ON=Array([layer])))
     pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=Dictionary(Names=Array([String("ende"), Array([pdf.pages[2].obj, Name.Fit])]))))
+    pdf.attachments["notiz.txt"] = pikepdf.AttachedFileSpec(pdf, b"Anhang zum Test", mime_type="text/plain")  # nach /Names (sonst überschrieben)
     with pdf.open_metadata() as meta:
         meta["dc:title"] = "Strukturtest"
     pdf.save(path)

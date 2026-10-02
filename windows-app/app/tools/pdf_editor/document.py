@@ -340,7 +340,7 @@ def _inspect(pdf: pikepdf.Pdf, report: OpenReport) -> None:
         form = root.get("/AcroForm")
         if form is not None:
             report.xfa = "/XFA" in form
-            report.signed = sum(1 for field in _fields(form.get("/Fields")) if field.get("/FT") == pikepdf.Name.Sig and field.get("/V") is not None)
+            report.signed = sum(1 for item in _fields(form.get("/Fields")) if item.get("/FT") == pikepdf.Name.Sig and item.get("/V") is not None)
     except (pikepdf.PdfError, TypeError, AttributeError):
         pass
     try:
@@ -358,10 +358,10 @@ def _inspect(pdf: pikepdf.Pdf, report: OpenReport) -> None:
 def _fields(fields, depth: int = 0):
     if fields is None or depth > 32:
         return
-    for field in fields:
-        if not isinstance(field, pikepdf.Dictionary):
+    for item in fields:
+        if not isinstance(item, pikepdf.Dictionary):
             continue
-        yield field
-        kids = field.get("/Kids")
+        yield item
+        kids = item.get("/Kids")
         if kids is not None:
             yield from _fields(kids, depth + 1)

@@ -200,7 +200,8 @@ def record(document: EditorDocument, history: History, title: str, *, pages: tup
         raise
     command = Command(title, recorder.before(), recorder._snapshot(), pages=tuple(pages), structure=recorder.structure, info=dict(recorder.info))
     history.push(command)
-    document.touch()
+    if not recorder.fresh:
+        document.touch()
 
 
 class _EagerRecorder(Recorder):
@@ -211,6 +212,9 @@ class _EagerRecorder(Recorder):
         self._before: list[ObjectState] = []
         self._order: PageOrder | None = None
         self.info: dict = {}
+        # ``True``: Die Änderung ist abgeschlossen und die Darstellung wurde danach schon neu
+        # geladen (z. B. zur Prüfung) – dann kein weiteres ``touch()`` (spart ein Serialisieren).
+        self.fresh = False
 
     def object(self, obj: pikepdf.Object, keys) -> None:
         keys = tuple(keys)
