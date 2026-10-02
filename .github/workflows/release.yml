@@ -1,0 +1,207 @@
+name: Release
+
+# Der einzige Weg, ein Release zu veröffentlichen (Beta und Stable) – nur manuell auf main.
+# Veröffentlicht wird genau das Setup, das der main-Lauf von »Windows-Setup« für diesen Commit
+# gebaut, installiert, aktualisiert, gestartet und getestet hat (Release Candidate). Dieser
+# Workflow baut nichts und führt die Testsuite nicht erneut aus:
+#   1. Release-Commit bestimmen (Standard: aktueller Stand von main)
+#   2. der Commit liegt auf main
+#   3. für GENAU diesen Commit gibt es einen erfolgreichen main-Lauf von »Windows-Setup« – ein Lauf
+#      eines anderen Commits zählt nie
+#   4. dessen Artifact »PDF-Tool-Release-Candidate-<Commit-SHA>« laden
+#   5. Manifest (Commit, Lauf, Version, Setup, SHA-256), Dateinamen, Prüfsumme (neu berechnet),
+#      Dateiversion, VERSION und Release Notes des Commits prüfen
+#   6. Beta vor Stable (Patch-Hotfix ohne Beta nur nach ausdrücklicher Entscheidung)
+#   7. Release und Tag dürfen noch nicht existieren (nie überschreiben, nie verschieben)
+#   8. Release mit genau diesen beiden Dateien erstellen (Beta → Vorabversion, Stable → »Latest«),
+#      Tag auf den geprüften Commit, danach das veröffentlichte Release prüfen
+# Ist der Release Candidate abgelaufen oder fehlt er, wird nichts neu gebaut: zuerst »Windows-Setup«
+# auf main erneut vollständig laufen lassen (manueller Start) oder einen neuen Commit verwenden.
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Release-Commit auf main (vollständiger SHA) – leer: aktueller Stand von main"
+        type: string
+        required: false
+        default: ""
+      hotfix_ohne_beta:
+        description: "Nur Patch-Hotfix X.Y.Z (Z > 0) nach ausdrücklicher Entscheidung: Stable ohne vorherige Beta veröffentlichen"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release veröffentlichen (geprüfter Release Candidate von main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # Release und Tag anlegen
+      actions: read # main-Lauf und sein Artifact lesen
+    steps:
+      - name: 1. Release-Commit bestimmen
+        id: commit
+        env:
+          INPUT_COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Sicherheitsabbruch: Releases nur von main (gestartet auf ${GITHUB_REF})." >&2
+            exit 1
+          fi
+          sha="${INPUT_COMMIT:-${GITHUB_SHA}}"
+          if ! [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Sicherheitsabbruch: Der Release-Commit muss ein vollständiger Commit-SHA sein (40 Hex-Zeichen, klein): ${sha}" >&2
+            exit 1
+          fi
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+          echo "Release-Commit: ${sha}"
+
+      # Prüfskripte vom Stand dieses Workflows (main), Inhalt (VERSION, Release Notes) vom Release-Commit
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: tools
+          persist-credentials: false
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.commit.outputs.sha }}
+          path: release
+          fetch-depth: 0 # alle Zweige: der Commit muss auf main liegen
+          persist-credentials: false
+
+      - name: 2. Der Release-Commit liegt auf main
+        working-directory: release
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${SHA}" || { echo "Sicherheitsabbruch: Checkout ist nicht ${SHA}" >&2; exit 1; }
+          git merge-base --is-ancestor "${SHA}" origin/main || { echo "Sicherheitsabbruch: ${SHA} liegt nicht auf main" >&2; exit 1; }
+
+      - name: "3. Erfolgreichen main-Lauf von »Windows-Setup« für genau diesen Commit finden"
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/windows-setup.yml/runs?head_sha=${SHA}&branch=main&status=success&per_page=100" > runs.json
+          if ! runs="$(python3 tools/windows-app/release_candidate.py runs runs.json --commit "${SHA}")"; then
+            echo "Sicherheitsabbruch: Für ${SHA} gibt es keinen erfolgreichen main-Lauf von »Windows-Setup«. Ein Lauf eines anderen Commits zählt nicht – zuerst diesen Stand auf main vollständig prüfen lassen." >&2
+            exit 1
+          fi
+          for run in ${runs}; do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run}/artifacts?name=PDF-Tool-Release-Candidate-${SHA}" > artifacts.json
+            if artifact="$(python3 tools/windows-app/release_candidate.py artifact artifacts.json --commit "${SHA}" --run "${run}")"; then
+              echo "run=${run}" >> "${GITHUB_OUTPUT}"
+              echo "Geprüfter main-Lauf: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${run} · Release Candidate ${artifact}"
+              exit 0
+            fi
+          done
+          echo "Sicherheitsabbruch: Der Release Candidate von ${SHA} ist nicht (mehr) vorhanden. Nichts wird neu gebaut: »Windows-Setup« auf main erneut vollständig laufen lassen oder einen neuen Commit verwenden." >&2
+          exit 1
+
+      - name: 4. Release Candidate laden (Artifact des main-Laufs – kein neuer Build)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: PDF-Tool-Release-Candidate-${{ steps.commit.outputs.sha }}
+          path: rc
+          run-id: ${{ steps.run.outputs.run }}
+          github-token: ${{ github.token }}
+
+      - name: 5. Release Candidate prüfen (Manifest, Commit, Lauf, VERSION, Dateinamen, SHA-256, Dateiversion, Release Notes)
+        id: check
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+          RUN: ${{ steps.run.outputs.run }}
+        run: python3 tools/windows-app/release_candidate.py verify rc --commit "${SHA}" --run "${RUN}" --root release --github-output "${GITHUB_OUTPUT}"
+
+      - name: 6. Beta vor Stable (stabiles Release nur nach einer veröffentlichten Beta derselben Version)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+          PRERELEASE: ${{ steps.check.outputs.prerelease }}
+          HOTFIX: ${{ inputs.hotfix_ohne_beta }}
+        run: |
+          set -euo pipefail
+          if [ "${PRERELEASE}" = "true" ]; then
+            echo "Beta ${TAG}: wird als Vorabversion veröffentlicht."
+            exit 0
+          fi
+          betas="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.prerelease and (.draft | not) and (.tag_name | startswith(\"${TAG}-beta.\"))) | .tag_name")"
+          if [ -n "${betas}" ]; then
+            echo "Veröffentlichte Betas von ${TAG}:"
+            echo "${betas}"
+            exit 0
+          fi
+          patch="${TAG##*.}"
+          if [ "${HOTFIX}" = "true" ] && [ "${patch}" != "0" ]; then
+            echo "Patch-Hotfix ${TAG} ohne vorherige Beta – ausdrücklich bestätigt (hotfix_ohne_beta)."
+            exit 0
+          fi
+          echo "Sicherheitsabbruch: Für ${TAG} gibt es keine veröffentlichte Beta (${TAG}-beta.N). Jede neue Version beginnt als Beta; Stable erst nach Test und ausdrücklicher Freigabe." >&2
+          exit 1
+
+      - name: 7.–8. Unveränderliches Release erstellen (genau diese Dateien, Tag auf den geprüften Commit)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          TAG: ${{ steps.check.outputs.tag }}
+          TITLE: ${{ steps.check.outputs.title }}
+          PRERELEASE: ${{ steps.check.outputs.prerelease }}
+          SETUP: ${{ steps.check.outputs.setup }}
+          CHECKSUM: ${{ steps.check.outputs.checksum }}
+          NOTES: ${{ steps.check.outputs.notes }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Sicherheitsabbruch: Release ${TAG} existiert bereits. Veröffentlichte Releases werden nicht überschrieben; bitte eine neue Version veröffentlichen." >&2
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Sicherheitsabbruch: Tag ${TAG} existiert bereits und wird nicht verschoben." >&2
+            exit 1
+          fi
+          if [ "${PRERELEASE}" = "true" ]; then
+            flags=(--prerelease --latest=false) # Beta: GitHub-Vorabversion, nie »Latest«
+          else
+            flags=(--latest)
+          fi
+          gh release create "${TAG}" "rc/${SETUP}" "rc/${CHECKSUM}" --repo "${GITHUB_REPOSITORY}" --target "${SHA}" --title "${TITLE}" --notes-file "${NOTES}" "${flags[@]}"
+
+      - name: Veröffentlichtes Release prüfen (Tag → Commit, Vorabversion, Assets, SHA-256 des veröffentlichten Setups)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          RUN: ${{ steps.run.outputs.run }}
+          TAG: ${{ steps.check.outputs.tag }}
+          PRERELEASE: ${{ steps.check.outputs.prerelease }}
+          SETUP: ${{ steps.check.outputs.setup }}
+          CHECKSUM: ${{ steps.check.outputs.checksum }}
+          DIGEST: ${{ steps.check.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)" = "${SHA}" || { echo "Tag ${TAG} zeigt nicht auf ${SHA}" >&2; exit 1; }
+          info="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft,isPrerelease,assets --jq '[.isDraft, .isPrerelease, ([.assets[].name] | sort | join(","))] | @tsv')"
+          test "${info}" = "$(printf 'false\t%s\t%s' "${PRERELEASE}" "${SETUP},${CHECKSUM}")" || { echo "Release ${TAG} stimmt nicht: ${info}" >&2; exit 1; }
+          mkdir -p check
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir check
+          test "$(sha256sum "check/${SETUP}" | awk '{print $1}')" = "${DIGEST}" || { echo "Veröffentlichtes Setup weicht vom Release Candidate ab" >&2; exit 1; }
+          cmp "check/${CHECKSUM}" "rc/${CHECKSUM}" || { echo "Veröffentlichte Prüfsumme weicht ab" >&2; exit 1; }
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}"
+          {
+            echo "### ${TAG} veröffentlicht"
+            echo "- Commit: \`${SHA}\`"
+            echo "- Geprüfter main-Lauf: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${RUN}"
+            echo "- Setup: \`${SETUP}\` · SHA-256 \`${DIGEST}\`"
+            echo "- Vorabversion (Beta): ${PRERELEASE}"
+          } >> "${GITHUB_STEP_SUMMARY}"

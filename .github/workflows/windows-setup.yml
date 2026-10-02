@@ -1,6 +1,7 @@
 name: Windows-Setup
 
-# Normaler Lauf (Push, Pull Request, Release):
+# Vollständige Prüfung – bei jedem Pull Request und nach jedem Merge auf main (Push); manuell auch
+# für den aktuellen Stand eines Zweigs:
 #   1. Tests – Kernlogik, Vorlagen, Regelwerk, Sicherung/Wiederherstellung, Diagnose,
 #      Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.2), PDF reparieren, Updater
 #      (lokaler Testserver, nie Live-GitHub), PDF Editor; die Qt-Oberflächentests laufen gleichzeitig
@@ -12,20 +13,18 @@ name: Windows-Setup
 #   5. Runtime-Smoke-Test  6. QML-Smoke-Test
 #   7. Updater-E2E-Test: Mock-Release → Download → SHA-256 → bereit → Start des Setups über den
 #      Hilfsprozess (Inno-Setup-Attrappe); nur lesend HTTPS zu GitHub (Schannel)
-#   8. Release – manuell (»release«) oder durch einen Tag vX.Y.Z bzw. vX.Y.Z-beta.N auf main:
-#      Beta-Versionen werden GitHub-Vorabversionen, stabile Versionen normale Releases;
-#      veröffentlichte Releases und Tags werden nie überschrieben oder verschoben.
-#      Beta vor Stable: Ein stabiles Release setzt eine veröffentlichte Beta derselben Version
-#      voraus (vX.Y.Z-beta.N). Nur ein Patch-Hotfix (Z > 0) darf nach ausdrücklicher Entscheidung
-#      (»hotfix_ohne_beta«) direkt Stable werden – eine neue Funktionsversion (X.Y.0) nie.
+#   8. Nur auf main und nur, wenn alles bestanden ist: Release Candidate speichern – genau das
+#      geprüfte Setup und seine Prüfsumme als Artifact »PDF-Tool-Release-Candidate-<Commit-SHA>«
+#      mit Manifest (Commit, Lauf, Version, SHA-256), 90 Tage aufbewahrt.
+# Veröffentlicht wird nur über den Workflow »Release« (release.yml): Er lädt den Release Candidate
+# eines erfolgreichen main-Laufs für genau den Release-Commit und veröffentlicht ihn unverändert –
+# ohne neuen Build und ohne erneute Tests (Beta vor Stable, Hotfix-Regel, unveränderliche Releases).
 # Keine historische Update-Matrix: ältere Versionen prüft nur der manuelle Workflow
 # »Deep Compatibility Test« (deep-compatibility.yml).
 
 on:
   push:
     branches: [main]
-    # Release per Tag: vX.Y.Z (Stable) oder vX.Y.Z-beta.N (Beta) – Pfadfilter gelten für Tags nicht
-    tags: ["v*"]
     paths:
       - "windows-app/**"
       - "THIRD_PARTY_LICENSES.md"
@@ -35,24 +34,15 @@ on:
       - "windows-app/**"
       - "THIRD_PARTY_LICENSES.md"
       - ".github/workflows/windows-setup.yml"
-  release:
-    types: [published]
+  # Erneuter vollständiger Lauf – z. B. wenn der Release Candidate eines main-Stands abgelaufen ist
+  # oder ein Commit auf main wegen der Pfadfilter keinen Lauf hatte
   workflow_dispatch:
-    inputs:
-      release:
-        description: "Nach bestandenen Prüfungen das Release v<Version> (»PDF Tool <Version>«) mit Setup und SHA-256 veröffentlichen"
-        type: boolean
-        default: false
-      hotfix_ohne_beta:
-        description: "Nur Patch-Hotfix X.Y.Z (Z > 0) nach ausdrücklicher Entscheidung: Stable ohne vorherige Beta veröffentlichen"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
-# Ein neuer Push in denselben Pull Request ersetzt den laufenden Lauf; main, Releases und
-# manuelle Läufe laufen immer zu Ende.
+# Ein neuer Push in denselben Pull Request ersetzt den laufenden Lauf; main und manuelle Läufe
+# laufen immer zu Ende.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -278,150 +268,42 @@ jobs:
           & ./windows-app/build/payload/runtime/python.exe -s windows-app/tests/smoke_updater.py --app windows-app/build/payload/app --fake-setup (Join-Path $fake "fake-update-setup.exe") --live
           if ($LASTEXITCODE -ne 0) { throw "Updater-E2E-Test fehlgeschlagen" }
 
+      # Setup dieses Laufs (auch zum Ausprobieren eines Pull Requests); auf main übernimmt Schritt 8
+      # genau diese Dateien als Release Candidate
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: PDF-Tool-Setup
+          name: PDF-Tool-Setup-${{ github.sha }}
           path: |
             windows-app/dist/*.exe
             windows-app/dist/*.sha256
           if-no-files-found: error
+          retention-days: 14
 
-  attach:
-    name: An Release anhängen
+  release-candidate:
+    name: 8. Release Candidate speichern (main)
     needs: [qt-tests, setup]
-    # ein auf GitHub veröffentlichtes Release erhält das Setup erst, wenn alle Tests bestanden sind
-    if: github.event_name == 'release'
+    # nur auf main (Push oder manueller Lauf) und nur, wenn alle Tests, der Build und alle
+    # Installer-Prüfungen dieses Laufs bestanden sind
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: PDF-Tool-Setup
-          path: dist
-
-      - name: Setup und Prüfsumme sicher anhängen (nie überschreiben)
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag="${{ github.event.release.tag_name }}"
-          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}")"
-          for file in dist/*.exe dist/*.sha256; do
-            name="$(basename "${file}")"
-            existing_name="$(printf '%s' "${release_json}" | jq -r --arg name "${name}" '.assets[] | select(.name == $name) | .name' | head -n1)"
-            if [ -n "${existing_name}" ]; then
-              existing_digest="$(printf '%s' "${release_json}" | jq -r --arg name "${name}" '.assets[] | select(.name == $name) | (.digest // "")' | head -n1)"
-              local_digest="sha256:$(sha256sum "${file}" | awk '{print $1}')"
-              if [ -n "${existing_digest}" ] && [ "${existing_digest}" = "${local_digest}" ]; then
-                echo "${name} ist bereits unverändert am Release vorhanden."
-                continue
-              fi
-              echo "Sicherheitsabbruch: Release-Asset ${name} existiert bereits und wird nicht überschrieben." >&2
-              exit 1
-            fi
-            gh release upload "${tag}" "${file}" --repo "${GITHUB_REPOSITORY}"
-          done
-
-  release:
-    name: 8. Release veröffentlichen
-    needs: [qt-tests, setup]
-    # manuell auf main (»release«) oder durch einen Tag vX.Y.Z / vX.Y.Z-beta.N – immer erst, wenn alle
-    # Tests, der Build und die Setup-Prüfungen bestanden sind
-    if: (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          fetch-depth: 0 # alle Zweige: ein Tag muss auf einen Stand von main zeigen
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - name: Geprüftes Setup dieses Laufs übernehmen (kein neuer Build)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: PDF-Tool-Setup
-          path: dist
+          name: PDF-Tool-Setup-${{ github.sha }}
+          path: rc
 
-      - name: Release-Dateien prüfen (Version, Namen, Prüfsumme, Release Notes; Beta → Vorabversion)
-        id: check
-        run: python3 windows-app/release_check.py dist --github-output "$GITHUB_OUTPUT"
+      - name: Release Candidate prüfen und dem Commit zuordnen (Manifest – Commit, Lauf, Version, SHA-256)
+        run: python3 windows-app/release_candidate.py write rc --commit "${GITHUB_SHA}" --run "${GITHUB_RUN_ID}" --attempt "${GITHUB_RUN_ATTEMPT}"
 
-      - name: Beta vor Stable (stabiles Release nur nach einer veröffentlichten Beta derselben Version)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.check.outputs.tag }}
-          PRERELEASE: ${{ steps.check.outputs.prerelease }}
-          HOTFIX: ${{ github.event_name == 'workflow_dispatch' && inputs.hotfix_ohne_beta }}
-        run: |
-          set -euo pipefail
-          if [ "${PRERELEASE}" = "true" ]; then
-            echo "Beta ${TAG}: wird als Vorabversion veröffentlicht."
-            exit 0
-          fi
-          betas="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.prerelease and (.draft | not) and (.tag_name | startswith(\"${TAG}-beta.\"))) | .tag_name")"
-          if [ -n "${betas}" ]; then
-            echo "Veröffentlichte Betas von ${TAG}:"
-            echo "${betas}"
-            exit 0
-          fi
-          patch="${TAG##*.}"
-          if [ "${HOTFIX}" = "true" ] && [ "${patch}" != "0" ]; then
-            echo "Patch-Hotfix ${TAG} ohne vorherige Beta – ausdrücklich bestätigt (hotfix_ohne_beta)."
-            exit 0
-          fi
-          echo "Sicherheitsabbruch: Für ${TAG} gibt es keine veröffentlichte Beta (${TAG}-beta.N). Jede neue Version beginnt als Beta; Stable erst nach Test und ausdrücklicher Freigabe." >&2
-          exit 1
-
-      - name: Unveränderliches Release erstellen (Beta → Vorabversion, Stable → »Latest«)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.check.outputs.tag }}
-          TITLE: ${{ steps.check.outputs.title }}
-          PRERELEASE: ${{ steps.check.outputs.prerelease }}
-          SETUP: ${{ steps.check.outputs.setup }}
-          CHECKSUM: ${{ steps.check.outputs.checksum }}
-          NOTES: ${{ steps.check.outputs.notes }}
-        run: |
-          set -euo pipefail
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Sicherheitsabbruch: Release ${TAG} existiert bereits. Veröffentlichte Releases werden nicht überschrieben; bitte eine neue Version veröffentlichen." >&2
-            exit 1
-          fi
-          if [ "${PRERELEASE}" = "true" ]; then
-            flags=(--prerelease --latest=false)  # Beta: GitHub-Vorabversion, nie »Latest«
-          else
-            flags=(--latest)
-          fi
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            # Tag-Release: der Tag heißt genau v<VERSION> und zeigt auf einen Stand von main; er wird
-            # nie verschoben, eine Beta nie automatisch zu Stable
-            test "${GITHUB_REF_NAME}" = "${TAG}" || { echo "Tag ${GITHUB_REF_NAME} passt nicht zu VERSION (${TAG})" >&2; exit 1; }
-            git merge-base --is-ancestor "${GITHUB_SHA}" origin/main || { echo "Tag ${TAG} zeigt nicht auf einen Stand von main" >&2; exit 1; }
-            gh release create "${TAG}" "dist/${SETUP}" "dist/${CHECKSUM}" --verify-tag --title "${TITLE}" --notes-file "${NOTES}" "${flags[@]}"
-          else
-            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
-              echo "Sicherheitsabbruch: Tag ${TAG} existiert bereits und wird nicht verschoben." >&2
-              exit 1
-            fi
-            gh release create "${TAG}" "dist/${SETUP}" "dist/${CHECKSUM}" --target "${GITHUB_SHA}" --title "${TITLE}" --notes-file "${NOTES}" "${flags[@]}"
-          fi
-
-      - name: Veröffentlichtes Release prüfen (Tag, Vorabversion, Assets, Prüfsumme)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.check.outputs.tag }}
-          PRERELEASE: ${{ steps.check.outputs.prerelease }}
-          SETUP: ${{ steps.check.outputs.setup }}
-          CHECKSUM: ${{ steps.check.outputs.checksum }}
-        run: |
-          set -euo pipefail
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)" = "${GITHUB_SHA}" || { echo "Tag ${TAG} zeigt nicht auf ${GITHUB_SHA}" >&2; exit 1; }
-          info="$(gh release view "${TAG}" --json isDraft,isPrerelease,assets --jq '[.isDraft, .isPrerelease, ([.assets[].name] | sort | join(","))] | @tsv')"
-          test "${info}" = "$(printf 'false\t%s\t%s' "${PRERELEASE}" "${SETUP},${CHECKSUM}")" || { echo "Release ${TAG} stimmt nicht: ${info}" >&2; exit 1; }
-          mkdir -p check && gh release download "${TAG}" --pattern "${CHECKSUM}" --dir check
-          cmp "check/${CHECKSUM}" "dist/${CHECKSUM}" || { echo "Veröffentlichte Prüfsumme weicht ab" >&2; exit 1; }
-          gh release view "${TAG}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: PDF-Tool-Release-Candidate-${{ github.sha }}
+          path: rc/
+          if-no-files-found: error
+          retention-days: 90 # lange genug für Beta- und Stable-Freigaben; danach erneuter main-Lauf

@@ -43,10 +43,52 @@ Dateien bieten die Kanäle nicht an. Entwürfe (Drafts) sehen weder Stable noch 
   PDF-Verarbeitung, Datenformaten, Installer, Updater, Sicherung/Wiederherstellung, Qt/QML, Regeln,
   Vorlagen oder Persistenz gehen immer zuerst als Beta hinaus.
 
-Der Release-Workflow setzt die Regel durch (Schritt „Beta vor Stable“): Ein stabiles Release bricht
+Der Workflow „Release“ setzt die Regel durch (Schritt „Beta vor Stable“): Ein stabiles Release bricht
 ab, wenn es keine veröffentlichte Beta derselben Version gibt (`vX.Y.Z-beta.N`, Vorabversion, kein
-Entwurf). Einzige Ausnahme: ein manueller Lauf mit `hotfix_ohne_beta: true` für eine Patch-Version
+Entwurf). Einzige Ausnahme: ein Lauf mit `hotfix_ohne_beta: true` für eine Patch-Version
 (Z > 0) – eine neue Funktionsversion (`X.Y.0`) kann nie ohne Beta Stable werden.
+
+## Build once – Test – Release genau dieses Setup
+
+Veröffentlicht wird immer genau das Setup, das vorher gebaut, installiert, aktualisiert, gestartet
+und getestet wurde – kein zweiter Build nur für das Release.
+
+| Workflow | Wann | Was |
+| --- | --- | --- |
+| **Windows-Setup** (`windows-setup.yml`) | jeder Pull Request; jeder Push auf `main`; manuell | vollständige Prüfung: alle Tests (Kern, Qt/QML, PDF Editor, PDF reparieren, Migration, Updater), Setup bauen, Release-Dateien prüfen, Clean-Install-, Upgrade-, Runtime-, QML- und Updater-E2E-Test |
+| | nur auf `main`, nur wenn alle Jobs bestanden sind | **Release Candidate** speichern: Artifact `PDF-Tool-Release-Candidate-<Commit-SHA>` (Setup, `.sha256`, Manifest `release-candidate.json`), 90 Tage aufbewahrt |
+| **Release** (`release.yml`) | nur manuell auf `main` | veröffentlicht den Release Candidate eines erfolgreichen main-Laufs – baut nichts, testet nicht erneut |
+
+**Commit ↔ Artifact:** Der Name des Artifacts enthält den vollständigen Commit-SHA; das Manifest nennt
+Commit, Lauf, Version, Setup und SHA-256 des Setups (`windows-app/release_candidate.py write`).
+GitHub ordnet jedes Artifact zusätzlich seinem Lauf zu (Lauf, Commit, Zweig).
+
+**Was der Workflow „Release“ prüft** (`windows-app/release_candidate.py`):
+
+1. Release-Commit bestimmen: Standard ist der aktuelle Stand von `main`; optional ein vollständiger
+   Commit-SHA (`commit`). Der Workflow läuft nur auf `main`.
+2. Der Commit liegt auf `main`.
+3. Für **genau diesen Commit** gibt es einen abgeschlossenen, erfolgreichen main-Lauf von
+   „Windows-Setup“ (Push oder manueller Lauf). Ein erfolgreicher Lauf eines anderen Commits zählt nie
+   (CI für `abc123`, Release-Commit `abc124` → abgelehnt).
+4. Dessen Artifact `PDF-Tool-Release-Candidate-<Commit-SHA>` – nicht abgelaufen, von genau diesem
+   Lauf, Commit und Zweig – wird geladen.
+5. Manifest: Commit und Lauf stimmen; Version = `windows-app/VERSION` des Commits; Dateinamen exakt;
+   keine fremden Dateien; SHA-256 des Setups neu berechnet = Prüfsummendatei = Manifest;
+   Dateiversion im Setup; Release Notes des Commits vorhanden. Jede Abweichung bricht ab.
+6. Beta vor Stable (Hotfix-Regel wie oben).
+7. Release und Tag `v<Version>` existieren noch nicht – nie überschreiben, nie verschieben.
+8. Release mit genau diesen beiden Dateien erstellen (Beta → Vorabversion, nie „Latest“;
+   Stable → „Latest“), Tag auf den geprüften Commit. Danach: Tag → Commit, Vorabversion ja/nein,
+   genau die beiden Dateien, SHA-256 des veröffentlichten Setups = Release Candidate.
+
+**Fehlt der Release Candidate** (abgelaufen, oder ein Commit auf `main` hatte wegen der Pfadfilter
+keinen Lauf), baut „Release“ nichts nach: „Windows-Setup“ auf `main` manuell starten – das prüft den
+Stand vollständig neu und speichert einen neuen Release Candidate – oder einen neuen Commit verwenden.
+
+Es gibt nur diesen einen Veröffentlichungsweg. Ein Tag-Push oder ein im Web angelegtes Release löst
+keinen Workflow aus; ein solches Release hätte kein geprüftes Setup – die App bietet Releases ohne
+Setup und Prüfsummendatei nie an.
 
 ## Ablauf
 
@@ -57,24 +99,19 @@ v2.8.0-beta.1  →  testen  →  Fehler gefunden  →  v2.8.0-beta.2  →  teste
 ```
 
 1. **Beta veröffentlichen:** `windows-app/VERSION` auf `2.8.0-beta.1` setzen, Release Notes
-   `windows-app/release-notes/2.8.0-beta.1.md` anlegen, per Pull Request auf `main` bringen. Dann
-   entweder den Tag setzen
-
-   ```
-   git tag v2.8.0-beta.1
-   git push origin v2.8.0-beta.1
-   ```
-
-   oder den Workflow „Windows-Setup“ auf `main` mit `release: true` starten. Der Workflow baut das
-   Setup, führt alle Tests und Installer-Prüfungen aus und veröffentlicht danach eine
-   **GitHub-Vorabversion** mit Setup und Prüfsumme. Anschließend den Workflow „Update-Test“
+   `windows-app/release-notes/2.8.0-beta.1.md` anlegen, per Pull Request auf `main` bringen. Der
+   main-Lauf von „Windows-Setup“ prüft den Merge-Commit vollständig und speichert seinen Release
+   Candidate. Danach den Workflow „Release“ auf `main` starten: Er veröffentlicht genau dieses Setup
+   als **GitHub-Vorabversion** mit Prüfsumme. Anschließend den Workflow „Update-Test“
    starten (`von: 2.7.2`, `ziel: 2.8.0-beta.1`, `kanal: beta`): Er aktualisiert eine installierte
    stabile Version über ihren eigenen Updater im Kanal „Beta“ und prüft das Ergebnis.
 2. **Weitere Betas** genauso mit `2.8.0-beta.2`, `2.8.0-beta.3` …
 3. **Stable veröffentlichen:** bewusst und erst nach Test und Freigabe – `windows-app/VERSION` auf
-   `2.8.0`, Release Notes `2.8.0.md`, Pull Request, dann Tag `v2.8.0` (bzw. Workflow mit
-   `release: true`). Der Workflow baut das Setup neu und prüft, dass eine Beta von `2.8.0`
-   veröffentlicht ist. Es entsteht ein **normales Release**, das „Latest“ wird. Anschließend den
+   `2.8.0`, Release Notes `2.8.0.md`, Pull Request. Weil sich die Version ändert, ist Stable ein
+   eigener Build: Der main-Lauf prüft den neuen Commit vollständig (Tests, Setup, Installer-Tests)
+   und speichert seinen Release Candidate – nie ein umbenanntes Beta-Setup. Dann den Workflow
+   „Release“ auf `main` starten; er prüft zusätzlich, dass eine Beta von `2.8.0` veröffentlicht ist.
+   Es entsteht ein **normales Release**, das „Latest“ wird. Anschließend den
    Workflow „Update-Test“ für beide Wege starten: `von: 2.7.2`, `ziel: 2.8.0`, `kanal: stable`
    (Anwender der stabilen Version) und `von: 2.8.0-beta.1`, `ziel: 2.8.0`, `kanal: beta`
    (Beta-Tester; die letzte Beta der Version).
@@ -87,21 +124,21 @@ Hinweis: Die Downloadseite (`src/components/landing-page.tsx`) zeigt die Version
 
 ## Prüfungen vor der Veröffentlichung
 
-`windows-app/release_check.py` läuft im Build und noch einmal im Release-Schritt:
+`windows-app/release_check.py` läuft im Build, beim Speichern des Release Candidates und noch einmal
+im Workflow „Release“ (über `release_candidate.py verify`):
 
-- Version gültig (`X.Y.Z` oder `X.Y.Z-beta.N`), Tag `vX.Y.Z…` passt zu `windows-app/VERSION` und
-  zeigt auf einen Stand von `main`
+- Version gültig (`X.Y.Z` oder `X.Y.Z-beta.N`), Tag `vX.Y.Z…` passt zu `windows-app/VERSION` des
+  Release-Commits, der auf `main` liegt
 - Setup und Prüfsummendatei vorhanden, Namen exakt nach der Konvention, keine fremden Dateien
 - die Prüfsumme gehört exakt zum Setup, die Dateiversion im Setup stimmt
 - Release Notes vorhanden
 
 Nach der Veröffentlichung prüft der Workflow das Release: Tag → Commit, Vorabversion ja/nein,
-genau die beiden Dateien, veröffentlichte Prüfsumme = gebaute Prüfsumme.
+genau die beiden Dateien, SHA-256 des veröffentlichten Setups = Release Candidate.
 
-Veröffentlichte Releases sind unveränderlich: Gibt es das Release einer Version schon (oder beim
-manuellen Start bereits ihren Tag), bricht der Workflow ab; Tags werden nie verschoben, Dateien eines
-Releases nie überschrieben. Eine Korrektur erscheint als neue Version (z. B. `2.8.0-beta.2` oder
-`2.8.1`).
+Veröffentlichte Releases sind unveränderlich: Gibt es das Release einer Version oder ihren Tag schon,
+bricht der Workflow ab; Tags werden nie verschoben, Dateien eines Releases nie überschrieben. Eine
+Korrektur erscheint als neue Version (z. B. `2.8.0-beta.2` oder `2.8.1`).
 
 ## Was die Kanäle sehen
 

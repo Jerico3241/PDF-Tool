@@ -24,8 +24,8 @@ der Importtabellen der DLLs), entfernt tkinter/Tcl/Tk aus der Laufzeit und prüf
 die nativen Bibliotheken von qpdf und PDFium sowie Qt Quick enthalten sind – und keine Reste der
 früheren Tk-Oberfläche.
 
-Die GitHub-Action [`windows-setup.yml`](../.github/workflows/windows-setup.yml) baut das Setup auf
-`windows-latest` in dieser Reihenfolge:
+Die GitHub-Action [`windows-setup.yml`](../.github/workflows/windows-setup.yml) prüft jeden Pull
+Request und jeden Stand von `main` vollständig – auf `windows-latest` in dieser Reihenfolge:
 
 1. **Tests:** Kernlogik, Updater (SemVer, Kanäle, Prüfsummen, Download und Hilfsprozess gegen einen
    lokalen Testserver – nie gegen das echte GitHub), Qt-Oberfläche (ohne Bildschirm; in drei
@@ -46,8 +46,14 @@ Die GitHub-Action [`windows-setup.yml`](../.github/workflows/windows-setup.yml) 
    Download → SHA-256 → bereit → der Hilfsprozess startet eine Inno-Setup-Attrappe erst nach dem
    Ende der „App“; manipulierte Dateien werden abgelehnt. Zusätzlich nur lesend HTTPS zu GitHub
    (Schannel, Weiterleitung zum Download-Speicher, Release-Liste über die Repository-ID).
-8. **Release** – siehe [RELEASE.md](RELEASE.md): manuell mit `release: true` oder durch einen Tag
-   `vX.Y.Z` bzw. `vX.Y.Z-beta.N` auf `main`; nur wenn alle Prüfungen bestanden sind.
+8. **Release Candidate** (nur auf `main`, nur wenn alle Jobs bestanden sind): genau das geprüfte
+   Setup und seine Prüfsumme als Artifact `PDF-Tool-Release-Candidate-<Commit-SHA>` mit Manifest
+   (`windows-app/release_candidate.py`), 90 Tage aufbewahrt.
+
+Veröffentlicht wird nur mit dem Workflow [`release.yml`](../.github/workflows/release.yml)
+(„Release“, manuell auf `main`): Er lädt den Release Candidate des erfolgreichen main-Laufs für genau
+den Release-Commit und veröffentlicht ihn unverändert – ohne neuen Build und ohne erneute Tests.
+Einzelheiten und alle Prüfungen: [RELEASE.md](RELEASE.md).
 
 Die vollständige historische Installer-Prüfung (Update vom Übersichten-Ersteller 2.2.0 und von
 PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1, 2.7.0 mit Beispieldaten) läuft nur noch auf ausdrückliche

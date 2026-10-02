@@ -781,11 +781,12 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
        py -3.13 -m pytest windows-app\tests
 
-GitHub Actions baut das Setup bei jedem Push auf windows-latest
-(.github/workflows/windows-setup.yml), prüft es (Clean Install, Update von
-der vorherigen stabilen Version, Updater-Test) und stellt es als Artefakt
-bereit. Releases (Stable und Beta) veröffentlicht derselbe Workflow – siehe
-docs/RELEASE.md im Repository.
+GitHub Actions baut das Setup bei jedem Pull Request und auf main auf
+windows-latest (.github/workflows/windows-setup.yml), prüft es (Clean Install,
+Update von der vorherigen stabilen Version, Updater-Test) und speichert es auf
+main als Release Candidate des Commits. Releases (Stable und Beta)
+veröffentlicht der Workflow „Release“ (release.yml) – genau dieses geprüfte
+Setup, ohne neuen Build. Siehe docs/RELEASE.md im Repository.
