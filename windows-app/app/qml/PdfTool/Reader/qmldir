@@ -16,3 +16,4 @@ OutlinePanel 1.0 OutlinePanel.qml
 SearchPanel 1.0 SearchPanel.qml
 CommentsPanel 1.0 CommentsPanel.qml
 OrganizeView 1.0 OrganizeView.qml
+ObjectPanel 1.0 ObjectPanel.qml

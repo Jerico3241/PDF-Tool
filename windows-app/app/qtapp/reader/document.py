@@ -29,9 +29,10 @@ ZOOM_MIN, ZOOM_MAX = 10.0, 800.0
 PAGE_GAP = 12  # Abstand der Seiten (geräteunabhängige Pixel)
 VIEW_MARGIN = 16
 VIEW_MODES = ("continuous", "single", "two", "continuousTwo")
-TOOLS = ("select", "editText", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form")
+TOOLS = ("select", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form")
 RECOVERY_DELAY_MS = 4000
 SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
+NUDGE_DELAY_MS = 350  # Pfeiltasten: so lange sammeln, dann ein Schritt (eine Änderung, ein Rückgängig)
 SEARCH_LIMIT = 5000
 LISTED_HITS = 500
 _ids = itertools.count(1)
@@ -91,6 +92,10 @@ class DocumentController(Observable):
     annotationsChanged, annotations = prop(list, "annotations", [])
     annotationPagesChanged, annotationPages = prop(dict, "annotationPages", {})  # Seite (Text) → Kommentare
     selectedObjectChanged, selectedObject = prop(dict, "selectedObject", {})  # {kind: image|annotation, page, index|key, view}
+    # Objekt bearbeiten: Objekte je Seite (Text: {segments, images, message}) und Auswahl (eine Seite)
+    objectPagesChanged, objectPages = prop(dict, "objectPages", {})
+    objectSelectionChanged, objectSelection = prop(list, "objectSelection", [])  # [{id, kind: text|word|image, page, view, …}]
+    objectMessageChanged, objectMessage = prop(str, "objectMessage", "")  # z. B. »kein bearbeitbarer Text« der aktuellen Seite
     lastModeChanged, lastMode = prop(str, "lastMode", "")  # Weg der letzten Textänderung (ehrlich benannt)
     # Farben und Stärken der Werkzeuge
     toolColorChanged, toolColor = prop(str, "toolColor", "#E53935")
@@ -126,9 +131,13 @@ class DocumentController(Observable):
         self._viewport = (900.0, 700.0, 1.0)
         self._pending: dict[str, Task] = {}
         self._save_next: dict | None = None  # Speicheranfrage während eines laufenden Speicherns
+        self._object_requests: set[int] = set()
+        self._reselect: dict[int, list[list[float]]] = {}  # nach einer Änderung: Auswahl an diesen Stellen wiederfinden
+        self._nudge = [0.0, 0.0]  # gesammelte Pfeiltasten-Verschiebung (Anzeige-Punkte)
         self._failure_details = ""  # Traceback des zuletzt fehlgeschlagenen Auftrags (Protokoll)
         self._closing = False
         self.state: dict = {}
+        self.observe("currentPage", self._page_shown)
 
     # QML-Konstanten --------------------------------------------------------------------------------------
     def _gap(self) -> int:
@@ -172,6 +181,11 @@ class DocumentController(Observable):
             self.textPages = []
             self.clear_selection()
             self.revision = state["revision"]
+            if self.objectPages:
+                self.objectPages = {}
+                self.objectSelection = []
+            if self.tool == "objects":
+                self._load_visible_objects()
             if self.searchCount:
                 self.hitRects = {}
                 self.currentHit = {}
@@ -374,8 +388,6 @@ class DocumentController(Observable):
     def setCurrentPage(self, page: int) -> None:  # noqa: N802 - aus der Ansicht (Scrollen), ohne Sprung
         if 0 <= page < self.pageCount and page != self.currentPage:
             self.currentPage = page
-            if self.fit == "page":
-                self._apply_fit()
 
     @Slot(int)
     def step(self, delta: int) -> None:
@@ -389,8 +401,12 @@ class DocumentController(Observable):
     def setTool(self, tool: str) -> None:  # noqa: N802
         if tool not in TOOLS:
             return
+        if tool != "objects" and self.objectSelection:
+            self.objectSelection = []  # Objektmodus verlassen: keine alte Auswahl stehen lassen
         self.tool = tool
         self.selectedObject = {}
+        if tool == "objects":
+            self._load_visible_objects()
         if tool in ("editText",):
             self.loadBlocks(self.currentPage)
         if tool == "image":
@@ -736,6 +752,229 @@ class DocumentController(Observable):
         style.setdefault("size", self.fontSize)
         width = float(style.pop("width", 0) or 0) or None
         self.run(lambda session: session.add_text(page, u, v, text, style, width), lambda _outcome: self.edited("Text hinzugefügt"), busy="Text wird hinzugefügt …")
+
+    # Objekt bearbeiten ------------------------------------------------------------------------------------------
+    def _page_shown(self, page: int) -> None:
+        """Neue aktuelle Seite (Scrollen, Sprung, Blättern). Seitenweise mit »Ganze Seite«: die neue Seite
+        einpassen. Fortlaufend bleibt der Zoom – sonst wechselt das Einpassen bei unterschiedlich großen
+        Seiten selbst die aktuelle Seite, und die Ansicht springt hin und her. Im Objektmodus: Hinweis der
+        Seite zeigen, sie und die Nachbarn analysieren."""
+        if self.fit == "page" and self.viewMode in ("single", "two"):
+            self._apply_fit()
+        if self.tool == "objects":
+            self.objectMessage = (self.objectPages.get(str(page)) or {}).get("message", "")
+            self._load_visible_objects()
+
+    def _load_visible_objects(self) -> None:
+        """Aktuelle Seite zuerst, dann die Nachbarn – nie alle Seiten auf einmal."""
+        for page in (self.currentPage, self.currentPage + 1, self.currentPage - 1):
+            if 0 <= page < self.pageCount:
+                self.loadObjects(page)
+
+    @Slot(int)
+    def loadObjects(self, page: int) -> None:  # noqa: N802
+        if not 0 <= page < self.pageCount or page in self._object_requests:
+            return
+        known = self.objectPages.get(str(page))
+        if known is not None and known.get("revision") == self.revision:
+            return
+        self._object_requests.add(page)
+
+        def done(data) -> None:
+            self._object_requests.discard(page)
+            if data.get("revision") != self.revision:
+                if self.tool == "objects":
+                    self.loadObjects(page)  # inzwischen geändert: neu analysieren
+                return
+            pages = dict(self.objectPages)
+            pages[str(page)] = data
+            self.objectPages = pages
+            if page == self.currentPage:
+                self.objectMessage = data.get("message", "")
+            self._restore_selection(page)
+
+        self.run(lambda session: session.objects(page), done, refresh=False, priority=VIEW, failed=lambda _exc: self._object_requests.discard(page))
+
+    def _object_items(self, page: int) -> list[dict]:
+        data = self.objectPages.get(str(page)) or {}
+        return [*data.get("segments", []), *data.get("images", [])]
+
+    def _find_object(self, page: int, ident: str) -> dict | None:
+        for item in self._object_items(page):
+            if item["id"] == ident:
+                return {**item, "page": page}
+            for word in item.get("words", []):
+                if word["id"] == ident:
+                    return {**item, "id": word["id"], "kind": "word", "text": word["text"], "view": word["view"], "segment": item["id"], "page": page}
+        return None
+
+    def _restore_selection(self, page: int) -> None:
+        """Nach einer Änderung dieselben Stellen wieder auswählen (die Kennungen sind dann neu)."""
+        wanted = self._reselect.pop(page, None)
+        if not wanted:
+            return
+        chosen = []
+        for rect in wanted:
+            best, best_overlap = None, 0.0
+            for item in self._object_items(page):
+                overlap = _overlap(item["view"], rect)
+                if overlap > best_overlap:
+                    best, best_overlap = item, overlap
+            if best is not None and best_overlap >= 0.3 and all(item["id"] != best["id"] for item in chosen):
+                chosen.append({**best, "page": page})
+        self.objectSelection = chosen
+
+    @Slot(int, str, bool)
+    def selectObject(self, page: int, ident: str, additive: bool = False) -> None:  # noqa: N802
+        item = self._find_object(page, ident)
+        if item is None:
+            return
+        current = [entry for entry in self.objectSelection if entry["page"] == page] if additive else []
+        if additive and any(entry["id"] == ident for entry in current):
+            self.objectSelection = [entry for entry in current if entry["id"] != ident]
+            return
+        # Ein Wort und sein Segment schließen sich aus (keine überlappende Auswahl)
+        family = item.get("segment", item["id"])
+        current = [entry for entry in current if entry.get("segment", entry["id"]) != family]
+        self.objectSelection = [*current, item]
+
+    @Slot(int, "QVariantList", bool)
+    def selectObjectsIn(self, page: int, rect, additive: bool = False) -> None:  # noqa: N802
+        """Auswahlrechteck: alle Objekte, die überwiegend darin liegen."""
+        area = [float(value) for value in rect]
+        found = [{**item, "page": page} for item in self._object_items(page) if _overlap(item["view"], area) >= 0.6]
+        current = [entry for entry in self.objectSelection if entry["page"] == page] if additive else []
+        known = {entry["id"] for entry in current}
+        self.objectSelection = current + [item for item in found if item["id"] not in known]
+
+    @Slot()
+    def clearObjectSelection(self) -> None:  # noqa: N802
+        self.objectSelection = []
+
+    @Slot(int)
+    def selectNextObject(self, step: int) -> None:  # noqa: N802
+        """Tab / Umschalt+Tab: nächstes bzw. voriges Objekt der Seite (Lesereihenfolge)."""
+        page = self.objectSelection[0]["page"] if self.objectSelection else self.currentPage
+        items = self._object_items(page)
+        if not items:
+            return
+        ids = [item["id"] for item in items]
+        current = self.objectSelection[-1].get("segment", self.objectSelection[-1]["id"]) if self.objectSelection else None
+        index = (ids.index(current) + step) % len(ids) if current in ids else (0 if step > 0 else len(ids) - 1)
+        self.objectSelection = [{**items[index], "page": page}]
+
+    def _selected(self, kinds=("text", "word")) -> tuple[int, list[dict]]:
+        chosen = [entry for entry in self.objectSelection if entry["kind"] in kinds]
+        return (chosen[0]["page"] if chosen else -1), chosen
+
+    def _object_op(self, page: int, func: Callable[[Any], Any], title: str, reselect: list[list[float]] | None = None) -> None:
+        if not self.edit_allowed():
+            return
+
+        def done(result) -> None:
+            label = result.get("label", "") if isinstance(result, dict) else ""
+            mode = result.get("mode", "") if isinstance(result, dict) else ""
+            self.lastMode = label
+            self.edited(title if mode in ("", "native") else f"{title}: {label}")
+            notes = result.get("notes") if isinstance(result, dict) else None
+            if notes:
+                self.app.notify("reader", "info", " ".join(notes), title=title, auto_hide=9000)
+            self._reselect[page] = reselect if reselect is not None else ([result["view"]] if isinstance(result, dict) and result.get("view") else [])
+
+        self.run(func, done, busy="Wird geändert und geprüft …")
+
+    @Slot(int, str, str)
+    def editObject(self, page: int, ident: str, text: str) -> None:  # noqa: N802
+        self._object_op(page, lambda session: session.object_edit(page, ident, text), "Text geändert")
+
+    @Slot()
+    def deleteObjects(self) -> None:  # noqa: N802
+        page, texts = self._selected()
+        images = [entry for entry in self.objectSelection if entry["kind"] == "image"]
+        if texts:
+            ids = [entry["id"] for entry in texts]
+            self._object_op(page, lambda session: session.object_delete(page, ids), "Gelöscht", reselect=[])
+        for image in sorted(images, key=lambda entry: -entry["index"]):
+            self.deleteImage(image["page"], image["index"])
+        self.objectSelection = []
+
+    @Slot(float, float)
+    def moveObjects(self, du: float, dv: float) -> None:  # noqa: N802
+        """Auswahl um (du, dv) Anzeige-Punkte verschieben – Text nativ, Bilder wie im Bildwerkzeug."""
+        if abs(du) < 0.01 and abs(dv) < 0.01:
+            return
+        page, texts = self._selected()
+        images = [entry for entry in self.objectSelection if entry["kind"] == "image"]
+        moved = [[entry["view"][0] + du, entry["view"][1] + dv, entry["view"][2] + du, entry["view"][3] + dv] for entry in self.objectSelection]
+        if texts:
+            ids = [entry["id"] for entry in texts]
+            self._object_op(page, lambda session: session.object_move(page, ids, du, dv), "Verschoben", reselect=moved)
+        for image in images:
+            self.moveImage(image["page"], image["index"], du, dv)
+            self._reselect[image["page"]] = moved
+
+    @Slot(int, int, "QVariantList")
+    def resizeObjectImage(self, page: int, index: int, rect) -> None:  # noqa: N802
+        """Bild im Objektmodus skalieren – die Auswahl bleibt am Bild."""
+        self._reselect[page] = [[float(value) for value in rect]]
+        self.resizeImage(page, index, rect)
+
+    @Slot(float, float)
+    def nudgeObjects(self, du: float, dv: float) -> None:  # noqa: N802
+        """Pfeiltasten: Auswahl sofort mitbewegen, die Änderung gesammelt als ein Schritt."""
+        if not self.objectSelection:
+            return
+        self._nudge[0] += du
+        self._nudge[1] += dv
+        self.objectSelection = [{**entry, "view": [entry["view"][0] + du, entry["view"][1] + dv, entry["view"][2] + du, entry["view"][3] + dv]} for entry in self.objectSelection]
+        self.app.timers.later(f"reader:nudge:{self.ident}", NUDGE_DELAY_MS, self._flush_nudge)
+
+    def _flush_nudge(self) -> None:
+        du, dv = self._nudge
+        self._nudge = [0.0, 0.0]
+        # Die Auswahl zeigt schon die neue Lage – zurückrechnen, dann als ein Schritt verschieben
+        self.objectSelection = [{**entry, "view": [entry["view"][0] - du, entry["view"][1] - dv, entry["view"][2] - du, entry["view"][3] - dv]} for entry in self.objectSelection]
+        self.moveObjects(du, dv)
+
+    @Slot(str, "QVariant")
+    def styleObjects(self, name: str, value) -> None:  # noqa: N802
+        page, texts = self._selected()
+        if not texts:
+            return
+        ids = [entry["id"] for entry in texts]
+        keep = [entry["view"] for entry in texts]
+        self._object_op(page, lambda session: session.object_style(page, ids, name, value), "Formatiert", reselect=keep)
+
+    @Slot()
+    def duplicateObject(self) -> None:  # noqa: N802
+        page, texts = self._selected()
+        if len(texts) != 1:
+            return
+        ident = texts[0]["id"]
+        self._object_op(page, lambda session: session.object_duplicate(page, ident), "Dupliziert")
+
+    @Slot(str)
+    def alignObjects(self, how: str) -> None:  # noqa: N802
+        page, texts = self._selected()
+        if len(texts) < 2:
+            return
+        ids = [entry["id"] for entry in texts]
+        self._object_op(page, lambda session: session.object_align(page, ids, how), "Ausgerichtet", reselect=[])
+
+    @Slot()
+    def copyObjects(self) -> None:  # noqa: N802
+        page, texts = self._selected()
+        if not texts:
+            return
+        if not (self.permissions or {}).get("copy", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Text.", title="Kopieren nicht erlaubt")
+            return
+        self.app.copy_text("\n".join(entry.get("text", "") for entry in texts), "Text kopiert.")
+
+    @Slot()
+    def cutObjects(self) -> None:  # noqa: N802
+        self.copyObjects()
+        self.deleteObjects()
 
     # Bilder --------------------------------------------------------------------------------------------------
     @Slot(int)
@@ -1287,3 +1526,13 @@ def _os_codes(exc: BaseException) -> str:
     if getattr(exc, "winerror", None) is not None:
         codes.append(f"WinError={exc.winerror}")
     return " · " + " · ".join(codes) if codes else ""
+
+
+def _overlap(rect, area) -> float:
+    """Anteil von ``rect``, der in ``area`` liegt (0 … 1)."""
+    x0, y0 = max(rect[0], area[0]), max(rect[1], area[1])
+    x1, y1 = min(rect[2], area[2]), min(rect[3], area[3])
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+    size = max(1e-6, (rect[2] - rect[0]) * (rect[3] - rect[1]))
+    return (x1 - x0) * (y1 - y0) / size

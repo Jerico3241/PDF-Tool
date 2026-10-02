@@ -45,6 +45,7 @@ Flickable {
     property bool restoring: false
     property int pendingEdge: 0         // Seitenweise: nach dem Blättern oben (1) oder unten (-1) beginnen
     property var editing: null          // offener Texteditor: {kind, page, rect, …}
+    property var pendingBlock: null     // »Text bearbeiten (ganzer Absatz)« aus dem Objektmodus: {page, u, v}
     property int scrollSerial: 0        // für Ausschnitte bei hohem Zoom
 
     clip: true
@@ -389,6 +390,10 @@ Flickable {
 
     Keys.onPressed: (event) => {
         if (!view.doc) return
+        if (view.doc.tool === "objects" && view.editing === null && view.objectKey(event)) {
+            event.accepted = true
+            return
+        }
         var page = view.height * 0.9
         switch (event.key) {
         case Qt.Key_Down:
@@ -425,6 +430,39 @@ Flickable {
             return
         }
         event.accepted = true
+    }
+
+    // Objekt bearbeiten (nur mit dem Fokus in der Seite – Eingabefelder behalten ihre Tasten): Tab wählt
+    // das nächste Objekt, Pfeiltasten verschieben die Auswahl (1 pt, mit Umschalt 10 pt), Entf löscht,
+    // Eingabe/F2 bearbeitet, Strg+C/X/D kopiert, schneidet aus, dupliziert, Esc hebt die Auswahl auf
+    function objectKey(event) {
+        var d = view.doc
+        if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ControlModifier)) { d.selectNextObject(1); return true }
+        if (event.key === Qt.Key_Backtab) { d.selectNextObject(-1); return true }
+        var chosen = d.objectSelection
+        if (chosen.length === 0) return false
+        var step = (event.modifiers & Qt.ShiftModifier) ? 10 : 1
+        if (event.matches(StandardKey.Copy)) { d.copyObjects(); return true }
+        if (event.matches(StandardKey.Cut)) { d.cutObjects(); return true }
+        switch (event.key) {
+        case Qt.Key_Left: d.nudgeObjects(-step, 0); return true
+        case Qt.Key_Right: d.nudgeObjects(step, 0); return true
+        case Qt.Key_Up: d.nudgeObjects(0, -step); return true
+        case Qt.Key_Down: d.nudgeObjects(0, step); return true
+        case Qt.Key_Delete: case Qt.Key_Backspace: d.deleteObjects(); return true
+        case Qt.Key_Escape: d.clearObjectSelection(); return true
+        case Qt.Key_D:
+            if (!(event.modifiers & Qt.ControlModifier)) return false
+            d.duplicateObject()
+            return true
+        case Qt.Key_Return: case Qt.Key_Enter: case Qt.Key_F2: {
+            var item = chosen[0]
+            if (chosen.length !== 1 || item.kind === "image") return false
+            view.openEditor({ kind: "object", page: item.page, rect: item.view, text: item.text, object: item, caret: item.text.length })
+            return true
+        }
+        }
+        return false
     }
 
     // Fokusrahmen nur bei Tastaturbedienung (ein Klick in die Seite setzt »pointerFocus«)

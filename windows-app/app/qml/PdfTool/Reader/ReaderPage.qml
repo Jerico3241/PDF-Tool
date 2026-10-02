@@ -16,6 +16,22 @@ FocusScope {
     readonly property bool active: App.currentPage === "reader" && !Dialogs.open
     readonly property bool editing: doc !== null && doc !== undefined
     property var dismissedNotices: ({})
+    // Objektmodus: die Eigenschaften öffnen sich mit dem Modus (nicht erst mit der ersten Auswahl – sonst
+    // verschöbe sich die Seite unter dem Mauszeiger) und gehen beim Verlassen wieder zu, wenn sie dafür
+    // geöffnet wurden. In schmalen Fenstern nie von selbst (dort überdecken sie die Seite).
+    property bool propertiesOpenedForObjects: false
+    readonly property string currentTool: doc ? doc.tool : ""
+    onCurrentToolChanged: {
+        if (currentTool === "objects") {
+            if (Reader.rightPanel === "" && !narrow) {
+                Reader.showRightPanel("properties")
+                propertiesOpenedForObjects = true
+            }
+            return
+        }
+        if (propertiesOpenedForObjects && Reader.rightPanel === "properties") Reader.setRightPanel("properties")
+        propertiesOpenedForObjects = false
+    }
 
     ReaderStart {
         anchors.fill: parent
@@ -74,6 +90,14 @@ FocusScope {
                     spacing: 0
                     PInfoBar { Layout.fillWidth: true; notice: Notices.area("reader") }
                     PInfoBar {
+                        objectName: "readerObjectNotice"
+                        Layout.fillWidth: true
+                        shown: page.doc !== null && page.doc.tool === "objects" && page.doc.objectMessage !== ""
+                        severity: "info"
+                        message: page.doc ? page.doc.objectMessage : ""
+                        closable: false
+                    }
+                    PInfoBar {
                         objectName: "readerDocumentNotice"
                         Layout.fillWidth: true
                         shown: page.doc !== null && page.doc.notice !== "" && !page.dismissedNotices[page.doc.docId]
@@ -111,7 +135,7 @@ FocusScope {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: workspace.rightWidth
-                visible: Reader.rightPanel === "comments"
+                visible: Reader.rightPanel !== ""
                 color: Theme.layer
                 z: 2
                 Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider }
@@ -121,6 +145,12 @@ FocusScope {
                     anchors.leftMargin: 1
                     active: Reader.rightPanel === "comments"
                     sourceComponent: CommentsPanel { doc: page.doc }
+                }
+                Loader {
+                    anchors.fill: parent
+                    anchors.leftMargin: 1
+                    active: Reader.rightPanel === "properties"
+                    sourceComponent: ObjectPanel { doc: page.doc }
                 }
             }
         }
@@ -140,10 +170,10 @@ FocusScope {
     Shortcut { sequence: "Ctrl+0"; enabled: page.active && page.editing; onActivated: page.doc.fitPage() }
     Shortcut { sequence: "F3"; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.nextHit() }
     Shortcut { sequence: "Shift+F3"; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.previousHit() }
-    Shortcut { sequences: [StandardKey.Copy]; enabled: page.active && page.editing && page.doc.selectionPage >= 0; onActivated: page.doc.copySelection() }
+    Shortcut { sequences: [StandardKey.Copy]; enabled: page.active && page.editing && page.doc.selectionPage >= 0 && page.doc.objectSelection.length === 0; onActivated: page.doc.copySelection() }
     Shortcut {
         sequences: [StandardKey.Delete]
-        enabled: page.active && page.editing && !Reader.organize && page.doc.selectedObject.kind !== undefined
+        enabled: page.active && page.editing && !Reader.organize && page.doc.tool !== "objects" && page.doc.selectedObject.kind !== undefined
         onActivated: {
             var chosen = page.doc.selectedObject
             if (chosen.kind === "image") page.doc.deleteImage(chosen.page, chosen.index)

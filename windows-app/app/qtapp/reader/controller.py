@@ -58,7 +58,7 @@ class ReaderController(Observable):
     recentChanged, recent = prop(list, "recent", [])
     dropHighlightChanged, dropHighlight = prop(bool, "dropHighlight", False)
     leftPanelChanged, leftPanel = prop(str, "leftPanel", "thumbs")  # thumbs, outline, search oder ""
-    rightPanelChanged, rightPanel = prop(str, "rightPanel", "")  # comments oder ""
+    rightPanelChanged, rightPanel = prop(str, "rightPanel", "")  # comments, properties oder ""
     organizeChanged, organize = prop(bool, "organize", False)  # Ansicht »Seiten organisieren«
     openingChanged, opening = prop(int, "opening", 0)  # Dateien, die gerade geöffnet werden
 
@@ -399,6 +399,12 @@ class ReaderController(Observable):
     @Slot(str)
     def setRightPanel(self, panel: str) -> None:  # noqa: N802
         self.rightPanel = "" if panel == self.rightPanel else panel
+
+    @Slot(str)
+    def showRightPanel(self, panel: str) -> None:  # noqa: N802
+        """Rechte Seitenleiste zeigen (ohne Umschalten): ``comments`` oder ``properties``."""
+        if panel in ("comments", "properties"):
+            self.rightPanel = panel
 
     @Slot(bool)
     def setOrganize(self, value: bool) -> None:  # noqa: N802

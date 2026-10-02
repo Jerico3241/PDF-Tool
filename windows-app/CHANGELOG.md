@@ -6,7 +6,34 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
 Änderungen für die nächste Beta – die Versionsnummer bleibt bis dahin 3.0.0-beta.1.
 
+## Neu
+
+- PDF Editor: Werkzeug „Objekt bearbeiten“. Es wählt Text und Bilder einzeln statt ganzer
+  Textblöcke.
+  - Auswahl: eine Zeile einer Adresse, eine Tabellenzelle oder ein Wort; ein Klick wählt die Zeile,
+    ein weiterer Klick das Wort, ein Doppelklick bearbeitet genau dieses Stück.
+  - Aktionen: ändern, verschieben (Ziehen oder Pfeiltasten), löschen, Größe, Farbe und
+    Zeichenabstand ändern, duplizieren, ausrichten.
+  - Mehrfachauswahl mit Strg+Klick oder Rahmen; Kontextmenü und Eigenschaften in der rechten
+    Seitenleiste.
+  - Änderungen geschehen direkt im PDF und in der Originalschrift. Fehlen der Schrift Zeichen, wird
+    der Text neu gesetzt. Nur wo beides nicht sicher geht, wird überlagert, und der Hinweis sagt das.
+  - Alles andere auf der Seite bleibt an seinem Platz.
+  - Seiten ohne Text melden „Auf dieser Seite wurde kein bearbeitbarer PDF-Text erkannt.“
+
+## Geändert
+
+- PDF Reader: Eine Textauswahl blendet keine eigene Aktionsleiste mehr ein. Kopieren, Markieren,
+  Unterstreichen, Durchstreichen und Notiz stehen im Kontextmenü (Rechtsklick), Strg+C kopiert.
+- „Ganze Seite“ passt beim Blättern in der seitenweisen Ansicht jede Seite neu ein. In der
+  fortlaufenden Ansicht bleibt der Zoom beim Scrollen gleich.
+
 ## Behoben
+
+- PDF Reader: „Ganze Seite“ konnte bei unterschiedlich großen Seiten (z. B. Hoch- und Querformat)
+  beim Scrollen zwischen den Seiten hin- und herspringen.
+- „Notiz hier hinzufügen“ aus dem Kontextmenü: Die Eingabe hatte bei eingeschalteten Animationen
+  nicht sofort den Tastaturfokus.
 
 - PDF Editor: Speichern schlug bei PDFs mit XMP-Metadaten (die meisten PDFs aus Office-Programmen,
   Acrobat oder Scannern) mit „Das Dokument konnte nicht geschrieben werden.“ fehl. Ursache: Beim

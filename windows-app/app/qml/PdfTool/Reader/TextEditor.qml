@@ -5,8 +5,9 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Texteingabe über der Seite: Textblock ändern (Werkzeug »Text bearbeiten«), Text hinzufügen,
-// Notiz oder Textfeld. Strg+Eingabe übernimmt, Esc bricht ab. Beim Ändern eines Blocks nennt die
+// Texteingabe über der Seite: Textblock ändern (Werkzeug »Text bearbeiten«), ein einzelnes Segment
+// oder Wort ändern (»Objekt bearbeiten«, einzeilig: Eingabe übernimmt), Text hinzufügen, Notiz oder
+// Textfeld. Strg+Eingabe übernimmt, Esc bricht ab. Beim Ändern eines Blocks nennt die
 // Zeile unter dem Feld Schrift und Größe und ob die Änderung direkt im PDF möglich ist; welcher
 // Weg tatsächlich genommen wurde (»Direkt im PDF geändert«, »Neu gesetzt«, »Kompatibilitätsmodus«),
 // meldet der Hinweis nach dem Übernehmen. Nur geänderte Stilwerte gehen an Python – so bleibt der
@@ -67,6 +68,14 @@ Item {
             color = "#000000"
             family = "Helvetica"
             align = "left"
+        } else if (r.kind === "object") {
+            var o = r.object
+            size = o.size
+            bold = String(o.font).toLowerCase().indexOf("bold") >= 0
+            italic = String(o.font).toLowerCase().indexOf("italic") >= 0 || String(o.font).toLowerCase().indexOf("oblique") >= 0
+            color = o.color
+            family = o.font
+            align = "left"
         } else {
             size = r.kind === "textbox" && doc ? doc.fontSize : 11
             color = r.kind === "textbox" && doc ? doc.toolColor : "#000000"
@@ -76,6 +85,7 @@ Item {
             if (root.request !== r) return
             input.forceActiveFocus(Qt.OtherFocusReason)
             if (r.kind === "block") input.selectAll()
+            else if (r.kind === "object") input.cursorPosition = Math.max(0, Math.min(input.length, r.caret !== undefined ? r.caret : input.length))
             else input.cursorPosition = input.length
         })
     }
@@ -99,8 +109,11 @@ Item {
             if (text.trim() !== "") doc.addNote(r.page, r.rect[0], r.rect[1], text)
         } else if (r.kind === "textbox") {
             if (text.trim() !== "") doc.addTextbox(r.page, r.rect, text)
+        } else if (r.kind === "object") {
+            if (text !== r.text) doc.editObject(r.page, r.object.id, text)
         }
         finished()
+        if (host) host.focusByPointer()  // Tastatur wieder in der Seite (Pfeiltasten, Entf, Tab)
     }
     function cancel() {
         finished()
@@ -201,7 +214,7 @@ Item {
 
         Rectangle {
             id: box
-            readonly property real minWidth: root.block ? (root.block.view[2] - root.block.view[0]) * root.s + 8 : 160
+            readonly property real minWidth: root.block ? (root.block.view[2] - root.block.view[0]) * root.s + 8 : (root.kind === "object" && root.request ? (root.request.rect[2] - root.request.rect[0]) * root.s + 24 : 160)
             Layout.preferredWidth: Math.max(minWidth, Math.min(input.contentWidth + 16, 900), 160)
             Layout.preferredHeight: Math.max(input.contentHeight + 8, root.request ? (root.request.rect[3] - root.request.rect[1]) * root.s + 8 : 0, 28)
             color: Theme.paper
@@ -227,11 +240,11 @@ Item {
                 Accessible.role: Accessible.EditableText
                 Accessible.name: root.kind === "note" ? "Notiz" : "Text"
                 Keys.onShortcutOverride: (event) => {
-                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (event.modifiers & Qt.ControlModifier)) event.accepted = true
+                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (root.kind === "object" || (event.modifiers & Qt.ControlModifier))) event.accepted = true
                     else if (event.key === Qt.Key_Escape) event.accepted = true
                 }
                 Keys.onPressed: (event) => {
-                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (event.modifiers & Qt.ControlModifier)) {
+                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (root.kind === "object" || (event.modifiers & Qt.ControlModifier))) {
                         root.commit()
                         event.accepted = true
                     } else if (event.key === Qt.Key_Escape) {
@@ -240,6 +253,16 @@ Item {
                     }
                 }
             }
+        }
+        PText {
+            visible: root.kind === "object" && root.request !== null
+            Layout.preferredWidth: Math.max(box.width, 320)
+            wrap: true
+            textStyle: "caption"
+            readonly property var o: root.request && root.kind === "object" ? root.request.object : null
+            tone: o && o.native ? "secondary" : "warning"
+            text: !o ? "" : o.font + " · " + (Math.round(o.size * 10) / 10) + " pt · " + (o.native ? "Nur dieses Objekt wird geändert – direkt im PDF, wenn die Originalschrift alle Zeichen hat" : "Direkt nicht möglich: " + o.reason + ". Der Text wird überlagert – der Hinweis nennt danach den Weg.")
+            Rectangle { anchors.fill: parent; anchors.margins: -4; z: -1; color: Theme.flyout; radius: Metrics.radiusControl; border.color: Theme.flyoutStroke }
         }
         PText {
             visible: root.kind === "block" && root.block !== null
