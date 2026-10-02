@@ -17,6 +17,22 @@ screenshots/
 # Python caches
 __pycache__/
 *.py[cod]
+.pytest_cache/
+
+# Lokale virtuelle Umgebungen
+.venv/
+venv/
+
+# Build-Ausgabe der Downloadseite (TanStack Start / Nitro)
+.output/
+.nitro/
+
+# QML-Zwischenspeicher, Absturzabbilder, temporäre Dateien
+*.qmlc
+*.jsc
+*.dmp
+*.tmp
+*.bak
 
 # Windows build artifacts
 windows-app/dist/
@@ -25,7 +41,6 @@ windows-app/.cache/
 windows-app/installer/payload.zip
 *.sha256
 *.log
-.pytest_cache/
 public/downloads/*.exe
 public/downloads/*.zip
 *.exe
