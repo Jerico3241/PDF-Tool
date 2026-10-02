@@ -19,6 +19,35 @@ Dokuments. **PDFium** (pypdfium2) zeichnet die Seiten, liefert Zeichen, Position
 prüft Änderungen. Beide greifen nur unter einer gemeinsamen Sperre (`pdfium_lock.PDFIUM_LOCK`) und
 nur aus dem Arbeitsthread auf ein Dokument zu.
 
+## Fensteraufbau: Navigation, Seitenleisten, Dokument
+
+Drei getrennte Ebenen:
+
+1. **App-Navigation** (Start, Werkzeuge, Einstellungen – `Shell/AppShell.qml`):
+   - Ist im Reader ein Dokument geöffnet, ist sie eingeklappt: nur zentrierte Symbole, der gewählte
+     Bereich mit zurückhaltender Akzentfläche, Akzentsymbol und Markierung.
+   - Die Menüschaltfläche klappt sie vorübergehend aus – bis zum nächsten geöffneten Dokument oder
+     bis der Reader verlassen wird. Die gespeicherte Wahl „Navigation kompakt“ bleibt unberührt und
+     gilt auf der Startseite und in den anderen Werkzeugen wie bisher.
+2. **Seitenleisten** links (Seiten, Lesezeichen, Suchen) und rechts (Kommentare, Eigenschaften):
+   - Feste Breiten, gleich, welcher Inhalt gezeigt wird: links 256 px, rechts 280 px
+     (`Metrics.readerLeftPanelWidth`, `readerRightPanelWidth`).
+   - Der Kopf ist in allen Leisten gleich aufgebaut (`PanelHeader`, 44 px hoch): Titel links,
+     daneben bei Kommentaren die Anzahl, rechts die Umschalter dieser Leiste (`PanelTabs`, die
+     Markierung gleitet zum gewählten Inhalt) und Schließen.
+   - Geschlossen bleibt ein schmaler Streifen (44 px, `PanelRail`) mit den Symbolen dieser Leiste;
+     ein Klick öffnet sie gleich mit diesem Inhalt. Die Befehlsleiste enthält keine Umschalter für
+     Seitenleisten mehr.
+   - Leere Inhalte zeigen einen ruhigen Hinweis mit Symbol, Titel und Erklärung
+     (`Controls/PEmptyState.qml`).
+   - In schmalen Fenstern (unter 820 px) liegen geöffnete Seitenleisten über der Seite.
+3. **Dokumentfläche** in der Mitte:
+   - Öffnet oder schließt eine Seitenleiste, nimmt die Fläche ihre neue Breite einmal an und wird
+     nicht in jedem Bild der Animation neu angeordnet.
+   - Die Leiste gleitet in 200 ms über ihren Streifen („Reduziert“: Überblenden, „Aus“: sofort).
+   - Steht die Ansicht ganz oben (z. B. gleich nach dem Öffnen), bleibt sie oben. Sonst bleibt die
+     Stelle in der Mitte stehen.
+
 ## Ansicht und Leistung
 
 - Nur sichtbare Seiten (plus eine halbe Bildschirmhöhe Vorlauf) existieren als Elemente; sie werden
@@ -298,6 +327,11 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
     - Zeigen, Klick, Wort, Doppelklick, Strg+Klick, Rahmen, Ziehen, Tastatur
     - Kontextmenü, Eigenschaften, Bilder
     - Zoom 50–400 %, gedrehte Seiten, Tabs, Animationsprofile
+- Fensteraufbau: `tests/test_qt_reader_layout.py`
+  - feste Breiten der Seitenleisten, Umschalter im Kopf, Streifen zum Wiederöffnen
+  - einheitliche Köpfe (kein Titel gekürzt), leere Zustände, Befehlsleiste ohne Umschalter
+  - eingeklappte Navigation im Dokument
+  - kein Neuanordnen in jedem Bild (Animationsprofile „Vollständig“ und „Aus“)
 - Laufzeit und Setup: `tests/smoke_runtime.py` (Text direkt ändern, Schrift-Teilmenge einbetten,
   speichern) und `tests/smoke_installer.ps1` (»Öffnen mit«, zweiter Start reicht die PDF weiter,
   Standard-App für PDF unverändert, Deinstallation entfernt die Einträge).

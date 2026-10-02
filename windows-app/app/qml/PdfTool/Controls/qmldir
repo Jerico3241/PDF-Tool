@@ -9,6 +9,7 @@ PComboBox 1.0 PComboBox.qml
 PCountBar 1.0 PCountBar.qml
 PCrossfadeText 1.0 PCrossfadeText.qml
 PDropZone 1.0 PDropZone.qml
+PEmptyState 1.0 PEmptyState.qml
 PFactList 1.0 PFactList.qml
 PFieldLabel 1.0 PFieldLabel.qml
 PFileRow 1.0 PFileRow.qml

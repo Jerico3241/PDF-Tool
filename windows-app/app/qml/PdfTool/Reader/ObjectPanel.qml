@@ -9,6 +9,7 @@ import PdfTool.Controls
 // Drehung, Zeichenabstand), Bild (Größe, Position, Ersetzen, Drehen) oder mehrere Objekte (Ausrichten,
 // gemeinsame Formatierung). Angeboten wird nur, was sich zuverlässig ändern lässt – Schrift und
 // Drehung eines Textes sind nur zu sehen. Positionen in Millimetern ab der linken oberen Ecke der Seite.
+// Kopf (Titel, Schließen) und Breite kommen von der rechten Seitenleiste (RightPanel).
 ColumnLayout {
     id: root
     objectName: "readerObjectPanel"
@@ -32,27 +33,17 @@ ColumnLayout {
         return Number(value).toLocaleString(Qt.locale("de_DE"), "f", digits === undefined ? 1 : digits)
     }
 
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.leftMargin: 12
-        Layout.rightMargin: 4
-        Layout.preferredHeight: Metrics.controlHeight + 12
-        PText { text: "Eigenschaften"; textStyle: "bodyStrong"; Layout.fillWidth: true }
-        PIconButton { iconName: "dismiss"; tip: "Seitenleiste schließen"; onClicked: Reader.setRightPanel("properties") }
-    }
-    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.divider }
-
     // Nichts gewählt
-    PText {
+    PEmptyState {
         objectName: "readerObjectPanelEmpty"
         Layout.fillWidth: true
-        Layout.margins: 16
+        Layout.fillHeight: true
         visible: root.chosen.length === 0
+        iconName: "select_object"
+        title: root.doc && root.doc.tool === "objects" ? "Kein Objekt ausgewählt" : "Eigenschaften einzelner Objekte"
         text: root.doc && root.doc.tool === "objects"
-            ? "Kein Objekt ausgewählt. Text oder ein Bild auf der Seite anklicken – erneut klicken wählt ein einzelnes Wort, Strg+Klick mehrere Objekte, Ziehen auf freier Fläche alle darin."
-            : "Eigenschaften einzelner Objekte gibt es im Modus »Objekt bearbeiten«."
-        tone: "secondary"
-        wrap: true
+            ? "Text oder Bild auf der Seite anklicken. Ein weiterer Klick wählt ein einzelnes Wort, Strg+Klick oder ein Rahmen mehrere Objekte."
+            : "Im Werkzeug »Objekt bearbeiten« zeigt diese Leiste Schrift, Größe, Farbe und Position der Auswahl."
     }
 
     Flickable {

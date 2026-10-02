@@ -8,6 +8,7 @@ import PdfTool.Controls
 // Kommentare des Dokuments (alle Seiten): Art, Seite, Text, Verfasser und Datum. Klick springt zur
 // Stelle; der Text lässt sich ändern, ein Kommentar löschen. Vorhandene Kommentare anderer
 // Programme bleiben erhalten, solange sie nicht ausdrücklich geändert oder gelöscht werden.
+// Kopf (Titel, Anzahl, Schließen) und Breite kommen von der rechten Seitenleiste (RightPanel).
 ColumnLayout {
     id: root
     objectName: "readerCommentsPanel"
@@ -15,28 +16,20 @@ ColumnLayout {
     property string editingKey: ""
     spacing: 0
 
-    RowLayout {
+    PEmptyState {
+        objectName: "readerCommentsEmpty"
         Layout.fillWidth: true
-        Layout.leftMargin: 12
-        Layout.rightMargin: 4
-        Layout.preferredHeight: Metrics.controlHeight + 12
-        PText { text: "Kommentare"; textStyle: "bodyStrong"; Layout.fillWidth: true }
-        PText { text: root.doc ? String(root.doc.annotationList.count) : ""; textStyle: "caption"; tone: "secondary" }
-        PIconButton { iconName: "dismiss"; tip: "Seitenleiste schließen"; onClicked: Reader.setRightPanel("comments") }
-    }
-    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.divider }
-    PText {
-        Layout.fillWidth: true
-        Layout.margins: 16
+        Layout.fillHeight: true
         visible: root.doc !== null && root.doc.annotationList.count === 0
-        text: "Noch keine Kommentare. Markieren, Notizen und Formen über »Kommentieren« und »Zeichnen« in der Befehlsleiste."
-        tone: "secondary"
-        wrap: true
+        iconName: "comment"
+        title: "Noch keine Kommentare"
+        text: "Markieren, Notizen und Formen über »Kommentieren« und »Zeichnen« in der Befehlsleiste."
     }
     ListView {
         id: list
         Layout.fillWidth: true
         Layout.fillHeight: true
+        visible: count > 0
         model: root.doc ? root.doc.annotationList : null
         clip: true
         spacing: 2

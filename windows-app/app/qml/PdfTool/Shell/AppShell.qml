@@ -14,7 +14,22 @@ FocusScope {
     property string mode: "wide"
     property bool userExpanded: false
     property bool paneAnimated: false
-    readonly property bool paneExpanded: App.navCompact ? false : (mode === "wide" ? true : userExpanded)
+    // Im Dokument (Reader mit geöffneter PDF) zählt die Breite: dort ist die Navigation eingeklappt.
+    // Die Menüschaltfläche klappt sie nur vorübergehend aus – bis zum nächsten geöffneten Dokument oder
+    // bis der Reader verlassen wird; die gespeicherte Wahl (»nav_kompakt«) bleibt unberührt.
+    readonly property bool documentFocus: App.currentPage === "reader" && Reader.hasDocument
+    property bool documentExpanded: false
+    readonly property int documentCount: Reader.tabs.count
+    property int knownDocuments: 0
+    onDocumentCountChanged: {
+        if (documentCount > knownDocuments) documentExpanded = false  // neues Dokument: wieder kompakt
+        knownDocuments = documentCount
+    }
+    onDocumentFocusChanged: {
+        paneAnimated = true
+        documentExpanded = false
+    }
+    readonly property bool paneExpanded: documentFocus ? documentExpanded : (App.navCompact ? false : (mode === "wide" ? true : userExpanded))
 
     function modeFor(w) {
         var hysteresis = Metrics.breakpointHysteresis
@@ -33,6 +48,10 @@ FocusScope {
 
     function togglePane() {
         paneAnimated = true
+        if (documentFocus) {
+            documentExpanded = !documentExpanded
+            return
+        }
         if (paneExpanded) {
             App.setNavCompact(true)
             userExpanded = false

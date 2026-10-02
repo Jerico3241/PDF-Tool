@@ -23,6 +23,22 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
 ## Geändert
 
+- PDF Reader: Seitenleisten neu geordnet.
+  - Die Umschalter sitzen im Kopf der jeweiligen Leiste: links Seiten, Lesezeichen und Suchen,
+    rechts Kommentare und Eigenschaften. Die Befehlsleiste enthält keine Seitenleisten-Umschalter
+    mehr.
+  - Eine geschlossene Leiste bleibt als schmaler Streifen mit ihren Symbolen und öffnet sich
+    darüber wieder.
+  - Beide Leisten haben eine feste Breite: Wechsel zwischen Seiten, Lesezeichen und Suchen ändern
+    die Breite nicht mehr.
+  - Alle Köpfe sind gleich aufgebaut, und leere Leisten (keine Lesezeichen, keine Kommentare, kein
+    Objekt gewählt) zeigen einen ruhigen Hinweis.
+  - Beim Öffnen und Schließen gleitet die Leiste kurz herein bzw. hinaus („Reduziert“: Überblenden,
+    „Aus“: sofort). Die Seiten werden dabei nur einmal neu angeordnet, und eine ganz oben stehende
+    Ansicht bleibt oben.
+- App-Navigation: Bei geöffnetem Dokument ist sie im Reader eingeklappt. Die Menüschaltfläche klappt
+  sie vorübergehend aus, bis zum nächsten Dokument. Der eingeklappte Zustand zeigt zentrierte Symbole
+  und den gewählten Bereich mit dezenter Akzentfläche.
 - PDF Reader: Eine Textauswahl blendet keine eigene Aktionsleiste mehr ein. Kopieren, Markieren,
   Unterstreichen, Durchstreichen und Notiz stehen im Kontextmenü (Rechtsklick), Strg+C kopiert.
 - „Ganze Seite“ passt beim Blättern in der seitenweisen Ansicht jede Seite neu ein. In der

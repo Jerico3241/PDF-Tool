@@ -11,6 +11,11 @@ FieldOverlay 1.0 FieldOverlay.qml
 ColorChooser 1.0 ColorChooser.qml
 ViewControls 1.0 ViewControls.qml
 LeftPanel 1.0 LeftPanel.qml
+PanelHeader 1.0 PanelHeader.qml
+PanelRail 1.0 PanelRail.qml
+PanelTabs 1.0 PanelTabs.qml
+PanelContent 1.0 PanelContent.qml
+RightPanel 1.0 RightPanel.qml
 ThumbnailPanel 1.0 ThumbnailPanel.qml
 OutlinePanel 1.0 OutlinePanel.qml
 SearchPanel 1.0 SearchPanel.qml

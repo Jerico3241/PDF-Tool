@@ -7,8 +7,9 @@ import PdfTool.Controls
 
 // Befehlsleiste des Readers: Datei (Öffnen, Speichern, Drucken), Rückgängig/Wiederholen, Werkzeuge
 // (Auswählen, Text bearbeiten, Objekt bearbeiten, Text hinzufügen, Bilder, Kommentieren, Zeichnen, Formular),
-// rechts Ansicht, Seiten organisieren, Suchen, Seitenleisten und »Mehr«. Bei schmalem Fenster
-// wandern die rechten Einträge in »Mehr«.
+// rechts Ansicht, Seiten organisieren und »Mehr«. Bei schmalem Fenster wandern die rechten Einträge in
+// »Mehr«. Die Umschalter der Seitenleisten (Seiten, Lesezeichen, Suchen; Kommentare, Eigenschaften)
+// sitzen nicht hier, sondern in den Randleisten bei ihrer Seitenleiste.
 Rectangle {
     id: root
     objectName: "readerToolbar"
@@ -154,31 +155,6 @@ Rectangle {
             checked: Reader.organize
             onClicked: Reader.setOrganize(!Reader.organize)
         }
-        PIconButton {
-            objectName: "readerSearch"
-            iconName: "search"
-            tip: "Suchen (Strg+F)"
-            checkable: true
-            checked: Reader.leftPanel === "search"
-            onClicked: { Reader.setLeftPanel("search"); if (Reader.leftPanel === "search" && root.doc) root.doc.requestSearch() }
-        }
-        PIconButton {
-            visible: root.roomy
-            iconName: "panel_left"
-            tip: "Miniaturen und Lesezeichen"
-            checkable: true
-            checked: Reader.leftPanel === "thumbs" || Reader.leftPanel === "outline"
-            onClicked: Reader.setLeftPanel(Reader.leftPanel === "outline" ? "outline" : "thumbs")
-        }
-        PIconButton {
-            objectName: "readerComments"
-            visible: root.roomy
-            iconName: "panel_right"
-            tip: "Kommentare"
-            checkable: true
-            checked: Reader.rightPanel === "comments"
-            onClicked: Reader.setRightPanel("comments")
-        }
         PIconButton { id: moreButton; objectName: "readerMore"; iconName: "more_horizontal"; tip: "Weitere Befehle"; onClicked: moreMenu.popup(moreButton, 0, moreButton.height) }
     }
 
@@ -211,8 +187,6 @@ Rectangle {
         PMenuItem { text: "Druckvorschau"; iconName: "eye"; enabled: root.doc !== null; onTriggered: root.doc.previewPrint() }
         PMenuItem { text: "Seiten organisieren"; iconName: "grid"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: Reader.setOrganize(!Reader.organize) }
         PMenuItem { text: "Seitenansicht …"; iconName: "document_one_page_multiple"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: viewMenu.popup(moreButton, 0, moreButton.height) }
-        PMenuItem { text: "Miniaturen"; iconName: "panel_left"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: Reader.setLeftPanel("thumbs") }
-        PMenuItem { text: "Kommentare"; iconName: "panel_right"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: Reader.setRightPanel("comments") }
         PMenuItem { text: "Seiten als PNG exportieren (150 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "png", 150) }
         PMenuItem { text: "Seiten als PNG exportieren (300 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "png", 300) }
         PMenuItem { text: "Seiten als JPEG exportieren (150 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "jpeg", 150) }

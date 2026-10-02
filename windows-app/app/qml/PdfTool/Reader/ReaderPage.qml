@@ -4,10 +4,12 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// »PDF Reader & Editor«: Tabs, Befehlsleiste, Leiste des Werkzeugs, links Miniaturen, Lesezeichen
-// oder Suche, in der Mitte die Seiten (oder »Seiten organisieren«), rechts die Kommentare. Ohne
-// Dokument: Öffnen und »Zuletzt geöffnet«. In schmalen Fenstern liegen die Seitenleisten über der
-// Ansicht. Tastenkürzel gelten nur, solange diese Seite zu sehen ist und kein Dialog offen ist.
+// »PDF Reader & Editor«: Tabs, Befehlsleiste, Leiste des Werkzeugs; links die Seitenleiste mit Seiten,
+// Lesezeichen oder Suche, rechts Kommentare oder Eigenschaften – jeweils mit ihren Umschaltern im
+// eigenen Kopf, eingeklappt als schmaler Streifen mit Symbolen –, in der Mitte die Seiten (oder »Seiten
+// organisieren«). Ohne Dokument: Öffnen und »Zuletzt geöffnet«. In schmalen Fenstern liegen die
+// Seitenleisten über der Ansicht.
+// Tastenkürzel gelten nur, solange diese Seite zu sehen ist und kein Dialog offen ist.
 FocusScope {
     id: page
     objectName: "readerPage"
@@ -20,6 +22,11 @@ FocusScope {
     // verschöbe sich die Seite unter dem Mauszeiger) und gehen beim Verlassen wieder zu, wenn sie dafür
     // geöffnet wurden. In schmalen Fenstern nie von selbst (dort überdecken sie die Seite).
     property bool propertiesOpenedForObjects: false
+    // Linke Seitenleiste mit diesem Inhalt zeigen (Streifen oder Kopf); die Suche bekommt den Fokus
+    function showLeft(key) {
+        Reader.showLeftPanel(key)
+        if (key === "search" && doc) doc.requestSearch()
+    }
     readonly property string currentTool: doc ? doc.tool : ""
     onCurrentToolChanged: {
         if (currentTool === "objects") {
@@ -51,14 +58,26 @@ FocusScope {
             id: workspace
             Layout.fillWidth: true
             Layout.fillHeight: true
-            readonly property int leftWidth: Reader.leftPanel === "" ? 0 : (Reader.leftPanel === "thumbs" ? Metrics.readerThumbPanelWidth : Metrics.readerPanelWidth)
-            readonly property int rightWidth: Reader.rightPanel === "" ? 0 : Metrics.readerPanelWidth
+            clip: true
+            // Drei Ebenen: links und rechts je eine Seitenleiste mit fester Breite (springt nicht je nach
+            // Inhalt) – geschlossen ein schmaler Streifen mit ihren Symbolen –, dazwischen die
+            // Dokumentfläche. Öffnen/Schließen: die Leiste gleitet über ihren Streifen herein bzw. hinaus
+            // (»Reduziert«: blendet, »Aus«: sofort). Die Dokumentfläche nimmt ihre neue Breite einmal an.
+            readonly property bool leftOpen: Reader.leftPanel !== ""
+            readonly property bool rightOpen: Reader.rightPanel !== ""
+            readonly property int leftSpace: page.narrow || !leftOpen ? Metrics.readerRailWidth : Metrics.readerLeftPanelWidth
+            readonly property int rightSpace: page.narrow || !rightOpen ? Metrics.readerRailWidth : Metrics.readerRightPanelWidth
+            property real leftShown: leftOpen ? 1 : 0   // 0…1: wie weit die Leiste zu sehen ist
+            property real rightShown: rightOpen ? 1 : 0
+            Behavior on leftShown { enabled: Motion.enabled; NumberAnimation { duration: Motion.moves ? Motion.pane : Motion.fade; easing.type: Motion.decelerate } }
+            Behavior on rightShown { enabled: Motion.enabled; NumberAnimation { duration: Motion.moves ? Motion.pane : Motion.fade; easing.type: Motion.decelerate } }
 
             Item {
                 id: center
                 anchors.fill: parent
-                anchors.leftMargin: page.narrow ? 0 : workspace.leftWidth
-                anchors.rightMargin: page.narrow ? 0 : workspace.rightWidth
+                // neue Breite sofort (einmal neu angeordnet, nicht in jedem Bild der Leisten-Animation)
+                anchors.leftMargin: workspace.leftSpace
+                anchors.rightMargin: workspace.rightSpace
 
                 DocumentView {
                     id: view
@@ -120,38 +139,60 @@ FocusScope {
                 }
             }
 
-            LeftPanel {
+            // Eingeklappte Seitenleisten (bei offener Leiste: deren Hintergrund)
+            PanelRail {
+                objectName: "readerLeftRail"
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                width: workspace.leftWidth
-                visible: Reader.leftPanel !== ""
-                doc: page.doc
-                z: 2
-                PShadow { visible: page.narrow; radius: 0 }
+                width: workspace.leftSpace
+                z: 1
+                side: "left"
+                collapsed: !workspace.leftOpen
+                items: [
+                    { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerRailThumbs" },
+                    { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerRailOutline" },
+                    { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerRailSearch" }
+                ]
+                onSelected: (key) => page.showLeft(key)
             }
-            Rectangle {
+            PanelRail {
+                objectName: "readerRightRail"
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                width: workspace.rightWidth
-                visible: Reader.rightPanel !== ""
-                color: Theme.layer
+                width: workspace.rightSpace
+                z: 1
+                side: "right"
+                collapsed: !workspace.rightOpen
+                items: [
+                    { key: "comments", icon: "comment", tip: "Kommentare", name: "readerRailComments" },
+                    { key: "properties", icon: "text_font", tip: "Eigenschaften", name: "readerRailProperties" }
+                ]
+                onSelected: (key) => Reader.showRightPanel(key)
+            }
+            LeftPanel {
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                x: Motion.moves ? -(1 - workspace.leftShown) * width : 0
+                width: Metrics.readerLeftPanelWidth
+                opacity: Motion.moves ? 1 : workspace.leftShown
+                visible: workspace.leftShown > 0
+                doc: page.doc
                 z: 2
-                Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider }
+                onChosen: (key) => page.showLeft(key)
                 PShadow { visible: page.narrow; radius: 0 }
-                Loader {
-                    anchors.fill: parent
-                    anchors.leftMargin: 1
-                    active: Reader.rightPanel === "comments"
-                    sourceComponent: CommentsPanel { doc: page.doc }
-                }
-                Loader {
-                    anchors.fill: parent
-                    anchors.leftMargin: 1
-                    active: Reader.rightPanel === "properties"
-                    sourceComponent: ObjectPanel { doc: page.doc }
-                }
+            }
+            RightPanel {
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                x: workspace.width - width + (Motion.moves ? (1 - workspace.rightShown) * width : 0)
+                width: Metrics.readerRightPanelWidth
+                opacity: Motion.moves ? 1 : workspace.rightShown
+                visible: workspace.rightShown > 0
+                doc: page.doc
+                z: 2
+                PShadow { visible: page.narrow; radius: 0 }
             }
         }
     }

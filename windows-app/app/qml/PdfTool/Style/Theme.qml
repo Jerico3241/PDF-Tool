@@ -47,6 +47,8 @@ QtObject {
     readonly property color strongStroke: c.strong_stroke || "#8A8A8A"
     readonly property color subtleHover: c.subtle_hover_rgba || "#0B000000"
     readonly property color subtlePressed: c.subtle_pressed_rgba || "#07000000"
+    // Gewählter Eintrag einer Leiste (Navigation, Seitenleisten-Umschalter): zurückhaltend im Akzentton
+    readonly property color selectedSubtle: Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.10)
 
     // Akzent
     readonly property color accentHover: c.accent_hover || "#196FBF"

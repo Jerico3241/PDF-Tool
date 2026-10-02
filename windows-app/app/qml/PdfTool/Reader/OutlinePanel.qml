@@ -10,14 +10,13 @@ Item {
     objectName: "readerOutline"
     property var doc: null
 
-    PText {
-        anchors.centerIn: parent
-        width: parent.width - 32
+    PEmptyState {
+        objectName: "readerOutlineEmpty"
+        anchors.fill: parent
         visible: root.doc !== null && !root.doc.hasOutline
-        text: "Dieses PDF hat keine Lesezeichen."
-        tone: "secondary"
-        wrap: true
-        horizontalAlignment: Text.AlignHCenter
+        iconName: "bookmark"
+        title: "Keine Lesezeichen"
+        text: "Dieses PDF enthält kein Inhaltsverzeichnis. Seiten finden Sie über die Miniaturen oder die Suche."
     }
     ListView {
         id: list
