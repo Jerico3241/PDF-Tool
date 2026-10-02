@@ -118,6 +118,7 @@ class DocumentController(Observable):
         self._outline_entries: list[dict] = []
         self._texts: dict[int, Any] = {}  # Seite → PageText (Zeichentabelle)
         self._text_requests: set[int] = set()
+        self._select_all_pending: set[int] = set()  # »Alles auswählen«, sobald die Textschicht da ist
         self._selection: tuple[int, int, int] | None = None  # Seite, Anfang, Ende (einschließlich)
         self._search_task: Task | None = None
         self._search_hits: list[dict] = []
@@ -410,8 +411,15 @@ class DocumentController(Observable):
             if table is not None and revision == self.revision:
                 self._texts[page] = table
                 self.textPages = sorted(self._texts)
+                if page in self._select_all_pending:
+                    self._select_all_pending.discard(page)
+                    self._select_whole(page)
 
-        self.run(lambda session: session.page_text(page), done, refresh=False, priority=VIEW, failed=lambda _exc: self._text_requests.discard(page))
+        def failed(_exc) -> None:
+            self._text_requests.discard(page)
+            self._select_all_pending.discard(page)
+
+        self.run(lambda session: session.page_text(page), done, refresh=False, priority=VIEW, failed=failed)
 
     def _index_at(self, page: int, u: float, v: float, nearest: bool) -> int:
         table = self._texts.get(page)
@@ -466,11 +474,16 @@ class DocumentController(Observable):
 
     @Slot(int)
     def selectAll(self, page: int) -> None:  # noqa: N802
-        table = self._texts.get(page)
-        if table is None:
+        if page in self._texts:
+            self._select_whole(page)
+        elif 0 <= page < self.pageCount:
+            # Textschicht noch nicht geladen (z. B. nach einer Änderung): auswählen, sobald sie da ist
+            self._select_all_pending.add(page)
             self.loadText(page)
-            return
-        if table.boxes:
+
+    def _select_whole(self, page: int) -> None:
+        table = self._texts.get(page)
+        if table is not None and table.boxes:
             self._set_selection(page, 0, len(table.boxes) - 1)
 
     def _set_selection(self, page: int, start: int, end: int) -> None:
@@ -484,6 +497,7 @@ class DocumentController(Observable):
         self.clear_selection()
 
     def clear_selection(self) -> None:
+        self._select_all_pending.clear()  # eine neue Auswahl, ein Klick oder eine Änderung ersetzt die Bitte
         self._selection = None
         if self.selectionPage != -1:
             self.selectionPage = -1
