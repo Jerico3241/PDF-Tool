@@ -9,7 +9,8 @@ einen privaten temporären Ordner – und zeigt ihre Seiten als Bild (PDFium):
   Läufe. Ein Ergebnis wird nur angezeigt, wenn es noch zur aktuellen Signatur passt – ein
   schneller Wechsel (Kunde A → B) zeigt nie ein veraltetes Bild.
 * ``RENDER_LOCK`` serialisiert PDF-Erzeugung und PDFium (nicht threadsicher); auch
-  »PDF erstellen« nimmt diese Sperre.
+  »PDF erstellen« nimmt diese Sperre. Sie ist die gemeinsame PDFium-Sperre der App
+  (``pdfium_lock``) – der PDF Reader/Editor nutzt dieselbe.
 * Temporäre Dateien werden beim Ersetzen und beim Beenden gelöscht; nichts landet im Zielordner.
 """
 
@@ -20,13 +21,14 @@ import io
 import json
 import shutil
 import tempfile
-import threading
 import time
 from dataclasses import dataclass, field
 from itertools import count
 from pathlib import Path
 
-RENDER_LOCK = threading.Lock()
+from pdfium_lock import PDFIUM_LOCK
+
+RENDER_LOCK = PDFIUM_LOCK
 DEBOUNCE_MS = 450
 ZOOMS = (0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
 MAX_SCALE = 4.0  # PDFium-Pixel je Punkt – begrenzt den Speicherbedarf
