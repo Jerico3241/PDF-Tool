@@ -23,7 +23,9 @@
 #      und Reparatur-Einstellungen unveraendert; von 2.5.0/2.6.0: zusaetzlich Stapel-Einstellungen
 #      erhalten, Vertragsstand unveraendert und lesbar, kein kuenstlicher neuer Stand; von 2.6.0:
 #      Kundenakte aus, Kundenakten unveraendert und fuer die App lesbar
-#   5. still deinstallieren
+#   4b. »Oeffnen mit« (seit 3.0.0): Eintrag fuer PDF-Dateien vorhanden, die Standard-App fuer .pdf
+#      unveraendert; Start mit einer PDF, ein zweiter Start reicht seine PDF an die laufende App weiter
+#   5. still deinstallieren (auch die Eintraege fuer »Oeffnen mit« sind danach entfernt)
 #
 # Aufruf:
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup windows-app\dist\PDF-Tool-Setup-<Version>.exe
@@ -62,6 +64,17 @@ $shortcut = Join-Path $programs "$appName.lnk"
 $oldShortcut = Join-Path $programs "$oldAppName.lnk"
 $uninstallRoot = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
 $appKey = Join-Path $uninstallRoot "{59C40061-D5E5-446D-ACB4-E077D3C71E1A}_is1"
+# »Oeffnen mit« (seit 3.0.0): eigene ProgID; die Standard-App fuer .pdf bleibt unveraendert
+$progIdKey = "HKCU:\Software\Classes\PDFTool.Dokument"
+$openWithKey = "HKCU:\Software\Classes\.pdf\OpenWithProgids"
+function PdfDefault() {
+    $key = "HKCU:\Software\Classes\.pdf"
+    if (-not (Test-Path $key)) { return "<keiner>" }
+    $value = (Get-Item -LiteralPath $key).GetValue("")
+    if ($null -eq $value) { return "<leer>" }
+    return [string]$value
+}
+$pdfDefaultBefore = PdfDefault
 $env:UE_DATA_DIR = $null
 $env:UE_CONFIG_FILE = $null
 
@@ -160,7 +173,7 @@ if ($Previous) {
 
 Write-Host "1. Stille Installation: $Setup"
 $log = Install $Setup "installation"
-foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
+foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "runtime\Lib\site-packages\PySide6\QtPrintSupport.pyd", "runtime\Lib\site-packages\PySide6\Qt6PrintSupport.dll", "runtime\Lib\site-packages\fontTools\__init__.py", "app\qtapp\instance.py", "app\qtapp\reader\controller.py", "app\qtapp\reader\document.py", "app\tools\pdf_editor\textedit.py", "app\tools\pdf_editor\save.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
     if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
 }
 # Seit 2.7.0 ohne Tk-Oberflaeche: auch bei einem Update bleiben keine alten Programmteile zurueck
@@ -177,6 +190,13 @@ if ($entry.DisplayName -ne $appName) { throw "Name unter 'Installierte Apps': $(
 if ($entry.DisplayVersion -ne $version) { throw "Version unter 'Installierte Apps': $($entry.DisplayVersion)" }
 if ((($entry."Inno Setup: App Path") -replace '\\$', '') -ne $target) { throw "Installationsort laut Registrierung: $($entry.'Inno Setup: App Path')" }
 Write-Host "   installiert: $($entry.DisplayName) $version in $target"
+# »Oeffnen mit«: ProgID mit Befehl, Eintrag unter .pdf\OpenWithProgids, Standard-App unveraendert
+$command = (Get-Item -LiteralPath (Join-Path $progIdKey "shell\open\command")).GetValue("")
+if ($command -notlike "*$(Join-Path $target 'app\start.py')*" -or $command -notlike '*"%1"*') { throw "Befehl fuer 'Oeffnen mit': $command" }
+if ((Get-Item -LiteralPath (Join-Path $progIdKey "shell\open")).GetValue("FriendlyAppName") -ne $appName) { throw "Name in 'Oeffnen mit' fehlt" }
+if ($null -eq (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument")) { throw "PDF Tool fehlt unter .pdf\OpenWithProgids" }
+if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Das Setup hat die Standard-App fuer PDF-Dateien veraendert: $(PdfDefault) statt $pdfDefaultBefore" }
+Write-Host "   'Oeffnen mit' fuer PDF-Dateien eingetragen, Standard-App unveraendert ($pdfDefaultBefore)"
 
 if ($Previous -and $previousKind -eq "2.3") {
     Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
@@ -239,6 +259,27 @@ if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Ra
 Stop-Process -Id $app.Id -Force
 Start-Sleep -Seconds 2
 Write-Host "   App lief ohne Fehler"
+Write-Host "4b. 'Oeffnen mit': Start mit einer PDF, zweiter Start reicht seine PDF weiter"
+$pdfDir = Join-Path $temp "pdf-tool-oeffnen-mit"
+New-Item -ItemType Directory -Force -Path $pdfDir | Out-Null
+$pdfA = Join-Path $pdfDir "Erste Datei.pdf"
+$pdfB = Join-Path $pdfDir "Zweite Datei.pdf"
+& (Join-Path $target "runtime\python.exe") -s -c "import sys, pikepdf; [(lambda p: (p.add_blank_page(), p.save(f)))(pikepdf.new()) for f in sys.argv[1:]]" $pdfA $pdfB
+if ($LASTEXITCODE -ne 0) { throw "Test-PDFs konnten nicht erzeugt werden" }
+Remove-Item $errorLog -ErrorAction SilentlyContinue
+$first = Start-Process -FilePath (Join-Path $target "runtime\pythonw.exe") -ArgumentList "-s", "-OO", "`"$(Join-Path $target 'app\start.py')`"", "`"$pdfA`"" -WorkingDirectory (Join-Path $target "app") -PassThru
+Start-Sleep -Seconds 15
+if ($first.HasExited) { throw "Die App hat sich beim Start mit einer PDF beendet (Code $($first.ExitCode))" }
+$second = Start-Process -FilePath (Join-Path $target "runtime\pythonw.exe") -ArgumentList "-s", "-OO", "`"$(Join-Path $target 'app\start.py')`"", "`"$pdfB`"" -WorkingDirectory (Join-Path $target "app") -PassThru
+$null = $second.Handle  # Handle sofort holen, sonst ist ExitCode nach dem Ende leer
+if (-not $second.WaitForExit(30000)) { Stop-Process -Id $second.Id -Force; throw "Der zweite Start hat seine PDF nicht an die laufende App weitergereicht" }
+if ($second.ExitCode -ne 0) { throw "Zweiter Start endete mit Code $($second.ExitCode)" }
+if ($first.HasExited) { throw "Die laufende App hat sich beim Weiterreichen beendet" }
+if (Test-Path $errorLog) { throw "Fehler beim Start mit einer PDF: $(Get-Content $errorLog -Raw)" }
+Stop-Process -Id $first.Id -Force
+Start-Sleep -Seconds 2
+Remove-Item $pdfDir -Recurse -Force -ErrorAction SilentlyContinue
+Write-Host "   App startete mit der PDF, der zweite Start endete nach dem Weiterreichen"
 # Die automatische Update-Pruefung laeuft wenige Sekunden nach dem Start im Hintergrund (nur lesend).
 # Offline oder bei einem Anfragelimit bleibt sie still - das ist nur ein Hinweis, kein Fehler.
 if (Test-Path (Join-Path $updates "releases.json")) {
@@ -340,6 +381,9 @@ if (Test-Path (Join-Path $target "app")) { throw "Programmdateien sind nach der 
 if (Test-Path (Join-Path $target "runtime")) { throw "Laufzeit ist nach der Deinstallation noch vorhanden" }
 if (Test-Path $shortcut) { throw "Verknuepfung ist nach der Deinstallation noch vorhanden" }
 if ((AppEntries).Count -ne 0) { throw "Eintrag unter 'Installierte Apps' ist nach der Deinstallation noch vorhanden" }
+if (Test-Path $progIdKey) { throw "Eintrag fuer 'Oeffnen mit' ist nach der Deinstallation noch vorhanden" }
+if ((Test-Path $openWithKey) -and ($null -ne (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))) { throw ".pdf\OpenWithProgids enthaelt nach der Deinstallation noch PDF Tool" }
+if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Standard-App fuer PDF-Dateien nach der Deinstallation veraendert" }
 if ($Previous -and -not (Test-Path (Join-Path $data "gui-config.json"))) { throw "Stille Deinstallation hat Benutzerdaten geloescht" }
 if (Get-ChildItem $updates -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "PDF-Tool-Setup-*" -or $_.Name -eq "releases.json" }) { throw "Heruntergeladene Updates sind nach der Deinstallation noch vorhanden" }
 

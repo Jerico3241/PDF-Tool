@@ -168,7 +168,7 @@ class Harness:
             self.wait_pages()
             pump(0.1)
 
-    PAGES = ("home", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings")
+    PAGES = ("home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings")
 
     def wait_pages(self, timeout: float = 20.0) -> bool:
         """Warten, bis alle verfügbaren Seiten im Hintergrund geladen sind (wie nach dem Start)."""

@@ -105,6 +105,13 @@ class FakeLauncher:
 
 
 @pytest.fixture(autouse=True)
+def _editor_folder(monkeypatch, tmp_path_factory):
+    """Sitzungssicherung und Sicherungskopien des PDF Editors liegen in Tests in einem eigenen
+    Ordner – nie im echten %LOCALAPPDATA%."""
+    monkeypatch.setenv("PDFTOOL_EDITOR_DIR", str(tmp_path_factory.mktemp("editor")))
+
+
+@pytest.fixture(autouse=True)
 def _updates_offline(monkeypatch, tmp_path_factory):
     """Tests gehen nie ins Internet und starten nie ein Setup: Der Updater der App fragt eine nicht
     erreichbare lokale Adresse (offline), Downloads landen in einem eigenen Testordner, der
