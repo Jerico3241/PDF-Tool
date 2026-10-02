@@ -63,7 +63,7 @@ Version, ein App-Eintrag, Programmstart, Kanal, Einstellungen und Vorlagen (`tes
 ## Tests
 
 ```powershell
-py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
 $env:QT_QPA_PLATFORM = "offscreen"   # Oberflächentests ohne Bildschirm (so läuft auch die CI)
 py -3.13 -m pytest windows-app\tests
 ```
@@ -85,6 +85,12 @@ die Excel bleibt unverändert), `test_backup.py` (Format, Prüfung, Beschädigun
 Wiederherstellung mit Rückabwicklung und Abbruch, Aufbewahrung, großer Datenbestand) und
 `test_diagnostics.py` (Datenprüfung, Bereinigung, Support-Paket ohne Kunden- oder Dokumentdaten,
 Protokoll-Rotation, Aufräumen nur eigener Dateien).
+
+Der PDF Reader & Editor (seit 3.0.0) hat Kerntests mit künstlichen PDFs (`tests/editorsamples.py`):
+`test_editor_core.py`, `test_editor_text.py`, `test_editor_pages.py`, `test_editor_images.py`,
+`test_editor_annotations.py`, `test_editor_forms.py`, `test_editor_properties.py`; die Oberfläche prüft
+`test_qt_reader.py` mit Maus und Tastatur. Messwerte für 1 bis 1000 Seiten liefert
+`python windows-app/tests/bench_editor.py` (Ergebnisse in [PDF-EDITOR.md](PDF-EDITOR.md)).
 
 Die Oberflächentests (`test_qt_*.py`) starten die App wie beim echten Start – Controller, QML und
 Fenster (`tests/qtutil.py`) – und schlagen fehl, sobald die QML-Engine eine Warnung meldet

@@ -23,7 +23,15 @@ REPAIR = ToolInfo(
     pages=("repair",),
     shortcut="Strg+3",
 )
-TOOLS: tuple[ToolInfo, ...] = (CONTRACTS, REPAIR)
+READER = ToolInfo(
+    key="reader",
+    title="PDF Reader & Editor",
+    description="PDFs öffnen, bearbeiten, organisieren und kommentieren.",
+    icon="document_pdf",
+    pages=("reader",),
+    shortcut="Strg+5",
+)
+TOOLS: tuple[ToolInfo, ...] = (READER, CONTRACTS, REPAIR)
 
 
 def tool_for_page(page: str) -> ToolInfo | None:

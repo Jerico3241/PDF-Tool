@@ -3,8 +3,8 @@ name: Windows-Setup
 # Normaler Lauf (Push, Pull Request, Release):
 #   1. Tests – Kernlogik, Vorlagen, Regelwerk, Sicherung/Wiederherstellung, Diagnose,
 #      Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.2), PDF reparieren, Updater
-#      (lokaler Testserver, nie Live-GitHub); die Qt-Oberflächentests laufen gleichzeitig in vier
-#      eigenen Jobs (je ein eigener Rechner)
+#      (lokaler Testserver, nie Live-GitHub), PDF Editor; die Qt-Oberflächentests laufen gleichzeitig
+#      in fünf eigenen Jobs (je ein eigener Rechner)
 #   2. Setup bauen (prüft Setup, Prüfsumme, Version und Release Notes)
 #   3. Clean-Install-Test der neuen Version
 #   4. Upgrade-Test: unmittelbar vorherige stabile Version → neue Version (nach SemVer ermittelt,
@@ -74,6 +74,8 @@ jobs:
             dateien: customers batch caret
           - gruppe: Vorlagen, Regelwerk, Sicherung und Diagnose
             dateien: templates rules backup
+          - gruppe: PDF Reader & Editor
+            dateien: reader
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -87,7 +89,7 @@ jobs:
           architecture: x64
 
       - name: Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
 
       - name: Tests (Qt-Oberfläche ohne Bildschirm – Controller, QML, Ressourcen, Abläufe)
         timeout-minutes: 25
@@ -146,7 +148,7 @@ jobs:
           architecture: x64
 
       - name: Build- und Testpakete
-        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+        run: python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
 
       - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern)
         run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py -q -p no:cacheprovider
@@ -164,6 +166,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_config_migration.py -v -p no:cacheprovider
+
+      - name: 1. Tests (PDF Editor – Kern, Text bearbeiten, Seiten, Bilder, Anmerkungen, Formulare, Eigenschaften)
+        run: python -m pytest windows-app/tests/test_editor_core.py windows-app/tests/test_editor_text.py windows-app/tests/test_editor_pages.py windows-app/tests/test_editor_images.py windows-app/tests/test_editor_annotations.py windows-app/tests/test_editor_forms.py windows-app/tests/test_editor_properties.py -q -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider

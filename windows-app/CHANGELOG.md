@@ -2,6 +2,58 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.0.0-beta.1
+
+Beta zum Testen (Kanal „Beta“). Neues Werkzeug „PDF Reader & Editor“.
+
+## PDF Reader
+
+- PDFs öffnen über „Öffnen“ (Strg+O), Ziehen in das Fenster, „Zuletzt geöffnet“ (leerbar) und
+  „Öffnen mit“ im Explorer (läuft PDF Tool schon, öffnet sich die Datei dort als neuer Tab; PDF Tool
+  wird dabei nicht zur Standard-App)
+- Tabs mit „*“ bei ungespeicherten Änderungen; Schließen mit „Speichern“ / „Nicht speichern“ /
+  „Abbrechen“; Strg+Tab, Strg+W
+- scharfe Darstellung bei jeder Windows-Skalierung; Ansichten Einzelseite, fortlaufend, zwei Seiten,
+  fortlaufend zweiseitig; Zoom 25–400 % in Stufen, frei mit Strg+Mausrad (um den Mauszeiger),
+  Seitenbreite, ganze Seite, Originalgröße
+- Miniaturen, Lesezeichen, Seitennavigation, Textauswahl und Kopieren, Suche (Strg+F, F3) mit
+  Groß-/Kleinschreibung und ganzem Wort
+- Drucken über den Druckdialog von Windows (Bereich, Kopien, Ausrichtung, Anpassung) und
+  Druckvorschau; Seiten als PNG/JPEG exportieren; Eigenschaften und Metadaten
+- große Dokumente (1000+ Seiten): nur sichtbare Seiten werden aufgebaut und gezeichnet,
+  begrenzter Zwischenspeicher
+
+## PDF Editor
+
+- Text ändern mit ehrlich benanntem Weg: „Direkt im PDF geändert (Originalschrift)“, „Neu gesetzt
+  (Originaltext entfernt)“ oder „Kompatibilitätsmodus“ (Überlagerung – keine Schwärzung); jede
+  Änderung wird geprüft, sonst zurückgenommen; Text hinzufügen mit Schrift, Größe, Farbe
+- Bilder auswählen, verschieben, Größe ändern, drehen, ersetzen, löschen, PNG/JPEG einfügen
+- Seiten organisieren: Raster mit Mehrfachauswahl und Ziehen, drehen, löschen, duplizieren, leere
+  Seite, aus PDF einfügen, PDFs anhängen, extrahieren, teilen
+- Kommentare: markieren, unterstreichen, durchstreichen, Notiz, Freihand (auch als sichtbare
+  Unterschrift), Rechteck, Ellipse, Linie, Pfeil, Textfeld; vorhandene Kommentare bleiben erhalten
+- Formulare (AcroForm) ausfüllen; PDF-JavaScript wird nie ausgeführt
+- Rückgängig/Wiederholen je Dokument (Strg+Z, Strg+Y)
+
+## Sicher speichern
+
+- Strg+S / Strg+Umschalt+S: Prüfung der neuen Datei vor dem Ersetzen, atomares Ersetzen, Sicherung
+  des vorherigen Stands; bei einem Fehler bleibt das Original unverändert
+- von außen geänderte Dateien werden nicht still überschrieben
+- verschlüsselte PDFs: Passwort nur im Arbeitsspeicher, Berechtigungen werden beachtet;
+  digital signierte PDFs: Warnung vor der ersten Änderung
+- beschädigte PDFs: „PDF reparieren“ wird angeboten (nie automatisch)
+- ungespeicherte Änderungen werden lokal gesichert und nach einem Absturz zum Wiederherstellen
+  angeboten
+
+## Weitere Änderungen
+
+- Startseite: Werkzeug „PDF Reader & Editor“ (Strg+5); eine auf die Startseite gezogene PDF öffnet
+  sich im Reader („PDF reparieren“ nimmt PDFs auf seiner eigenen Seite an)
+- Diagnose nennt die Engines des Editors (pikepdf/qpdf, PDFium, fontTools)
+- Laufzeit: fontTools 4.66.1 (MIT) für Schrift-Teilmengen, Qt Print Support für den Druck
+
 # PDF Tool 2.8.0
 
 Freigegebene Version – getestet als Beta 2.8.0-beta.1, Funktionsumfang unverändert.

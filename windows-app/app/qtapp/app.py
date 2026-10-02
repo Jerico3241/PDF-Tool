@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
-from tools.registry import CONTRACTS, REPAIR, TOOLS, tool_for_page
+from tools.registry import CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
 
 import winsys
 
@@ -29,23 +29,25 @@ from .timers import Timers
 HOME = "home"
 SETTINGS = "settings"
 PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
-SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS)  # Strg+1 … Strg+4
-HOME_HINT = "Strg+2  Vertragsübersichten   ·   Strg+3  PDF reparieren"
+SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key)  # Strg+1 … Strg+5
+HOME_HINT = "Strg+5  PDF Reader & Editor   ·   Strg+2  Vertragsübersichten   ·   Strg+3  PDF reparieren"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
-    "Lokale Windows-App mit Werkzeugen für PDF-Dateien: Vertragsübersichten aus Excel-Listen "
-    "erstellen sowie beschädigte PDF-Dateien analysieren und reparieren. Alle Dateien werden "
-    "lokal auf diesem PC verarbeitet. Python und alle Pakete sind im Setup enthalten."
+    "Lokale Windows-App mit Werkzeugen für PDF-Dateien: PDFs lesen, bearbeiten, organisieren und "
+    "kommentieren, Vertragsübersichten aus Excel-Listen erstellen sowie beschädigte PDF-Dateien "
+    "analysieren und reparieren. Alle Dateien werden lokal auf diesem PC verarbeitet. Python und "
+    "alle Pakete sind im Setup enthalten."
 )
 ABOUT_QUOTE = "„Ich beleidige seine Mutter, weil wenn ich seine Mutter beleidige, beleidige ich nur ihn oder maximal noch seine Mutter.“"
 ABOUT_QUOTE_AUTHOR = "— Manuelsen"
 HOME_STEPS = (
     "Auf der Startseite ein Werkzeug wählen – oder links in der Navigation unter »Tools«.",
+    "»PDF Reader & Editor« öffnet PDFs zum Lesen, Bearbeiten, Organisieren und Kommentieren (Strg+5).",
     "»Vertragsübersichten« erstellt aus einer Excel-Liste eine PDF (Strg+2).",
     "»PDF reparieren« analysiert beschädigte PDF-Dateien und überträgt lesbare Inhalte in eine neue PDF (Strg+3).",
 )
 HOME_NOTES = (
-    "Eine Datei kann auch direkt in das Fenster gezogen werden: Eine PDF öffnet »PDF reparieren«, eine Excel-Liste »Vertragsübersichten«.",
+    "Eine Datei kann auch direkt in das Fenster gezogen werden: Auf der Startseite öffnet eine PDF den »PDF Reader & Editor«, eine Excel-Liste »Vertragsübersichten«; auf der Seite »PDF reparieren« wird eine PDF zur Reparatur hinzugefügt.",
     "Design, Akzentfarbe, Mica und Animationen stehen unter »Einstellungen« (Strg+4).",
     "Alle Dateien werden lokal verarbeitet; es wird nichts hochgeladen.",
 )
@@ -286,8 +288,8 @@ class AppController(Observable):
         key, hooks = self._page_tool()
         if hooks is not None:
             return key if hooks.accepts(paths, self.currentPage) else None
-        # Startseite und Einstellungen: nach Dateiart
-        for tool_key in (CONTRACTS.key, REPAIR.key):
+        # Startseite und Einstellungen: nach Dateiart (PDFs öffnet der Reader)
+        for tool_key in (READER.key, CONTRACTS.key):
             other = self._tools.get(tool_key)
             if other is not None and other.accepts(paths, ""):
                 return tool_key
@@ -303,7 +305,7 @@ class AppController(Observable):
         if hooks is not None:
             hooks.drag_enter(target is not None, self.currentPage)
         elif target is not None:
-            self.set_status("Loslassen: PDFs öffnen »PDF reparieren«, eine Excel-Liste »Vertragsübersichten«.", "info")
+            self.set_status("Loslassen: PDFs öffnen den »PDF Reader & Editor«, eine Excel-Liste »Vertragsübersichten«.", "info")
         return target is not None
 
     @Slot()

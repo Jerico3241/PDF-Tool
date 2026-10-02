@@ -185,4 +185,5 @@ FocusScope {
     Shortcut { sequence: "Ctrl+2"; enabled: !Dialogs.open; onActivated: App.openShortcut(2) }
     Shortcut { sequence: "Ctrl+3"; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
     Shortcut { sequence: "Ctrl+4"; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
+    Shortcut { sequence: "Ctrl+5"; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
 }

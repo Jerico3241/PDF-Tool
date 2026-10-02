@@ -44,6 +44,11 @@ und `app/tools/` (ohne Oberflächencode):
   Konflikte und Nummerierung, Reservierung beim Start – keine eigene Engine, nur Reihenfolge und
   Namen), Texte und Angaben für die Anzeige (`presentation.py`), erweiterte Wiederherstellung
   (`recovery/`).
+- `tools/pdf_editor/` (seit 3.0.0) – PDF Reader & Editor ohne Oberfläche: Dokument (pikepdf als
+  Quelle der Wahrheit, PDFium für Darstellung und Text), Text bearbeiten (`textedit.py`: direkt, neu
+  gesetzt, Überlagerung – mit Prüfung), Bilder, Seiten, Anmerkungen, Formulare, Metadaten, Export,
+  Rückgängig (`commands.py`), sicheres Speichern (`save.py`), Sitzungssicherung (`recovery.py`).
+  Details: [`docs/PDF-EDITOR.md`](../docs/PDF-EDITOR.md).
 - `tools/registry.py` – welche Werkzeuge es gibt und welche Seiten zu ihnen gehören.
 
 Regeln: kein `import PySide6` und keine Oberfläche im Kern; Texte, die die Oberfläche zeigt,
@@ -68,6 +73,7 @@ Modul `PdfTool.Backend`:
 | `Batch` | `contracts.batch.BatchController` | Stapel |
 | `Comparison` | `contracts.comparison.ComparisonController` | Vertragsvergleich |
 | `Repair` | `repair.RepairController` | PDF reparieren |
+| `Reader` | `reader.controller.ReaderController` | PDF Reader & Editor: Tabs, Öffnen, »Zuletzt geöffnet«, Seitenleisten; `Reader.current` ist der `DocumentController` des aktiven Tabs (Seitenbilder über `image://pdfpage/…`) |
 | `Updates` | `updates.UpdatesController` | Updates (vor der Installation: Sicherung) |
 | `Backup` | `backups.BackupController` | Einstellungen → Sicherung & Wiederherstellung |
 | `Diagnose` | `diagnose.DiagnoseController` | Einstellungen → Diagnose |
@@ -125,6 +131,9 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
   zwei gleichzeitig (Analysen), repariert wird nacheinander. „Abbrechen“ beendet die Prozesse und
   lässt die noch nicht begonnenen Dateien aus. Die Zeilen (`Repair.items`, `KeyedListModel`) melden
   Fortschritt nur für die betroffene Zeile und Rolle.
+- PDF Reader & Editor: ein eigener Arbeitsthread (`qtapp/reader/engine.py`) für alle Zugriffe auf
+  geöffnete Dokumente, Aufträge mit Priorität (Bearbeiten vor sichtbaren Seiten vor Miniaturen vor
+  Suche), Seitenbilder abbrechbar und in einem begrenzten Zwischenspeicher.
 - `timers.Timers` – benannte, abbrechbare Zeitgeber (verzögertes Speichern, Entprellen der Suche).
 
 ## QML-Oberfläche (`app/qml`)
@@ -267,6 +276,8 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
   über `tests/caret_geometry.py` – je Skalierung ein eigener Prozess).
 - PDF reparieren: `tests/test_pdf_repair_batch.py` (Liste, Zustände, Namen, Konflikte ohne Qt),
   `tests/test_qt_repair.py` (eine PDF wie bis 2.7.0, mehrere PDFs, Namen; bis zu 100 PDFs).
+- PDF Reader & Editor: `tests/test_editor_*.py` (Engine) und `tests/test_qt_reader.py` (Oberfläche mit
+  Maus und Tastatur); Messung: `tests/bench_editor.py`.
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
   (`tests/fixtures/config_v22.json` … `config_v272.json`, dazu Kundenakten und ein Vertragsstand)
   in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.
@@ -276,7 +287,7 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 ## CI
 
 - **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Push/PR/Release): Tests (die Qt-Tests in
-  vier gleichzeitig laufenden Jobs auf eigenen Rechnern; Release erst nach allen Jobs) → Setup bauen →
+  fünf gleichzeitig laufenden Jobs auf eigenen Rechnern; Release erst nach allen Jobs) → Setup bauen →
   Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen stabilen Version
   (`windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test

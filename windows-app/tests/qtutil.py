@@ -168,7 +168,7 @@ class Harness:
             self.wait_pages()
             pump(0.1)
 
-    PAGES = ("home", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings")
+    PAGES = ("home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings")
 
     def wait_pages(self, timeout: float = 20.0) -> bool:
         """Warten, bis alle verfügbaren Seiten im Hintergrund geladen sind (wie nach dem Start)."""
@@ -219,6 +219,16 @@ class Harness:
     def navigate(self, page: str, settle: float = 0.25) -> None:
         self.app.navigate(page)
         pump(settle)
+        # Auf einem ausgelasteten Rechner dauert der Seitenwechsel länger als ``settle``: warten, bis die Seite
+        # wirklich eingeblendet ist (wechselt sie nie, scheitert der Test an seiner nächsten Prüfung)
+        if self.window is not None and self.app.currentPage == page:
+            wait_until(lambda: self.page_shown(page), 5)
+
+    def page_shown(self, page: str) -> bool:
+        """Seite vollständig eingeblendet: gezeigt, kein Übergang mehr, voll deckend."""
+        slot = self.item(f"page_{page}")
+        host = slot.parentItem() if slot is not None else None
+        return host is not None and host.property("shownKey") == page and not host.property("transitioning") and slot.isVisible() and slot.opacity() > 0.999
 
     # Lebenszyklus -----------------------------------------------------------------------------
     def close(self) -> None:

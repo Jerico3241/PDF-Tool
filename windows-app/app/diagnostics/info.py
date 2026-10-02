@@ -21,6 +21,7 @@ MODULES = (
     (("pikepdf",), "pikepdf", "pikepdf"),
     (("pypdfium2",), "pypdfium2", "pypdfium2"),
     (("lxml",), "lxml", "lxml"),
+    (("fonttools",), "fontTools", "fontTools"),
 )
 
 
@@ -111,6 +112,31 @@ def repair_engines() -> str:
         return "nicht verfügbar"
 
 
+def editor_engines() -> str:
+    """Engine des PDF Readers & Editors: pikepdf (qpdf) für Struktur und Speichern, PDFium für
+    Darstellung und Text, fontTools für Schrift-Teilmengen."""
+    parts = []
+    try:
+        import pikepdf
+
+        parts.append(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__})")
+    except Exception:  # noqa: BLE001
+        parts.append("pikepdf nicht verfügbar")
+    try:
+        import pypdfium2
+
+        parts.append(f"pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO.build})")
+    except Exception:  # noqa: BLE001
+        parts.append("PDFium nicht verfügbar")
+    try:
+        import fontTools
+
+        parts.append(f"fontTools {fontTools.version}")
+    except Exception:  # noqa: BLE001
+        parts.append("fontTools nicht verfügbar")
+    return " · ".join(parts)
+
+
 def qt_versions() -> str:
     try:
         import PySide6
@@ -132,6 +158,7 @@ FACTS = (
     ("data", "Datenordner"),
     ("install", "Programmordner"),
     ("engines", "Reparatur-Engines"),
+    ("editor", "PDF Reader & Editor"),
     ("modules", "Module"),
 )
 
@@ -148,6 +175,7 @@ def system_facts(app_version: str, channel: str, data_dir: Path, install_dir: Pa
         "data": str(data_dir),
         "install": str(install_dir),
         "engines": repair_engines(),
+        "editor": editor_engines(),
         "modules": ", ".join(f"{label} {version}" for label, version in module_versions().items()),
     }
     return [Fact(key, label, values[key]) for key, label in FACTS]

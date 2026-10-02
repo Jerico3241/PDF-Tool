@@ -22,15 +22,16 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | Python (Windows, 64 Bit), ohne tkinter/Tcl/Tk | 3.13.15 | PSF-2.0 | Laufzeit | https://www.python.org |
 | PySide6-Essentials (Qt for Python) | 6.11.2 | LGPL-3.0-only (alternativ GPL-2.0/GPL-3.0 oder kommerziell) | Oberfläche (Qt Quick/QML), Dateiauswahl, Zwischenablage | https://doc.qt.io/qtforpython-6/ · https://code.qt.io/cgit/pyside/pyside-setup.git/tag/?h=v6.11.2 |
 | ↳ shiboken6 | 6.11.2 | LGPL-3.0-only (alternativ GPL-2.0/GPL-3.0 oder kommerziell) | Python-Bindung von PySide6 | https://pypi.org/project/shiboken6/6.11.2/ |
-| ↳ Qt (in PySide6 enthalten: QtCore, QtGui, QtWidgets, QtNetwork, QtOpenGL, QtQml, QtQuick, Qt Quick Controls (nur Stil »Basic«), Qt Quick Templates, Layouts, Shapes, QtSvg; Plugins qwindows, qoffscreen, qico, qjpeg, qsvg, qwebp, qsvgicon, qschannelbackend) | 6.11.2 | LGPL-3.0-only | Oberfläche; Qt Network mit TLS über Windows-Schannel für die Update-Prüfung (seit 2.7.2, keine zusätzliche Bibliothek) | https://download.qt.io/official_releases/qt/6.11/ |
+| ↳ Qt (in PySide6 enthalten: QtCore, QtGui, QtWidgets, QtNetwork, QtOpenGL, QtQml, QtQuick, Qt Quick Controls (nur Stil »Basic«), Qt Quick Templates, Layouts, Shapes, QtSvg, QtPrintSupport; Plugins qwindows, qoffscreen, qico, qjpeg, qsvg, qwebp, qsvgicon, qschannelbackend) | 6.11.2 | LGPL-3.0-only | Oberfläche; Qt Network mit TLS über Windows-Schannel für die Update-Prüfung (seit 2.7.2, keine zusätzliche Bibliothek); Qt Print Support für den Druckdialog von Windows im PDF Reader (seit 3.0.0) | https://download.qt.io/official_releases/qt/6.11/ |
 | ↳ Bibliotheken von Qt (u. a. libjpeg-turbo, libwebp, PCRE2, HarfBuzz, FreeType, double-conversion, zlib) | – | BSD-artig / MIT / IJG / FTL / Zlib | Bildformate, Textdarstellung | https://doc.qt.io/qt-6/licenses-used-in-qt.html |
-| pikepdf | 10.15.0 | MPL-2.0 | PDF reparieren (Analyse, Neuaufbau) | https://github.com/pikepdf/pikepdf |
+| pikepdf | 10.15.0 | MPL-2.0 | PDF reparieren (Analyse, Neuaufbau); PDF Reader & Editor (Struktur, Bearbeiten, Speichern) | https://github.com/pikepdf/pikepdf |
 | ↳ qpdf (in pikepdf enthalten) | 12.4.1 | Apache-2.0 | PDF-Engine 1 | https://github.com/qpdf/qpdf |
 | ↳ libjpeg-turbo, zlib, OpenSSL, Teile von pdfminer.six, sRGB-Farbprofil (in pikepdf enthalten) | – | IJG / BSD-3-Clause / Zlib / Apache-2.0 / MIT | Bilddaten, Verschlüsselung, Farbprofile | `pikepdf-10.15.0.dist-info\licenses\third-party-licenses\` |
 | ↳ Microsoft Visual C++ Runtime (msvcp140, in pikepdf, numpy, pandas enthalten) | – | Microsoft Redistributable | C++-Laufzeit | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
-| pypdfium2 | 5.13.0 | Apache-2.0 oder BSD-3-Clause | PDF reparieren (zweite Engine, Rettungsmodus) | https://github.com/pypdfium2-team/pypdfium2 |
+| pypdfium2 | 5.13.0 | Apache-2.0 oder BSD-3-Clause | PDF reparieren (zweite Engine, Rettungsmodus); PDF Reader & Editor (Darstellung, Text, Suche, Prüfung von Änderungen) | https://github.com/pypdfium2-team/pypdfium2 |
 | ↳ PDFium (in pypdfium2 enthalten) | 153.0.7999.0 | BSD-3-Clause | PDF-Engine 2 | https://pdfium.googlesource.com/pdfium |
 | ↳ Bibliotheken von PDFium | – | Apache-2.0 (abseil, llvm-libc mit LLVM-Exception), FTL (FreeType), Unicode-3.0 (ICU), MIT (lcms, simdutf), BSD (agg, OpenJPEG, libjpeg-turbo), libpng, libtiff, Zlib, MIT/Apache-2.0 (fast_float) | Schriften, Bilder, Farbprofile | https://github.com/bblanchon/pdfium-binaries |
+| fontTools | 4.66.1 | MIT | PDF Reader & Editor: Teilmengen lokaler Schriften einbetten (nur wenn die Schrift es erlaubt) | https://github.com/fonttools/fonttools |
 | pypdf | 6.19.0 | BSD-3-Clause | PDF reparieren (dritte, tolerante Engine der erweiterten Wiederherstellung) | https://github.com/py-pdf/pypdf |
 | packaging | 26.3 | Apache-2.0 oder BSD-2-Clause | von pikepdf benötigt | https://github.com/pypa/packaging |
 | pandas | 2.3.3 | BSD-3-Clause | Vertragsübersichten (Excel lesen) | https://pandas.pydata.org |
@@ -48,8 +49,9 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 
 Nicht mitgeliefert: lxml (von pikepdf nur für XMP-Metadaten benötigt – PDF Tool schreibt
 Metadaten unverändert und braucht es nicht), qpdf- oder Ghostscript-Programme, Kommandozeilen-
-werkzeuge. pypdf wird ohne optionale Zusatzpakete (cryptography, PyCryptodome, fontTools)
-ausgeliefert; Verschlüsselung übernimmt weiterhin qpdf. Von PySide6 bleiben nur die Module,
+werkzeuge. pypdf wird ohne optionale Zusatzpakete (cryptography, PyCryptodome) ausgeliefert;
+Verschlüsselung übernimmt weiterhin qpdf. fontTools gehört seit 3.0.0 für den PDF Editor zur
+Laufzeit; Schriften selbst werden nie mitgeliefert, aus PDFs extrahiert oder weitergegeben. Von PySide6 bleiben nur die Module,
 Plugins und QML-Module, die die App lädt (`windows-app/qtruntime.py`): keine Entwicklerwerkzeuge
 (Designer, Linguist, qmlls …), keine weiteren Stile, kein Software-OpenGL (`opengl32sw.dll`), keine
 Übersetzungen – die Dateien selbst bleiben unverändert (Original-Wheel).
@@ -107,7 +109,7 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
   kein Bestandteil des App-Brandings.
 - **Schriften der Oberfläche** (Segoe UI Variable, Segoe UI) werden nicht mitgeliefert, sondern aus
   Windows verwendet.
-- **Symbole der Oberfläche** (seit 2.7.0): 110 SVG-Symbole aus **Fluent UI System Icons** von
+- **Symbole der Oberfläche** (seit 2.7.0): 141 SVG-Symbole aus **Fluent UI System Icons** von
   Microsoft (Paket `@fluentui/svg-icons` 1.1.343, https://github.com/microsoft/fluentui-system-icons),
   unverändert unter `windows-app/app/qml/icons/`, im Setup als Teil der QML-Ressource. Lizenz: MIT.
 

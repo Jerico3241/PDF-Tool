@@ -7,8 +7,11 @@
 # die App schreibt Metadaten unverändert (fix_metadata_version=False), Test: test_engine_works_without_lxml.
 # Oberfläche (seit 2.7.0): PySide6-Essentials (Qt 6, Qt Quick/QML; LGPL-3.0) mit shiboken6 in exakt
 # derselben Version. build.py übernimmt davon nur die benötigten Module, Plugins und QML-Module (qtruntime.py).
+# PDF Reader & Editor (seit 3.0.0): fontTools (MIT) bettet Teilmengen lokaler Schriften ein – nur wenn die
+# Schrift es erlaubt (fsType). Zwei Prüfsummen: Wheel für Python 3.13/win_amd64 und das reine Python-Wheel.
 charset-normalizer==3.5.1 --hash=sha256:aea996a6aba25260827c9ea511d1addfde2da9eb686ac961838509086188b7e6
 et-xmlfile==2.0.0 --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa
+fonttools==4.66.1 --hash=sha256:43d1284c1964666ee833f2badd3017dc138f53d4889043ffca66c5ce4188f188 --hash=sha256:7234ae9e28db64273fbbfa72caebd0a97e3bdba6b05064114741b9539ef339d0
 numpy==2.5.3 --hash=sha256:71cad2b2a7451ab79d8f5e71b453485b6775963d5cf794179144a7463fe6e8ec
 openpyxl==3.1.5 --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2
 packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c

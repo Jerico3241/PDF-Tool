@@ -18,14 +18,19 @@ Geprüft wird:
    Engine nacheinander erstellen – eine vorhandene PDF wird nicht überschrieben;
    Vertragsvergleich: Stand nach dem Export speichern (unverändert nicht doppelt),
    Änderungen erkennen
-3. PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
+3. PDF Reader & Editor (seit 3.0.0): Text direkt im PDF ändern (Originalschrift), Text mit einem
+   Zeichen außerhalb von WinAnsi hinzufügen (eingebettete Teilmenge einer Systemschrift über
+   fontTools), leere Seite einfügen, unter neuem Namen speichern (geprüft) – das Original bleibt
+   unverändert;
+   PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen – auch
    ohne »_repariert« (nummeriert, das Original bleibt);
    erweiterte Wiederherstellung: klassische PDF ohne xref, Trailer, %%EOF und mit
    defektem Seitenbaum rekonstruieren, Text und Seiten mit pypdf prüfen
 4. Oberfläche: die QML-Oberfläche aus der eingebauten Ressource (qml_rc) laden, ohne dass die
    QML-Engine etwas meldet; mit ``--ui`` zusätzlich der Programmstart wie per Verknüpfung
-   (Hauptfenster mit Startseite, Werkzeuge und die Ansichten »Stapel« und »Vorschau« öffnen;
+   (Hauptfenster mit Startseite, Werkzeuge und die Ansichten »Stapel« und »Vorschau« öffnen,
+   eine PDF im PDF Reader öffnen;
    Kundenakte standardmäßig aus, »Kunden« erst nach dem Einschalten – ohne Neustart;
    Einstellungen werden gespeichert). ``--offscreen`` prüft ohne sichtbares Fenster.
 
@@ -88,7 +93,8 @@ def main() -> int:
 
     check(importlib.util.find_spec("tkinter") is None, "tkinter gehört nicht mehr zur Laufzeit (Qt-Oberfläche)")
     import PySide6
-    from PySide6 import QtCore, QtGui, QtNetwork, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
+    from PySide6 import QtCore, QtGui, QtNetwork, QtPrintSupport, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
+    import fontTools
     import numpy
     import openpyxl
     import pandas
@@ -101,7 +107,7 @@ def main() -> int:
 
     check(PySide6.__version__ == "6.11.2" and QtCore.qVersion() == "6.11.2", f"PySide6 {PySide6.__version__} / Qt {QtCore.qVersion()} statt 6.11.2")
     print(f"PySide6 {PySide6.__version__} (Qt {QtCore.qVersion()}) · numpy {numpy.__version__} · pandas {pandas.__version__} · openpyxl {openpyxl.__version__} · xlrd {xlrd.__version__} · reportlab {reportlab.Version} · Pillow {PIL.__version__}")
-    print(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__}) · pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO}) · pypdf {pypdf.__version__}")
+    print(f"pikepdf {pikepdf.__version__} (qpdf {pikepdf.__libqpdf_version__}) · pypdfium2 {pypdfium2.version.PYPDFIUM_INFO} (PDFium {pypdfium2.version.PDFIUM_INFO}) · pypdf {pypdf.__version__} · fontTools {fontTools.version}")
     import appstate
     import engine
     import excelstyle
@@ -111,6 +117,13 @@ def main() -> int:
     from qtapp.contracts import comparison as qt_comparison
     from qtapp.contracts import tool as qt_contracts
     from qtapp import repair as qt_repair
+    from qtapp import instance as qt_instance
+    from qtapp.reader import controller as qt_reader
+    from tools.pdf_editor import commands as editor_commands
+    from tools.pdf_editor import pages as editor_pages
+    from tools.pdf_editor import save as editor_save
+    from tools.pdf_editor import textedit
+    from tools.pdf_editor.document import EditorDocument
     from tools import registry
     from tools.contract_overview import overview, preview
     from tools.contract_overview.batch import analyzer as batch_analyzer
@@ -148,8 +161,9 @@ def main() -> int:
     check(hasattr(qt_comparison, "ComparisonView") and qt_comparison.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
     check(hasattr(rebuild, "write_classic") and hasattr(scanner, "scan"), "Rohrekonstruktion fehlt")
 
-    check([tool.key for tool in registry.TOOLS] == ["contracts", "repair"], "Werkzeuge fehlen")
-    check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool"), "Werkzeuge der Oberfläche fehlen")
+    check([tool.key for tool in registry.TOOLS] == ["reader", "contracts", "repair"], "Werkzeuge fehlen")
+    check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool") and hasattr(qt_reader, "ReaderTool"), "Werkzeuge der Oberfläche fehlen")
+    check(qt_instance.server_name().startswith(qt_instance.PREFIX), "»Öffnen mit« fehlt")
     check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
     check(overview.contract_summary(5, 3) == "5 aktive Verträge · 3 inaktiv ausgeblendet" and overview.contract_summary(1) == "1 aktiver Vertrag", "Statuszeile der Excel-Prüfung")
     print(f"App {appstate.VERSION} · Schriften: {', '.join(pdffonts.available_families())} · Engines: {repair_engine.engine_name()}")
@@ -353,6 +367,37 @@ def main() -> int:
         check(rebuilt.get_warnings() == [] and len(rebuilt.pages) == 3, "rekonstruierte PDF öffnet nicht ohne Wiederherstellung")
     print(f"Erweiterte Wiederherstellung: {output.name} ({result.method.value}, {result.pages_after} Seiten)")
 
+    # PDF Reader & Editor: Text direkt ändern, Text mit eingebetteter Schrift-Teilmenge, Seite einfügen, speichern
+    from reportlab.pdfgen import canvas as rl_canvas
+
+    quelle = work / "editor.pdf"
+    blatt = rl_canvas.Canvas(str(quelle))
+    blatt.setFont("Helvetica", 14)
+    blatt.drawString(72, 760, "Rechnung Nr. 4711")
+    blatt.showPage()
+    blatt.save()
+    original = quelle.read_bytes()
+    dokument = EditorDocument.open(str(quelle))
+    verlauf = editor_commands.History()
+    block = next(b for b in textedit.analyze(dokument, 0) if "4711" in b.text)
+    ergebnis = textedit.edit_block(dokument, verlauf, block, "Rechnung Nr. 4712")
+    check(ergebnis.mode == textedit.NATIVE, f"Text nicht direkt im PDF geändert: {ergebnis.mode}")
+    neu = textedit.add_text(dokument, verlauf, 0, 72, 120, "Zahlbar in 14 Tagen – Čeština", style=textedit.TextStyle(size=11))
+    editor_pages.insert_blank(dokument, verlauf, 1)
+    ziel = work / "editor-gespeichert.pdf"
+    gespeichert = editor_save.save(dokument, ziel, backup_dir=work / "editor-sicherungen")
+    dokument.close()
+    check(quelle.read_bytes() == original, "Original wurde beim »Speichern unter« verändert")
+    with pikepdf.open(ziel) as geprueft:
+        check(len(geprueft.pages) == 2, f"Seiten nach dem Speichern: {len(geprueft.pages)}")
+    gelesen = pypdfium2.PdfDocument(str(ziel))
+    try:
+        seite = gelesen[0].get_textpage().get_text_range()
+    finally:
+        gelesen.close()
+    check("4712" in seite and "4711" not in seite and "Čeština" in seite, "Text nach dem Speichern nicht wie bearbeitet")
+    print(f"PDF Editor: {ergebnis.label}; neuer Text mit {neu.font}; gespeichert {gespeichert.path.name} ({gespeichert.size} Bytes)")
+
     if args.part == "runtime":
         print("OK")
         return 0
@@ -434,6 +479,27 @@ def ui_probe(qt_application, full: bool) -> None:
         shown["customers"] = app.currentPage
         runtime.settings.setCustomerRecords(False)
 
+    sample = Path(tempfile.mkdtemp(prefix="pdf-tool-reader-")) / "Probe.pdf"
+    import pikepdf
+
+    with pikepdf.new() as probe:
+        probe.add_blank_page()
+        probe.add_blank_page()
+        probe.save(sample)
+
+    def reader() -> None:
+        app.openTool("reader")
+        shown["reader"] = app.currentPage
+        runtime.reader.controller.open_paths([str(sample)])
+
+    def reader_wait() -> None:
+        pass
+
+    def reader_check() -> None:
+        current = runtime.reader.controller.current
+        shown["reader_pages"] = current.pageCount if current is not None else 0
+        runtime.reader.controller.closeCurrent()
+
     def finish() -> None:
         shown["customers_after"] = app.currentPage
         shown["messages"] = list(qt_application.MESSAGES)
@@ -441,7 +507,7 @@ def ui_probe(qt_application, full: bool) -> None:
         window.close()
         qt.quit()
 
-    actions = [first, tools, views, records_off, records_on, open_customers, finish] if full else [first, finish]
+    actions = [first, tools, views, records_off, records_on, open_customers, reader, reader_wait, reader_wait, reader_check, finish] if full else [first, finish]
     QTimer.singleShot(2500, lambda: step(actions))
     QTimer.singleShot(60000, qt.quit)  # Sicherheitsnetz
     qt.exec()
@@ -458,6 +524,7 @@ def ui_probe(qt_application, full: bool) -> None:
         check(shown.get("preview") == "preview" and shown.get("batch") == "batch", "Ansichten »Stapel« und »Vorschau« lassen sich nicht öffnen")
         check(shown.get("records") is False and shown.get("customers_blocked") is True and shown.get("customers_off") == "preview", "Kundenakte ist nicht standardmäßig aus bzw. »Kunden« ohne Kundenakte erreichbar")
         check(shown.get("customers") == "customers" and shown.get("customers_after") != "customers", "Kundenakte lässt sich nicht ohne Neustart ein- und ausschalten")
+        check(shown.get("reader") == "reader" and shown.get("reader_pages") == 2, f"PDF Reader: Seite {shown.get('reader')}, {shown.get('reader_pages')} Seiten geöffnet")
     config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
     check(config.is_file() and isinstance(json.loads(config.read_text(encoding="utf-8")), dict), "Einstellungen wurden beim Beenden nicht gespeichert")
     print(f"Oberfläche: Fenster sichtbar, {'Werkzeuge und Ansichten geprüft, ' if full else ''}beendet nach {time.monotonic() - started:.1f} s")

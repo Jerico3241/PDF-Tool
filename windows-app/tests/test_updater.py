@@ -143,6 +143,18 @@ def test_88_drafts_are_never_offered():
         assert update("2.7.2", channel, eintrag("v2.7.3-beta.1", draft=True)) is None
 
 
+def test_major_beta_3_0_only_for_the_beta_channel():
+    """3.0.0-beta.1 (neue Hauptversion): Beta-Kanal von 2.8.0 aus ja, Stable nie – auch nicht von einer
+    älteren Stable oder Beta aus; erst die spätere stabile 3.0.0 erreicht Stable."""
+    entries = (eintrag("v2.8.0-beta.1"), eintrag("v2.8.0"), eintrag("v3.0.0-beta.1"))
+    assert update("2.8.0", Channel.BETA, *entries) == "3.0.0-beta.1"
+    assert update("2.8.0", Channel.STABLE, *entries) is None
+    assert update("2.7.2", Channel.STABLE, *entries) == "2.8.0"
+    assert update("2.8.0-beta.1", Channel.STABLE, *entries) == "2.8.0"
+    assert update("3.0.0-beta.1", Channel.STABLE, *entries) is None  # kein Rückschritt
+    assert update("3.0.0-beta.1", Channel.STABLE, *entries, eintrag("v3.0.0")) == "3.0.0"
+
+
 def test_stable_channel_example_from_the_spec():
     entries = (eintrag("v2.7.3-beta.1"), eintrag("v2.7.3-beta.2"), eintrag("v2.7.3"))
     assert update("2.7.2", Channel.STABLE, *entries) == "2.7.3"

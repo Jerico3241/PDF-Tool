@@ -10,3 +10,5 @@ ChooseTemplateContent 1.0 ChooseTemplateContent.qml
 UpdateContent 1.0 UpdateContent.qml
 TextInputContent 1.0 TextInputContent.qml
 RestoreSummaryContent 1.0 RestoreSummaryContent.qml
+PasswordContent 1.0 PasswordContent.qml
+ReaderPropertiesContent 1.0 ReaderPropertiesContent.qml
