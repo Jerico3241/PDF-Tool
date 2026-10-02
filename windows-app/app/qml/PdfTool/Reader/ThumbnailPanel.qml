@@ -7,7 +7,10 @@ import PdfTool.Controls
 
 // Miniaturen aller Seiten – virtualisiert (nur sichtbare entstehen und werden gerendert, mit
 // niedriger Priorität nach den Seiten der Ansicht). Klick springt zur Seite; die aktuelle Seite
-// ist markiert und bleibt im Blick.
+// ist markiert und bleibt im Blick. Ein fertiges Bild blendet kurz über das weiße Blatt ein (keine
+// Bewegung); zeigt eine wiederverwendete Zeile eine andere Seite oder ein anderes Dokument, ist das alte
+// Bild sofort weg (PageImage).
+// Die Markierung der aktuellen Seite wechselt weich (Rahmenfarbe, Fläche, Strich links).
 ListView {
     id: list
     objectName: "readerThumbnails"
@@ -64,13 +67,11 @@ ListView {
             color: Theme.paper
             border.width: row.current ? 2 : 1
             border.color: row.current ? Theme.accent : Theme.border
-            Image {
+            Behavior on border.color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+            PageImage {
+                id: image
                 anchors.fill: parent
                 anchors.margins: row.current ? 2 : 1
-                asynchronous: true
-                retainWhileLoading: true
-                cache: false
-                smooth: true
                 source: list.doc ? "image://pdfpage/" + list.doc.docId + "/" + row.index + "/" + Math.round(paper.width * list.ratio) + "/" + list.doc.revision + "/thumb" : ""
             }
         }

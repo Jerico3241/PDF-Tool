@@ -12,6 +12,7 @@ Item {
     id: root
     property var field: ({})
     property var doc: null
+    property var host: null         // Ansicht (DocumentView): bekommt die Tastatur nach der Eingabe zurück
     property real s: 1
     readonly property var r: field.view || [0, 0, 0, 0]
     readonly property string kind: field.kind || ""
@@ -35,6 +36,11 @@ Item {
         var value = input.text
         if (value !== String(field.value) && doc) doc.setField(field.key, value)
     }
+    // Eingabe mit der Tastatur beendet (Eingabetaste, Escape): Tastatur wieder in der Seite wie nach dem
+    // Textbearbeiten – sonst bliebe sie im ausgeblendeten Eingabefeld und die Fokusmarkierung stehen
+    function leave() {
+        if (host) host.focusByPointer()
+    }
     function choose() {
         if (!editable || !doc) return
         if (kind === "checkbox") doc.setField(field.key, !(field.value === true))
@@ -54,9 +60,21 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: root.editing ? Theme.paper : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, hover.hovered ? 0.14 : 0.06)
-        border.width: root.editing || input.activeFocus ? 2 : 1
+        border.width: 1
         border.color: root.editable ? Theme.accent : Theme.warning
         radius: root.kind === "radio" ? Math.min(width, height) / 2 : 2
+        // Fokus: der kräftigere Rahmen blendet kurz ein (kein Glühen). Fläche und Eingabe wechseln sofort –
+        // sonst schiene der Wert aus dem PDF kurz unter der Eingabe durch.
+        Rectangle {
+            objectName: "readerFieldFocus"
+            anchors.fill: parent
+            radius: parent.radius
+            color: "transparent"
+            border.width: 2
+            border.color: parent.border.color
+            opacity: root.editing || input.activeFocus ? 1 : 0
+            Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
+        }
     }
     // Eingabe (nur Textfelder; sichtbar während der Eingabe – sonst zeigt das PDF den Wert)
     TextEdit {
@@ -81,9 +99,11 @@ Item {
         Keys.onPressed: (event) => {
             if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (!root.field.multiline || (event.modifiers & Qt.ControlModifier))) {
                 root.commit()
+                root.leave()
                 event.accepted = true
             } else if (event.key === Qt.Key_Escape) {
                 root.editing = false
+                root.leave()
                 event.accepted = true
             }
         }

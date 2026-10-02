@@ -6,6 +6,7 @@ ReaderToolbar 1.0 ReaderToolbar.qml
 ToolOptions 1.0 ToolOptions.qml
 DocumentView 1.0 DocumentView.qml
 PageView 1.0 PageView.qml
+PageImage 1.0 PageImage.qml
 TextEditor 1.0 TextEditor.qml
 FieldOverlay 1.0 FieldOverlay.qml
 ColorChooser 1.0 ColorChooser.qml

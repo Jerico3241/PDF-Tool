@@ -65,7 +65,7 @@ jobs:
           - gruppe: Vorlagen, Regelwerk, Sicherung und Diagnose
             dateien: templates rules backup
           - gruppe: PDF Reader & Editor
-            dateien: reader objects reader_layout
+            dateien: reader objects reader_layout reader_motion
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:

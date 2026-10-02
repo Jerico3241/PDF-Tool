@@ -67,16 +67,22 @@ Rectangle {
         Layout.rightMargin: 4
         color: Theme.divider
     }
+    // Gewähltes Werkzeug: Akzentmarkierung am unteren Rand, gleitet zum neu gewählten Werkzeug
+    property Item activeTool: null
     component ToolButton: PIconButton {
+        id: toolButton
         property string toolKey: ""
         checkable: true
         checked: root.tool === toolKey
+        onCheckedChanged: if (checked) root.activeTool = toolButton
+        Component.onCompleted: if (checked) root.activeTool = toolButton
         onClicked: if (root.doc) root.doc.setTool(toolKey)
         Accessible.role: Accessible.RadioButton
         Accessible.checked: checked
     }
 
     RowLayout {
+        id: bar
         anchors.fill: parent
         anchors.leftMargin: 8
         anchors.rightMargin: 8
@@ -156,6 +162,21 @@ Rectangle {
             onClicked: Reader.setOrganize(!Reader.organize)
         }
         PIconButton { id: moreButton; objectName: "readerMore"; iconName: "more_horizontal"; tip: "Weitere Befehle"; onClicked: moreMenu.popup(moreButton, 0, moreButton.height) }
+    }
+    Rectangle {
+        id: toolIndicator
+        objectName: "readerToolIndicator"
+        readonly property Item target: root.activeTool !== null && root.activeTool.visible && root.activeTool.checked ? root.activeTool : null
+        width: 16
+        height: 3
+        radius: 1.5
+        color: Theme.accent
+        // Lage aus der Schaltfläche (auch in verschachtelten Zeilen); hängt an Breite und Anordnung der Leiste
+        x: target ? (target.x, target.parent.x, bar.x, root.width, target.mapToItem(root, target.width / 2, 0).x - width / 2) : x
+        y: target ? (target.y, target.parent.y, target.mapToItem(root, 0, target.height).y - height - 2) : y
+        opacity: target ? 1 : 0
+        Behavior on x { enabled: Motion.moves && toolIndicator.opacity > 0.5; NumberAnimation { duration: Motion.indicator; easing.type: Motion.decelerate } }
+        Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
     }
 
     PMenu {

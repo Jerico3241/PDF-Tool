@@ -48,6 +48,70 @@ Drei getrennte Ebenen:
    - Steht die Ansicht ganz oben (z. B. gleich nach dem Öffnen), bleibt sie oben. Sonst bleibt die
      Stelle in der Mitte stehen.
 
+## Bewegung (Animationsprofile)
+
+Der Reader nutzt dasselbe Animationssystem wie die übrige App (Einstellungen → Animationen:
+„Vollständig“, „Reduziert“, „Aus“; `Style/Motion.qml`). Alle Dauern und Kurven kommen von dort:
+
+- Farbe und Deckkraft: `fast` (83 ms), `fade` (150/110 ms), `renderFade` (120/90 ms)
+- Bewegungen, nur „Vollständig“: `pane` (200 ms), `expand` (200 ms), `indicator` (260 ms),
+  `normal` (167 ms)
+- Versatz und Größe: `paneShift` (8 px), `menuScale` (95 %)
+- Kurven: `decelerate`, `accelerate`, `standard`
+
+Was sich bewegt („Vollständig“):
+
+- **App-Navigation:** Sie klappt beim Öffnen eines Dokuments weich ein, die Beschriftungen blenden aus.
+- **Seitenleisten:**
+  - Sie gleiten über ihren Streifen herein bzw. hinaus. Die Dokumentfläche nimmt ihre Breite einmal
+    an, ohne Neuaufbau in jedem Bild.
+  - Der Inhalt überblendet mit leichtem Versatz, die Auswahl im Kopf gleitet zum neuen Reiter.
+  - Die Eigenschaften blenden kurz ein, wenn die Art der Auswahl wechselt (Text, Bild, mehrere).
+- **Dokument-Tabs:**
+  - Neue Tabs blenden ein und heben sich leicht, geschlossene blenden aus, die übrigen rücken weich nach.
+  - Die Markierung des aktiven Tabs gleitet.
+  - Der Punkt für „ungespeichert“ blendet ein und aus; sein Platz ist reserviert, der Tab springt nicht.
+- **Werkzeuge:** Die Akzentmarkierung unter dem gewählten Werkzeug gleitet zum neuen Werkzeug.
+- **Kontextmenüs** blenden ein und wachsen dabei von 95 auf 100 % (140 ms).
+- **Seitenbilder und Miniaturen:**
+  - Ein neues Bild blendet kurz über dem weißen Blatt ein, nur über die Deckkraft.
+  - Nach einer Änderung (Text, Kommentar, Rückgängig) blendet das alte Bild über dem neuen aus.
+  - Zeigt ein Platz eine andere Seite (Scrollen, wiederverwendete Zeile, anderes Dokument), ist das
+    alte Bild im selben Moment weg, und bis zum neuen steht das weiße Blatt. Ausblenden ist dabei nie
+    animiert, nur das Einblenden (`Reader/PageImage.qml`).
+  - Die Markierung der aktuellen Miniatur wechselt weich.
+- **Zoom:** Über Schaltflächen, Menü und Tastatur gleitet die Darstellung kurz vom alten zum neuen
+  Maßstab (167 ms). Aufbau und Lage gelten dabei sofort, nur die fertigen Inhalte werden skaliert.
+- **Suche:**
+  - Die Treffer einer Seite blenden einmal ein.
+  - Der Rahmen des aktuellen Treffers zieht sich beim Wechsel kurz auf den Treffer zusammen.
+- **Seiten organisieren:**
+  - Beim Ziehen werden die gewählten Seiten zu Platzhaltern an der neuen Stelle, und eine Vorschau mit
+    Schatten folgt dem Zeiger.
+  - Die übrigen Seiten rücken weich in die neue Reihenfolge, nach dem Ablegen rasten die Seiten ein.
+  - Gelöschte Seiten blenden aus, eingefügte ein, die übrigen rücken nach.
+  - Jede Zelle wechselt erst an ihre neue Stelle, wenn ihr neues Bild da ist. So steht nie eine falsche
+    Seite an einer Stelle.
+- **Formularfelder:** Die Fokusmarkierung (kräftigerer Rahmen) blendet kurz ein und aus, ohne Glühen.
+  Fläche und Eingabe wechseln sofort, sonst schiene der Wert aus dem PDF kurz durch. Nach der
+  Eingabetaste oder Escape hat wieder die Seite die Tastatur.
+- **Hinweise und Ablegen:**
+  - InfoBars gleiten ein und aus.
+  - Eine über die Ansicht gezogene PDF zeigt eine Ablagefläche, die weich ein- und ausblendet.
+  - Beim Speichern wechselt „Speichern …“ → „Gespeichert“ mit Überblendung.
+
+„Reduziert“: nur kurze Überblendungen und Farbwechsel – nichts gleitet, wächst oder rückt nach; beim
+Organisieren zeigt die Einfügemarke die Stelle. „Aus“: jeder Zustand gilt sofort, keine Komponente
+erzwingt eine Animation.
+
+Bewusst ohne Bewegung:
+
+- Scrollen und Strg+Mausrad reagieren direkt: kein weiches Scrollen, kein Zoom-Gleiten.
+- Seiten gleiten beim Scrollen nicht ein.
+- Textauswahl, Einfügemarke und Anfasser beim Ziehen folgen direkt; neue Anfasser blenden nur ein.
+- Animiert werden nur Deckkraft, Verschiebung und Skalierung einzelner Elemente. Lange Listen werden
+  nicht Element für Element animiert, und es gibt keine Unschärfe oder Shader.
+
 ## Ansicht und Leistung
 
 - Nur sichtbare Seiten (plus eine halbe Bildschirmhöhe Vorlauf) existieren als Elemente; sie werden
@@ -327,6 +391,16 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
     - Zeigen, Klick, Wort, Doppelklick, Strg+Klick, Rahmen, Ziehen, Tastatur
     - Kontextmenü, Eigenschaften, Bilder
     - Zoom 50–400 %, gedrehte Seiten, Tabs, Animationsprofile
+- Bewegung: `tests/test_qt_reader_motion.py` (je Test „Vollständig“, „Reduziert“, „Aus“)
+  - Seitenleisten: gleiten, blenden oder schalten sofort; nach schnellem Umschalten gilt der letzte
+    Zustand
+  - Auswahl im Kopf, Dokument-Tabs (Markierung, Punkt für „ungespeichert“), Kontextmenü, Werkzeug
+  - Miniaturen: Beim schnellen Scrollen und beim Wechsel des Dokuments zeigt keine Zeile ein fremdes
+    Bild, am Ende sind alle sichtbar; Einblenden außer bei „Aus“
+  - Formularfelder: Die Fokusmarkierung blendet außer bei „Aus“; nach Escape hat die Seite die Tastatur
+  - Seiten organisieren: Vorschau beim Ziehen, Einrasten, Löschen
+  - Zoom gleitet nur über Schaltflächen; Strg+Mausrad und Scrollen bleiben direkt
+  - Suchtreffer, Ablagefläche
 - Fensteraufbau: `tests/test_qt_reader_layout.py`
   - feste Breiten der Seitenleisten, Umschalter im Kopf, Streifen zum Wiederöffnen
   - einheitliche Köpfe (kein Titel gekürzt), leere Zustände, Befehlsleiste ohne Umschalter

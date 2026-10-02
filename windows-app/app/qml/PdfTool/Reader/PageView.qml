@@ -7,7 +7,9 @@ import PdfTool.Controls
 
 // Eine Seite in der Ansicht: Papier, Seitenbild, bei hohem Zoom zusätzlich der sichtbare Ausschnitt
 // in voller Schärfe, darüber Suchtreffer, Textauswahl und die Ebene des gewählten Werkzeugs.
-// Das Seitenbild bleibt stehen, bis das neue fertig ist (Zoomen, Änderungen) – kein Flackern.
+// Das Seitenbild bleibt stehen, bis das neue fertig ist (Zoomen, Änderungen) – kein Flackern. Kommt eine
+// Seite neu an diesen Platz (Scrollen, anderes Dokument), steht sofort das weiße Blatt und ihr Bild
+// blendet kurz ein – nur Deckkraft, nie Lage oder Größe: die Seiten folgen dem Scrollen unmittelbar.
 // Koordinaten aus Python sind Anzeige-Punkte der Seite; hier mal ``s`` (Pixel je Punkt).
 Item {
     id: root
@@ -36,14 +38,24 @@ Item {
 
     // --- Seitenbild ----------------------------------------------------------------------------------------
     property int shownPage: -1
+    property string shownBase: ""
     property int requestedWidth: 0
     function requestImage() {
         // Beim Wechsel des Dokuments kann die Seite noch zum vorigen gehören – dann nichts anfragen
-        if (base === "" || page >= doc.pageCount) { pageImage.source = ""; shownPage = -1; requestedWidth = 0; return }
+        if (base === "" || page >= doc.pageCount) {
+            pageImage.source = ""
+            dropPrevious()
+            shownPage = -1
+            shownBase = ""
+            requestedWidth = 0
+            return
+        }
         if (width < 16) return  // Ansicht noch nicht angeordnet
-        if (shownPage !== page) {
-            pageImage.source = ""  // andere Seite: nicht das Bild der vorigen zeigen
+        if (shownPage !== page || shownBase !== base) {
+            pageImage.source = ""  // andere Seite oder anderes Dokument: nicht das Bild der vorigen zeigen
+            dropPrevious()
             shownPage = page
+            shownBase = base
         }
         requestedWidth = wantedWidth
         pageImage.source = base + wantedWidth + "/" + revision
@@ -54,7 +66,24 @@ Item {
         detailTimer.restart()
         if (wantsObjects) doc.loadObjects(page)  // Objektmodus: auch die neue Seite dieses Platzes analysieren
     }
-    onRevisionChanged: requestImage()
+    // Änderung an diesem Dokument (Text, Kommentar, Rückgängig …): das bisherige Bild bleibt als Schnappschuss
+    // über dem neuen stehen und blendet aus, sobald das neue fertig ist – die Änderung erscheint weich
+    property bool crossfading: false
+    function dropPrevious() {
+        crossfading = false
+        previousFade.stop()
+        previousImage.visible = false
+    }
+    onRevisionChanged: {
+        if (Motion.enabled && pageImage.ready && pageImage.status === Image.Ready && shownPage === page) {
+            previousImage.scheduleUpdate()
+            previousFade.stop()
+            previousImage.opacity = 1
+            previousImage.visible = true
+            crossfading = true
+        }
+        requestImage()
+    }
     onBaseChanged: requestImage()
     // Kleine Zoomschritte gesammelt (kurz warten), große Sprünge und das erste Bild sofort
     onWantedWidthChanged: {
@@ -71,15 +100,35 @@ Item {
         border.width: 1
         border.color: Theme.border
     }
-    Image {
+    PageImage {
         id: pageImage
+        // erstes Bild dieser Seite an diesem Platz: kurz einblenden; neue Fassungen (Zoom, Änderung) ohne Blinken
         anchors.fill: parent
-        asynchronous: true
-        retainWhileLoading: true
-        cache: false
-        smooth: true
         mipmap: false
         fillMode: Image.Stretch
+        onStatusChanged: if (status === Image.Error) root.dropPrevious()
+        onImageReady: {
+            if (!root.crossfading) return
+            root.crossfading = false
+            previousFade.restart()
+        }
+    }
+    ShaderEffectSource {
+        id: previousImage
+        objectName: "readerPagePrevious"
+        anchors.fill: pageImage
+        sourceItem: pageImage
+        live: false
+        visible: false
+        NumberAnimation {
+            id: previousFade
+            target: previousImage
+            property: "opacity"
+            to: 0
+            duration: Motion.renderFade
+            easing.type: Motion.decelerate
+            onFinished: previousImage.visible = false
+        }
     }
 
     // Ausschnitt in voller Schärfe (nur wenn das ganze Seitenbild an seine Grenze stößt)
@@ -123,29 +172,49 @@ Item {
     }
 
     // --- Suchtreffer und Auswahl ---------------------------------------------------------------------------
-    Repeater {
-        model: root.doc && root.page >= 0 ? (root.doc.hitRects[root.key] || []) : []
-        Rectangle {
-            required property var modelData
-            x: modelData[0] * root.s
-            y: modelData[1] * root.s
-            width: Math.max(2, (modelData[2] - modelData[0]) * root.s)
-            height: Math.max(2, (modelData[3] - modelData[1]) * root.s)
-            color: Theme.searchHit
+    // Treffer einer Seite blenden einmal ein, wenn die Seite ihre ersten Treffer bekommt (neue Treffer auf
+    // anderen Seiten lösen hier nichts aus); der aktuelle Treffer bekommt einen kräftigeren Rahmen, der sich
+    // beim Wechsel kurz auf den Treffer zusammenzieht – ohne Blinken, das Dokument selbst bewegt sich nicht.
+    Item {
+        id: hitLayer
+        objectName: "readerHitLayer"
+        readonly property var rects: root.doc && root.page >= 0 ? (root.doc.hitRects[root.key] || []) : []
+        anchors.fill: parent
+        opacity: rects.length > 0 ? 1 : 0
+        Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
+        Repeater {
+            model: hitLayer.rects
+            Rectangle {
+                required property var modelData
+                x: modelData[0] * root.s
+                y: modelData[1] * root.s
+                width: Math.max(2, (modelData[2] - modelData[0]) * root.s)
+                height: Math.max(2, (modelData[3] - modelData[1]) * root.s)
+                color: Theme.searchHit
+            }
         }
     }
     Repeater {
         model: root.doc && root.doc.currentHit.page === root.page ? root.doc.currentHit.rects : []
         Rectangle {
+            id: currentHit
             required property var modelData
-            x: modelData[0] * root.s - 2
-            y: modelData[1] * root.s - 2
-            width: (modelData[2] - modelData[0]) * root.s + 4
-            height: (modelData[3] - modelData[1]) * root.s + 4
+            property real grow: 0  // zusätzlicher Abstand des Rahmens, zieht sich beim Erscheinen auf 0 zusammen
+            objectName: "readerCurrentHit"
+            x: modelData[0] * root.s - 2 - grow
+            y: modelData[1] * root.s - 2 - grow
+            width: (modelData[2] - modelData[0]) * root.s + 4 + 2 * grow
+            height: (modelData[3] - modelData[1]) * root.s + 4 + 2 * grow
             color: "transparent"
-            radius: 2
+            radius: 2 + grow / 2
             border.width: 2
             border.color: Theme.searchHitCurrent
+            Component.onCompleted: if (Motion.enabled) arrive.start()
+            ParallelAnimation {
+                id: arrive
+                NumberAnimation { target: currentHit; property: "opacity"; from: 0; to: 1; duration: Motion.fade; easing.type: Motion.decelerate }
+                NumberAnimation { target: currentHit; property: "grow"; from: Motion.moves ? 6 : 0; to: 0; duration: Motion.expand; easing.type: Motion.decelerate }
+            }
         }
     }
     Repeater {
@@ -328,7 +397,9 @@ Item {
             border.width: chosen || pointer.hoverKey === "image" + modelData.index ? 2 : 1
             border.color: modelData.editable ? Theme.accent : Theme.warning
             opacity: chosen || pointer.hoverKey === "image" + modelData.index ? 1 : 0.55
-            // Anfasser an den Ecken (Größe ändern; Seitenverhältnis bleibt, Umschalt: frei)
+            Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
+            Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+            // Anfasser an den Ecken (Größe ändern; Seitenverhältnis bleibt, Umschalt: frei) – blenden kurz ein
             Repeater {
                 model: imageBox.chosen && imageBox.modelData.editable ? 4 : 0
                 Rectangle {
@@ -341,6 +412,9 @@ Item {
                     color: Theme.surface
                     border.width: 2
                     border.color: Theme.accent
+                    opacity: 0
+                    Component.onCompleted: opacity = 1
+                    Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
                 }
             }
         }
@@ -444,6 +518,7 @@ Item {
             required property var modelData
             field: modelData
             doc: root.doc
+            host: root.host
             s: root.s
             z: 10
         }

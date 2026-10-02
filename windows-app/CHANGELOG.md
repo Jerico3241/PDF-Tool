@@ -36,6 +36,20 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
   - Beim Öffnen und Schließen gleitet die Leiste kurz herein bzw. hinaus („Reduziert“: Überblenden,
     „Aus“: sofort). Die Seiten werden dabei nur einmal neu angeordnet, und eine ganz oben stehende
     Ansicht bleibt oben.
+- PDF Reader: Bewegung nach dem Animationsprofil der App („Vollständig“, „Reduziert“, „Aus“).
+  - Dokument-Tabs blenden ein und aus, die übrigen rücken nach, die Markierung des aktiven Tabs gleitet.
+  - Ungespeichert zeigt ein Punkt, der weich ein- und ausblendet, statt „*“ im Namen.
+  - Werkzeugmarkierung, Auswahl im Kopf der Seitenleisten und Kontextmenüs (Einblenden mit leichtem
+    Wachsen) bewegen sich weich.
+  - Seitenbilder, Miniaturen und Änderungen auf der Seite blenden kurz ein.
+  - Zoom über Schaltflächen und Tastatur gleitet kurz.
+  - Suchtreffer blenden ein, der aktuelle Treffer wird beim Wechsel kurz hervorgehoben.
+  - Beim Ziehen in „Seiten organisieren“ zeigen Platzhalter die neue Stelle, eine Vorschau folgt dem
+    Zeiger, die übrigen Seiten rücken weich nach. Gelöschte und eingefügte Seiten blenden aus bzw. ein.
+  - Eine über die Ansicht gezogene PDF zeigt eine Ablagefläche, die weich ein- und ausblendet.
+  - Die Fokusmarkierung von Formularfeldern blendet weich ein und aus.
+  - Scrollen und Strg+Mausrad bleiben direkt.
+- Seiten organisieren: Nach dem Verschieben bleiben die verschobenen Seiten an ihrer neuen Stelle gewählt.
 - App-Navigation: Bei geöffnetem Dokument ist sie im Reader eingeklappt. Die Menüschaltfläche klappt
   sie vorübergehend aus, bis zum nächsten Dokument. Der eingeklappte Zustand zeigt zentrierte Symbole
   und den gewählten Bereich mit dezenter Akzentfläche.
@@ -50,6 +64,12 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
   beim Scrollen zwischen den Seiten hin- und herspringen.
 - „Notiz hier hinzufügen“ aus dem Kontextmenü: Die Eingabe hatte bei eingeschalteten Animationen
   nicht sofort den Tastaturfokus.
+- PDF Reader: Miniaturen zeigten beim schnellen Scrollen und beim Wechsel zwischen Dokumenten kurz
+  das Bild einer anderen Seite bzw. des anderen Dokuments, bis das richtige Bild fertig war; in
+  „Seiten organisieren“ beim schnellen Scrollen ebenso. Bis dahin steht jetzt das leere Blatt.
+- Formular ausfüllen: Nach der Eingabetaste oder Escape blieb die Tastatur im ausgeblendeten
+  Eingabefeld. Tastendrücke landeten dort, und die Markierung des Felds blieb stehen. Jetzt geht die
+  Tastatur wie nach dem Textbearbeiten zurück an die Seite.
 
 - PDF Editor: Speichern schlug bei PDFs mit XMP-Metadaten (die meisten PDFs aus Office-Programmen,
   Acrobat oder Scannern) mit „Das Dokument konnte nicht geschrieben werden.“ fehl. Ursache: Beim
