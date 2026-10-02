@@ -15,7 +15,7 @@ import pytest
 from conftest import neustart, pump, wait_until
 
 import appstate
-from tools.registry import CONTRACTS, REPAIR
+from tools.registry import CONTRACTS, READER, REPAIR
 
 
 def test_start_and_version(app) -> None:
@@ -53,7 +53,7 @@ def test_qml_runtime_avoids_the_qt_611_crash_when_loading_pages(ui_app) -> None:
 
 
 def test_navigation_all_pages_and_rapid_switching(app) -> None:
-    pages = ["create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers", "repair", "settings", "home"]
+    pages = ["reader", "create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers", "repair", "settings", "home"]
     for page in pages:
         app.navigate(page, 0.3)
         assert app.app.currentPage == page
@@ -70,9 +70,9 @@ def test_navigation_all_pages_and_rapid_switching(app) -> None:
 
 def test_start_page_shows_tool_cards(app) -> None:
     tools = app.app.tools
-    assert [tool["key"] for tool in tools] == [CONTRACTS.key, REPAIR.key]
-    assert tools[0]["title"] == "Vertragsübersichten" and tools[1]["title"] == "PDF reparieren"
-    assert tools[0]["shortcut"] == "Strg+2" and tools[1]["shortcut"] == "Strg+3"
+    assert [tool["key"] for tool in tools] == [READER.key, CONTRACTS.key, REPAIR.key]
+    assert [tool["title"] for tool in tools] == ["PDF Reader & Editor", "Vertragsübersichten", "PDF reparieren"]
+    assert [tool["shortcut"] for tool in tools] == ["Strg+5", "Strg+2", "Strg+3"]
 
 
 def _szene(item) -> tuple[float, float, float, float]:
@@ -95,15 +95,21 @@ def _teil(karte, name: str) -> tuple[float, float, float, float]:
     raise AssertionError(name)
 
 
+KARTEN = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
+
+
 def _pruefe_startseite(h) -> int:
     """Symmetrie der Startseite; liefert die Zahl der Spalten."""
-    karten = [h.item("toolCard_contracts"), h.item("toolCard_repair")]
+    karten = [h.item(name) for name in KARTEN]
     raster, hinweis = h.item("homeGrid"), h.item("homePrivacy")
-    a, b = (_szene(k) for k in karten)
+    lagen = [_szene(k) for k in karten]
+    a = lagen[0]
     # exakt gleich groß (ganzzahlig), gleicher Innenaufbau
-    assert (a[2], a[3]) == (b[2], b[3]) and float(a[2]).is_integer() and float(a[3]).is_integer()
+    for lage in lagen:
+        assert (lage[2], lage[3]) == (a[2], a[3]) and float(a[2]).is_integer() and float(a[3]).is_integer()
     for teil in ("toolIcon", "toolTitle", "toolFooter", "toolOpen", "toolShortcut"):
-        assert _teil(karten[0], teil) == _teil(karten[1], teil), teil
+        for karte in karten[1:]:
+            assert _teil(karten[0], teil) == _teil(karte, teil), teil
     assert _teil(karten[0], "toolIcon")[2:] == (48, 48)
     # Fußzeile unten in der Karte, Tastenkürzel am rechten Rand
     fx, fy, fw, fh = _teil(karten[0], "toolFooter")
@@ -119,15 +125,24 @@ def _pruefe_startseite(h) -> int:
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) <= 1, (links, rechts)
     # Titel und Datenschutzhinweis an der linken Kante der Karten
-    assert _szene(hinweis)[0] == gx and min(a[0], b[0]) == gx
+    assert _szene(hinweis)[0] == gx and min(lage[0] for lage in lagen) == gx
     titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
     assert _szene(titel)[0] == gx
-    if a[1] == b[1]:  # zwei Spalten: gleiche Oberkante, Abstand = Token, Gruppe voll genutzt
-        assert b[0] - (a[0] + a[2]) == 16
-        assert b[0] + b[2] == pytest.approx(gx + gbreite, abs=0.5)
-        return 2
-    assert a[0] == b[0] and b[1] - (a[1] + a[3]) == 16  # eine Spalte: untereinander, gleich breit
-    return 1
+    # Raster: nebeneinander gleiche Oberkante, untereinander gleiche linke Kante, Abstand = Token
+    spalten = 2 if lagen[1][1] == a[1] else 1
+    for index, lage in enumerate(lagen):
+        zeile, spalte = divmod(index, spalten)
+        if spalte:
+            links = lagen[index - 1]
+            assert lage[1] == links[1] and lage[0] - (links[0] + links[2]) == 16
+        else:
+            assert lage[0] == gx
+        if zeile:
+            oben = lagen[index - spalten]
+            assert lage[0] == oben[0] and lage[1] - (oben[1] + oben[3]) == 16
+    if spalten == 2:  # zwei Spalten: Gruppe voll genutzt
+        assert lagen[1][0] + lagen[1][2] == pytest.approx(gx + gbreite, abs=0.5)
+    return spalten
 
 
 def _alle(wurzel) -> list:
@@ -158,7 +173,7 @@ def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
     vorher = _szene(karten[0])[3]
     karten[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und die Karte höher macht, als sie es sonst wäre.")
     pump(0.3)
-    assert _szene(karten[0])[3] > vorher  # beide Karten wachsen gemeinsam …
+    assert _szene(karten[0])[3] > vorher  # alle Karten wachsen gemeinsam …
     assert _pruefe_startseite(h) == 2  # … Fußzeile und Tastenkürzel bleiben auf einer Linie
 
 
@@ -172,6 +187,9 @@ def test_shortcuts_open_tools(app) -> None:
     app.app.openShortcut(4)
     pump(0.2)
     assert app.app.currentPage == "settings"
+    app.app.openShortcut(5)
+    pump(0.2)
+    assert app.app.currentTool == READER.key and app.app.currentPage == "reader"
     app.app.openShortcut(1)
     pump(0.2)
     assert app.app.currentPage == "home"
@@ -198,7 +216,7 @@ def test_status_hint_follows_the_tool(app) -> None:
 def test_help_follows_the_open_view(app) -> None:
     from qtapp import dialogs
 
-    for page, title in (("home", "Kurzanleitung – PDF Tool"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
+    for page, title in (("home", "Kurzanleitung – PDF Tool"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
         app.navigate(page, 0.15)
         app.app.showHelp()
         assert app.app.dialogs.history[-1]["title"] == title
@@ -320,7 +338,7 @@ def test_pane_toggle_lays_out_the_page_once(app) -> None:
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)
-    for page in ("home", "create", "layout", "preview", "batch", "repair", "settings"):
+    for page in ("home", "reader", "create", "layout", "preview", "batch", "repair", "settings"):
         app.navigate(page, 0.2)
     pump(0.3)
     assert not app.messages()
@@ -349,9 +367,11 @@ def test_drop_on_start_page_routes_by_file_type(app, tmp_path: Path, excel_file:
     pdfsamples.healthy(pdf, pages=1)
     assert app.app.currentPage == "home"
     assert app.app.dragEnter([pdf.as_uri()]) is True
-    app.app.drop([pdf.as_uri()])
-    assert app.app.currentPage == "repair"
-    assert wait_until(lambda: app.repair.analysis is not None, 60)
+    app.app.drop([pdf.as_uri()])  # seit 3.0.0: PDFs öffnet der PDF Reader
+    assert app.app.currentPage == "reader"
+    reader = app.runtime.reader.controller
+    assert wait_until(lambda: reader.current is not None and reader.current.pageCount == 1, 60)
+    reader.closeCurrent()
     app.navigate("home")
     app.app.drop([excel_file.as_uri()])
     assert app.app.currentPage == "create"

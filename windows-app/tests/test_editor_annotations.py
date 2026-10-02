@@ -38,6 +38,19 @@ def pixel(doc: EditorDocument, x: float, y: float, page: int = 0) -> tuple[int, 
     return picture.getpixel((int(u * scale), int(v * scale)))
 
 
+def area(doc: EditorDocument, rect, page: int = 0) -> list[tuple[int, int, int]]:
+    """Alle Pixel innerhalb eines Rechtecks (PDF-Koordinaten) – unabhängig davon, wo genau die
+    Schrift des Systems die Glyphen setzt."""
+    geo = doc.geometry(page)
+    picture = render.to_pil(render.render_page(doc, page, int(geo.width * 2)))
+    scale = picture.width / geo.width
+    x0, y0, x1, y1 = rect
+    (u0, v0), (u1, v1) = geo.to_view(x0, y0), geo.to_view(x1, y1)
+    left, right = sorted((int(u0 * scale), int(u1 * scale)))
+    top, bottom = sorted((int(v0 * scale), int(v1 * scale)))
+    return [picture.getpixel((u, v)) for u in range(left + 1, right - 1) for v in range(top + 1, bottom - 1)]
+
+
 def close(a, b, tolerance: int = 45) -> bool:
     return all(abs(x - y) <= tolerance for x, y in zip(a, b))
 
@@ -56,8 +69,9 @@ def test_highlight_keeps_text_readable_and_is_listed(tmp_path: Path) -> None:
         key = notes.add_markup(doc, history, 0, notes.HIGHLIGHT, rects, contents="Prüfen")
         (info,) = notes.list_annotations(doc, 0)
         assert (info.key, info.label, info.contents, info.color, info.ours) == (key, "Markierung", "Prüfen", (255, 235, 59), True)
-        x0, y0, x1, y1 = rects[0]
-        assert close(pixel(doc, x0 + 1, y1 - 1), (255, 235, 59))  # gelb hinterlegt
+        pixels = area(doc, rects[0])
+        assert close(max(pixels, key=sum), (255, 235, 59))  # gelb hinterlegt
+        assert sum(min(pixels, key=sum)) < 150  # der Text bleibt darunter dunkel und lesbar
         annot = doc.pdf.pages[0].Annots[0]
         assert len(annot.QuadPoints) == 8 and "/AP" in annot and annot.F == 4
         assert "/T" not in annot  # kein Autor ohne ausdrückliche Angabe
