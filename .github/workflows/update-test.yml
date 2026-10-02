@@ -1,0 +1,143 @@
+name: Update-Test
+
+# Update auf eine veröffentlichte Version aus Sicht der Anwender – NUR manuell, nach dem
+# Veröffentlichen einer Beta oder einer stabilen Version (nie bei Commits, Pull Requests oder
+# Releases), z. B. 2.7.2 → 2.8.0-beta.1 (Kanal „Beta“), 2.7.2 → 2.8.0 (Kanal „Stable“) und
+# 2.8.0-beta.1 → 2.8.0 (Kanal „Beta“):
+#
+# 1. frischer Windows-Rechner: veröffentlichtes Setup der installierten Version laden (nie neu
+#    bauen, Prüfsumme geprüft), still installieren, Benutzerdaten mit dem gewählten Update-Kanal
+#    anlegen (eine Version mit Vorlagen 2.0 startet dabei einmal und übernimmt die Vorlagen selbst)
+# 2. der Updater DER INSTALLIERTEN VERSION fragt GitHub (nur lesend): Stable bietet nie eine
+#    Vorabversion an; der gewählte Kanal bietet die erwartete Version an, lädt sie, prüft sie per
+#    SHA-256 und gibt sie zur Installation frei
+# 3. das freigegebene Setup still ausführen (in der App startet es der Hilfsprozess sichtbar,
+#    sobald die App beendet ist – das prüft der Updater-E2E-Test im Workflow »Windows-Setup«)
+# 4. danach: Version, genau ein App-Eintrag, Programmstart, Update-Kanal und Einstellungen
+#    erhalten, Vorlagen genau einmal übernommen, heruntergeladenes Setup aufgeräumt
+#
+# Ablauf und Prüfungen im Einzelnen: windows-app/tests/smoke_update.py
+
+on:
+  workflow_dispatch:
+    inputs:
+      von:
+        description: "Installierte Version (X.Y.Z oder X.Y.Z-beta.N), muss veröffentlicht sein, z. B. 2.7.2"
+        type: string
+        required: true
+        default: "2.7.2"
+      ziel:
+        description: "Erwartete neue Version (X.Y.Z oder X.Y.Z-beta.N), muss veröffentlicht sein"
+        type: string
+        required: true
+      kanal:
+        description: "Update-Kanal der Anwender (Stable bietet nie eine Beta an)"
+        type: choice
+        options:
+          - beta
+          - stable
+        default: beta
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    name: "Update ${{ inputs.von }} → ${{ inputs.ziel }} (Kanal ${{ inputs.kanal }})"
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      VON: ${{ inputs.von }}
+      ZIEL: ${{ inputs.ziel }}
+      KANAL: ${{ inputs.kanal }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Eingaben prüfen
+        shell: pwsh
+        run: |
+          $version = '^\d+\.\d+\.\d+(-beta\.[1-9]\d*)?$'
+          if ($env:VON -notmatch $version) { throw "Installierte Version muss X.Y.Z oder X.Y.Z-beta.N sein: $env:VON" }
+          if ($env:ZIEL -notmatch $version) { throw "Erwartete Version muss X.Y.Z oder X.Y.Z-beta.N sein: $env:ZIEL" }
+          if ($env:KANAL -cne "stable" -and $env:KANAL -cne "beta") { throw "Kanal muss stable oder beta sein: $env:KANAL" }
+          if ($env:KANAL -ceq "stable" -and $env:ZIEL -match '-beta\.') { throw "Der Kanal Stable bietet nie eine Beta an: $env:ZIEL" }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA "PDF-Tool")) { throw "PDF Tool ist auf diesem Rechner schon installiert" }
+          if (Test-Path (Join-Path $env:APPDATA "PDF-Tool")) { throw "Es gibt schon Benutzerdaten von PDF Tool" }
+
+      - name: "Setup von PDF Tool ${{ inputs.von }} laden und prüfen (veröffentlichtes Release)"
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "vorversion"
+          gh release download "v$env:VON" --repo "${{ github.repository }}" --pattern "PDF-Tool-Setup-$env:VON.exe*" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Setup von PDF Tool $env:VON konnte nicht geladen werden" }
+          $setup = Join-Path $dir "PDF-Tool-Setup-$env:VON.exe"
+          $expected = ((Get-Content "$setup.sha256" -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Prüfsumme des Setups von PDF Tool $env:VON stimmt nicht: $actual" }
+          "PREVIOUS_SETUP=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: "PDF Tool ${{ inputs.von }} installieren, Benutzerdaten mit Kanal ${{ inputs.kanal }} anlegen"
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "setup-vorversion.log"
+          $run = Start-Process -FilePath $env:PREVIOUS_SETUP -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40; throw "Installation von PDF Tool $env:VON fehlgeschlagen (Code $($run.ExitCode))" }
+          $app = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+          & "$app\runtime\python.exe" -s windows-app/tests/smoke_update.py --phase vorbereiten --kanal $env:KANAL --app "$app\app"
+          if ($LASTEXITCODE -ne 0) { throw "Benutzerdaten konnten nicht angelegt werden" }
+
+      - name: "Updater von PDF Tool ${{ inputs.von }}: Stable ohne Vorabversion; Kanal ${{ inputs.kanal }} findet, lädt, prüft und gibt ${{ inputs.ziel }} frei"
+        timeout-minutes: 20
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+          $result = Join-Path $env:RUNNER_TEMP "update.json"
+          & "$app\runtime\python.exe" -s windows-app/tests/smoke_update.py --phase suchen --kanal $env:KANAL --app "$app\app" --installed $env:VON --expect $env:ZIEL --result $result
+          if ($LASTEXITCODE -ne 0) { throw "Updater von PDF Tool $env:VON hat $env:ZIEL nicht gefunden, geladen oder geprüft" }
+          "UPDATE_RESULT=$result" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: "Setup von PDF Tool ${{ inputs.ziel }} ausführen (wie nach „Jetzt installieren“, hier still)"
+        timeout-minutes: 10
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $result = Get-Content $env:UPDATE_RESULT -Raw | ConvertFrom-Json
+          if ($result.version -ne $env:ZIEL) { throw "Freigegeben wurde $($result.version) statt $env:ZIEL" }
+          # Unabhängig vom Updater: gegen die veröffentlichte Prüfsummendatei
+          $dir = Join-Path $env:RUNNER_TEMP "ziel-pruefsumme"
+          gh release download "v$env:ZIEL" --repo "${{ github.repository }}" --pattern "PDF-Tool-Setup-$env:ZIEL.exe.sha256" --dir $dir
+          if ($LASTEXITCODE -ne 0) { throw "Prüfsummendatei von PDF Tool $env:ZIEL konnte nicht geladen werden" }
+          $published = ((Get-Content (Join-Path $dir "PDF-Tool-Setup-$env:ZIEL.exe.sha256") -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash $result.setup -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $published -or $actual -ne $result.sha256) { throw "Prüfsumme stimmt nicht: Datei $actual, veröffentlicht $published, Updater $($result.sha256)" }
+          Write-Host "Setup $($result.setup) · $($result.size) Bytes · SHA-256 $actual (= veröffentlicht)"
+          $log = Join-Path $env:RUNNER_TEMP "setup-ziel.log"
+          $run = Start-Process -FilePath $result.setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40; throw "Update auf PDF Tool $env:ZIEL fehlgeschlagen (Code $($run.ExitCode))" }
+
+      - name: "Nach dem Update: Version, App-Eintrag, Programmstart, Kanal, Einstellungen, Vorlagen"
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $root = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+          $old = "$([char]0x00DC)bersichten-Ersteller"
+          $entries = @(Get-ChildItem $root | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { $_.DisplayName -eq "PDF Tool" -or $_.DisplayName -eq $old -or $_.PSChildName -eq "Uebersichten-Ersteller" })
+          if ($entries.Count -ne 1) { throw "Erwartet genau einen App-Eintrag, gefunden: $($entries.Count)" }
+          if ($entries[0].DisplayVersion -ne $env:ZIEL) { throw "App-Eintrag nennt Version $($entries[0].DisplayVersion) statt $env:ZIEL" }
+          Write-Host "App-Eintrag: $($entries[0].DisplayName) $($entries[0].DisplayVersion)"
+          $app = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+          & "$app\runtime\python.exe" -s windows-app/tests/smoke_update.py --phase danach --kanal $env:KANAL --app "$app\app" --expect $env:ZIEL
+          if ($LASTEXITCODE -ne 0) { throw "Prüfung nach dem Update fehlgeschlagen" }
+          @(
+            "### Update-Test",
+            "- PDF Tool **$env:VON** (Kanal $env:KANAL) → **$env:ZIEL** über den Updater der installierten Version",
+            "- Stable bot keine Vorabversion an; Kanal ${env:KANAL}: angeboten, geladen, SHA-256 geprüft, freigegeben, installiert",
+            "- danach: ein App-Eintrag, Programmstart, Kanal und Einstellungen erhalten, Vorlagen genau einmal übernommen"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

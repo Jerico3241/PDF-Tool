@@ -67,14 +67,17 @@ v2.8.0-beta.1  →  testen  →  Fehler gefunden  →  v2.8.0-beta.2  →  teste
 
    oder den Workflow „Windows-Setup“ auf `main` mit `release: true` starten. Der Workflow baut das
    Setup, führt alle Tests und Installer-Prüfungen aus und veröffentlicht danach eine
-   **GitHub-Vorabversion** mit Setup und Prüfsumme. Anschließend den Workflow „Beta-Update-Test“
-   starten (z. B. `von: 2.7.2`, `beta: 2.8.0-beta.1`): Er aktualisiert eine installierte stabile
-   Version über ihren eigenen Updater im Kanal „Beta“ und prüft das Ergebnis.
+   **GitHub-Vorabversion** mit Setup und Prüfsumme. Anschließend den Workflow „Update-Test“
+   starten (`von: 2.7.2`, `ziel: 2.8.0-beta.1`, `kanal: beta`): Er aktualisiert eine installierte
+   stabile Version über ihren eigenen Updater im Kanal „Beta“ und prüft das Ergebnis.
 2. **Weitere Betas** genauso mit `2.8.0-beta.2`, `2.8.0-beta.3` …
 3. **Stable veröffentlichen:** bewusst und erst nach Test und Freigabe – `windows-app/VERSION` auf
    `2.8.0`, Release Notes `2.8.0.md`, Pull Request, dann Tag `v2.8.0` (bzw. Workflow mit
    `release: true`). Der Workflow baut das Setup neu und prüft, dass eine Beta von `2.8.0`
-   veröffentlicht ist. Es entsteht ein **normales Release**, das „Latest“ wird.
+   veröffentlicht ist. Es entsteht ein **normales Release**, das „Latest“ wird. Anschließend den
+   Workflow „Update-Test“ für beide Wege starten: `von: 2.7.2`, `ziel: 2.8.0`, `kanal: stable`
+   (Anwender der stabilen Version) und `von: 2.8.0-beta.1`, `ziel: 2.8.0`, `kanal: beta`
+   (Beta-Tester; die letzte Beta der Version).
 
 Eine Beta wird nie automatisch zu Stable: Der Kanal eines Releases folgt allein aus der Version in
 `windows-app/VERSION`, die ein Mensch per Pull Request ändert.
