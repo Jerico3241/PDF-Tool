@@ -4,7 +4,9 @@
 # pypdf (BSD-3-Clause, reines Python, keine Abhängigkeiten unter Python 3.13) ist die dritte,
 # tolerante Engine der erweiterten Wiederherstellung.
 # lxml (von pikepdf nur für XMP-Metadaten gebraucht) wird bewusst nicht mitgeliefert –
-# die App schreibt Metadaten unverändert (fix_metadata_version=False), Test: test_engine_works_without_lxml.
+# die App schreibt Metadaten unverändert (fix_metadata_version=False), »Eigenschaften« gleicht XMP mit der
+# Standardbibliothek an (tools/pdf_editor/xmp.py). Die CI-Tests laufen ohne lxml; Prüfungen:
+# test_engine_works_without_lxml, test_editor_save.py, smoke_runtime.py (Laufzeit des Setups).
 # Oberfläche (seit 2.7.0): PySide6-Essentials (Qt 6, Qt Quick/QML; LGPL-3.0) mit shiboken6 in exakt
 # derselben Version. build.py übernimmt davon nur die benötigten Module, Plugins und QML-Module (qtruntime.py).
 # PDF Reader & Editor (seit 3.0.0): fontTools (MIT) bettet Teilmengen lokaler Schriften ein – nur wenn die

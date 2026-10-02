@@ -9,7 +9,7 @@ kommentieren – vollständig lokal. Kurzfassung für Anwender: [README](../READ
 | Teil | Aufgabe | Code |
 | --- | --- | --- |
 | Engine (ohne Oberfläche) | Dokument, Darstellung, Textschicht, Suche, Gliederung, Text bearbeiten, Bilder, Seiten, Anmerkungen, Formulare, Metadaten, Bildexport, Rückgängig, Speichern, Sitzungssicherung | `windows-app/app/tools/pdf_editor/` |
-| Arbeitsthread | ein Thread für alle Zugriffe auf geöffnete Dokumente; Aufträge mit Priorität (Bearbeiten/Öffnen/Speichern vor sichtbaren Seiten vor Miniaturen vor Suche), Seitenbilder abbrechbar | `app/qtapp/reader/engine.py` |
+| Arbeitsthread | ein Thread für alle Zugriffe auf geöffnete Dokumente; Aufträge mit Priorität (Bearbeiten/Öffnen/Speichern vor sichtbaren Seiten vor Miniaturen vor Suche), Seitenbilder abbrechbar; die Suche gibt dringenden Aufträgen zwischendurch Vorrang | `app/qtapp/reader/engine.py` |
 | Controller | Tabs, Öffnen (Dialog, Ziehen, »Zuletzt geöffnet«, »Öffnen mit«), Ansicht, Werkzeuge, Dialoge | `app/qtapp/reader/controller.py`, `document.py`, `session.py`, `printing.py` |
 | Oberfläche | Seitenansicht (virtualisiert), Tabs, Befehls- und Werkzeugleiste, Miniaturen, Lesezeichen, Suche, Kommentare, »Seiten organisieren« | `app/qml/PdfTool/Reader/` |
 | »Öffnen mit« | zweiter Start reicht PDF-Pfade an die laufende App weiter (lokale Verbindung, nur für diesen Benutzer) | `app/qtapp/instance.py`, `installer/PDF-Tool.iss` (`[Registry]`) |
@@ -112,16 +112,52 @@ höchstens 100 Schritte – älteste Schritte entfallen zuerst.
 
 1. Wurde die Datei seit dem Öffnen von einem anderen Programm verändert, wird sie nicht
    überschrieben – PDF Tool fragt (»Überschreiben« / »Speichern unter …« / »Abbrechen«).
-2. Der Stand wird serialisiert (qpdf, komprimiert, keine Vergrößerung durch Altlasten:
+2. Vorab: Zielordner vorhanden, Datei nicht schreibgeschützt; die temporäre Datei wird zuerst im
+   Zielordner angelegt (gleiches Dateisystem – fehlt die Schreibberechtigung, zeigt sich das sofort).
+3. Der Stand wird serialisiert (qpdf, komprimiert, keine Vergrößerung durch Altlasten:
    nicht mehr benutzte eigene Schriften werden entfernt). Eine vorhandene Verschlüsselung bleibt
-   samt Berechtigungen erhalten.
-3. **Prüfung vor dem Ersetzen:** mit pikepdf und PDFium neu öffnen, Seitenzahl, Darstellbarkeit der
+   samt Berechtigungen erhalten. XMP-Metadaten bleiben unverändert (`fix_metadata_version=False`):
+   sonst bräuchte pikepdf lxml, das nicht zur Laufzeit gehört – daran scheiterte in 3.0.0-beta.1
+   das Speichern jedes PDFs mit XMP-Metadaten. »Eigenschaften« gleicht XMP mit der
+   Standardbibliothek an (`xmp.py`).
+4. **Prüfung vor dem Ersetzen:** mit pikepdf und PDFium neu öffnen, Seitenzahl, Darstellbarkeit der
    Seiten und Erhalt der Struktur (Lesezeichen, Links, Anmerkungen, Formularfelder, Anhänge,
    Metadaten, Ebenen, Sprungziele) mit dem Stand im Speicher vergleichen.
-4. Temporäre Datei im Zielordner schreiben, auf den Datenträger zwingen, zurücklesen, vergleichen.
-5. Vor dem Überschreiben des Originals eine Sicherung des vorherigen Stands anlegen
+5. Temporäre Datei schreiben, auf den Datenträger zwingen, zurücklesen, vergleichen.
+6. Vor dem Überschreiben des Originals eine Sicherung des vorherigen Stands anlegen
    (`%LOCALAPPDATA%\PDF-Tool-Editor\Sicherungen`, je Datei die letzten 3, höchstens 7 Tage).
-6. Atomar ersetzen. Schlägt ein Schritt fehl, bleibt das Original unverändert.
+7. Atomar ersetzen (`os.replace` = `MoveFileEx` im selben Ordner; kurze Wiederholungen, falls ein
+   Virenscanner die Datei gerade prüft).
+8. **Nachprüfung:** die gespeicherte Datei wie beim Öffnen lesen (dieselben Bytes wie geprüft,
+   pikepdf und PDFium, gleiche Seitenzahl). Erst dann gilt das Dokument als gespeichert.
+
+Schlägt ein Schritt fehl, bleibt das Original unverändert, die temporäre Datei wird entfernt, das
+Dokument bleibt ungespeichert (»*«) und Rückgängig bleibt möglich. Jeder Fehler hat eine Art
+(`SaveFailed.kind`) mit verständlichem Text; wo es hilft, bietet die Meldung »Speichern unter …« an:
+
+| Art | Meldung (gekürzt) |
+| --- | --- |
+| `TARGET_READ_ONLY` | Die Datei ist schreibgeschützt. Verwenden Sie »Speichern unter« … |
+| `DIRECTORY_NOT_WRITABLE` | PDF Tool hat keine Schreibberechtigung für diesen Speicherort. |
+| `FILE_LOCKED` | Die Datei wird möglicherweise von einem anderen Programm verwendet. |
+| `TEMP_WRITE_FAILED` | Datei nicht geschrieben (z. B. Datenträger voll) – Original unverändert |
+| `VALIDATION_FAILED` | Prüfung vor dem Schreiben fehlgeschlagen – Original unverändert |
+| `REPLACE_FAILED` | Originaldatei nicht ersetzt (sonstiger Grund) – unverändert |
+| `REOPEN_FAILED` | gespeicherte Datei ließ sich nicht wieder öffnen – nennt die Sicherung |
+| `SERIALIZE_FAILED`, `BACKUP_FAILED`, `DIRECTORY_MISSING` | Stand nicht als PDF schreibbar, Sicherung nicht möglich, Ordner fehlt |
+
+»Gesperrt« wird nie vermutet: Scheitert das Ersetzen mit »Zugriff verweigert«, prüft PDF Tool mit
+einem kurzen Öffnen mit Löschrecht, ob ein anderes Programm die Datei offen hält oder die
+Berechtigung fehlt. Eigene offene Handles gibt es nicht – das Dokument liegt nach dem Öffnen
+vollständig im Speicher (pikepdf und PDFium arbeiten auf Bytes, auch Darstellung, Miniaturen und
+Suche). Das Protokoll (`pdf-tool.log`) nennt Art, Schritt, Komponente, Fehlertyp, errno/WinError –
+statt des Pfads nur die Endung und eine Kurzkennung, nie Inhalte oder Passwörter.
+
+Je Dokument läuft höchstens ein Speichervorgang; weitere Anfragen (mehrfaches Strg+S, »Speichern«
+beim Schließen) werden zusammengefasst und danach ausgeführt – ohne Änderungen gibt es nichts zu
+schreiben. Eine laufende Suche gibt dem Speichern Vorrang und läuft danach weiter. Die Ansicht
+(Seite, Zoom, Modus, Seitenleisten, Tabs) und der Verlauf für Rückgängig bleiben beim Speichern
+erhalten; die Werkzeugleiste zeigt »Speichern …« und danach kurz »Gespeichert« – ohne Dialog.
 
 ## Sitzungssicherung (Absturz)
 

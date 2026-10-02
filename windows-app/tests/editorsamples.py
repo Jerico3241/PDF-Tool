@@ -46,6 +46,35 @@ def standard_text(path: Path, pages: int = 1, lines: tuple[str, ...] | None = No
     return path
 
 
+# XMP-Metadaten wie aus Word oder Acrobat: einfache Eigenschaften als Attribute, Listen als Elemente
+XMP_PACKET = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.6">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" pdf:Producer="Textverarbeitung 365" pdf:PDFVersion="1.7"/>
+  <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:CreatorTool="Textverarbeitung 365" xmp:CreateDate="2026-09-30T10:00:00+02:00" xmp:ModifyDate="2026-09-30T10:00:00+02:00"/>
+  <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
+   <dc:format>application/pdf</dc:format>
+   <dc:title><rdf:Alt><rdf:li xml:lang="x-default">Testdokument</rdf:li></rdf:Alt></dc:title>
+   <dc:creator><rdf:Seq><rdf:li>PDF Tool Tests</rdf:li></rdf:Seq></dc:creator>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"""
+
+
+def with_xmp(path: Path, pages: int = 1) -> Path:
+    """Wie ``standard_text``, zusätzlich mit XMP-Metadaten (die meisten echten PDFs haben welche) –
+    ohne lxml geschrieben, wie es die Laufzeit der App auch nicht hat."""
+    standard_text(path, pages=pages)
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        stream = pdf.make_stream(XMP_PACKET.encode("utf-8"))
+        stream.Type = Name.Metadata
+        stream.Subtype = Name.XML
+        pdf.Root.Metadata = stream
+        pdf.save(path, fix_metadata_version=False)
+    return path
+
+
 def paragraph(path: Path) -> Path:
     """Ein Absatz über mehrere Zeilen (je Zeile ein Textoperator, gleicher Zeilenabstand)."""
     from reportlab.pdfgen import canvas
@@ -281,9 +310,13 @@ def structured(path: Path) -> Path:
     pdf.Root.OCProperties = Dictionary(OCGs=Array([layer]), D=Dictionary(ON=Array([layer])))
     pdf.Root.Names = pdf.make_indirect(Dictionary(Dests=Dictionary(Names=Array([String("ende"), Array([pdf.pages[2].obj, Name.Fit])]))))
     pdf.attachments["notiz.txt"] = pikepdf.AttachedFileSpec(pdf, b"Anhang zum Test", mime_type="text/plain")  # nach /Names (sonst überschrieben)
-    with pdf.open_metadata() as meta:
-        meta["dc:title"] = "Strukturtest"
-    pdf.save(path)
+    # XMP ohne lxml (wie die App): Titel »Strukturtest« in Info und XMP
+    pdf.docinfo["/Title"] = "Strukturtest"
+    xmp = pdf.make_stream(XMP_PACKET.replace("Testdokument", "Strukturtest").encode("utf-8"))
+    xmp.Type = Name.Metadata
+    xmp.Subtype = Name.XML
+    pdf.Root.Metadata = xmp
+    pdf.save(path, fix_metadata_version=False)
     pdf.close()
     return path
 

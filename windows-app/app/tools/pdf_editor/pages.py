@@ -469,7 +469,7 @@ def extract(document: EditorDocument, pages, target: str | os.PathLike) -> Path:
                 if key in info:
                     out.docinfo[key] = info[key]
         buffer = io.BytesIO()
-        out.save(buffer, compress_streams=True, object_stream_mode=pikepdf.ObjectStreamMode.generate)
+        out.save(buffer, compress_streams=True, fix_metadata_version=False, object_stream_mode=pikepdf.ObjectStreamMode.generate)  # ohne lxml (wie serialize)
         data = buffer.getvalue()
     except (pikepdf.PdfError, RuntimeError, ValueError) as exc:
         raise SaveFailed("Die Seiten konnten nicht geschrieben werden.", str(exc)[:200]) from exc

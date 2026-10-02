@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pikepdf
 from pikepdf import Dictionary, Name, String
 
-from . import commands
+from . import commands, xmp
 from .commands import History
 from .document import EditorDocument
 from .errors import EditorError
@@ -204,17 +204,18 @@ def update(document: EditorDocument, history: History, *, title: str | None = No
                 del info[key]
         from pikepdf.models.metadata import encode_pdf_date
 
-        info.ModDate = String(encode_pdf_date(datetime.now(timezone.utc)))
+        now = datetime.now(timezone.utc)
+        info.ModDate = String(encode_pdf_date(now))
         old = pdf.Root.get("/Metadata")
         if isinstance(old, pikepdf.Stream):
-            # XMP in eine neue Kopie schreiben – der bisherige Stream bleibt für Rückgängig unverändert
-            copy = pdf.make_stream(old.read_bytes())
+            # XMP angleichen – mit der Standardbibliothek (lxml gehört nicht zur Laufzeit, pikepdfs
+            # open_metadata bräuchte es). In eine neue Kopie schreiben: der bisherige Stream bleibt
+            # für Rückgängig unverändert. Beschädigtes XMP: nichts ändern (Rückgängig stellt Info wieder her).
+            try:
+                updated = xmp.sync(old.read_bytes(), {attr: values[attr] for attr, _key, _xmp in EDITABLE}, now)
+            except (xmp.XmpError, pikepdf.PdfError) as exc:
+                raise EditorError("Die XMP-Metadaten dieses PDFs sind beschädigt und wurden nicht geändert.") from exc
+            copy = pdf.make_stream(updated)
             copy.Type = Name.Metadata
             copy.Subtype = Name.XML
             pdf.Root.Metadata = copy
-            try:
-                with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as meta:
-                    meta.load_from_docinfo(pdf.docinfo, delete_missing=True)
-            except Exception as exc:  # noqa: BLE001 - beschädigtes XMP: Info allein ist gültig, XMP neu anlegen
-                pdf.Root.Metadata = old
-                raise EditorError("Die XMP-Metadaten dieses PDFs sind beschädigt und wurden nicht geändert.") from exc

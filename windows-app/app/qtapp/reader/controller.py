@@ -476,13 +476,13 @@ class ReaderController(Observable):
         task = self.engine.submit(lambda: controller.session.save(target), label="speichern")
         try:
             self.engine.wait(task, timeout=600)
-        except Exception as exc:  # noqa: BLE001 - Fehler anzeigen, Beenden abbrechen
-            controller.report(exc)
+        except Exception as exc:  # noqa: BLE001 - Fehler anzeigen (mit Protokoll), Beenden abbrechen
+            controller._report_save_error(exc)  # noqa: SLF001
             return False
         return True
 
     def running_work(self) -> str:
-        return "PDF speichern" if any(controller.busy for controller in self._docs.values()) else ""
+        return "PDF speichern" if any(controller.busy or controller.saving for controller in self._docs.values()) else ""
 
     def close_all(self) -> None:
         for key in list(self._docs):

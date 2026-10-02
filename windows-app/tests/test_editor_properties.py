@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 import editorsamples as samples
-from tools.pdf_editor import commands, export, metadata, save
+from tools.pdf_editor import commands, export, metadata, save, xmp
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import ReadOnlyDocument
 
@@ -59,12 +59,12 @@ def test_update_metadata_keeps_info_and_xmp_in_sync_and_undoes(tmp_path: Path) -
         metadata.update(doc, history, title="Neuer Titel", author="Erika Muster", keywords="Vertrag, 2026")
         props = metadata.read(doc)
         assert (props.title, props.author, props.keywords) == ("Neuer Titel", "Erika Muster", "Vertrag, 2026")
-        with doc.pdf.open_metadata() as meta:
-            assert meta.get("dc:title") == "Neuer Titel" and meta.get("pdf:Keywords") == "Vertrag, 2026"
+        # XMP lesen wie die App – ohne lxml
+        meta = xmp.read(doc.pdf.Root.Metadata.read_bytes())
+        assert meta.get("title") == "Neuer Titel" and meta.get("keywords") == "Vertrag, 2026" and meta.get("author") == "Erika Muster"
         history.undo(doc)
         assert (metadata.read(doc).title, metadata.read(doc).author) == (original.title, original.author)
-        with doc.pdf.open_metadata() as meta:
-            assert meta.get("dc:title") == "Strukturtest"  # XMP wie vorher
+        assert xmp.read(doc.pdf.Root.Metadata.read_bytes()).get("title") == "Strukturtest"  # XMP wie vorher
         history.redo(doc)
         metadata.update(doc, history, author="")
         save.save(doc, path)

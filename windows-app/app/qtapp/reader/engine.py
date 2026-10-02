@@ -3,7 +3,8 @@
 * **Ein** Thread erledigt alle Zugriffe auf geöffnete Dokumente (pikepdf, PDFium) nacheinander –
   die Oberfläche bleibt frei, und kein Dokument wird gleichzeitig gelesen und geändert.
 * Aufträge haben Prioritäten: Bearbeiten/Öffnen/Speichern (``EDIT``) vor sichtbaren Seiten
-  (``VIEW``) vor Miniaturen (``THUMB``) vor Hintergrundarbeit wie der Suche (``BACKGROUND``).
+  (``VIEW``) vor Miniaturen (``THUMB``) vor Hintergrundarbeit wie der Suche (``BACKGROUND``). Lange
+  Hintergrundarbeit gibt zwischendurch Vorrang (``urgent``) – Speichern wartet nie auf eine Suche.
   Bearbeitungen laufen in der Reihenfolge ihres Eingangs, Seitenbilder »zuletzt angefragt zuerst«
   (beim Scrollen zählen die gerade sichtbaren Seiten). Darstellungsaufträge lassen sich abbrechen –
   etwa wenn eine Seite aus dem Bild scrollt, bevor sie gerendert ist.
@@ -106,6 +107,12 @@ class Engine(QObject):
 
     def idle(self) -> bool:
         return self.pending() == 0
+
+    def urgent(self) -> bool:
+        """Wartet ein Auftrag mit Vorrang vor Hintergrundarbeit (Speichern, Bearbeiten, sichtbare Seiten,
+        Miniaturen)? Lange Hintergrundarbeit (Suche) unterbricht sich dann und läuft danach weiter."""
+        with self._cv:
+            return any(item[0] < BACKGROUND and not item[3].cancelled for item in self._heap)
 
     def shutdown(self, timeout: float = 5.0) -> None:
         with self._cv:
