@@ -2,9 +2,9 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
-# PDF Tool 2.8.0-beta.1
+# PDF Tool 2.8.0
 
-Beta zum Testen (Kanal „Beta“). Die stabile Version 2.8.0 folgt erst nach Test und Freigabe.
+Freigegebene Version – getestet als Beta 2.8.0-beta.1, Funktionsumfang unverändert.
 
 ## Vorlagen 2.0
 
@@ -56,6 +56,10 @@ Beta zum Testen (Kanal „Beta“). Die stabile Version 2.8.0 folgt erst nach Te
 - Oberfläche: Schutz vor einem Absturz der QML-Engine (Qt 6.11) beim Laden der Ansichten im
   Hintergrund
 - Release-Workflow: ein stabiles Release setzt eine veröffentlichte Beta derselben Version voraus
+
+# PDF Tool 2.8.0-beta.1
+
+Beta zum Testen (Kanal „Beta“) mit dem Umfang von 2.8.0 (siehe oben).
 
 # PDF Tool 2.7.2
 

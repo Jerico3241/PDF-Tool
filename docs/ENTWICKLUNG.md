@@ -54,11 +54,11 @@ PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1, 2.7.0 mit Beispieldaten) läuft nur 
 Anforderung im manuellen Workflow [`deep-compatibility.yml`](../.github/workflows/deep-compatibility.yml)
 („Deep Compatibility Test“, je Vorversion ein frischer Windows-Rechner).
 
-Nach dem Veröffentlichen einer Beta prüft der manuelle Workflow
-[`beta-update-test.yml`](../.github/workflows/beta-update-test.yml) („Beta-Update-Test“) das Update
-aus Sicht der Anwender: veröffentlichte stabile Vorversion installieren, Kanal „Beta“; der Updater
-dieser Vorversion findet die Beta bei GitHub, lädt und prüft sie (Stable bietet sie nicht an); danach
-Version, ein App-Eintrag, Programmstart, Kanal, Einstellungen und Vorlagen (`tests/smoke_beta_update.py`).
+Nach dem Veröffentlichen einer Beta oder einer stabilen Version prüft der manuelle Workflow
+[`update-test.yml`](../.github/workflows/update-test.yml) („Update-Test“) das Update aus Sicht der
+Anwender: veröffentlichte Vorversion installieren, Update-Kanal wählen; der Updater dieser Vorversion
+findet die neue Version bei GitHub, lädt und prüft sie (Stable bietet nie eine Beta an); danach
+Version, ein App-Eintrag, Programmstart, Kanal, Einstellungen und Vorlagen (`tests/smoke_update.py`).
 
 ## Tests
 
