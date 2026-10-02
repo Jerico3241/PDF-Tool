@@ -270,7 +270,7 @@ def zeilen_elemente(h) -> dict[str, object]:
 
 def test_excel_card_shows_contract_counts_only_once(ui_app, tmp_path: Path) -> None:
     h = ui_app
-    einzeln_pruefen(h, excel(tmp_path / "liste.xlsx", aktiv=5, inaktiv=3, mails=("p.zimmermann@ipb-zimmermann.de",)))
+    einzeln_pruefen(h, excel(tmp_path / "liste.xlsx", aktiv=5, inaktiv=3, mails=("p.muster@ingenieurbuero-muster.de",)))
     bar = h.app.notices.get("info_excel")
     assert (bar.severity, bar.title, bar.message) == ("success", "Excel geprüft", "5 aktive Verträge · 3 inaktiv ausgeblendet")
     assert sichtbar(infobar(h, "info_excel", "createPage"))
@@ -278,7 +278,7 @@ def test_excel_card_shows_contract_counts_only_once(ui_app, tmp_path: Path) -> N
     assert "Aktive Verträge" not in labels and "Ausgeblendet (inaktiv)" not in labels  # keine Doppelung
     assert not any("aktiv" in wert for wert in labels.values())
     # Rechnungsempfänger als eigene Zeile – ohne Auswahlliste
-    assert h.overview.mailValue == "p.zimmermann@ipb-zimmermann.de" and ist_sichtbar(h, "p.zimmermann@ipb-zimmermann.de", "PText", "createPage")
+    assert h.overview.mailValue == "p.muster@ingenieurbuero-muster.de" and ist_sichtbar(h, "p.muster@ingenieurbuero-muster.de", "PText", "createPage")
     assert h.overview.mailChoices == []
     assert not any(qml_typ(item) == "PComboBox" and item.property("label") == "Rechnungsempfänger wählen" and sichtbar(item) for item in elemente(seite(h, "createPage")))
     assert h.overview.detailsVisible
@@ -320,21 +320,21 @@ def test_no_recipient_means_no_empty_row(ui_app, tmp_path: Path) -> None:
 
 def test_known_customer_appears_once(ui_app, tmp_path: Path) -> None:
     h = ui_app
-    kunde = h.customers.customers.create("IPB Zimmermann", "123456", ["p.zimmermann@ipb-zimmermann.de"])
+    kunde = h.customers.customers.create("Ingenieurbüro Muster", "123456", ["p.muster@ingenieurbuero-muster.de"])
     h.customers.customers_changed()
-    einzeln_pruefen(h, excel(tmp_path / "ipb.xlsx", mails=("p.zimmermann@ipb-zimmermann.de",)))
+    einzeln_pruefen(h, excel(tmp_path / "ingenieurbuero.xlsx", mails=("p.muster@ingenieurbuero-muster.de",)))
     bar = h.app.notices.get("kunde_match")
-    assert bar.shown and bar.title == "Bekannter Kunde gefunden" and "IPB Zimmermann · 123456" in bar.message
-    assert "p.zimmermann@" not in bar.message  # steht schon als Rechnungsempfänger darüber
+    assert bar.shown and bar.title == "Bekannter Kunde gefunden" and "Ingenieurbüro Muster · 123456" in bar.message
+    assert "p.muster@" not in bar.message  # steht schon als Rechnungsempfänger darüber
     assert "Kunde" not in fakten(h)
     element_bar = infobar(h, "kunde_match", "createPage")
     assert sichtbar(element_bar) and karte(element_bar) == "Dateien"  # in der Dateikarte
     aktion(h, "kunde_match", "Übernehmen")
     assert kunde.id == h.customers.active_id
     assert not bar.shown and "Kunde" not in fakten(h)
-    assert h.customers.activeTitle == "Kunde: IPB Zimmermann · 123456" and ist_sichtbar(h, "Kunde: IPB Zimmermann · 123456", "PText", "createPage")
+    assert h.customers.activeTitle == "Kunde: Ingenieurbüro Muster · 123456" and ist_sichtbar(h, "Kunde: Ingenieurbüro Muster · 123456", "PText", "createPage")
     picker = h.item("customerPicker")
-    assert picker.property("text") == "" and "IPB Zimmermann" not in h.customers.pickerPlaceholder  # das Auswahlfeld wiederholt die aktive Kundenakte nicht
+    assert picker.property("text") == "" and "Ingenieurbüro Muster" not in h.customers.pickerPlaceholder  # das Auswahlfeld wiederholt die aktive Kundenakte nicht
     h.customers.detach_customer()
     einzeln_pruefen(h, excel(tmp_path / "neu.xlsx", mails=("info@unbekannt.de",)))
     assert fakten(h).get("Kunde") == "Nicht zugeordnet"
