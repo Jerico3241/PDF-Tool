@@ -124,8 +124,8 @@ class UpdatesController(Observable):
     statusTextChanged, statusText = prop(str, "statusText", "")
     statusKindChanged, statusKind = prop(str, "statusKind", "neutral")  # neutral, busy, success, info, warning, error
     hasOfferChanged, hasOffer = prop(bool, "hasOffer", False)
-    offerTitleChanged, offerTitle = prop(str, "offerTitle", "")  # »PDF Tool 2.8.0-beta.2«
-    offerLabelChanged, offerLabel = prop(str, "offerLabel", "")  # »2.8.0 Beta 2«
+    offerTitleChanged, offerTitle = prop(str, "offerTitle", "")  # »PDF Tool 1.2.3-beta.2«
+    offerLabelChanged, offerLabel = prop(str, "offerLabel", "")  # »1.2.3 Beta 2«
     offerBetaChanged, offerBeta = prop(bool, "offerBeta", False)
     offerDateChanged, offerDate = prop(str, "offerDate", "")
     offerSizeChanged, offerSize = prop(str, "offerSize", "")

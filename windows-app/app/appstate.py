@@ -145,7 +145,7 @@ NEUERUNGEN = (
     "Regelwerk: Werte der Übersicht nach eigenen Regeln anpassen (WENN … DANN …) – Ansicht »Regeln« mit Testmodus und Vorschau vorher → nachher. Die Excel-Datei bleibt immer unverändert.",
     "Sicherung & Wiederherstellung: Einstellungen, Kundenakten, Vorlagen und Regelwerke in einer Datei – manuell oder automatisch, Wiederherstellen mit Prüfung und Auswahl (Einstellungen).",
     "Diagnose: Systeminformationen, Datenprüfung und ein Support-Paket ohne Kunden- oder Dokumentdaten (Einstellungen).",
-    "Dies ist eine Beta zum Testen. Alle bisherigen Funktionen bleiben erhalten; Vorlagen aus 2.7 werden einmalig übernommen.",
+    "Alle bisherigen Funktionen bleiben erhalten; Vorlagen aus 2.7 werden einmalig übernommen.",
     "Alle Dateien werden lokal auf diesem PC verarbeitet – keine Cloud, keine Uploads. Die Update-Prüfung fragt nur bei GitHub nach neuen Versionen.",
 )
 

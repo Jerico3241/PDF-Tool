@@ -285,7 +285,8 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
   voraus, siehe [`docs/RELEASE.md`](../docs/RELEASE.md)).
 - **Deep Compatibility Test** (`.github/workflows/deep-compatibility.yml`, nur manuell): Upgrade von
   allen bzw. ausgewählten älteren stabilen Versionen (ab 2.2.0), je Version ein frischer Windows-Rechner.
-- **Beta-Update-Test** (`.github/workflows/beta-update-test.yml`, nur manuell nach dem Veröffentlichen
-  einer Beta): stabile Vorversion installieren, Kanal „Beta“; deren Updater findet die Beta bei
-  GitHub, lädt und prüft sie; das freigegebene Setup läuft still; danach Version, ein App-Eintrag,
-  Programmstart, Kanal, Einstellungen und Vorlagen (`tests/smoke_beta_update.py`).
+- **Update-Test** (`.github/workflows/update-test.yml`, nur manuell nach dem Veröffentlichen einer
+  Beta oder einer stabilen Version): Vorversion installieren, Kanal „Stable“ oder „Beta“; deren
+  Updater findet die neue Version bei GitHub, lädt und prüft sie (Stable nie eine Beta); das
+  freigegebene Setup läuft still; danach Version, ein App-Eintrag, Programmstart, Kanal,
+  Einstellungen und Vorlagen (`tests/smoke_update.py`).
