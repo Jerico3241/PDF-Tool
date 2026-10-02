@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
 
-// Kontextmenü: blendet mit Deckkraft und leichter Bewegung ein (120–160 ms).
+// Kontextmenü: blendet mit Deckkraft ein und wächst dabei leicht von 95 auf 100 % (von der Ecke am Zeiger
+// aus; »Reduziert«: nur Deckkraft, »Aus«: sofort).
 // ``afterClose``: Aktion, die erst nach dem Ausblenden läuft – etwa einen Editor öffnen. Beim Schließen gibt
 // das Menü den Tastaturfokus zurück; ein schon geöffneter Editor verlöre ihn sonst wieder.
 T.Menu {
@@ -42,10 +43,11 @@ T.Menu {
         radius: Metrics.radiusOverlay
         PShadow { radius: Metrics.radiusOverlay }
     }
+    transformOrigin: Item.TopLeft
     enter: Transition {
         ParallelAnimation {
             NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.menu; easing.type: Motion.decelerate }
-            NumberAnimation { property: "y"; from: control.y - Motion.menuShift; to: control.y; duration: Motion.menu; easing.type: Motion.decelerate }
+            NumberAnimation { property: "scale"; from: Motion.menuScale; to: 1; duration: Motion.menu; easing.type: Motion.decelerate }
         }
     }
     exit: Transition {

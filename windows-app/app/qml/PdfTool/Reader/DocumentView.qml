@@ -13,6 +13,9 @@ import PdfTool.Controls
 // Treffer, Miniaturen) holen die Stelle in den Blick. Ziehen mit der linken Maustaste gehört den
 // Werkzeugen (Auswahl, Zeichnen, Verschieben) – verschoben wird mit Mausrad, Bildlaufleisten,
 // Tastatur oder mit gedrückter mittlerer Maustaste.
+// Zoom über Schaltflächen, Menü und Tastatur (``smoothly``) gleitet kurz vom alten Maßstab zum neuen:
+// Aufbau und Lage gelten sofort, nur die fertigen Inhalte werden für ~170 ms skaliert (kein Neuaufbau je
+// Bild). Strg+Mausrad, Scrollen und Animationsprofil »Reduziert«/»Aus«: immer direkt.
 Flickable {
     id: view
     objectName: "readerView"
@@ -47,6 +50,17 @@ Flickable {
     property var editing: null          // offener Texteditor: {kind, page, rect, …}
     property var pendingBlock: null     // »Text bearbeiten (ganzer Absatz)« aus dem Objektmodus: {page, u, v}
     property int scrollSerial: 0        // für Ausschnitte bei hohem Zoom
+    property real smoothFrom: 0         // Maßstab vor einem weichen Zoom (nur während ``smoothly``)
+    property real glide: 1              // optische Skalierung während des weichen Zooms (1 = keine)
+
+    // Zoomaktion weich ausführen: ``action`` ändert den Zoom (Python, synchron); die Ansicht gleitet hin
+    function smoothly(action) {
+        smoothFrom = Motion.moves ? zoomScale : 0
+        action()
+        smoothFrom = 0
+    }
+    Scale { id: zoomTransform; xScale: view.glide; yScale: view.glide }
+    NumberAnimation { id: zoomGlide; target: view; property: "glide"; to: 1; duration: Motion.normal; easing.type: Motion.decelerate }
 
     clip: true
     boundsBehavior: Flickable.StopAtBounds
@@ -245,6 +259,15 @@ Flickable {
         relayout()
         if (point) restorePoint(point)
         rememberAnchor()
+        // weicher Zoom: vom alten Maßstab um die Mitte der Ansicht zum neuen gleiten
+        if (smoothFrom > 0 && Math.abs(smoothFrom - zoomScale) > 0.0005) {
+            zoomTransform.origin.x = contentX + width / 2
+            zoomTransform.origin.y = contentY + height / 2
+            zoomGlide.from = smoothFrom / zoomScale
+            zoomGlide.restart()
+        } else if (zoomGlide.running) {
+            zoomGlide.complete()  // direkter Zoom (Mausrad) während eines Gleitens: sofort am Ziel
+        }
     }
     onSizesChanged: {
         var point = viewAnchor
@@ -306,7 +329,10 @@ Flickable {
         restoring = false
         reveal(doc.currentPage, -1, -1)
     }
-    Component.onCompleted: if (doc) { doc.setViewport(width, height, ratio); relayout() }
+    Component.onCompleted: {
+        contentItem.transform = [zoomTransform]
+        if (doc) { doc.setViewport(width, height, ratio); relayout() }
+    }
 
     // Aufträge des Dokuments: Stelle in den Blick holen; nach einer Änderung den Editor schließen
     // (nur neue Aufträge desselben Dokuments – beim Wechsel des Tabs zählt dessen aktuelle Seite)

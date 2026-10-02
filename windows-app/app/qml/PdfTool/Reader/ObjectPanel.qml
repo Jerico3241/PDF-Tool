@@ -23,7 +23,17 @@ ColumnLayout {
     readonly property var one: first !== null && chosen.length === 1 ? first : null
     readonly property bool oneImage: one !== null && one.kind === "image"
     readonly property real mm: 25.4 / 72
+    // Art der Auswahl: wechselt sie (Text → Bild → mehrere), blendet der Inhalt kurz ein statt hart zu
+    // wechseln; neue Werte derselben Art (anderes Wort, verschoben) erscheinen sofort
+    readonly property string kind: chosen.length === 0 ? "" : (chosen.length > 1 ? "multi" : (image ? "image" : "text"))
+    onKindChanged: if (kind !== "" && Motion.enabled) reveal.restart()
     spacing: 0
+
+    ParallelAnimation {
+        id: reveal
+        NumberAnimation { target: details; property: "opacity"; from: 0; to: 1; duration: Motion.fade; easing.type: Motion.decelerate }
+        NumberAnimation { target: detailsShift; property: "y"; from: Motion.paneShift; to: 0; duration: Motion.fade; easing.type: Motion.decelerate }
+    }
 
     function number(text) {
         var value = parseFloat(String(text).replace(",", "."))
@@ -47,9 +57,12 @@ ColumnLayout {
     }
 
     Flickable {
+        id: details
+        objectName: "readerObjectDetails"
         Layout.fillWidth: true
         Layout.fillHeight: true
         visible: root.chosen.length > 0
+        transform: Translate { id: detailsShift }
         contentHeight: body.implicitHeight + 24
         clip: true
         boundsBehavior: Flickable.StopAtBounds

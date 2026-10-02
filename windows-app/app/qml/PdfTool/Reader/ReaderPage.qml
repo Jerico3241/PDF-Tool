@@ -97,6 +97,7 @@ FocusScope {
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 16
                     doc: page.doc
+                    view: view
                     visible: !Reader.organize && page.doc !== null
                 }
                 // Hinweise: Meldungen des Readers und Hinweis zum Dokument (signiert, repariert, XFA …)
@@ -129,13 +130,34 @@ FocusScope {
                         }
                     }
                 }
-                // Arbeit im Hintergrund (Speichern, Text ändern …)
+                // Arbeit im Hintergrund (Speichern, Text ändern, ein weiteres PDF wird geöffnet …)
                 PProgressBar {
+                    objectName: "readerBusy"
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
                     indeterminate: true
-                    visible: page.doc !== null && page.doc.busy
+                    visible: (page.doc !== null && page.doc.busy) || Reader.opening > 0
+                }
+                // PDF über die Ansicht gezogen: Ablagefläche blendet weich ein (öffnet in einem neuen Tab) und
+                // beim Verlassen wieder aus – nur solange gezogen wird
+                Item {
+                    objectName: "readerDropOverlay"
+                    anchors.fill: parent
+                    anchors.margins: Metrics.s16
+                    opacity: Reader.dropHighlight ? 1 : 0
+                    visible: opacity > 0
+                    scale: Reader.dropHighlight ? 1 : Motion.menuScale
+                    Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
+                    Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
+                    Rectangle { anchors.fill: parent; radius: Metrics.radiusCard; color: Theme.viewer; opacity: 0.9 }
+                    PDropZone {
+                        anchors.fill: parent
+                        highlighted: true
+                        iconName: "document_pdf"
+                        title: "PDF hier ablegen"
+                        text: "Jede abgelegte PDF öffnet sich in einem eigenen Tab."
+                    }
                 }
             }
 
@@ -206,9 +228,9 @@ FocusScope {
     Shortcut { sequence: "Ctrl+W"; enabled: page.active && Reader.hasDocument; onActivated: Reader.closeCurrent() }
     Shortcut { sequence: "Ctrl+Tab"; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
     Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
-    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; enabled: page.active && page.editing; onActivated: page.doc.zoomIn() }
-    Shortcut { sequences: [StandardKey.ZoomOut]; enabled: page.active && page.editing; onActivated: page.doc.zoomOut() }
-    Shortcut { sequence: "Ctrl+0"; enabled: page.active && page.editing; onActivated: page.doc.fitPage() }
+    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomIn() }) }
+    Shortcut { sequences: [StandardKey.ZoomOut]; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomOut() }) }
+    Shortcut { sequence: "Ctrl+0"; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.fitPage() }) }
     Shortcut { sequence: "F3"; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.nextHit() }
     Shortcut { sequence: "Shift+F3"; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.previousHit() }
     Shortcut { sequences: [StandardKey.Copy]; enabled: page.active && page.editing && page.doc.selectionPage >= 0 && page.doc.objectSelection.length === 0; onActivated: page.doc.copySelection() }
