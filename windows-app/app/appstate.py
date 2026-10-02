@@ -141,12 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Vorlagen 2.0: Eine Vorlage hält die ganze Darstellung fest – mit eigener Ansicht »Vorlagen«, Standardvorlage für neue Übersichten und »Vorlage geändert« in der »Darstellung«.",
-    "Regelwerk: Werte der Übersicht nach eigenen Regeln anpassen (WENN … DANN …) – Ansicht »Regeln« mit Testmodus und Vorschau vorher → nachher. Die Excel-Datei bleibt immer unverändert.",
-    "Sicherung & Wiederherstellung: Einstellungen, Kundenakten, Vorlagen und Regelwerke in einer Datei – manuell oder automatisch, Wiederherstellen mit Prüfung und Auswahl (Einstellungen).",
-    "Diagnose: Systeminformationen, Datenprüfung und ein Support-Paket ohne Kunden- oder Dokumentdaten (Einstellungen).",
-    "Alle bisherigen Funktionen bleiben erhalten; Vorlagen aus 2.7 werden einmalig übernommen.",
-    "Alle Dateien werden lokal auf diesem PC verarbeitet – keine Cloud, keine Uploads. Die Update-Prüfung fragt nur bei GitHub nach neuen Versionen.",
+    "Neues Werkzeug »PDF Reader & Editor« (Strg+5): PDFs in Tabs öffnen, lesen, suchen, zoomen, drucken – auch über »Öffnen mit« im Explorer.",
+    "Text direkt im PDF ändern oder hinzufügen; PDF Tool nennt jeweils den Weg (direkt, neu gesetzt oder Überlagerung – keine Schwärzung).",
+    "Bilder, Seiten organisieren (drehen, löschen, verschieben, einfügen, teilen), Kommentare, Formulare ausfüllen, Rückgängig mit Strg+Z.",
+    "Sicheres Speichern: Die neue Datei wird vor dem Ersetzen geprüft; bei einem Fehler bleibt das Original unverändert. Ungespeicherte Änderungen werden nach einem Absturz angeboten.",
+    "Beta-Version zum Testen – alle bisherigen Funktionen bleiben erhalten.",
+    "Alle Dateien werden lokal auf diesem PC verarbeitet – keine Cloud, keine Uploads. PDF-JavaScript wird nie ausgeführt.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]

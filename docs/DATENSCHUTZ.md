@@ -25,6 +25,15 @@ die Kundenakte und ihre Zuordnungen, nie PDF- oder Excel-Dateien. Das Protokoll 
 Befunde, aber keine PDF-Inhalte, keine vollständigen Pfade und keine Passwörter. Zwischendateien
 entstehen nur im temporären Ordner von Windows und werden nach jedem Vorgang gelöscht.
 
+**PDF Reader & Editor (seit 3.0.0):** PDFs werden nur lokal geöffnet und gespeichert. Die Liste
+„Zuletzt geöffnet“ enthält nur Pfade (in den Einstellungen) und lässt sich leeren. Passwörter
+verschlüsselter PDFs bleiben nur im Arbeitsspeicher. Ungespeicherte Änderungen sichert PDF Tool
+lokal in `%LOCALAPPDATA%\PDF-Tool-Editor\Sitzungen` (nach dem Speichern oder Schließen gelöscht),
+vor dem Überschreiben einer PDF eine Kopie des vorherigen Stands in
+`%LOCALAPPDATA%\PDF-Tool-Editor\Sicherungen` (je Datei höchstens 3, nach 7 Tagen entfernt). Diese
+Ordner gehören weder zur Sicherung noch zum Support-Paket. Protokolle enthalten keine Texte aus PDFs;
+PDF-JavaScript wird nie ausgeführt.
+
 **Updates (seit 2.7.2):** PDF Tool fragt die Releases des offiziellen Repositories bei GitHub ab –
 automatisch höchstens einmal täglich (abschaltbar unter Einstellungen → Updates) oder mit „Nach
 Updates suchen“. Dabei werden keine Dateien, keine Einstellungen und keine persönlichen Daten

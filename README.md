@@ -1,11 +1,14 @@
 # PDF Tool
 
-PDF Tool ist eine Windows-App mit Werkzeugen für PDF-Dateien: Sie erstellt professionelle
-Vertragsübersichten aus Excel-Listen und repariert beschädigte PDF-Dateien. Alle Dateien werden
-lokal auf dem PC verarbeitet. Entwickler und Inhaber: Jerico.
+PDF Tool ist eine Windows-App mit Werkzeugen für PDF-Dateien: Sie öffnet, bearbeitet, organisiert
+und kommentiert PDFs, erstellt professionelle Vertragsübersichten aus Excel-Listen und repariert
+beschädigte PDF-Dateien. Alle Dateien werden lokal auf dem PC verarbeitet. Entwickler und Inhaber:
+Jerico.
 
 ## Funktionen
 
+- PDF Reader & Editor: lesen, suchen, Text direkt ändern, Bilder, Seiten organisieren, Kommentare,
+  Formulare ausfüllen, drucken – mit Tabs, Rückgängig und sicherem Speichern
 - Vertragsübersichten aus Excel erstellen – einzeln oder als Stapel
 - Live-PDF-Vorschau
 - Vertragsvergleich mit dem letzten Stand
@@ -17,7 +20,7 @@ lokal auf dem PC verarbeitet. Entwickler und Inhaber: Jerico.
 - Diagnose mit Support-Paket ohne Kunden- oder Dokumentdaten
 - In-App-Updates mit Stable- und Beta-Kanal
 
-Ausführlich: [docs/FUNKTIONEN.md](docs/FUNKTIONEN.md).
+Ausführlich: [docs/FUNKTIONEN.md](docs/FUNKTIONEN.md) · PDF Reader & Editor: [docs/PDF-EDITOR.md](docs/PDF-EDITOR.md).
 
 ## Oberfläche
 
@@ -43,7 +46,7 @@ freigegeben.
 ## Entwicklung
 
 ```powershell
-py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2
+py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
 $env:QT_QPA_PLATFORM = "offscreen"
 py -3.13 -m pytest windows-app\tests    # Tests
 py -3.13 windows-app\build.py           # Setup bauen (Inno Setup 6.6 oder neuer)

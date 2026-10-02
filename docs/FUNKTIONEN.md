@@ -8,10 +8,13 @@ Ausführliche Beschreibung der Werkzeuge mit Verweisen auf den Code. Die kurze V
 
 Nach dem Start zeigt PDF Tool eine Startseite mit allen Werkzeugen. Die Navigation links führt zu
 **Start**, den **Tools** und den **Einstellungen**. Eine Datei kann direkt in das Fenster gezogen
-werden: PDFs (eine oder mehrere) öffnen „PDF reparieren“, eine Excel-Liste „Vertragsübersichten“.
+werden: Auf der Startseite öffnen PDFs (eine oder mehrere) den „PDF Reader & Editor“, eine
+Excel-Liste „Vertragsübersichten“; auf der Seite „PDF reparieren“ werden PDFs zur Reparatur
+hinzugefügt.
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
+| **PDF Reader & Editor** (seit 3.0.0) | Öffnet PDFs in Tabs zum Lesen (Zoom, Ansichten, Miniaturen, Lesezeichen, Suche, Textauswahl, Drucken) und Bearbeiten: Text direkt im PDF ändern oder hinzufügen, Bilder, Seiten organisieren, Kommentare, Formulare, Eigenschaften – mit Rückgängig, sicherem Speichern und Sitzungssicherung. Details: [PDF-EDITOR.md](PDF-EDITOR.md) | Fachlogik: `app/tools/pdf_editor/` · Controller: `app/qtapp/reader/` · Seiten: `app/qml/PdfTool/Reader/` |
 | **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, Regelwerk, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | Fachlogik: `app/tools/contract_overview/` (`overview.py`, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich, `templates/` für Vorlagen, `rules/` für das Regelwerk), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` · Controller: `app/qtapp/contracts/` · Seiten: `app/qml/PdfTool/Pages/` |
 | **PDF reparieren** | Analysiert beschädigte PDF-Dateien – eine oder mehrere auf einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen, bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten; Ausgabenamen je Datei, nie wird eine vorhandene Datei überschrieben | Fachlogik: `app/tools/pdf_repair/` (`batch.py` für Liste, Zustände und Ausgabenamen, `recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seiten: `app/qml/PdfTool/Pages/RepairPage.qml`, `RepairItem.qml` |
 

@@ -2,9 +2,13 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 2.8.0
+Version 3.0.0-beta.1 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
+- PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
+  und zum Bearbeiten – Text direkt im PDF ändern oder hinzufügen, Bilder,
+  Seiten organisieren, Kommentare, Formulare ausfüllen – mit Rückgängig und
+  sicherem Speichern.
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
   vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
@@ -22,13 +26,30 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-2.8.0.exe
+PDF-Tool-Setup-3.0.0-beta.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
-qpdf, pypdfium2 mit PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghostscript oder
+qpdf, pypdfium2 mit PDFium, pypdf, fontTools). Eine eigene Python-Installation, qpdf, Ghostscript oder
 andere Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 3.0 (Beta 1) – PDF Reader & Editor
+-------------------------------------------------
+Beta-Version zum Testen: Sie erscheint nur im Update-Kanal „Beta“.
+- PDF Reader: PDFs öffnen (auch „Öffnen mit“ im Explorer, ohne PDF Tool zur
+  Standard-App zu machen), Tabs, Miniaturen, Lesezeichen, Suche (Strg+F),
+  Zoom (Strg+Mausrad), Ansichten, Textauswahl, Drucken, Eigenschaften.
+- PDF Editor: Text direkt im PDF ändern oder hinzufügen – PDF Tool nennt den
+  Weg („Direkt im PDF geändert“, „Neu gesetzt“ oder „Kompatibilitätsmodus“;
+  eine Überlagerung ist keine Schwärzung). Bilder, Seiten organisieren,
+  Kommentare, Formulare ausfüllen, Rückgängig (Strg+Z).
+- Sicheres Speichern (Strg+S): Die neue Datei wird vor dem Ersetzen geprüft;
+  bei einem Fehler bleibt das Original unverändert. Vor dem Überschreiben
+  wird der vorherige Stand gesichert. Ungespeicherte Änderungen werden nach
+  einem Absturz zum Wiederherstellen angeboten.
+- PDF-JavaScript wird nie ausgeführt; Passwörter bleiben nur im
+  Arbeitsspeicher.
 
 Neu in Version 2.8 – Vorlagen, Regelwerk, Sicherung, Diagnose
 -------------------------------------------------------------
@@ -225,6 +246,10 @@ Ihre Daten:       %APPDATA%\PDF-Tool
                   Textbausteine, Kopf- und Fußzeile, Zyklus-Regeln, Design,
                   Akzentfarbe, aktueller Stapel stapel.json, Protokolle
                   pdf-repair.log und stapel.log)
+PDF Editor:       %LOCALAPPDATA%\PDF-Tool-Editor
+                  (ungespeicherte Änderungen für den Fall eines Absturzes,
+                  Sicherungskopien vor dem Überschreiben einer PDF – je
+                  Datei höchstens 3, nach 7 Tagen entfernt)
 
 Die App erscheint im Startmenü unter „PDF Tool“ und unter
 Einstellungen → Apps → Installierte Apps.
@@ -247,6 +272,12 @@ stabile Version erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 2.8 auf 3.0.0-beta.1 (Kanal „Beta“): Das Setup ersetzt
+nur die Programmdateien und trägt PDF Tool unter „Öffnen mit“ für
+PDF-Dateien ein (die Standard-App für PDF bleibt unverändert). Alle
+Einstellungen und Daten bleiben unverändert. Der Kanal „Stable“ erhält diese
+Beta nicht.
 
 Update von PDF Tool 2.7.2 auf 2.8.0: Das Setup ersetzt nur die
 Programmdateien. Vorlagen bis 2.7 werden beim ersten Start einmalig als
