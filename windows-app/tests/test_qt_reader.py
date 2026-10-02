@@ -305,6 +305,72 @@ def test_text_selection_by_mouse_and_copy(reader_app, tmp_path: Path) -> None:
     assert doc.selectionPage == -1
 
 
+def context_menu(h, page: int = 0):
+    """Kontextmenü der Seite mit seinen Einträgen (Text → Eintrag). Seite und Menü mit zurückgeben:
+    PySide verwirft die Python-Objekte der Kinder, sobald das des Elternobjekts freigegeben ist."""
+    from PySide6.QtCore import QObject
+
+    item = page_item(h, page)
+    menus = [obj for obj in item.findChildren(QObject) if obj.objectName() == "readerContextMenu"]
+    assert len(menus) == 1
+    entries = {obj.property("text"): obj for obj in menus[0].findChildren(QObject) if obj.property("text") and obj.property("enabled") is not None and hasattr(obj, "mapToScene")}
+    return item, menus[0], entries
+
+
+def right_click(h, point: QPoint) -> None:
+    QTest.mouseClick(h.window, Qt.MouseButton.RightButton, NO_MOD, point)
+    pump(0.3)
+
+
+def test_text_selection_shows_no_extra_bar_and_actions_stay_in_the_context_menu(reader_app, tmp_path: Path) -> None:
+    """Desktop: Eine Textauswahl blendet keine Aktionsleiste ein. Rechtsklick auf die Auswahl öffnet das
+    Kontextmenü – Kopieren, Alles auswählen, Markieren, Unterstreichen, Durchstreichen, Notiz –, die
+    Auswahl bleibt dabei bestehen; Strg+C kopiert wie bisher."""
+    h = reader_app
+    doc = open_pdf(h, samples.standard_text(tmp_path / "kontextmenue.pdf"))
+    doc.loadText(0)
+    settle(h)
+    options = h.item("readerToolOptions")
+    drag(h, page_point(h, 0, 70, 77), page_point(h, 0, 300, 77))
+    settle(h)
+    assert doc.tool == "select" and doc.selectionPage == 0
+    assert not options.isVisible() and options.height() == 0  # keine Leiste für die Auswahl
+    # Rechtsklick auf den ausgewählten Text: Kontextmenü, Auswahl bleibt
+    right_click(h, page_point(h, 0, 150, 77))
+    _page, menu, entries = context_menu(h)
+    assert menu.property("opened") and doc.selectionPage == 0 and not options.isVisible()
+    assert {"Kopieren", "Alles auswählen (Seite)", "Markieren", "Unterstreichen", "Durchstreichen", "Notiz hier hinzufügen"} <= set(entries)
+    assert all(entries[name].property("enabled") for name in ("Kopieren", "Markieren", "Unterstreichen", "Durchstreichen"))
+    QGuiApplication.clipboard().setText("")
+    copy = entries["Kopieren"]
+    click(h, window_point(copy, copy.width() / 2, copy.height() / 2))
+    settle(h)
+    assert "Rechnung Nr. 4711" in QGuiApplication.clipboard().text() and not menu.property("opened")
+    # »Unterstreichen« aus dem Kontextmenü: Anmerkung über der Auswahl, Auswahl danach aufgehoben
+    right_click(h, page_point(h, 0, 150, 77))
+    _page, menu, entries = context_menu(h)
+    underline = entries["Unterstreichen"]
+    click(h, window_point(underline, underline.width() / 2, underline.height() / 2))
+    settle(h)
+    assert [item["subtype"] for item in doc.annotations] == ["/Underline"]
+    assert doc.selectionPage == -1 and not options.isVisible()
+    # Ohne Auswahl: Textaktionen im Menü ausgegraut, »Alles auswählen« und »Notiz« bleiben
+    right_click(h, page_point(h, 0, 150, 300))
+    _page, menu, entries = context_menu(h)
+    assert not any(entries[name].property("enabled") for name in ("Kopieren", "Markieren", "Unterstreichen", "Durchstreichen"))
+    assert entries["Alles auswählen (Seite)"].property("enabled") and entries["Notiz hier hinzufügen"].property("enabled")
+    key(h, Qt.Key.Key_Escape)
+    pump(0.2)
+    # Strg+C kopiert weiterhin eine Auswahl – auch »Alles auswählen«, ohne dass eine Leiste erscheint
+    doc.selectAll(0)
+    settle(h)
+    assert doc.selectionPage == 0 and not options.isVisible()
+    QGuiApplication.clipboard().setText("")
+    key(h, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    assert "Rechnung Nr. 4711" in QGuiApplication.clipboard().text()
+
+
 def test_search_hits_navigation_and_options(reader_app, tmp_path: Path) -> None:
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "suche.pdf", pages=4))
