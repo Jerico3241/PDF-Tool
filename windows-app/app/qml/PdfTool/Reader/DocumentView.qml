@@ -267,9 +267,20 @@ Flickable {
     function resized() {
         if (!doc) return
         var point = viewAnchor
+        // Ganz oben (z. B. gleich nach dem Öffnen, während Navigation oder Seitenleisten auf- und
+        // zugehen) bleibt die Ansicht oben; sonst bleibt die Stelle in der Mitte stehen
+        var top = contentY <= 1
+        restoring = true
         doc.setViewport(width, height, ratio)
         relayout()
-        if (point) restorePoint({ page: point.page, u: point.u, v: point.v, x: width / 2, y: height / 2 })
+        restoring = false
+        if (top) {
+            restoring = true
+            contentY = 0
+            restoring = false
+        } else if (point) {
+            restorePoint({ page: point.page, u: point.u, v: point.v, x: width / 2, y: height / 2 })
+        }
         rememberAnchor()
     }
     onContentYChanged: {

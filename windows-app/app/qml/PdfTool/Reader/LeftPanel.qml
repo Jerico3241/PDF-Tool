@@ -4,54 +4,45 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Linke Seitenleiste: Miniaturen, Lesezeichen oder Suche (umschaltbar; die Wahl bleibt gespeichert).
+// Linke Seitenleiste: Seiten (Miniaturen), Lesezeichen oder Suche. Umgeschaltet wird in ihrem Kopf, die
+// geschlossene Leiste öffnet der Streifen am linken Rand (PanelRail). Die Breite ist fest – gleich, welcher
+// Inhalt gezeigt wird. Der Inhalt wechselt mit einer kurzen Überblendung; beim Schließen bleibt er
+// stehen, bis die Leiste weggeglitten ist.
 Rectangle {
     id: root
     objectName: "readerLeftPanel"
     property var doc: null
     readonly property string panel: Reader.leftPanel
+    // Zuletzt gezeigter Inhalt (bleibt beim Schließen, damit die Leiste nicht leer hinausgleitet)
+    property string shown: "thumbs"
+    onPanelChanged: if (panel !== "") shown = panel
+    Component.onCompleted: if (panel !== "") shown = panel
+    readonly property var titles: ({ thumbs: "Seiten", outline: "Lesezeichen", search: "Suchen" })
+    signal chosen(string key)  // Inhalt im Kopf gewählt
     color: Theme.layer
-    Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider }
-
-    component PanelTab: PButton {
-        property string panelKey: ""
-        kind: "subtle"
-        checkable: true
-        checked: root.panel === panelKey
-        Layout.fillWidth: true
-        onClicked: if (root.panel !== panelKey) Reader.setLeftPanel(panelKey)
-        Accessible.role: Accessible.PageTab
-    }
+    Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
 
     ColumnLayout {
         anchors.fill: parent
         anchors.rightMargin: 1
         spacing: 0
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 4
-            Layout.rightMargin: 4
-            Layout.topMargin: 4
-            spacing: 2
-            PanelTab { panelKey: "thumbs"; iconName: "document_one_page_multiple"; tip: "Miniaturen" }
-            PanelTab { panelKey: "outline"; iconName: "bookmark"; tip: "Lesezeichen" }
-            PanelTab { panelKey: "search"; iconName: "search"; tip: "Suchen (Strg+F)" }
-            PIconButton { iconName: "dismiss"; tip: "Seitenleiste schließen"; onClicked: Reader.setLeftPanel(root.panel) }
-        }
-        PText {
-            Layout.fillWidth: true
-            Layout.leftMargin: 12
-            Layout.topMargin: 4
-            text: root.panel === "thumbs" ? "Seiten" : (root.panel === "outline" ? "Lesezeichen" : "Suchen")
-            textStyle: "bodyStrong"
+        PanelHeader {
+            title: root.titles[root.shown] || ""
+            current: root.shown
+            tabs: [
+                { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerTabThumbs" },
+                { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerTabOutline" },
+                { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerTabSearch" }
+            ]
+            onTabSelected: (key) => root.chosen(key)
+            onCloseRequested: Reader.setLeftPanel(root.panel)
         }
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // Nur die gezeigte Leiste existiert (versteckte Miniaturen würden sonst gerendert)
-            Loader { anchors.fill: parent; active: root.panel === "thumbs"; sourceComponent: ThumbnailPanel { doc: root.doc } }
-            Loader { anchors.fill: parent; active: root.panel === "outline"; sourceComponent: OutlinePanel { doc: root.doc } }
-            Loader { anchors.fill: parent; active: root.panel === "search"; sourceComponent: SearchPanel { doc: root.doc } }
+            PanelContent { shown: root.shown === "thumbs" && root.visible; sourceComponent: ThumbnailPanel { doc: root.doc } }
+            PanelContent { shown: root.shown === "outline" && root.visible; sourceComponent: OutlinePanel { doc: root.doc } }
+            PanelContent { shown: root.shown === "search" && root.visible; sourceComponent: SearchPanel { doc: root.doc } }
         }
     }
 }

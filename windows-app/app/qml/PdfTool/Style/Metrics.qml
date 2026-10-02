@@ -56,8 +56,13 @@ QtObject {
     readonly property int readerTabHeight: 36
     readonly property int readerTabMaxWidth: 220
     readonly property int readerToolbarHeight: 48
-    readonly property int readerPanelWidth: 272
-    readonly property int readerThumbPanelWidth: 196
+    // Seitenleisten: feste Breiten je Seite – gleich, welcher Inhalt gezeigt wird (kein Springen)
+    readonly property int readerLeftPanelWidth: 256
+    readonly property int readerRightPanelWidth: 280
+    readonly property int readerPanelHeaderHeight: 44
+    readonly property int readerPanelTab: 28      // Umschalter und Schließen im Kopf einer Seitenleiste
+    readonly property int readerRailWidth: 44     // eingeklappte Seitenleiste: Streifen mit ihren Symbolen
+    readonly property int readerRailButton: 36
     readonly property int readerViewMargin: 16    // wie VIEW_MARGIN in qtapp/reader/document.py
     readonly property int readerNarrowFrom: 820   // schmaler: Seitenleisten liegen über der Ansicht
     readonly property int readerHandle: 10        // Anfasser zum Ändern der Bildgröße

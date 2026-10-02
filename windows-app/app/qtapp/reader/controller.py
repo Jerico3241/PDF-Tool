@@ -397,6 +397,13 @@ class ReaderController(Observable):
         self.app.schedule_save()
 
     @Slot(str)
+    def showLeftPanel(self, panel: str) -> None:  # noqa: N802
+        """Linke Seitenleiste zeigen (ohne Umschalten): ``thumbs``, ``outline`` oder ``search``."""
+        if panel in ("thumbs", "outline", "search") and panel != self.leftPanel:
+            self.leftPanel = panel
+            self.app.schedule_save()
+
+    @Slot(str)
     def setRightPanel(self, panel: str) -> None:  # noqa: N802
         self.rightPanel = "" if panel == self.rightPanel else panel
 

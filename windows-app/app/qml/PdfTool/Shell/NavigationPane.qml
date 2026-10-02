@@ -6,9 +6,12 @@ import PdfTool.Controls
 
 // Navigationsbereich links (auf Mica): Start, Tools, Einstellungen. Die Markierung gleitet zum
 // gewählten Eintrag; ausgeklappt/kompakt wechselt mit einer Breitenanimation, Texte blenden
-// weich ein und aus, die Symbole bleiben an ihrem Platz.
+// weich ein und aus, die Symbole bleiben an ihrem Platz. Kompakt: zentrierte Symbole in runden
+// Flächen; der gewählte Bereich hat eine zurückhaltende Akzentfläche, ein Akzentsymbol und die
+// Markierung. Bei geöffnetem Dokument ist die Navigation eingeklappt (AppShell).
 FocusScope {
     id: pane
+    objectName: "navigationPane"
     property bool expanded: true
     property bool animated: true  // aus bei Breakpoints: dann sofort umstellen
     property real amount: expanded ? 1 : 0
@@ -86,7 +89,8 @@ FocusScope {
             width: entry.width - 8
             height: entry.height
             radius: Metrics.radiusControl
-            color: entry.pressed ? Theme.subtlePressed : ((entry.hovered || entry.selected) ? Theme.subtleHover : "transparent")
+            // gewählt: zurückhaltend im Akzentton (auch eingeklappt klar erkennbar), Zeigen: leicht grau
+            color: entry.pressed ? Theme.subtlePressed : (entry.selected ? Theme.selectedSubtle : (entry.hovered ? Theme.subtleHover : "transparent"))
             Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
             PFocusRing { visible: entry.visualFocus; inset: -1 }
         }
@@ -96,6 +100,7 @@ FocusScope {
                 anchors.verticalCenter: parent.verticalCenter
                 name: entry.iconName
                 size: Metrics.iconSize
+                color: entry.selected ? Theme.accent : Theme.textPrimary
                 visible: !entry.header && entry.iconName !== ""
             }
             Text {
@@ -134,6 +139,7 @@ FocusScope {
     // Menüschaltfläche und App-Name
     PIconButton {
         id: toggle
+        objectName: "navigationToggle"
         x: 8
         y: 4
         width: 36
