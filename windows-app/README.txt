@@ -30,10 +30,8 @@ qpdf, pypdfium2 mit PDFium, pypdf). Eine eigene Python-Installation, qpdf, Ghost
 andere Zusatzprogramme sind nicht nötig.
 
 
-Neu in Version 2.8 (Beta) – Vorlagen, Regelwerk, Sicherung, Diagnose
----------------------------------------------------------------------
-Diese Beta erscheint nur im Update-Kanal „Beta“. Die stabile Version 2.8.0
-folgt nach dem Test.
+Neu in Version 2.8 – Vorlagen, Regelwerk, Sicherung, Diagnose
+-------------------------------------------------------------
 - Vorlagen 2.0: Eine Vorlage hält die ganze Darstellung fest (Logo, Format,
   Titel, Dateiname, Kopf- und Fußzeile, Zyklus-Regeln, Regelwerk). Neue
   Ansicht „Vorlagen“ zum Suchen, Anwenden, Umbenennen, Duplizieren und
@@ -250,12 +248,13 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 2.7.2 auf 2.8.0 Beta 1 (Kanal „Beta“): Das Setup
-ersetzt nur die Programmdateien. Vorlagen bis 2.7 werden beim ersten Start
-einmalig als Vorlagen 2.0 übernommen (je Vorlage eine Datei im Ordner
-„vorlagen“); die bisherige Liste bleibt unverändert. Alle übrigen
-Einstellungen und Daten bleiben unverändert. Vor jedem weiteren Update
-sichert PDF Tool Ihre Daten automatisch.
+Update von PDF Tool 2.7.2 auf 2.8.0: Das Setup ersetzt nur die
+Programmdateien. Vorlagen bis 2.7 werden beim ersten Start einmalig als
+Vorlagen 2.0 übernommen (je Vorlage eine Datei im Ordner „vorlagen“); die
+bisherige Liste bleibt unverändert. Alle übrigen Einstellungen und Daten
+bleiben unverändert. Vor jedem weiteren Update sichert PDF Tool Ihre Daten
+automatisch. Wer die Beta 2.8.0-beta.1 nutzt, erhält 2.8.0 als Update;
+Daten, Einstellungen und der Kanal „Beta“ bleiben erhalten.
 
 Update von PDF Tool 2.7.1 auf 2.7.2: Das Setup ersetzt nur die
 Programmdateien. Alle Einstellungen und Daten bleiben unverändert. Der
