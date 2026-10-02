@@ -96,6 +96,9 @@ class EditorDocument:
         self.permissions = _permissions(pdf)
         self.read_only_reason = "" if self.permissions.edit else "Der Ersteller dieses PDFs hat das Bearbeiten nicht erlaubt."
         self.closed = False
+        # Quellen eingefügter Seiten (andere PDFs): qpdf liest deren Stream-Daten erst beim
+        # Schreiben – sie bleiben deshalb geöffnet, solange das Dokument offen ist.
+        self._sources: list[pikepdf.Pdf] = []
 
     # Öffnen ---------------------------------------------------------------------------------
     @classmethod
@@ -268,6 +271,11 @@ class EditorDocument:
         self._view_bytes = None
         self._view_revision = -1
 
+    def adopt(self, source: pikepdf.Pdf) -> None:
+        """Eine PDF, aus der Seiten übernommen wurden, bis zum Schließen offen halten."""
+        if all(source is not known for known in self._sources):
+            self._sources.append(source)
+
     def close(self) -> None:
         if self.closed:
             return
@@ -278,6 +286,12 @@ class EditorDocument:
             self.pdf.close()
         except Exception:  # noqa: BLE001
             pass
+        for source in self._sources:
+            try:
+                source.close()
+            except Exception:  # noqa: BLE001
+                pass
+        self._sources.clear()
         self._data = None
         self.password = None
 
