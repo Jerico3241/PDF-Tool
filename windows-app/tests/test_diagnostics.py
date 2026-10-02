@@ -38,10 +38,12 @@ def schreibe(path: Path, data) -> Path:
 
 def test_system_facts_cover_the_essentials() -> None:
     facts = {fact.key: fact for fact in info.system_facts("2.8.0-beta.1", "beta", Path("/daten"), Path("/programm"))}
-    assert set(facts) == {"version", "channel", "python", "qt", "os", "arch", "data", "install", "engines", "modules"}
+    assert set(facts) == {"version", "channel", "python", "qt", "os", "arch", "data", "install", "engines", "editor", "modules"}
     assert facts["version"].value == "2.8.0-beta.1" and facts["channel"].value == "Beta"
     assert "PySide6 6." in facts["qt"].value and "Qt 6." in facts["qt"].value
     assert "qpdf" in facts["engines"].value and "PDFium" in facts["engines"].value
+    assert "pikepdf" in facts["editor"].value and "PDFium" in facts["editor"].value and "fontTools" in facts["editor"].value
+    assert "nicht verfügbar" not in facts["editor"].value
     assert "ReportLab" in facts["modules"].value and "pypdf" in facts["modules"].value
     assert info.system_facts("2.8.0", "stable", Path("/d"), Path("/p"))[1].value == "Stable"
 

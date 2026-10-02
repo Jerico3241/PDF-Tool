@@ -5,7 +5,8 @@ Die Wheels von PySide6-Essentials bringen neben Qt Quick viele Werkzeuge und Mod
 was PDF Tool zur Laufzeit lädt:
 
 * Python-Module (``.pyd``): ``PYTHON_MODULES`` – genau die, die ``import PySide6.…`` der App
-  (auch indirekt, z. B. QtQml → QtNetwork) lädt.
+  (auch indirekt, z. B. QtQml → QtNetwork) lädt. QtPrintSupport (seit 3.0.0) druckt aus dem PDF
+  Reader; der Druck unter Windows steckt in ``Qt6PrintSupport.dll`` selbst (kein Plugin).
 * Qt-Plugins: ``PLUGINS`` – Fensterplattform, Bildformate (ICO für das Fenstersymbol, JPEG/WebP/SVG
   für Logos und Symbole), TLS über Schannel (HTTPS für die Update-Prüfung, seit 2.7.2).
 * QML-Module: ``QML_MODULES`` – ermittelt mit ``qmlimportscanner``; von Qt Quick Controls nur der
@@ -24,7 +25,7 @@ import struct
 import sys
 from pathlib import Path
 
-PYTHON_MODULES = ("QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtOpenGL", "QtQml", "QtQuick", "QtQuickControls2", "QtSvg")
+PYTHON_MODULES = ("QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtOpenGL", "QtQml", "QtQuick", "QtQuickControls2", "QtSvg", "QtPrintSupport")
 PLUGINS = (
     "platforms/qwindows.dll",
     "platforms/qoffscreen.dll",  # Prüfungen ohne Bildschirm (Laufzeittest)
