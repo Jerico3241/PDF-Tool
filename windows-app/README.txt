@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.0.0-beta.1 (Beta zum Testen)
+Version 3.0.0-beta.2 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -26,7 +26,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.0.0-beta.1.exe
+PDF-Tool-Setup-3.0.0-beta.2.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -34,9 +34,22 @@ qpdf, pypdfium2 mit PDFium, pypdf, fontTools). Eine eigene Python-Installation, 
 andere Zusatzprogramme sind nicht nötig.
 
 
-Neu in Version 3.0 (Beta 1) – PDF Reader & Editor
+Neu in Version 3.0 (Beta 2) – PDF Reader & Editor
 -------------------------------------------------
 Beta-Version zum Testen: Sie erscheint nur im Update-Kanal „Beta“.
+Neu in Beta 2:
+- Speichern repariert: PDFs mit XMP-Metadaten (die meisten PDFs aus
+  Office-Programmen, Acrobat oder Scannern) lassen sich wieder speichern;
+  Fehler beim Speichern werden verständlich gemeldet, mit „Speichern
+  unter …“ direkt in der Meldung.
+- Objekt bearbeiten: eine Zeile, eine Tabellenzelle oder ein Wort einzeln
+  ändern, verschieben, löschen oder formatieren; alles andere auf der Seite
+  bleibt an seinem Platz.
+- Aufgeräumter Reader: Umschalter im Kopf der Seitenleisten, feste Breiten,
+  eingeklappte Navigation im Dokument, Textauswahl ohne eigene Leiste
+  (Aktionen im Kontextmenü) und weiche Bewegungen nach dem
+  Animationsprofil (Einstellungen → Animationen).
+Seit Beta 1:
 - PDF Reader: PDFs öffnen (auch „Öffnen mit“ im Explorer, ohne PDF Tool zur
   Standard-App zu machen), Tabs, Miniaturen, Lesezeichen, Suche (Strg+F),
   Zoom (Strg+Mausrad), Ansichten, Textauswahl, Drucken, Eigenschaften.
@@ -273,7 +286,11 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 2.8 auf 3.0.0-beta.1 (Kanal „Beta“): Das Setup ersetzt
+Update von PDF Tool 3.0.0-beta.1 auf 3.0.0-beta.2 (Kanal „Beta“): Das Setup
+ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
+unverändert.
+
+Update von PDF Tool 2.8 auf 3.0.0-beta.2 (Kanal „Beta“): Das Setup ersetzt
 nur die Programmdateien und trägt PDF Tool unter „Öffnen mit“ für
 PDF-Dateien ein (die Standard-App für PDF bleibt unverändert). Alle
 Einstellungen und Daten bleiben unverändert. Der Kanal „Stable“ erhält diese

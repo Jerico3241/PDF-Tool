@@ -410,7 +410,7 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   speichern) und `tests/smoke_installer.ps1` (»Öffnen mit«, zweiter Start reicht die PDF weiter,
   Standard-App für PDF unverändert, Deinstallation entfernt die Einträge).
 
-## Bekannte Einschränkungen (3.0.0-beta.1)
+## Bekannte Einschränkungen (3.0.0-beta.2)
 
 - Textauswahl innerhalb einer Seite (nicht über Seitengrenzen hinweg).
 - Keine Schwärzung: Eine echte Schwärzung (Entfernen von Text, Bildern und Vektoren eines

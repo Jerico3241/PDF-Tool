@@ -142,11 +142,11 @@ ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
     "Neues Werkzeug »PDF Reader & Editor« (Strg+5): PDFs in Tabs öffnen, lesen, suchen, zoomen, drucken – auch über »Öffnen mit« im Explorer.",
-    "Text direkt im PDF ändern oder hinzufügen; PDF Tool nennt jeweils den Weg (direkt, neu gesetzt oder Überlagerung – keine Schwärzung).",
-    "Bilder, Seiten organisieren (drehen, löschen, verschieben, einfügen, teilen), Kommentare, Formulare ausfüllen, Rückgängig mit Strg+Z.",
-    "Sicheres Speichern: Die neue Datei wird vor dem Ersetzen geprüft; bei einem Fehler bleibt das Original unverändert. Ungespeicherte Änderungen werden nach einem Absturz angeboten.",
-    "Beta-Version zum Testen – alle bisherigen Funktionen bleiben erhalten.",
-    "Alle Dateien werden lokal auf diesem PC verarbeitet – keine Cloud, keine Uploads. PDF-JavaScript wird nie ausgeführt.",
+    "Text direkt im PDF ändern oder hinzufügen; PDF Tool nennt jeweils den Weg (direkt, neu gesetzt oder Überlagerung – keine Schwärzung). Bilder, Seiten organisieren, Kommentare, Formulare, Rückgängig mit Strg+Z.",
+    "Neu in Beta 2: Werkzeug »Objekt bearbeiten« – eine Zeile, eine Tabellenzelle oder ein Wort einzeln ändern, verschieben oder löschen; alles andere bleibt an seinem Platz.",
+    "Speichern repariert: PDFs aus Office-Programmen, Acrobat oder Scannern (mit XMP-Metadaten) lassen sich wieder speichern. Die neue Datei wird vor dem Ersetzen geprüft; bei einem Fehler bleibt das Original unverändert.",
+    "Aufgeräumter Reader: Umschalter im Kopf der Seitenleisten, feste Breiten, eingeklappte Navigation im Dokument und weiche Bewegungen nach dem Animationsprofil.",
+    "Beta-Version zum Testen – alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
