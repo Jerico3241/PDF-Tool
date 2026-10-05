@@ -2,9 +2,10 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
-# In Arbeit (nach 3.0.0-beta.1)
+# PDF Tool 3.0.0-beta.2
 
-Änderungen für die nächste Beta – die Versionsnummer bleibt bis dahin 3.0.0-beta.1.
+Beta zum Testen (Kanal „Beta“). Behebt den Fehler beim Speichern von PDFs mit XMP-Metadaten aus
+3.0.0-beta.1 und bringt das Werkzeug „Objekt bearbeiten“ sowie einen aufgeräumten Reader.
 
 ## Neu
 
@@ -60,17 +61,6 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
 ## Behoben
 
-- PDF Reader: „Ganze Seite“ konnte bei unterschiedlich großen Seiten (z. B. Hoch- und Querformat)
-  beim Scrollen zwischen den Seiten hin- und herspringen.
-- „Notiz hier hinzufügen“ aus dem Kontextmenü: Die Eingabe hatte bei eingeschalteten Animationen
-  nicht sofort den Tastaturfokus.
-- PDF Reader: Miniaturen zeigten beim schnellen Scrollen und beim Wechsel zwischen Dokumenten kurz
-  das Bild einer anderen Seite bzw. des anderen Dokuments, bis das richtige Bild fertig war; in
-  „Seiten organisieren“ beim schnellen Scrollen ebenso. Bis dahin steht jetzt das leere Blatt.
-- Formular ausfüllen: Nach der Eingabetaste oder Escape blieb die Tastatur im ausgeblendeten
-  Eingabefeld. Tastendrücke landeten dort, und die Markierung des Felds blieb stehen. Jetzt geht die
-  Tastatur wie nach dem Textbearbeiten zurück an die Seite.
-
 - PDF Editor: Speichern schlug bei PDFs mit XMP-Metadaten (die meisten PDFs aus Office-Programmen,
   Acrobat oder Scannern) mit „Das Dokument konnte nicht geschrieben werden.“ fehl. Ursache: Beim
   Schreiben wollte pikepdf die PDF-Version in den XMP-Metadaten nachtragen und brauchte dafür lxml,
@@ -83,13 +73,23 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
   geöffnet (genau geprüft statt vermutet), Datenträger voll; technische Angaben stehen ohne Pfad
   und ohne Inhalte im Protokoll
 - die gespeicherte Datei wird nach dem Ersetzen wie beim Öffnen nachgeprüft; erst dann gilt das
-  Dokument als gespeichert („*“ verschwindet), bei einem Fehler bleibt es ungespeichert und
-  Rückgängig bleibt möglich
+  Dokument als gespeichert (der Punkt für „ungespeichert“ verschwindet), bei einem Fehler bleibt es
+  ungespeichert und Rückgängig bleibt möglich
 - je Dokument läuft höchstens ein Speichervorgang: mehrfaches Strg+S schreibt die Datei einmal,
   „Speichern“ beim Schließen während eines laufenden Speicherns wartet darauf
 - Speichern wartet nicht mehr auf eine laufende Suche (die Suche läuft danach weiter); Ansicht,
   Seite, Zoom, Seitenleisten und Tabs bleiben beim Speichern unverändert
 - Werkzeugleiste: „Speichern …“ während des Speicherns, danach kurz „Gespeichert“ – ohne Dialog
+- PDF Reader: „Ganze Seite“ konnte bei unterschiedlich großen Seiten (z. B. Hoch- und Querformat)
+  beim Scrollen zwischen den Seiten hin- und herspringen.
+- „Notiz hier hinzufügen“ aus dem Kontextmenü: Die Eingabe hatte bei eingeschalteten Animationen
+  nicht sofort den Tastaturfokus.
+- PDF Reader: Miniaturen zeigten beim schnellen Scrollen und beim Wechsel zwischen Dokumenten kurz
+  das Bild einer anderen Seite bzw. des anderen Dokuments, bis das richtige Bild fertig war; in
+  „Seiten organisieren“ beim schnellen Scrollen ebenso. Bis dahin steht jetzt das leere Blatt.
+- Formular ausfüllen: Nach der Eingabetaste oder Escape blieb die Tastatur im ausgeblendeten
+  Eingabefeld. Tastendrücke landeten dort, und die Markierung des Felds blieb stehen. Jetzt geht die
+  Tastatur wie nach dem Textbearbeiten zurück an die Seite.
 
 # PDF Tool 3.0.0-beta.1
 
