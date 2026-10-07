@@ -141,15 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Formulare gestalten: Textfelder, Kontrollkästchen, Optionsfelder, Dropdowns und Listen anlegen, verschieben, in der Größe ändern, duplizieren und ihre Eigenschaften bearbeiten.",
+    "PDF Reader & Editor: PDFs in Tabs lesen, durchsuchen und drucken – und bearbeiten: Text und einzelne Objekte direkt im PDF ändern, Bilder, Seiten organisieren, Kommentare, mit Rückgängig und sicherem Speichern.",
+    "Tabs statt Seitenleiste: ⌂ Start, geöffnete Werkzeuge und PDFs als Tabs oben wie in Adobe Acrobat, ≡ Menü; neue Startseite mit Werkzeugen, Ablagefläche und »Zuletzt verwendet«.",
+    "Formulare ausfüllen und gestalten: Textfelder, Kontrollkästchen, Optionsfelder, Dropdowns und Listen anlegen, verschieben, in der Größe ändern und ihre Eigenschaften bearbeiten.",
     "Texterkennung (OCR) für gescannte PDFs – vollständig lokal und im Setup enthalten: Der Text wird durchsuchbar und kopierbar, das Aussehen der Seiten bleibt gleich.",
-    "Objekt bearbeiten: auch Linien und Grafiken, gemischte Auswahl, Drehen, Ausrichten, Ebenen und Deckkraft; Ausschneiden, Kopieren und Einfügen – auch zwischen Tabs und aus anderen Programmen.",
-    "Seiten kopieren und in einem anderen Tab einfügen, Rahmenauswahl, nur ausgewählte Seiten aus einer PDF einfügen; Text unterstrichen oder durchgestrichen; Kommentare nachträglich formatieren und beantworten.",
-    "Reader: Vollbild (F11), Anhänge, Seitenleisten je Tab, »Gehe zu Seite« (Strg+G), freie Zoomeingabe und gewählte Seiten drucken.",
-    "Neu in Beta 2 – schneller: Die Startseite steht im ersten Bild, PDFs per Doppelklick öffnen direkt im Reader, »PDF reparieren« arbeitet viele Dateien mehrfach so schnell ab.",
-    "Neu in Beta 3 – Feinschliff: gleichmäßiges Scrollen mit dem Mausrad, Werkzeug »Verschieben« und Ziehen neben der Seite, Werkzeuge lassen sich wieder abwählen, dazu viele Korrekturen an der Oberfläche.",
-    "Neu in Beta 4 – Tabs statt Seitenleiste: ⌂ Start, geöffnete Werkzeuge und PDFs als Tabs oben wie in Adobe Acrobat, ≡ Menü; neue Startseite mit Werkzeugen, Ablagefläche und »Zuletzt verwendet«.",
-    "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
+    "Schneller und ruhiger: Die Startseite steht im ersten Bild, PDFs per Doppelklick öffnen direkt im Reader, »PDF reparieren« arbeitet viele Dateien mehrfach so schnell ab, das Mausrad scrollt gleichmäßig wie in Edge und Chrome.",
+    "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
