@@ -167,7 +167,7 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
   kein Bestandteil des App-Brandings.
 - **Schriften der Oberfläche** (Segoe UI Variable, Segoe UI) werden nicht mitgeliefert, sondern aus
   Windows verwendet.
-- **Symbole der Oberfläche** (seit 2.7.0): 162 SVG-Symbole aus **Fluent UI System Icons** von
+- **Symbole der Oberfläche** (seit 2.7.0): 163 SVG-Symbole aus **Fluent UI System Icons** von
   Microsoft (Paket `@fluentui/svg-icons` 1.1.343, https://github.com/microsoft/fluentui-system-icons),
   unverändert unter `windows-app/app/qml/icons/`, im Setup als Teil der QML-Ressource. Lizenz: MIT.
 

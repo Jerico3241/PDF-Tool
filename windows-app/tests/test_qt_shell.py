@@ -419,6 +419,54 @@ def test_pane_toggle_lays_out_the_page_once(app) -> None:
         assert widths[0] == 1100 - (240 if expanded else 48) - 1
 
 
+def test_compact_navigation_has_no_gap_and_the_marker_stays_on_its_entry(app) -> None:
+    """Eingeklappt wird die Überschrift »Tools« zur schmalen Trennlinie – bis 3.1.0-beta.2 blieb sie 32 px
+    hoch, zwischen »Start« und den Tools lagen 40 px statt 4 px. Beim Ein- und Ausklappen bleibt die
+    Markierung in jedem Bild auf ihrem Eintrag; bei einem Wechsel gleitet sie und endet genau dort."""
+    from PySide6.QtCore import QPointF
+
+    app.window.resize(1280, 800)
+    app.settings.setProfile("full")
+    app.app.setNavCompact(False)
+    app.navigate("repair", 0.5)
+    shell, pane, indicator = app.item("shell"), app.item("navigationPane"), app.item("navIndicator")
+    entries, stack = {}, [pane]
+    while stack:
+        item = stack.pop()
+        stack.extend(item.childItems())
+        if item.property("key") and item.property("label") is not None:
+            entries[item.property("key")] = item
+
+    def top(item) -> float:
+        return item.mapToScene(QPointF(0, 0)).y()
+
+    def gap() -> float:  # zwischen »Start« und dem ersten Tool
+        return top(entries["reader"]) - (top(entries["home"]) + entries["home"].height())
+
+    def offset(key: str) -> float:  # Markierung gegenüber der Mitte ihres Eintrags
+        return abs(top(indicator) + indicator.height() / 2 - top(entries[key]) - entries[key].height() / 2)
+
+    assert shell.property("paneExpanded") is True and gap() == 40  # ausgeklappt: Platz für »Tools«
+    worst = 0.0
+    shell.togglePane()  # einklappen, animiert
+    for _ in range(40):
+        pump(0.01)
+        worst = max(worst, offset("repair"))
+    assert pane.width() == 48 and worst < 0.5
+    assert gap() == 17  # 8 px, Trennlinie, 8 px
+    line = [item for item in app.items("navSeparator") if item.isVisible()]
+    assert len(line) == 1 and top(line[0]) - (top(entries["home"]) + entries["home"].height()) == 8
+    assert top(entries["reader"]) - (top(line[0]) + 1) == 8
+    app.app.navigate("home")  # Wechsel: gleitet vom alten Eintrag …
+    assert offset("home") > 20 if app.theme.effectiveProfile == "full" else offset("home") < 0.5
+    pump(0.5)
+    assert offset("home") < 0.5  # … und endet genau am neuen
+    shell.togglePane()  # ausklappen: wieder Platz für die Überschrift
+    pump(0.5)
+    assert shell.property("paneExpanded") is True and gap() == 40 and offset("home") < 0.5
+    assert not app.messages()
+
+
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)
@@ -513,3 +561,52 @@ def test_animation_profiles_follow_the_design_rules(app) -> None:
     off = _motion(app)
     assert not off["enabled"] and all(off[key] == 0 for key in ("pageOut", "pageIn", "menu", "dialog", "expand", "infoBar", "fast", "fade", "tooltip"))
     app.settings.setProfile("full")
+
+
+def test_mouse_wheel_moves_the_same_distance_for_every_notch(app) -> None:
+    """Mausrad wie in anderen Windows-Programmen: Jede Raste verschiebt gleich weit – auch schnell gedreht
+    (Qts eigene Bewegung begann bei jeder Raste neu und verlor dabei bis zur Hälfte der Strecke) –, rund
+    32 px je Zeile der Windows-Einstellung; am Ende des Inhalts bleibt die Seite stehen."""
+    import time
+
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QGuiApplication, QWheelEvent
+
+    from qtapp import application as appmod
+
+    hints = QGuiApplication.styleHints()
+    lines = hints.wheelScrollLines()
+    appmod.tune_wheel(app.qt)  # einmal je Anwendung – ein zweiter Aufruf ändert nichts
+    assert hints.wheelScrollLines() == lines
+    app.app.dialogs.shutdown()
+    app.navigate("settings", 0.4)
+    scrollers = [item for item in app.items("wheelScroll") if item.isVisible()]
+    assert len(scrollers) == 1
+    flick = scrollers[0].parentItem().parentItem()  # Inhalt → Ansicht
+    end = flick.property("contentHeight") - flick.height()
+    step = lines * 24
+    assert end > 7 * step
+    point = flick.mapToScene(QPointF(flick.width() / 2, flick.height() / 2))
+
+    def notch(delta: int = -120) -> None:
+        event = QWheelEvent(point, QPointF(app.window.mapToGlobal(point.toPoint())), QPoint(0, 0), QPoint(0, delta), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+        event.setTimestamp(int(time.monotonic() * 1000))
+        QGuiApplication.sendEvent(app.window, event)
+
+    assert flick.property("contentY") == 0
+    notch()
+    pump(0.4)
+    assert abs(flick.property("contentY") - step) < 1
+    for _ in range(5):  # schnell gedreht: die Rasten addieren sich
+        notch()
+        pump(0.02)
+    pump(0.5)
+    assert abs(flick.property("contentY") - 6 * step) < 1
+    notch(120)
+    pump(0.4)
+    assert abs(flick.property("contentY") - 5 * step) < 1
+    for _ in range(40):  # weit über das Ende hinaus
+        notch()
+        pump(0.01)
+    pump(0.5)
+    assert abs(flick.property("contentY") - end) < 1

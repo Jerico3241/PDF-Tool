@@ -27,6 +27,7 @@ ColumnLayout {
     }
     ListView {
         id: list
+        PWheelScroll { flickable: list }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
         objectName: "readerAttachmentList"
         Layout.fillWidth: true
         Layout.fillHeight: true

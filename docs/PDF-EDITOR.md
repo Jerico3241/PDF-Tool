@@ -47,6 +47,13 @@ Drei getrennte Ebenen:
    - Die Leiste gleitet in 200 ms über ihren Streifen („Reduziert“: Überblenden, „Aus“: sofort).
    - Steht die Ansicht ganz oben (z. B. gleich nach dem Öffnen), bleibt sie oben. Sonst bleibt die
      Stelle in der Mitte stehen.
+   - Dokument bewegen (seit 3.1.0-beta.3): Werkzeug „Verschieben“ (Hand) – Ziehen mit der linken
+     Maustaste bewegt das Dokument, herausgezoomt wie vergrößert. In jedem Werkzeug zieht die linke
+     Maustaste auf der freien Fläche neben den Seiten und die mittlere Maustaste überall; Umschalt +
+     Mausrad verschiebt waagerecht. Wo das geht, zeigt der Zeiger eine offene Hand
+     (`Reader/DocumentView.qml`).
+   - Ein Klick auf das gewählte Werkzeug schaltet zurück zu „Auswählen“; ebenso schaltet ein Klick
+     auf die gewählte Feldart beim Gestalten von Formularen sie ab.
 
 ## Bewegung (Animationsprofile)
 
@@ -82,6 +89,9 @@ Was sich bewegt („Vollständig“):
   - Die Markierung der aktuellen Miniatur wechselt weich.
 - **Zoom:** Über Schaltflächen, Menü und Tastatur gleitet die Darstellung kurz vom alten zum neuen
   Maßstab (167 ms). Aufbau und Lage gelten dabei sofort, nur die fertigen Inhalte werden skaliert.
+- **Mausrad:** Jede Raste verschiebt um dieselbe Strecke (Zeilen aus den Windows-Einstellungen, rund
+  32 px je Zeile; „Eine Bildschirmseite“: eine Seite), weich in 160 ms; schnell gedrehte Rasten addieren sich (`Controls/PWheelScroll.qml`,
+  in der Ansicht, den Seitenleisten und „Seiten organisieren“).
 - **Suche:**
   - Die Treffer einer Seite blenden einmal ein.
   - Der Rahmen des aktuellen Treffers zieht sich beim Wechsel kurz auf den Treffer zusammen.
@@ -106,7 +116,8 @@ erzwingt eine Animation.
 
 Bewusst ohne Bewegung:
 
-- Scrollen und Strg+Mausrad reagieren direkt: kein weiches Scrollen, kein Zoom-Gleiten.
+- Strg+Mausrad zoomt direkt, ohne Gleiten. Touchpad, Bildlaufleiste und Ziehen folgen direkt; das
+  Mausrad scrollt bei „Reduziert“ und „Aus“ sofort.
 - Seiten gleiten beim Scrollen nicht ein.
 - Textauswahl, Einfügemarke und Anfasser beim Ziehen folgen direkt; neue Anfasser blenden nur ein.
 - Animiert werden nur Deckkraft, Verschiebung und Skalierung einzelner Elemente. Lange Listen werden
@@ -436,7 +447,7 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
     Bild, am Ende sind alle sichtbar; Einblenden außer bei „Aus“
   - Formularfelder: Die Fokusmarkierung blendet außer bei „Aus“; nach Escape hat die Seite die Tastatur
   - Seiten organisieren: Vorschau beim Ziehen, Einrasten, Löschen
-  - Zoom gleitet nur über Schaltflächen; Strg+Mausrad und Scrollen bleiben direkt
+  - Zoom gleitet nur über Schaltflächen; Strg+Mausrad bleibt direkt, Seiten folgen dem Scrollen sofort
   - Suchtreffer, Ablagefläche
 - Fensteraufbau: `tests/test_qt_reader_layout.py`
   - feste Breiten der Seitenleisten, Umschalter im Kopf, Streifen zum Wiederöffnen

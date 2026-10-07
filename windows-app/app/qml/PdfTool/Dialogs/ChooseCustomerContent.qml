@@ -44,6 +44,7 @@ ColumnLayout {
         border.color: Theme.border
         ListView {
             id: list
+            PWheelScroll { flickable: list }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
             anchors.fill: parent
             anchors.margins: 4
             clip: true

@@ -13,6 +13,10 @@ T.Button {
     property bool large: false
     property string tip: ""
     property int minimumWidth: 0
+    // Umschalter (Werkzeug, Fett, Ausrichtung …): ``checked`` folgt allein dem Zustand, den der Klick
+    // ändert. Die Schaltfläche schaltet sich nicht selbst um – sonst ginge die Bindung verloren und sie
+    // zeigte einen Zustand, den es nicht gibt.
+    property bool toggle: false
 
     readonly property bool accentKind: kind === "accent"
     readonly property bool subtleKind: kind === "subtle"
@@ -29,6 +33,8 @@ T.Button {
     Accessible.role: Accessible.Button
     Accessible.name: text !== "" ? text : tip
     Accessible.description: tip
+    Accessible.checkable: toggle
+    Accessible.checked: toggle && checked
 
     readonly property color foreground: {
         if (!enabled) return accentKind || dangerKind ? Theme.textOnAccentDisabled : Theme.disabled

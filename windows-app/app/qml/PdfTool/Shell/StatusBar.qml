@@ -24,8 +24,18 @@ Item {
         anchors.rightMargin: 16
         spacing: 8
         Item {
+            id: statusIcon
+            objectName: "statusIcon"
             implicitWidth: 16
             implicitHeight: 16
+            // Neuer Zustand: das Symbol blendet mit dem Text ein (»Vollständig«: wächst dabei leicht)
+            readonly property string kind: App.statusKind
+            onKindChanged: if (Motion.enabled && bar.visible) appear.restart()
+            ParallelAnimation {
+                id: appear
+                NumberAnimation { target: statusIcon; property: "opacity"; from: 0; to: 1; duration: Motion.status; easing.type: Motion.decelerate }
+                NumberAnimation { target: statusIcon; property: "scale"; from: Motion.moves ? 0.6 : 1; to: 1; duration: Motion.status; easing.type: Motion.decelerate }
+            }
             PProgressRing {
                 anchors.centerIn: parent
                 size: 14

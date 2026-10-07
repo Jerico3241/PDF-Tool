@@ -286,7 +286,7 @@ class ReaderController(Observable):
                 # Sofort neu sichern: die neue Sitzung gehört diesem Prozess, die alte wird entfernt –
                 # so bietet ein weiterer Start dieselbe Sitzung nicht noch einmal an
                 controller.write_recovery_now()
-            self.app.set_status(f"Geöffnet: {controller.name} – {controller.pageCount} Seite(n)", "success")
+            self.app.set_status(f"Geöffnet: {controller.name} – {controller.pageCount} {'Seite' if controller.pageCount == 1 else 'Seiten'}", "success")
 
         def failed(exc: BaseException, _details: str) -> None:
             self.opening = max(0, self.opening - 1)

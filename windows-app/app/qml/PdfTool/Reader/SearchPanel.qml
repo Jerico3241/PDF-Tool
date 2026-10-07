@@ -97,6 +97,7 @@ ColumnLayout {
     }
     ListView {
         id: hitList
+        PWheelScroll { flickable: hitList }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: root.doc ? root.doc.hits : null

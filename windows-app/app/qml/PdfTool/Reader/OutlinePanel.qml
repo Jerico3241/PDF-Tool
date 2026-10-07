@@ -20,6 +20,7 @@ Item {
     }
     ListView {
         id: list
+        PWheelScroll { flickable: list }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
         anchors.fill: parent
         model: root.doc ? root.doc.outline : null
         clip: true

@@ -404,6 +404,10 @@ Flickable {
     }
 
     // --- Bedienung ---------------------------------------------------------------------------------------
+    // Strecke je Mausrad-Raste wie bei allen Listen der App (Zeilen aus den Windows-Einstellungen × 24 px;
+    // »Eine Bildschirmseite«: eine Seite ohne zwei Zeilen, siehe PWheelScroll)
+    readonly property real wheelStep: Qt.styleHints.wheelScrollLines > 0 && Qt.styleHints.wheelScrollLines < 100
+                                      ? Qt.styleHints.wheelScrollLines * 24 : Math.max(24, height - 48)
     WheelHandler {
         id: zoomWheel
         acceptedModifiers: Qt.ControlModifier
@@ -430,22 +434,45 @@ Flickable {
                 view.pendingEdge = -1
                 view.doc.step(-1)
             } else {
-                view.contentY = view.clampY(view.contentY - delta / 120 * 64)
+                view.contentY = view.clampY(view.contentY - delta / 120 * view.wheelStep)
             }
         }
     }
+    // Mausrad (fortlaufende Ansichten): gleiche Strecke je Raste, schnelle Rasten addieren sich (PWheelScroll)
+    PWheelScroll { flickable: view; enabled: !view.paged }
+    // Umschalt + Mausrad: waagerecht verschieben (hoher Zoom, breite Seiten)
+    WheelHandler {
+        objectName: "readerWheelSideways"
+        acceptedModifiers: Qt.ShiftModifier
+        target: null
+        onWheel: (event) => {
+            var delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
+            if (delta !== 0 && view.contentWidth > view.width + 1)
+                view.contentX = view.clampX(view.contentX - delta / 120 * view.wheelStep)
+        }
+    }
+    // Dokument mit der Maus bewegen: mittlere Maustaste immer; linke Maustaste mit dem Werkzeug
+    // »Verschieben« überall, sonst auf der freien Fläche neben den Seiten. Auf einer Seite gilt das
+    // gewählte Werkzeug (Text markieren, Objekte ziehen …) – der Griff wird ihr nie weggenommen.
+    readonly property bool movable: contentWidth > width + 1 || contentHeight > height + 1
     DragHandler {
         id: pan
-        acceptedButtons: Qt.MiddleButton
+        objectName: "readerPan"
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         target: null
+        grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType | PointerHandler.ApprovesTakeOverByAnything
         property real startX: 0
         property real startY: 0
-        onActiveChanged: if (active) { startX = view.contentX; startY = view.contentY }
+        onActiveChanged: if (active) { startX = view.contentX; startY = view.contentY; view.forceActiveFocus() }
         onTranslationChanged: {
             view.contentX = view.clampX(startX - translation.x)
             view.contentY = view.clampY(startY - translation.y)
         }
         cursorShape: Qt.ClosedHandCursor
+    }
+    // Offene Hand, wo sich das Dokument ziehen lässt (über den Seiten zeigt das Werkzeug seinen Zeiger)
+    HoverHandler {
+        cursorShape: view.doc && (view.doc.tool === "hand" || view.movable) ? Qt.OpenHandCursor : Qt.ArrowCursor
     }
 
     Keys.onPressed: (event) => {

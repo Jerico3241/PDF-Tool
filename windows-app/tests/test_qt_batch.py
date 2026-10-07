@@ -350,8 +350,8 @@ def test_empty_batch_offers_files_and_folder(ui_app, tmp_path: Path) -> None:
     batch = stapel(h)
     assert not batch.hasItems and batch.model.rowCount() == 0
     texte = sichtbare_texte(h)
-    assert "Noch keine Excel-Dateien hinzugefügt." in texte
-    assert "Füge mehrere Excel-Dateien hinzu, um Vertragsübersichten gesammelt zu erstellen." in texte
+    assert "Noch keine Excel-Dateien hinzugefügt" in texte
+    assert "Fügen Sie mehrere Excel-Dateien hinzu, um Vertragsübersichten gesammelt zu erstellen." in texte
     assert ist_sichtbar(h, "Dateien hinzufügen") and ist_sichtbar(h, "Ordner hinzufügen")
     # Die leere Karte bietet die Aktionen – oben keine Doppelung, noch kein Stapel und keine Liste
     assert not ist_sichtbar(h, "Excel-Dateien hinzufügen")
@@ -362,7 +362,7 @@ def test_empty_batch_offers_files_and_folder(ui_app, tmp_path: Path) -> None:
     geprueft(h)
     pump(0.4)
     texte = sichtbare_texte(h)
-    assert batch.hasItems and "Noch keine Excel-Dateien hinzugefügt." not in texte
+    assert batch.hasItems and "Noch keine Excel-Dateien hinzugefügt" not in texte
     assert ist_sichtbar(h, "Excel-Dateien hinzufügen") and ist_sichtbar(h, "Bereite Übersichten erstellen") and ist_sichtbar(h, "Alle auswählen", "PCheckBox")
     assert set(zeilen_elemente(h)) == {"a.xlsx", "b.xlsx"}
 
@@ -938,7 +938,7 @@ def test_new_batch_keeps_customers_templates_and_settings(ui_app, tmp_path: Path
     klicken(h, "Neuer Stapel")  # Rückfrage bestätigt der Test
     pump(0.3)
     assert h.app.dialogs.history[-1]["title"] == "Neuen Stapel beginnen?"
-    assert h.batch.items == [] and not h.batch.hasItems and "Noch keine Excel-Dateien hinzugefügt." in sichtbare_texte(h)
+    assert h.batch.items == [] and not h.batch.hasItems and "Noch keine Excel-Dateien hinzugefügt" in sichtbare_texte(h)
     assert h.customers.customers.get(kunde.id) is not None and h.app.state.find_vorlage("Quer") is not None
     assert h.batch.settings.template == "Quer" and h.batch.settings.subfolders
     assert pfad.is_file()

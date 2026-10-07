@@ -67,7 +67,7 @@ CHANGE_LABELS = {
 }
 SORT_LABELS = {ORDER_RECENT: "Zuletzt verwendet", ORDER_COMPANY: "Firma A–Z", ORDER_NUMBER: "Kundennummer"}
 PRIVACY = "Kundendaten und E-Mail-Zuordnungen werden ausschließlich lokal auf diesem PC gespeichert."
-EMPTY_TITLE = "Noch keine Kunden gespeichert."
+EMPTY_TITLE = "Noch keine Kunden gespeichert"
 EMPTY_TEXT = "PDF Tool kann bekannte Rechnungsempfänger später automatisch wiedererkennen. Kundenakten entstehen, wenn Sie Kundendaten bewusst speichern – nach dem Erstellen einer Übersicht oder mit »Als Kundenakte speichern«."
 NO_TEMPLATE = "Keine Vorlage"
 
@@ -1318,7 +1318,7 @@ class CustomerController(Observable):
             text += f" – {len(shown)} angezeigt, bitte Suche verfeinern"
         ambiguous = store.ambiguous_emails()
         if ambiguous:
-            text += f" · {len(ambiguous)} E-Mail-Adresse(n) sind mehreren Kundenakten zugeordnet – bitte zusammenführen oder Zuordnung verschieben"
+            text += f" · {len(ambiguous)} {'E-Mail-Adresse ist' if len(ambiguous) == 1 else 'E-Mail-Adressen sind'} mehreren Kundenakten zugeordnet – bitte zusammenführen oder Zuordnung verschieben"
         self.countText = text
 
     # Ansicht »Kunden«: Detail -----------------------------------------------------------------------------------------

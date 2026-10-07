@@ -53,6 +53,7 @@ Item {
         switch (tool) {
         case "editText": return "Einen Textblock anklicken, um ihn zu ändern. Blau gestrichelt: direkt im PDF änderbar · orange: wird neu gesetzt oder überlagert."
         case "objects": return "Text, Bild oder Grafik anklicken, erneut klicken wählt ein Wort. Doppelklick ändert den Text, Ziehen verschiebt; Strg- oder Umschalt+Klick oder ein Rahmen wählt mehrere. Strg+C/V kopiert und fügt ein."
+        case "hand": return "Mit gedrückter Maustaste ziehen, um das Dokument zu bewegen. Erneuter Klick auf »Verschieben« kehrt zu »Auswählen« zurück."
         case "addText": return "In die Seite klicken und schreiben."
         case "image": return root.imageSelected ? (selected.editable ? "Ziehen verschiebt, die Ecken ändern die Größe (Umschalt: frei)." : (selected.reason || "Dieses Bild lässt sich nicht ändern.")) : "Bild anklicken – oder einen Rahmen aufziehen und ein Bild einfügen."
         case "highlight": return "Text markieren: mit der Maus über den Text ziehen."
@@ -255,9 +256,10 @@ Item {
                     objectName: "readerFormKind_" + (modelData.kind !== "" ? modelData.kind : "select")
                     iconName: modelData.icon
                     tip: modelData.tip
-                    checkable: true
+                    toggle: true
                     checked: root.formKind === modelData.kind
-                    onClicked: root.doc.setFormKind(modelData.kind)
+                    // erneuter Klick auf die gewählte Feldart: zurück zum Auswählen der Felder
+                    onClicked: root.doc.setFormKind(root.formKind === modelData.kind ? "" : modelData.kind)
                 }
             }
             Rectangle { visible: root.designTool && root.fieldChosen; Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.divider }

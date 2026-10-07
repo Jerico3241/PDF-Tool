@@ -164,6 +164,7 @@ PPage {
                 }
                 Flickable {
                     id: pan
+                    PWheelScroll { flickable: pan }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
                     anchors.fill: parent
                     anchors.margins: 1
                     clip: true

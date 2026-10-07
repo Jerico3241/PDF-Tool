@@ -27,6 +27,9 @@ Item {
     Accessible.name: "Ansichten"
 
     property int focusIndex: -1
+    // Der Repeater meldet ``count``, bevor er die Einträge erzeugt (Seiten entstehen im Hintergrund):
+    // ``itemsRevision`` lässt die Markierung ihr Ziel neu suchen, sobald die Einträge da sind.
+    property int itemsRevision: 0
     function availableKeys() {
         var keys = []
         for (var i = 0; i < items.length; ++i)
@@ -85,6 +88,8 @@ Item {
             Repeater {
                 id: repeater
                 model: root.items
+                onItemAdded: root.itemsRevision += 1
+                onItemRemoved: root.itemsRevision += 1
                 Item {
                     id: entry
                     required property var modelData
@@ -92,11 +97,14 @@ Item {
                     readonly property bool available: root.isAvailable(modelData)
                     readonly property bool isCurrent: modelData.key === root.current
                     readonly property bool keyboardFocus: root.activeFocus && root.focusIndex >= 0 && root.availableKeys()[root.focusIndex] === modelData.key
+                    // Breite für die fette Schrift der gewählten Ansicht – beim Wechsel springt nichts
+                    readonly property real fullWidth: Math.ceil(Math.max(label.implicitWidth, strongWidth.advanceWidth)) + 24
+                    TextMetrics { id: strongWidth; font: Typography.bodyStrong; text: entry.modelData.label }
                     height: row.height
-                    width: available ? label.implicitWidth + 24 : 0
+                    width: available ? fullWidth : 0
                     opacity: available ? 1 : 0
                     visible: width > 0.5
-                    clip: width < label.implicitWidth + 24
+                    clip: width < fullWidth
                     Behavior on width { enabled: Motion.moves; NumberAnimation { duration: Motion.expand; easing.type: Motion.decelerate } }
                     Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade } }
                     Accessible.role: Accessible.PageTab
@@ -165,12 +173,17 @@ Item {
         id: indicator
         parent: flick.contentItem  // verschiebt sich mit den Einträgen
         property Item target: {
+            root.itemsRevision
             for (var i = 0; i < repeater.count; ++i) {
                 var item = repeater.itemAt(i)
                 if (item && item.isCurrent && item.available) return item
             }
             return null
         }
+        objectName: "selectorIndicator"
+        // erst nach der ersten Lage gleiten – nicht beim Aufbau von links herein
+        property bool placed: false
+        onTargetChanged: if (target !== null && !placed) Qt.callLater(function() { indicator.placed = true })
         visible: target !== null
         height: 3
         radius: 1.5
@@ -178,7 +191,7 @@ Item {
         y: row.height - 6
         x: target ? target.x + (target.width - width) / 2 : 0
         width: target ? Math.max(16, Math.min(target.width - 24, 24)) : 0
-        Behavior on x { enabled: Motion.moves; NumberAnimation { duration: Motion.indicator; easing.type: Motion.decelerate } }
-        Behavior on width { enabled: Motion.moves; NumberAnimation { duration: Motion.indicator; easing.type: Motion.decelerate } }
+        Behavior on x { enabled: Motion.moves && indicator.placed; NumberAnimation { duration: Motion.indicator; easing.type: Motion.decelerate } }
+        Behavior on width { enabled: Motion.moves && indicator.placed; NumberAnimation { duration: Motion.indicator; easing.type: Motion.decelerate } }
     }
 }

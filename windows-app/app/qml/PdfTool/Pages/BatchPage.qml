@@ -40,11 +40,17 @@ Item {
                 PButton { iconName: "folder_open"; text: "Ordner hinzufügen"; tip: "Alle Excel-Dateien eines Ordners hinzufügen (ohne Unterordner)"; onClicked: Batch.pickFolder() }
                 PButton { kind: "subtle"; iconName: "arrow_clockwise"; text: "Neuer Stapel"; visible: Batch.newVisible; tip: "Liste leeren – Dateien, Kundenakten, Vorlagen und Einstellungen bleiben"; onClicked: Batch.newBatch() }
             }
-            PInfoBar { Layout.fillWidth: true; notice: Notices.area("batch_info"); topMargin: Batch.hasItems ? 8 : 0 }
+            PInfoBar { id: batchInfo; Layout.fillWidth: true; notice: Notices.area("batch_info"); topMargin: Batch.hasItems ? 8 : 0 }
+            // Abstand zu den Karten nur unter Schaltflächen bzw. Hinweis – ohne sie stehen die Karten so
+            // dicht unter den Ansichten wie auf allen anderen Ansichten von »Vertragsübersichten«
+            Item {
+                Layout.fillWidth: true
+                implicitHeight: Batch.hasItems || batchInfo.shown ? 12 : 0
+                Behavior on implicitHeight { enabled: Motion.moves; NumberAnimation { duration: Motion.infoBar; easing.type: Motion.decelerate } }
+            }
 
             GridLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 12
                 columns: listPage.columns
                 columnSpacing: 12
                 rowSpacing: 12

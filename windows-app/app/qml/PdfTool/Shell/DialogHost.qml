@@ -92,6 +92,7 @@ T.Popup {
 
             Flickable {
                 id: scroller
+                PWheelScroll { flickable: scroller }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.preferredHeight: Math.min(bodyColumn.implicitHeight, (popup.parent ? popup.parent.height : 800) - 48 - footer.implicitHeight)

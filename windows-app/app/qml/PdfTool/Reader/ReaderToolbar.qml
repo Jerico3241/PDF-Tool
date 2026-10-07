@@ -69,18 +69,23 @@ Rectangle {
         Layout.rightMargin: 4
         color: Theme.divider
     }
-    // Gewähltes Werkzeug: Akzentmarkierung am unteren Rand, gleitet zum neu gewählten Werkzeug
+    // Gewähltes Werkzeug: Akzentmarkierung am unteren Rand, gleitet zum neu gewählten Werkzeug.
+    // Ein Klick auf das gewählte Werkzeug schaltet es ab – zurück zu »Auswählen« (wie beim Abwählen
+    // in anderen PDF-Programmen); »Auswählen« selbst bleibt gewählt. Die Markierung folgt allein dem
+    // Werkzeug des Dokuments.
     property Item activeTool: null
+    function chooseTool(key) {
+        if (root.doc) root.doc.setTool(root.tool === key && key !== "select" ? "select" : key)
+    }
     component ToolButton: PIconButton {
         id: toolButton
         property string toolKey: ""
-        checkable: true
+        toggle: true
         checked: root.tool === toolKey
         onCheckedChanged: if (checked) root.activeTool = toolButton
         Component.onCompleted: if (checked) root.activeTool = toolButton
-        onClicked: if (root.doc) root.doc.setTool(toolKey)
+        onClicked: root.chooseTool(toolKey)
         Accessible.role: Accessible.RadioButton
-        Accessible.checked: checked
     }
 
     RowLayout {
@@ -127,6 +132,7 @@ Rectangle {
         }
         Separator {}
         ToolButton { objectName: "readerToolSelect"; toolKey: "select"; iconName: "cursor"; tip: "Auswählen: Text markieren und kopieren, Kommentare verschieben" }
+        ToolButton { objectName: "readerToolHand"; toolKey: "hand"; iconName: "hand_left"; tip: "Verschieben: das Dokument mit gedrückter Maustaste bewegen" }
         ToolButton { objectName: "readerToolEditText"; toolKey: "editText"; iconName: "text_edit_style"; tip: "Text bearbeiten: Absätze mit Cursor ändern, ergänzen, umbrechen" }
         ToolButton { objectName: "readerToolObjects"; toolKey: "objects"; iconName: "select_object"; tip: "Objekt bearbeiten: Text und andere PDF-Inhalte einzeln auswählen und bearbeiten." }
         ToolButton { objectName: "readerToolAddText"; toolKey: "addText"; iconName: "text_add"; tip: "Text hinzufügen" }
@@ -164,7 +170,7 @@ Rectangle {
             visible: root.roomy
             iconName: "grid"
             tip: "Seiten organisieren"
-            checkable: true
+            toggle: true
             checked: Reader.organize
             onClicked: Reader.setOrganize(!Reader.organize)
         }

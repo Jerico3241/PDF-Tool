@@ -1276,3 +1276,57 @@ def test_copy_path_from_file_rows(ui_app, excel_file: Path) -> None:
     h.overview.excel = ""
     klicke(kopieren)
     assert h.app.statusText == "Kein Pfad zum Kopieren vorhanden."
+
+
+# --- Ansichten und Karten (3.1.0-beta.3) ---------------------------------------------------------
+def _labels(bar) -> tuple[dict[str, float], object]:
+    """Beschriftungen der Ansichtswahl → waagerechte Mitte (Szene); dazu ihre Markierung."""
+    found, marker, stack = {}, None, [bar]
+    while stack:
+        item = stack.pop()
+        text = item.property("text") if item.metaObject().className().startswith("QQuickText") else None
+        if text and item.isVisible():
+            found[text] = item.mapToScene(QPointF(item.width() / 2, 0)).x()
+        if item.objectName() == "selectorIndicator":
+            marker = item
+        stack.extend(item.childItems())
+    return found, marker
+
+
+def test_view_bar_marks_the_current_view_and_keeps_its_place(ui_app) -> None:
+    """Ansichten von »Vertragsübersichten«: Die Markierung steht unter der gewählten Ansicht (bis 3.1.0-beta.2
+    fehlte sie), und kein Eintrag springt beim Wechsel – die fette Schrift der gewählten Ansicht ist eingerechnet."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    seen = []
+    for key, label in (("create", "Übersicht erstellen"), ("layout", "Darstellung"), ("batch", "Stapel")):
+        h.navigate(key, 0.6)
+        bar = next(item for item in h.items("contractViews") if item.isVisible())
+        labels, marker = _labels(bar)
+        assert marker is not None and marker.isVisible() and marker.width() >= 16
+        assert abs(marker.mapToScene(QPointF(marker.width() / 2, 0)).x() - labels[label]) < 1.5
+        seen.append(labels)
+    for labels in seen[1:]:  # gleiche Lage – höchstens Rundung der zentrierten Beschriftung
+        assert labels.keys() == seen[0].keys()
+        assert all(abs(labels[name] - seen[0][name]) < 1 for name in labels)
+
+
+def test_card_header_button_sits_on_the_title_line(ui_app) -> None:
+    """Kartenkopf ohne Untertitel: Schaltflächen rechts stehen mittig zur Titelzeile (»Kundendaten leeren«
+    lag 6 px tiefer als der Titel)."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    h.navigate("create", 0.6)
+    page = h.item("page_create")
+    button = title = None
+    stack = [page]
+    while stack:
+        item = stack.pop()
+        if item.isVisible() and item.property("tip") == "Kundendaten leeren":
+            button = item
+        if item.isVisible() and item.metaObject().className().startswith(("QQuickText", "PText")) and item.property("text") == "Kundendaten":
+            title = item
+        stack.extend(item.childItems())
+    assert button is not None and title is not None
+    middle = lambda item: item.mapToScene(QPointF(0, item.height() / 2)).y()  # noqa: E731
+    assert abs(middle(button) - middle(title)) <= 2

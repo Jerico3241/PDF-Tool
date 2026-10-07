@@ -8,7 +8,8 @@ import PdfTool.Controls
 // gewählten Eintrag; ausgeklappt/kompakt wechselt mit einer Breitenanimation, Texte blenden
 // weich ein und aus, die Symbole bleiben an ihrem Platz. Kompakt: zentrierte Symbole in runden
 // Flächen; der gewählte Bereich hat eine zurückhaltende Akzentfläche, ein Akzentsymbol und die
-// Markierung. Bei geöffnetem Dokument ist die Navigation eingeklappt (AppShell).
+// Markierung; Abschnittsüberschriften schrumpfen mit der Breite zu einer schmalen Trennlinie. Bei
+// geöffnetem Dokument ist die Navigation eingeklappt (AppShell).
 FocusScope {
     id: pane
     objectName: "navigationPane"
@@ -72,7 +73,10 @@ FocusScope {
         property bool header: false
         readonly property bool selected: key === pane.selectedKey
         width: pane.width
-        height: header ? Metrics.navHeaderHeight : Metrics.navItemHeight
+        // Überschrift: eingeklappt nur so hoch wie die Trennlinie mit ihrem Abstand – sonst stünde
+        // zwischen »Start« und den Tools eine leere Fläche; folgt der Breitenanimation Bild für Bild
+        height: header ? Math.round(Metrics.navSeparatorHeight + (Metrics.navHeaderHeight - Metrics.navSeparatorHeight) * pane.amount)
+                       : Metrics.navItemHeight
         focusPolicy: header ? Qt.NoFocus : Qt.TabFocus
         enabled: !header
         hoverEnabled: true
@@ -118,12 +122,12 @@ FocusScope {
             }
             // Kompakt: Abschnittsüberschrift wird zur Trennlinie
             Rectangle {
-                visible: entry.header
+                objectName: "navSeparator"
+                visible: entry.header && opacity > 0.01
                 x: 12
+                y: Math.floor((entry.height - height) / 2)
                 width: pane.width - 24
                 height: 1
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.verticalCenterOffset: 3
                 color: Theme.divider
                 opacity: 1 - pane.amount
             }
@@ -188,18 +192,35 @@ FocusScope {
         iconName: "settings"
     }
 
-    // Markierung des gewählten Eintrags – gleitet zum neuen Eintrag
+    // Markierung des gewählten Eintrags – gleitet zum neuen Eintrag. Sie folgt dem Eintrag auch, während
+    // sich beim Ein- und Ausklappen die Abstände ändern: Die Lage ergibt sich in jedem Bild aus der
+    // Startlage und dem Eintrag, animiert wird nur der Fortschritt dazwischen.
     Rectangle {
         id: indicator
+        objectName: "navIndicator"
         readonly property Item target: pane.itemFor(pane.selectedKey)
-        readonly property real targetY: target ? target.y + (target === settingsItem ? 0 : mainColumn.y) + (target.height - 16) / 2 : 0
+        property Item shown: null  // zuletzt gewählter Eintrag
+        property real fromY: 0     // Lage beim letzten Wechsel
+        property real progress: 1
+        function rowY(item) { return item.y + (item === settingsItem ? 0 : mainColumn.y) + (item.height - height) / 2 }
+        onTargetChanged: {
+            // von dort, wo die Markierung gerade steht – auch mitten in einem Gleiten
+            var start = shown !== null ? fromY + (rowY(shown) - fromY) * progress : 0
+            var glides = shown !== null && target !== null && Motion.moves
+            glide.stop()
+            fromY = start
+            shown = target
+            progress = glides ? 0 : 1
+            if (glides) glide.start()
+        }
+        Component.onCompleted: shown = target
         visible: target !== null
         x: 4
         width: 3
         height: 16
         radius: 1.5
         color: Theme.accent
-        y: targetY
-        Behavior on y { enabled: Motion.moves; NumberAnimation { duration: Motion.indicator; easing.type: Motion.decelerate } }
+        y: target === null ? 0 : (progress < 1 ? fromY + (rowY(target) - fromY) * progress : rowY(target))
+        NumberAnimation { id: glide; target: indicator; property: "progress"; to: 1; duration: Motion.indicator; easing.type: Motion.decelerate }
     }
 }
