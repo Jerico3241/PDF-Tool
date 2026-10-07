@@ -72,6 +72,7 @@ ColumnLayout {
 
     Flickable {
         id: details
+        PWheelScroll { flickable: details }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
         objectName: "readerObjectDetails"
         Layout.fillWidth: true
         Layout.fillHeight: true

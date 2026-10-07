@@ -8,6 +8,7 @@ import PdfTool.Style
 // Zeilen setzen ihren Inhalt mit ``page.columnX`` und ``page.columnWidth`` auf die Seitenspalte.
 ListView {
     id: page
+    PWheelScroll { flickable: page }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
     property string title: ""
     property string subtitle: ""
     property Component headerContent: null

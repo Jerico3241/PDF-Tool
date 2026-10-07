@@ -242,6 +242,7 @@ FocusScope {
         }
         GridView {
             id: grid
+            PWheelScroll { flickable: grid }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
             objectName: "readerOrganizeGrid"
             Layout.fillWidth: true
             Layout.fillHeight: true

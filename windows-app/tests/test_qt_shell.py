@@ -513,3 +513,52 @@ def test_animation_profiles_follow_the_design_rules(app) -> None:
     off = _motion(app)
     assert not off["enabled"] and all(off[key] == 0 for key in ("pageOut", "pageIn", "menu", "dialog", "expand", "infoBar", "fast", "fade", "tooltip"))
     app.settings.setProfile("full")
+
+
+def test_mouse_wheel_moves_the_same_distance_for_every_notch(app) -> None:
+    """Mausrad wie in anderen Windows-Programmen: Jede Raste verschiebt gleich weit – auch schnell gedreht
+    (Qts eigene Bewegung begann bei jeder Raste neu und verlor dabei bis zur Hälfte der Strecke) –, rund
+    32 px je Zeile der Windows-Einstellung; am Ende des Inhalts bleibt die Seite stehen."""
+    import time
+
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QGuiApplication, QWheelEvent
+
+    from qtapp import application as appmod
+
+    hints = QGuiApplication.styleHints()
+    lines = hints.wheelScrollLines()
+    appmod.tune_wheel(app.qt)  # einmal je Anwendung – ein zweiter Aufruf ändert nichts
+    assert hints.wheelScrollLines() == lines
+    app.app.dialogs.shutdown()
+    app.navigate("settings", 0.4)
+    scrollers = [item for item in app.items("wheelScroll") if item.isVisible()]
+    assert len(scrollers) == 1
+    flick = scrollers[0].parentItem().parentItem()  # Inhalt → Ansicht
+    end = flick.property("contentHeight") - flick.height()
+    step = lines * 24
+    assert end > 7 * step
+    point = flick.mapToScene(QPointF(flick.width() / 2, flick.height() / 2))
+
+    def notch(delta: int = -120) -> None:
+        event = QWheelEvent(point, QPointF(app.window.mapToGlobal(point.toPoint())), QPoint(0, 0), QPoint(0, delta), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+        event.setTimestamp(int(time.monotonic() * 1000))
+        QGuiApplication.sendEvent(app.window, event)
+
+    assert flick.property("contentY") == 0
+    notch()
+    pump(0.4)
+    assert abs(flick.property("contentY") - step) < 1
+    for _ in range(5):  # schnell gedreht: die Rasten addieren sich
+        notch()
+        pump(0.02)
+    pump(0.5)
+    assert abs(flick.property("contentY") - 6 * step) < 1
+    notch(120)
+    pump(0.4)
+    assert abs(flick.property("contentY") - 5 * step) < 1
+    for _ in range(40):  # weit über das Ende hinaus
+        notch()
+        pump(0.01)
+    pump(0.5)
+    assert abs(flick.property("contentY") - end) < 1

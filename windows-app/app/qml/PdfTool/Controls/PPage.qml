@@ -50,6 +50,7 @@ Item {
         flickableDirection: Flickable.VerticalFlick
         clip: true
         T.ScrollBar.vertical: PScrollBar {}
+        PWheelScroll { flickable: flick }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
 
         ColumnLayout {
             id: column

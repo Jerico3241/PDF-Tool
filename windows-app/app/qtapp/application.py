@@ -49,6 +49,7 @@ _ENGINES: dict[int, dict[str, QObject]] = {}  # Kennung der Engine → Controlle
 _ENGINE_KEY = "pdftoolRuntime"
 _engine_ids = iter(range(1, 1 << 30))
 GC_TIME_LIMIT = "QV4_GC_TIMELIMIT"  # Zeitscheibe der QML-Speicherbereinigung in ms, 0 = in einem Zug
+WHEEL_LINE_FACTOR = 4 / 3  # Mausrad: Qt rechnet 24 px je Zeile – wie Edge und Chrome rund 32 px (PWheelScroll)
 
 
 def _message_handler(mode, context, message) -> None:
@@ -138,7 +139,20 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     app.setApplicationVersion(VERSION)
     if ICON_FILE.is_file():
         app.setWindowIcon(QIcon(str(ICON_FILE)))
+    tune_wheel(app)
     return app
+
+
+def tune_wheel(app: QApplication) -> None:
+    """Strecke je Mausrad-Raste wie in anderen Windows-Programmen: die Zeilenzahl aus den
+    Windows-Einstellungen (Standard 3), je Zeile rund 32 px statt Qts 24 px – einmal je Anwendung."""
+    if app.property("pdftoolWheel"):
+        return
+    app.setProperty("pdftoolWheel", True)
+    hints = app.styleHints()
+    lines = hints.wheelScrollLines()
+    if 0 < lines < 100:  # »Eine Bildschirmseite« (sehr großer Wert) bleibt unverändert
+        hints.setWheelScrollLines(max(1, round(lines * WHEEL_LINE_FACTOR)))
 
 
 def _provider(name: str) -> Callable[[QQmlEngine], QObject]:

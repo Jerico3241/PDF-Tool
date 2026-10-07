@@ -14,6 +14,7 @@ import PdfTool.Controls
 // Befehle der Seite (drehen, kopieren, einfügen, extrahieren, drucken, löschen …).
 ListView {
     id: list
+    PWheelScroll { flickable: list }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
     objectName: "readerThumbnails"
     property var doc: null
     readonly property real ratio: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1

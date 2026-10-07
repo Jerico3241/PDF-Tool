@@ -117,6 +117,7 @@ T.ComboBox {
         transformOrigin: Item.Top
         contentItem: ListView {
             id: list
+            PWheelScroll { flickable: list }  // Mausrad: gleiche Strecke je Raste, Rasten addieren sich
             clip: true
             implicitHeight: contentHeight
             model: control.delegateModel

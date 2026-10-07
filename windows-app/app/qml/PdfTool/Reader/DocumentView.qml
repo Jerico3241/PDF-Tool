@@ -404,6 +404,10 @@ Flickable {
     }
 
     // --- Bedienung ---------------------------------------------------------------------------------------
+    // Strecke je Mausrad-Raste wie bei allen Listen der App (Zeilen aus den Windows-Einstellungen × 24 px;
+    // »Eine Bildschirmseite«: eine Seite ohne zwei Zeilen, siehe PWheelScroll)
+    readonly property real wheelStep: Qt.styleHints.wheelScrollLines > 0 && Qt.styleHints.wheelScrollLines < 100
+                                      ? Qt.styleHints.wheelScrollLines * 24 : Math.max(24, height - 48)
     WheelHandler {
         id: zoomWheel
         acceptedModifiers: Qt.ControlModifier
@@ -430,10 +434,12 @@ Flickable {
                 view.pendingEdge = -1
                 view.doc.step(-1)
             } else {
-                view.contentY = view.clampY(view.contentY - delta / 120 * 64)
+                view.contentY = view.clampY(view.contentY - delta / 120 * view.wheelStep)
             }
         }
     }
+    // Mausrad (fortlaufende Ansichten): gleiche Strecke je Raste, schnelle Rasten addieren sich (PWheelScroll)
+    PWheelScroll { flickable: view; enabled: !view.paged }
     DragHandler {
         id: pan
         acceptedButtons: Qt.MiddleButton
