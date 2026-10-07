@@ -93,9 +93,9 @@ class MicaSource:
         if path and Path(path).is_file():
             img = Image.open(path)
             try:
-                img.draft("RGB", (480, 480))
-            except Exception:
-                pass
+                img.draft("RGB", (480, 480))  # JPEG: gleich verkleinert dekodieren
+            except (OSError, ValueError, TypeError, AttributeError, AssertionError):
+                pass  # ohne Vorauswahl wird das Bild vollständig geladen und darunter verkleinert
             img = img.convert("RGB")
             img.thumbnail((480, 480))
             return img

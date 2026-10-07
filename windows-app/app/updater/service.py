@@ -15,6 +15,9 @@ Er kennt keine Oberflächentexte – die bestimmt ``qtapp.updates`` aus Zustand 
   Teil-Datei das Setup und der Zustand ``READY``. Sonst wird die Datei gelöscht (``ERROR``).
 * **Installation vorbereiten** – Datei und Prüfsumme unmittelbar vorher erneut prüfen; den
   Start des Setups übernimmt der Aufrufer (``installer``) erst danach.
+
+Protokoll (Kategorie ``update``): Ergebnis jeder Prüfung, Kanalwechsel, Download, Abbruch und
+Prüfsumme – nur Versionen, Fehlerarten und Zustände, nie Pfade oder Inhalte der Release Notes.
 """
 
 from __future__ import annotations
@@ -26,6 +29,9 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
 
+from diagnostics.applog import UPDATE
+from diagnostics.applog import get as get_log
+
 from . import github, schedule
 from .models import Channel, ErrorKind, Release, UpdateState
 from .semver import Version
@@ -36,6 +42,12 @@ from .verifier import ChecksumError, file_sha256, parse_checksum, same_digest
 
 S = UpdateState
 Background = Callable[[Callable[[], object], Callable[[object], None], Callable[[BaseException, str], None]], None]
+logger = get_log(UPDATE)
+
+
+def _reason(error: TransferError) -> str:
+    """Fehlerart eines Abrufs fürs Protokoll – ohne die Meldung (sie kann einen Pfad enthalten)."""
+    return f"{error.kind} {error.status}" if error.status else error.kind
 
 
 class UpdateService(QObject):
@@ -160,10 +172,15 @@ class UpdateService(QObject):
         self.store.save_releases(releases, self.last_check)
         self.checked.emit()
         self._evaluate(fresh=manual)
+        found = f"Update {self.offer.version}" if self.offer is not None else "kein neueres Update"
+        logger.info("Prüfung (%s, Kanal %s): %d Releases, %s", "manuell" if manual else "automatisch", self.channel.value, len(releases), found)
+        for release in github.skipped(releases, self.installed, self.channel):
+            logger.info("Release %s übergangen (unvollständig): %s", release.version, "; ".join(release.problems))
 
     def _check_failed(self, error: TransferError, manual: bool | None = None) -> None:
         manual = self._check_manual if manual is None else manual
         self._check = None
+        logger.log(30 if manual else 20, "Prüfung fehlgeschlagen (%s): %s", "manuell" if manual else "automatisch", _reason(error))
         if not manual:
             self.auto_failed = True  # automatisch: still – der bisherige Zustand bleibt
             self.changed.emit()
@@ -204,6 +221,7 @@ class UpdateService(QObject):
         """Kanal sofort wechseln (ohne Neustart): Angebot aus der letzten Prüfung neu bestimmen."""
         if channel is self.channel:
             return
+        logger.info("Kanal: %s → %s", self.channel.value, channel.value)
         self.channel = channel
         if self.state is S.INSTALLING or self._check is not None:
             return  # die laufende Prüfung verwendet beim Ergebnis den neuen Kanal
@@ -230,6 +248,7 @@ class UpdateService(QObject):
         self.downloads += 1
         self._token += 1
         token = self._token
+        logger.info("Download: %s (%d Bytes)", offer.version, offer.installer.size)
         self._go(S.DOWNLOADING)
         self.progressChanged.emit()
         self._transfer = self.client.fetch(
@@ -283,6 +302,7 @@ class UpdateService(QObject):
         if checksum and error.kind == "http" and error.status == 404 and self.offer is not None:
             self._verification_failed(self.offer, "Prüfsummendatei fehlt")
             return
+        logger.warning("Download fehlgeschlagen (%s): %s", self.offer.version if self.offer is not None else "–", _reason(error))
         self._set_error(ErrorKind.DOWNLOAD_FAILED, f"{error.kind}: {error}")
         self._go(S.ERROR)
 
@@ -290,6 +310,7 @@ class UpdateService(QObject):
         """Download bzw. Prüfung abbrechen – eine Teil-Datei wird entfernt, nichts wird verwendet."""
         if self.state not in (S.DOWNLOADING, S.VERIFYING):
             return
+        logger.info("Download abgebrochen: %s", self.offer.version if self.offer is not None else "–")
         self._abort_download()
         self._go(S.CANCELLED)
 
@@ -342,6 +363,7 @@ class UpdateService(QObject):
             if not ok:
                 self._verification_failed(offer, "SHA-256 stimmt nicht überein")
                 return
+            logger.info("Update %s verifiziert (SHA-256) – bereit zur Installation", offer.version)
             self._go(S.READY)
             keep = offer
             self.background(lambda: self.store.cleanup(keep), lambda _result: None, lambda _exc, _text: None)
@@ -351,6 +373,7 @@ class UpdateService(QObject):
                 return
             if isinstance(exc, InterruptedError):
                 return
+            logger.warning("Prüfung des Setups %s nicht möglich: %s", offer.version, type(exc).__name__)
             self.store.remove(offer)
             self._set_error(ErrorKind.DOWNLOAD_FAILED if isinstance(exc, OSError) else ErrorKind.VERIFY_FAILED, str(exc))
             self._go(S.ERROR)
@@ -359,6 +382,7 @@ class UpdateService(QObject):
 
     def _verification_failed(self, offer: Release, detail: str) -> None:
         """Ohne gültige Prüfsumme keine Installation: Dateien löschen, Fehler melden."""
+        logger.warning("Update %s nicht verifiziert: %s – Datei entfernt", offer.version, detail)
         self._token += 1
         self._transfer = None
         self.store.remove(offer)
@@ -388,6 +412,7 @@ class UpdateService(QObject):
             if token != self._token or self.closed:
                 return
             if not ok:
+                logger.warning("Setup %s fehlt oder wurde verändert – keine Installation", offer.version)
                 self.store.remove(offer)
                 self._set_error(ErrorKind.VERIFY_FAILED, "Setup fehlt oder wurde verändert")
                 self._go(S.ERROR)
@@ -397,6 +422,7 @@ class UpdateService(QObject):
         def failed(exc: BaseException, _text: str) -> None:
             if token != self._token or self.closed:
                 return
+            logger.warning("Setup %s nicht lesbar: %s – keine Installation", offer.version, type(exc).__name__)
             self.store.remove(offer)
             self._set_error(ErrorKind.VERIFY_FAILED, f"Setup fehlt oder ist nicht lesbar: {exc}")
             self._go(S.ERROR)

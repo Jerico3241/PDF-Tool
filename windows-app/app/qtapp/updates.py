@@ -3,8 +3,9 @@
 Die Logik steckt im ``updater``-Paket (``UpdateService``); hier entstehen nur Texte, die
 sichtbaren Aktionen und die Verbindung zur App:
 
-* Einstellungen → Updates: Version, Kanal (Stable/Beta), automatische Prüfung, letzte
-  Prüfung, »Nach Updates suchen«, Angebot mit Fortschritt, Bereit-Zustand und Fehlern.
+* Einstellungen → Updates: Version, Schalter »Beta-Versionen erhalten« (aus: Kanal Stable, an:
+  Beta – gespeichert wie bisher als ``update_kanal``), automatische Prüfung, letzte Prüfung,
+  »Nach Updates suchen«, Angebot mit Fortschritt, Bereit-Zustand und Fehlern.
 * Hinweisleiste über allen Seiten (außer den Einstellungen, die alles selbst zeigen): einmal je
   Version, kein Dialog, der die Arbeit unterbricht; »Später« blendet sie für diese Sitzung aus.
 * Automatische Prüfung: höchstens alle 24 Stunden, erst nach dem Start im Hintergrund – der
@@ -22,6 +23,8 @@ from datetime import datetime, timedelta
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from appstate import VERSION
+from diagnostics.applog import INSTALLER
+from diagnostics.applog import get as get_log
 from updater import github, notes, schedule
 from updater import store as store_module
 from updater.installer import Launcher
@@ -40,7 +43,6 @@ START_DELAY_MS = 4000  # automatische Prüfung erst einige Sekunden nach dem ers
 PERIODIC_MS = 60 * 60 * 1000  # stündlich nachsehen, ob 24 Stunden vergangen sind (App bleibt lange offen)
 BANNER_DELAY_MS = 1200  # Hinweis aus dem Zwischenspeicher erst nach dem Start einblenden
 
-CHANNELS = (("stable", "Stable", "Freigegebene Versionen (empfohlen)"), ("beta", "Beta", "Vorabversionen zum Testen – können Fehler enthalten"))
 BETA_TITLE = "Beta-Versionen verwenden?"
 BETA_TEXT = "Beta-Versionen enthalten Funktionen und Änderungen, die noch getestet werden. Sie können instabiler sein als Stable-Versionen."
 BETA_CONFIRM = "Beta verwenden"
@@ -175,13 +177,15 @@ class UpdatesController(Observable):
     def _current_beta(self) -> bool:
         return self.installed.is_prerelease
 
-    def _channels(self) -> list[dict]:
-        return [{"value": value, "label": label, "text": text} for value, label, text in CHANNELS]
-
     _constant = Signal()
     currentVersion = Property(str, _current_version, notify=_constant)
     currentBeta = Property(bool, _current_beta, notify=_constant)
-    channels = Property(list, _channels, notify=_constant)
+
+    # Schalter »Beta-Versionen erhalten«: an = Kanal Beta (folgt ``channel``)
+    def _beta(self) -> bool:
+        return self.channel == Channel.BETA.value
+
+    beta = Property(bool, _beta, notify=channelChanged)
 
     # Speichern ----------------------------------------------------------------------------------------------------
     def config(self) -> dict:
@@ -221,6 +225,11 @@ class UpdatesController(Observable):
         self.workHint = ""
         self.service.check(manual=True)
 
+    @Slot(bool)
+    def setBeta(self, enabled: bool) -> None:  # noqa: N802
+        """Schalter »Beta-Versionen erhalten«: an → Kanal Beta (beim ersten Mal mit Rückfrage), aus → Stable."""
+        self.setChannel(Channel.BETA.value if enabled else Channel.STABLE.value)
+
     @Slot(str)
     def setChannel(self, value: str) -> None:  # noqa: N802
         if value not in ("stable", "beta") or value == self.channel:
@@ -228,13 +237,13 @@ class UpdatesController(Observable):
         channel = Channel(value)
         if channel is Channel.BETA and not self._beta_confirmed:
             if not self.app.dialogs.confirm(BETA_TITLE, BETA_TEXT, BETA_CONFIRM, danger=False):
-                self.channelChanged.emit()  # Auswahl in QML wieder auf den gespeicherten Kanal
+                self.channelChanged.emit()  # Schalter in QML wieder auf den gespeicherten Kanal
                 return
             self._beta_confirmed = True
         self.channel = channel.value
         self.service.set_channel(channel)
         self.app.persist()
-        self.app.set_status(f"Update-Kanal: {'Beta' if channel is Channel.BETA else 'Stable'}", "success")
+        self.app.set_status("Beta-Versionen erhalten: " + ("eingeschaltet (Kanal Beta)" if channel is Channel.BETA else "ausgeschaltet (Kanal Stable)"), "success")
         if channel is Channel.BETA and self.automatic:
             self.service.check(manual=True)  # gleich nachsehen, ob es eine Beta gibt
         self._sync()
@@ -351,11 +360,14 @@ class UpdatesController(Observable):
         try:
             self._helper = create_launcher().start(path, digest, os.getpid(), path.parent / "update-start.log")
         except OSError as exc:
+            get_log(INSTALLER).warning("Setup %s nicht gestartet: Hilfsprozess %s", path.name, type(exc).__name__)
             self.service.install_failed(str(exc))
             return
+        get_log(INSTALLER).info("Installation von %s: PDF Tool wird beendet, danach startet das Setup", path.name)
         if self._quit_app():
             return
         # Beenden wurde abgelehnt (z. B. Rückfrage eines Werkzeugs): kein Setup, das Update bleibt bereit
+        get_log(INSTALLER).info("Installation abgebrochen: PDF Tool wurde nicht beendet – Hilfsprozess beendet, das Update bleibt bereit")
         helper, self._helper = self._helper, None
         try:
             helper.terminate()

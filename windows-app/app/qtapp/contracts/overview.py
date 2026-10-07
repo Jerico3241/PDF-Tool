@@ -457,16 +457,19 @@ class ContractOverviewController(Observable):
         aktiv = int(result.get("aktiv", 0) or 0)
         inaktiv = int(result.get("inaktiv", 0) or 0)
         fehlend = [str(name) for name in result.get("fehlend") or []]
-        # Die Statuszeile nennt die Vertragszahlen – darunter stehen sie nicht noch einmal.
+        # Die Vertragszahlen nennt nur die Hinweisleiste der Excel-Karte – weder die Statusleiste
+        # noch die Angaben darunter wiederholen sie.
         vertraege = contract_summary(aktiv, inaktiv)
         if fehlend:
             spalten = ", ".join(f"»{name}«" for name in fehlend)
             self.notify("info_excel", "error", f"Für die PDF fehlt {'die Spalte' if len(fehlend) == 1 else 'die Spalten'} {spalten}.", title="Spalten fehlen", status=False, animate=animate)
+            self.set_status("Excel geprüft – es fehlen Spalten.", "warning")
         elif aktiv == 0:
             self.notify("info_excel", "warning", "In der Datei steht kein aktiver Vertrag." + (f" {inaktiv} inaktive wurden ausgeblendet." if inaktiv else ""), title="Keine aktiven Verträge", status=False, animate=animate)
+            self.set_status("Excel geprüft – keine aktiven Verträge.", "warning")
         else:
             self.notify("info_excel", "success", vertraege, title="Excel geprüft", status=False, animate=animate)
-        self.set_status(f"Excel geprüft: {text}", "success" if aktiv and not fehlend else "warning")
+            self.set_status("Excel geprüft.", "success")
         self._set_mails(mails, animate=animate)
         # Bekannte Kunden über die Rechnungsempfänger erkennen – vor dem Füllen aus der Datei,
         # damit »automatisch übernehmen« den unveränderten Stand des Formulars sieht.

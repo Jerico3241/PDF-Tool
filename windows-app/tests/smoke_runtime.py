@@ -23,7 +23,9 @@ Geprüft wird:
    fontTools), leere Seite einfügen, unter neuem Namen speichern (geprüft) – das Original bleibt
    unverändert; ein PDF mit XMP-Metadaten (wie die meisten echten PDFs) bearbeiten, über das
    Original speichern (Strg+S), Eigenschaften ändern, schließen, neu öffnen, Änderung prüfen und
-   die Seite zeichnen – ohne lxml, das nicht zur Laufzeit gehört;
+   die Seite zeichnen – ohne lxml, das nicht zur Laufzeit gehört; Texterkennung mit der gebündelten
+   Engine (``ocr\\tesseract.exe``): eine gescannte Seite ohne Text erkennen, unsichtbare Textebene
+   übernehmen, speichern – der Text ist danach suchbar;
    PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen – auch
    ohne »_repariert« (nummeriert, das Original bleibt);
@@ -462,6 +464,38 @@ def main() -> int:
     check(zeilen == ["Firma", "Hottgenroth Software GmbH", "Von-Hünefeld-Str. 3", "50829 Köln"], f"Objekt bearbeiten: nach dem Speichern {zeilen}")
     print("PDF Editor: Objekt bearbeiten – nur die gewählte Zeile direkt geändert, gespeichert und neu geöffnet")
 
+    # Texterkennung mit der gebündelten Engine: Scan ohne Text erkennen, unsichtbare Textebene übernehmen,
+    # speichern und unabhängig lesen – prüft tesseract.exe samt DLLs und Sprachdaten des Pakets
+    from tools.pdf_editor import ocr as editor_ocr
+    from tools.pdf_editor import textlayer as editor_textlayer
+
+    engine = editor_ocr.find_engine()
+    check(engine is not None, "Texterkennung: keine Engine gefunden (ocr\\tesseract.exe)")
+    check(engine.executable.parent == (app_dir.parent / "ocr").resolve(), f"Texterkennung: nicht die gebündelte Engine ({engine.executable})")
+    check({"deu", "eng"} <= set(engine.languages) and engine.orientation, f"Texterkennung: Sprachdaten {engine.languages}")
+    scan = write_scan_pdf(work / "editor-scan.pdf")
+    dokument = EditorDocument.open(str(scan))
+    try:
+        (befund,) = editor_ocr.scan_pages(dokument)
+        check(befund.needs_ocr, f"Texterkennung: Scanseite nicht als solche erkannt ({befund})")
+        bild, dpi = editor_ocr.render_page_image(dokument, 0)
+        start = time.monotonic()
+        erkannt = editor_ocr.recognize(engine, 0, bild, ["deu", "eng"], dpi)
+        dauer = time.monotonic() - start
+        check(erkannt.words >= 10 and erkannt.language == "deu", f"Texterkennung: {erkannt.words} Wörter, Sprache {erkannt.language!r}")
+        check(editor_ocr.apply_text_layers(dokument, editor_commands.History(), [erkannt]) == 1, "Texterkennung: Textebene nicht übernommen")
+        check(bool(editor_textlayer.search(dokument, 0, "Hottgenroth")), "Texterkennung: erkannter Text nicht suchbar")
+        editor_save.save(dokument, work / "editor-scan-erkannt.pdf")
+    finally:
+        dokument.close()
+    gelesen = pypdfium2.PdfDocument(str(work / "editor-scan-erkannt.pdf"))
+    try:
+        seite = gelesen[0].get_textpage().get_text_range()
+    finally:
+        gelesen.close()
+    check("Hottgenroth" in seite and "4711" in seite, "Texterkennung: erkannter Text nach dem Speichern nicht lesbar")
+    print(f"Texterkennung: Tesseract {engine.version} (gebündelt, Sprachen {', '.join(engine.languages)}), {erkannt.words} Wörter, Sicherheit {erkannt.confidence:.0f} %, {dauer:.1f} s")
+
     if args.part == "runtime":
         print("OK")
         return 0
@@ -493,6 +527,34 @@ def write_address_pdf(path: Path) -> Path:
         "BT /F1 11 Tf 72 760 Td (Firma) Tj 0 -14 Td (Hottgenroth Software AG) Tj "
         "0 -14 Td (Von-H\xfcnefeld-Str. 3) Tj 0 -14 Td (50829 K\xf6ln) Tj ET\n"
     ).encode("cp1252"))
+    pdf.save(path)
+    return path
+
+
+def write_scan_pdf(path: Path) -> Path:
+    """»Gescannte« A4-Seite ohne PDF-Text: vier Zeilen als Graustufenbild mit 300 dpi (Schrift Bitstream
+    Vera aus ReportLab, das zur Laufzeit gehört)."""
+    import zlib
+
+    import pikepdf
+    import reportlab
+    from PIL import Image, ImageDraw, ImageFont
+
+    scale = 300 / 72
+    image = Image.new("L", (round(595 * scale), round(842 * scale)), 246)
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype(str(Path(reportlab.__file__).parent / "fonts" / "Vera.ttf"), round(13 * scale))
+    for number, line in enumerate(("Hottgenroth Software AG", "Rechnung Nr. 4711", "Müller Straße 12, 50829 Köln", "Vielen Dank für die gute Zusammenarbeit und den Auftrag.")):
+        draw.text((72 * scale, (90 + 26 * number) * scale), line, fill=24, font=font)
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(595, 842))
+    scan = pdf.make_stream(b"")
+    scan.write(zlib.compress(image.tobytes(), 6), filter=pikepdf.Name.FlateDecode, type_check=False)
+    scan.Type, scan.Subtype = pikepdf.Name.XObject, pikepdf.Name.Image
+    scan.Width, scan.Height = image.size
+    scan.ColorSpace, scan.BitsPerComponent = pikepdf.Name.DeviceGray, 8
+    page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=scan))
+    page.Contents = pdf.make_stream(b"q 595 0 0 842 0 0 cm /Im1 Do Q\n")
     pdf.save(path)
     return path
 
@@ -656,10 +718,13 @@ def ui_probe(qt_application, full: bool) -> None:
     qt.exec()
     qt_application.finish_incubation(engine_qml)  # wie beim Beenden der App
     del engine_qml
+    from qtapp.app import window_title
+
+    qt_app_title = window_title(appstate.VERSION)  # »PDF Tool«, bei einer Beta mit Versionsnummer
     check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
     check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")
     check(shown.get("page") == "home", "Startseite fehlt")
-    check(shown.get("title") == "PDF Tool", f"Fenstertitel: {shown.get('title')}")
+    check(shown.get("title") == qt_app_title, f"Fenstertitel: {shown.get('title')} statt {qt_app_title}")
     check(not shown.get("messages"), "Meldungen der QML-Engine:\n" + "\n".join(shown.get("messages") or []))
     check(shown.get("closed") is True, "App ließ sich nicht schließen")
     if full:

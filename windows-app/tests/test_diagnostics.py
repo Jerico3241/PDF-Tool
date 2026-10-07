@@ -201,6 +201,53 @@ def test_app_log_rotates_and_keeps_three_old_files(tmp_path: Path, monkeypatch) 
     assert [p.name for p in applog.log_files(tmp_path)][:1] == ["pdf-tool.log"]
 
 
+def test_log_categories_are_fixed_and_documented() -> None:
+    assert applog.CATEGORIES == ("pdf", "save", "render", "repair", "ocr", "ui", "update", "installer")
+    for name in applog.CATEGORIES:
+        assert applog.get(name).name == f"pdftool.{name}"
+        assert f"* ``{name}`` –" in applog.__doc__, name  # im Modulkopf beschrieben
+    # get() bleibt kompatibel: jeder bisherige Bereich hat weiter seinen Logger
+    assert applog.get("sicherung").name == "pdftool.sicherung" and applog.get("diagnose").name == "pdftool.diagnose"
+
+
+def test_update_installer_and_start_log_into_their_categories(tmp_path: Path, monkeypatch) -> None:
+    """Update-Code → »update«, Start des Setups durch den Updater → »installer«, App-Start → »ui«;
+    im Protokoll stehen nur Versionen und Dateinamen – keine Pfade."""
+    pytest.importorskip("PySide6")
+    import sys
+
+    import storage
+    from qtapp import application
+    from updater import installer
+    from updater.models import Channel
+    from updater.semver import Version
+    from updater.service import UpdateService
+    from updater.store import UpdateStore
+
+    gestartet: list[list[str]] = []
+
+    class Prozess:
+        def __init__(self, args, **_options) -> None:
+            gestartet.append(list(args))
+
+    monkeypatch.setattr(installer.subprocess, "Popen", Prozess)
+    monkeypatch.setattr(storage, "data_root", lambda: tmp_path)
+    ordner = tmp_path / "Benutzer" / "Updates"
+    try:
+        application.start_log()  # richtet das Protokoll in ``tmp_path`` ein
+        service = UpdateService(Version.parse("2.7.2"), None, UpdateStore(ordner), lambda *_args: None)
+        service.set_channel(Channel.BETA)
+        installer.Launcher(python=Path(sys.executable)).start(ordner / "PDF-Tool-Setup-2.7.3.exe", "0" * 64, 4242, ordner / "update-start.log")
+    finally:
+        applog.close()
+    assert gestartet and gestartet[0][1] == "-I"  # Hilfsprozess im isolierten Modus
+    text = (tmp_path / "pdf-tool.log").read_text(encoding="utf-8")
+    assert "INFO    pdftool.ui: PDF Tool " in text and " gestartet (Python " in text
+    assert "INFO    pdftool.update: Kanal: stable → beta" in text
+    assert "INFO    pdftool.installer: Hilfsprozess gestartet: PDF-Tool-Setup-2.7.3.exe startet nach dem Ende von Prozess 4242" in text
+    assert str(tmp_path) not in text
+
+
 def test_cleanup_removes_only_own_old_temp_files(tmp_path: Path) -> None:
     temp, data, backups = tmp_path / "temp", tmp_path / "daten", tmp_path / "sicherungen"
     old = time.time() - 3 * 24 * 3600
@@ -219,6 +266,9 @@ def test_cleanup_removes_only_own_old_temp_files(tmp_path: Path) -> None:
     own_old = [
         anlegen(temp / "pdf-tool-vorschau-abc", True, folder=True),
         anlegen(temp / "pdf-tool-logo-1.png", True),
+        anlegen(temp / "pdf-tool-ocr-7", True, folder=True),  # Texterkennung
+        anlegen(temp / "pdf-tool-anhaenge-8", True, folder=True),  # geöffnete Anhänge
+        anlegen(temp / "pdf-tool-einfuegen-9.png", True),  # eingefügtes Bild
         anlegen(data / ".~xyz.tmp", True),
         anlegen(data / ".gui-config-1.tmp", True),
         anlegen(data / "vorlagen" / ".~t.tmp", True),
@@ -227,6 +277,7 @@ def test_cleanup_removes_only_own_old_temp_files(tmp_path: Path) -> None:
     ]
     keep = [
         anlegen(temp / "pdf-tool-vorschau-neu", False, folder=True),  # jung: evtl. zweite Instanz
+        anlegen(temp / "pdf-tool-anhaenge-neu", False, folder=True),  # Anhang einer laufenden Instanz noch geöffnet
         anlegen(temp / "fremd.tmp", True),
         anlegen(temp / "andere-app-vorschau", True, folder=True),
         anlegen(data / "gui-config.json", True),

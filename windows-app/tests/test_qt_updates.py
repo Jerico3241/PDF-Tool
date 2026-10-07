@@ -99,7 +99,11 @@ def test_settings_show_version_channel_automatic_and_last_check(start):
     assert u(h).currentVersion == "2.7.2" and not u(h).currentBeta
     assert h.item("updateCurrentVersion").property("text") == "PDF Tool 2.7.2"
     assert h.item("updateLastCheck").property("text") == "Letzte Prüfung: Noch nie"
-    assert u(h).channel == "stable" and h.item("updateChannelCombo").property("currentText") == "Stable"
+    # Standard: Schalter »Beta-Versionen erhalten« aus = Kanal Stable; keine Auswahlliste mehr
+    assert u(h).channel == "stable" and u(h).beta is False
+    schalter = h.item("updateBetaToggle")
+    assert schalter.property("checked") is False and schalter.property("label") == "Beta-Versionen erhalten"
+    assert h.item("updateChannelCombo") is None
     assert u(h).automatic and h.item("updateAutomaticToggle").property("checked")
     assert h.item("updateCheckButton").property("enabled")
 
@@ -202,7 +206,57 @@ def test_20_beta_needs_confirmation_once(start, monkeypatch, config_file):
     u(h).setChannel("beta")  # nicht noch einmal fragen
     assert len(h.app.dialogs.history) == gefragt and u(h).channel == "beta"
     h.navigate("settings", 0.2)
-    assert h.item("updateChannelCombo").property("currentText") == "Beta"
+    assert h.item("updateBetaToggle").property("checked") is True
+
+
+def _schalten(h, schalter) -> None:
+    """Schalter wie ein Benutzer umlegen (Tastatur: Fokus, Leertaste)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    schalter.forceActiveFocus()
+    QTest.keyClick(h.window, Qt.Key.Key_Space)
+    pump(0.3)
+
+
+def test_beta_toggle_switches_the_channel_with_confirmation_once(start, monkeypatch, config_file):
+    """Schalter »Beta-Versionen erhalten«: an = Beta (beim ersten Einschalten mit Rückfrage),
+    aus = Stable – gespeichert wie bisher in ``update_kanal``."""
+    h = start()
+    h.navigate("settings", 0.3)
+    schalter = h.item("updateBetaToggle")
+    # Rückfrage abgelehnt: der Schalter springt zurück, nichts gespeichert
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "close")
+    _schalten(h, schalter)
+    frage = h.app.dialogs.history[-1]
+    assert frage["kind"] == "confirm" and frage["title"] == "Beta-Versionen verwenden?" and frage["primary"] == "Beta verwenden"
+    assert u(h).channel == "stable" and schalter.property("checked") is False
+    assert config(config_file).get("update_kanal", "stable") == "stable" and "update_beta_bestaetigt" not in config(config_file)
+    # bestätigt: Kanal Beta
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", "primary")
+    _schalten(h, schalter)
+    assert u(h).channel == "beta" and u(h).beta and schalter.property("checked") is True
+    data = config(config_file)
+    assert data["update_kanal"] == "beta" and data["update_beta_bestaetigt"] is True
+    # aus: Stable, ohne Rückfrage; wieder an: keine zweite Rückfrage
+    gefragt = len(h.app.dialogs.history)
+    _schalten(h, schalter)
+    assert u(h).channel == "stable" and schalter.property("checked") is False and config(config_file)["update_kanal"] == "stable"
+    _schalten(h, schalter)
+    assert u(h).channel == "beta" and schalter.property("checked") is True
+    assert len(h.app.dialogs.history) == gefragt
+    # »Nach Updates suchen« und »Automatisch nach Updates suchen« bleiben (Hinweis bei neuerer Beta: test_19)
+    assert h.item("updateCheckButton").property("visible") and h.item("updateAutomaticToggle").property("visible")
+
+
+@pytest.mark.parametrize("gespeichert,beta", [(None, False), ("stable", False), ("beta", True), ("unbekannt", False)])
+def test_beta_toggle_reads_the_stored_channel(start, config_file, gespeichert, beta):
+    """Bestehende Einstellungen gelten weiter: ``update_kanal`` bestimmt den Schalter."""
+    extra = {} if gespeichert is None else {"update_kanal": gespeichert, "update_beta_bestaetigt": True}
+    h = start(**extra)
+    h.navigate("settings", 0.3)
+    assert u(h).beta is beta and u(h).channel == ("beta" if beta else "stable")
+    assert h.item("updateBetaToggle").property("checked") is beta
 
 
 def test_81_channel_switch_works_without_restart(start, server):

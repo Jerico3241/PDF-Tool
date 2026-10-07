@@ -148,7 +148,8 @@ class Sanitizer:
 
 
 # Werte der Einstellungen, die nie persönlich sind (Auswahl aus festen Werten, Versionen)
-SAFE_TEXT_KEYS = frozenset({"theme", "accent", "animationsprofil", "format", "gesehen", "update_kanal", "kanal", "kundenakte_modus", "stapel_konflikt", "stapel_kunden", "sortierung"})
+SAFE_TEXT_KEYS = frozenset({"theme", "accent", "animationsprofil", "format", "gesehen", "update_kanal", "kanal", "kundenakte_modus", "stapel_konflikt", "stapel_kunden", "sortierung",
+                            "reader_zoom_beim_oeffnen", "reader_leiste_beim_oeffnen"})
 
 
 def anonymize_config(cfg: dict) -> dict:

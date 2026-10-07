@@ -4,7 +4,8 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Einstellungen: Design, Akzentfarbe, Mica, Animationen, Kundenakte und Info. Alles wirkt sofort.
+// Einstellungen: Design, Akzentfarbe, Mica, Animationen, PDF Reader, Kundenakte, Sicherung,
+// Updates, Diagnose und Info. Alles wirkt sofort.
 PPage {
     id: page
     objectName: "settingsPage"
@@ -109,6 +110,46 @@ PPage {
             valueRole: "value"
             currentIndex: page.indexOfValue(Settings.profiles, ThemeBackend.profile)
             onActivated: (index) => Settings.setProfile(Settings.profiles[index].value)
+        }
+    }
+
+    // Ansicht neu geöffneter PDFs – »Zuletzt verwendet« (Standard) wie bisher
+    PSectionTitle { text: "PDF Reader" }
+
+    PSettingsCard {
+        objectName: "readerZoomCard"
+        Layout.fillWidth: true
+        iconName: "zoom_in"
+        title: "Standardzoom beim Öffnen"
+        description: "Für neu geöffnete PDFs. »Zuletzt verwendet« übernimmt die zuletzt eingestellte Ansicht."
+        PComboBox {
+            objectName: "readerZoomCombo"
+            preferredWidth: 180
+            label: "Standardzoom beim Öffnen"
+            model: Settings.readerZooms
+            textRole: "label"
+            valueRole: "value"
+            currentIndex: page.indexOfValue(model, Settings.readerZoom)
+            onActivated: (index) => Settings.setReaderZoom(model[index].value)
+        }
+    }
+
+    PSettingsCard {
+        objectName: "readerPanelCard"
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        iconName: "panel_left"
+        title: "Seitenleiste beim Öffnen"
+        description: "Linke Seitenleiste, wenn ein PDF geöffnet wird. »Zuletzt verwendet« zeigt die zuletzt gewählte."
+        PComboBox {
+            objectName: "readerPanelCombo"
+            preferredWidth: 180
+            label: "Seitenleiste beim Öffnen"
+            model: Settings.readerPanels
+            textRole: "label"
+            valueRole: "value"
+            currentIndex: page.indexOfValue(model, Settings.readerPanel)
+            onActivated: (index) => Settings.setReaderPanel(model[index].value)
         }
     }
 
@@ -413,29 +454,24 @@ PPage {
         }
     }
 
+    // Aus: Kanal Stable (Standard), an: Beta – beim ersten Einschalten mit Rückfrage
     PSettingsCard {
+        id: betaCard
+        objectName: "updateBetaCard"
+        readonly property bool beta: Updates.beta
         Layout.fillWidth: true
         Layout.topMargin: 4
         iconName: "branch_compare"
-        title: "Update-Kanal"
-        description: {
-            var list = Updates.channels
-            var index = page.indexOfValue(list, Updates.channel)
-            return index >= 0 ? list[index].text : ""
-        }
-        PComboBox {
-            id: channelCombo
-            objectName: "updateChannelCombo"
-            preferredWidth: 180
-            label: "Update-Kanal"
-            model: Updates.channels
-            textRole: "label"
-            valueRole: "value"
-            currentIndex: page.indexOfValue(Updates.channels, Updates.channel)
-            onActivated: (index) => {
-                Updates.setChannel(Updates.channels[index].value)
+        title: "Beta-Versionen erhalten"
+        description: "Vorabversionen zum Testen – sie können Fehler enthalten. Ausgeschaltet erhalten Sie nur freigegebene Versionen (empfohlen)."
+        PToggle {
+            objectName: "updateBetaToggle"
+            label: "Beta-Versionen erhalten"
+            checked: betaCard.beta
+            onToggled: {
+                Updates.setBeta(checked)
                 // Abgelehnte Rückfrage: wieder der gespeicherte Kanal
-                currentIndex = Qt.binding(function() { return page.indexOfValue(Updates.channels, Updates.channel) })
+                checked = Qt.binding(function() { return betaCard.beta })
             }
         }
     }
@@ -540,10 +576,13 @@ PPage {
     PSectionTitle { text: "Info" }
 
     PSettingsCard {
+        objectName: "infoCard"
         Layout.fillWidth: true
         iconName: "info"
         title: App.appName
         description: "Version " + App.version + " · Entwickler und Inhaber: " + App.developer
+        // Beta-Version: dasselbe Etikett wie in der Karte »Updates«
+        PBadge { objectName: "infoBeta"; text: App.beta ? "Beta" : ""; tone: "accent"; anchors.verticalCenter: parent.verticalCenter }
         PButton { text: "Über"; onClicked: App.showAbout() }
     }
     PSettingsCard {

@@ -258,8 +258,10 @@ def alte_konfig(request, config_file: Path) -> dict:
 
 
 def test_start_and_version(ui_app) -> None:
+    from qtapp.app import window_title
+
     h = ui_app
-    assert h.window.title() == appstate.APP_NAME == "PDF Tool"
+    assert appstate.APP_NAME == "PDF Tool" and h.window.title() == window_title(appstate.VERSION)  # Beta: »PDF Tool X.Y.Z Beta«
     assert h.app.version == appstate.VERSION  # die Versionsnummer selbst prüft test_core
     assert h.app.currentPage == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert h.item("createPdf").property("text") == "PDF erstellen"
@@ -307,6 +309,35 @@ def test_excel_check_and_pdf_creation(ui_app, excel_file: Path, tmp_path: Path) 
     # Kundenakten entstehen nie automatisch – nach der PDF wird das Speichern nur angeboten.
     assert len(h.customers.customers) == 0
     assert hinweis(h, "kunde_info").title == "Als Kundenakte speichern?"
+
+
+def test_status_bar_names_only_the_result_of_the_excel_check(ui_app, excel_file: Path, tmp_path: Path) -> None:
+    """Einzelmodus: Die Vertragszahlen nennt nur die Hinweisleiste der Excel-Karte – die
+    Statusleiste unten nur das Ergebnis, ohne Zahlen (und ohne Angaben aus der Datei)."""
+    import re
+
+    h = ui_app
+    o = h.overview
+    h.navigate("create", 0.3)
+
+    def pruefe(pfad: Path, schwere: str) -> str:
+        h.app.set_status("Bereit")
+        o.use_excel(str(pfad))
+        assert wait_until(lambda: hinweis(h, "info_excel").severity == schwere and h.app.statusText != "Bereit" and "wird geprüft" not in h.app.statusText, 60)
+        pump(0.4)
+        text = h.app.statusText
+        assert not re.search(r"\d", text) and "Muster" not in text and "@" not in text, text
+        sichtbar = [t for t in finde(statusleiste(h), lambda e: e.inherits("QQuickText")) if t.property("text") == text and t.property("opacity") > 0.99]
+        assert sichtbar, f"»{text}« nicht in der Statusleiste"
+        return text
+
+    assert pruefe(excel_file, "success") == "Excel geprüft." and h.app.statusKind == "success"
+    assert hinweis(h, "info_excel").message == "3 aktive Verträge · 1 inaktiv ausgeblendet"  # nur hier die Zahlen
+    inaktiv = write_excel(tmp_path / "inaktiv.xlsx", [["V-1", datetime(2023, 1, 1), "jährlich", 10.0, "Sofort", "Eins", "a@x.de", 1, "F", "Inaktiv"]])
+    assert pruefe(inaktiv, "warning") == "Excel geprüft – keine aktiven Verträge." and h.app.statusKind == "warning"
+    spalten = ["Vertrag-Nr.", "Beginnt am", "Abrechnungszyklus", "Netto [€]", "Bemerkung", "Anwenderstatus"]
+    ohne = write_excel(tmp_path / "ohne.xlsx", [["V-1", datetime(2023, 1, 1), "jährlich", 10.0, "Eins", "Aktiv"]], spalten)
+    assert pruefe(ohne, "error") == "Excel geprüft – es fehlen Spalten." and h.app.statusKind == "warning"
 
 
 def test_pdf_validation_messages(ui_app) -> None:

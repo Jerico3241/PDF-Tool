@@ -16,6 +16,7 @@ from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
 from tools.registry import CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
+from updater.semver import Version
 
 import winsys
 
@@ -52,6 +53,20 @@ HOME_NOTES = (
     "Alle Dateien werden lokal verarbeitet; es wird nichts hochgeladen.",
 )
 SEVERITY_TO_STATUS = {"success": "success", "error": "error", "warning": "warning", "info": "info", "neutral": "neutral"}
+
+
+def is_beta(version: str) -> bool:
+    """Vorabversion (``2.8.0-beta.1``) – aus der Versionsnummer, nie als Text verglichen."""
+    return Version.coerce(version).is_prerelease
+
+
+def window_title(version: str) -> str:
+    """Fenstertitel: »PDF Tool«; bei einer Beta mit Versionsnummer ohne Kennung, z. B.
+    ``2.8.0-beta.1`` → »PDF Tool 2.8.0 Beta«."""
+    if not is_beta(version):
+        return APP_NAME
+    core = ".".join(str(part) for part in Version.coerce(version).core)
+    return f"{APP_NAME} {core} Beta"
 
 
 class ToolHooks(Protocol):
@@ -105,6 +120,7 @@ class AppController(Observable):
         self.window = None  # QQuickWindow (nach dem Laden von QML)
         self.geometry = None  # WindowState (Fensterlage)
         self.theme = None  # ThemeController
+        self.settings = None  # SettingsController (z. B. Ansicht neu geöffneter PDFs)
         self.chrome = "none"  # Titelleiste: »mica«, »solid« oder »none«
         self.closing = False
         self._tools: dict[str, ToolHooks] = {}
@@ -123,6 +139,12 @@ class AppController(Observable):
     def _version(self) -> str:
         return VERSION
 
+    def _window_title(self) -> str:
+        return window_title(VERSION)
+
+    def _beta(self) -> bool:
+        return is_beta(VERSION)
+
     def _developer(self) -> str:
         return DEVELOPER
 
@@ -135,6 +157,8 @@ class AppController(Observable):
     _constant = Signal()
     appName = Property(str, _app_name, notify=_constant)
     version = Property(str, _version, notify=_constant)
+    windowTitle = Property(str, _window_title, notify=_constant)  # »PDF Tool« bzw. »PDF Tool 2.8.0 Beta«
+    beta = Property(bool, _beta, notify=_constant)
     developer = Property(str, _developer, notify=_constant)
     tools = Property(list, _tools_list, notify=_constant)
 
@@ -413,9 +437,10 @@ class AppController(Observable):
     def report_exception(self, text: str) -> None:
         """Unerwarteter Fehler in einer Rückmeldung: protokollieren und in der Statuszeile nennen."""
         self.write_error_log(text)
+        from diagnostics.applog import UI
         from diagnostics.applog import get as get_log
 
-        get_log("app").error("Unerwarteter Fehler:\n%s", text.rstrip())
+        get_log(UI).error("Unerwarteter Fehler:\n%s", text.rstrip())
         last = text.strip().splitlines()[-1] if text.strip() else "Unbekannter Fehler"
         try:
             self.set_status(f"Unerwarteter Fehler: {last} – Details in fehler.log", "error")

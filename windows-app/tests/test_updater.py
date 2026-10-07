@@ -12,6 +12,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
@@ -30,7 +31,7 @@ DIGEST = "3cd865b7b1a82d7045aae23b558c9af319368ace8447b7fcab4f27072f9d3bd9"
 
 def eintrag(tag: str, *, prerelease: bool | None = None, draft: bool = False, assets: list[dict] | None = None, body: str = "Neu.", page: str | None = None) -> dict:
     """Ein Release, wie die GitHub-API es liefert (nur die genutzten Felder)."""
-    version = tag[1:]
+    version = tag[1:] if tag.startswith("v") else tag
     if prerelease is None:
         prerelease = "-" in version
     if assets is None:
@@ -48,7 +49,8 @@ def eintrag(tag: str, *, prerelease: bool | None = None, draft: bool = False, as
 
 
 def asset(name: str, tag: str, *, size: int = 1000, state: str = "uploaded", url: str | None = None, digest: str | None = None) -> dict:
-    entry = {"name": name, "size": size, "state": state, "browser_download_url": url if url is not None else DOWNLOAD + tag + "/" + name}
+    # wie GitHub: Tag und Dateiname in der Adresse kodiert (»+« → »%2B«)
+    entry = {"name": name, "size": size, "state": state, "browser_download_url": url if url is not None else DOWNLOAD + quote(tag, safe="") + "/" + quote(name, safe="")}
     if digest:
         entry["digest"] = f"sha256:{digest}"
     return entry
@@ -169,15 +171,50 @@ def test_beta_user_after_stable_gets_next_beta():
 
 
 def test_prerelease_marks_are_respected_in_both_directions():
-    # Auf GitHub als Vorabversion markiert, aber ohne Vorabkennung: nie für Stable
+    # Auf GitHub als Vorabversion markiert, aber ohne Vorabkennung: in keinem Kanal
     assert update("2.7.2", Channel.STABLE, eintrag("v2.7.3", prerelease=True)) is None
-    # Vorabkennung, aber versehentlich nicht markiert: trotzdem nie für Stable
-    assert update("2.7.2", Channel.STABLE, eintrag("v2.7.3-beta.1", prerelease=False)) is None
-    assert update("2.7.2", Channel.BETA, eintrag("v2.7.3-beta.1", prerelease=False)) == "2.7.3-beta.1"
+    assert update("2.7.2", Channel.BETA, eintrag("v2.7.3", prerelease=True)) is None
+    # Beta-Kennung, aber versehentlich nicht markiert: nie – auch nicht im Beta-Kanal
+    for channel in Channel:
+        assert update("2.7.2", channel, eintrag("v2.7.3-beta.1", prerelease=False)) is None
+    # richtig markiert: Beta nur im Beta-Kanal
+    assert update("2.7.2", Channel.BETA, eintrag("v2.7.3-beta.1", prerelease=True)) == "2.7.3-beta.1"
+    assert update("2.7.2", Channel.STABLE, eintrag("v2.7.3-beta.1", prerelease=True)) is None
 
 
 def test_only_beta_prereleases_reach_the_beta_channel():
     assert update("2.7.2", Channel.BETA, eintrag("v2.7.3-rc.1"), eintrag("v2.7.3-alpha.1")) is None
+
+
+@pytest.mark.parametrize("tag", ["v2.7.3-rc.1", "v2.7.3-alpha.1", "v2.7.3-dev", "v2.7.3-dev.4", "v2.7.3+build.5", "v2.7.3-beta.1+build.5", "v2.7.3-beta", "v2.7.3-beta.0", "v2.7.3-beta.1.2", "v2.7.3-Beta.1", "v2.7.3-beta.x", "2.7.3", "2.7.3-beta.1"])
+@pytest.mark.parametrize("prerelease", [True, False])
+def test_other_tags_are_never_offered(tag, prerelease):
+    """Nur ``vX.Y.Z`` und ``vX.Y.Z-beta.N`` – andere Kennungen (auch versehentlich nicht als
+    Vorabversion markiert), Build-Angaben und Tags ohne »v« erreichen keinen Kanal."""
+    entry = eintrag(tag, prerelease=prerelease)
+    found = releases(entry)[0]
+    assert found.complete and found.version > Version.parse("2.7.2")  # vollständig und neuer – nur der Tag passt nicht
+    assert found.channel is None
+    for channel in Channel:
+        assert update("2.7.2", channel, entry) is None
+        assert github.skipped([found], Version.parse("2.7.2"), channel) == []
+
+
+def test_release_channel_comes_from_tag_and_mark():
+    def kanal(tag: str, prerelease: bool) -> Channel | None:
+        return releases(eintrag(tag, prerelease=prerelease))[0].channel
+
+    assert kanal("v2.7.3", False) is Channel.STABLE and kanal("v10.0.0", False) is Channel.STABLE
+    assert kanal("v2.7.3-beta.1", True) is Channel.BETA and kanal("v2.7.3-beta.12", True) is Channel.BETA
+    assert kanal("v2.7.3", True) is None and kanal("v2.7.3-beta.1", False) is None
+
+
+def test_beta_channel_keeps_stable_and_marked_betas_only():
+    entries = (eintrag("v2.8.0-rc.1", prerelease=False), eintrag("v2.8.0-beta.2", prerelease=False), eintrag("v2.7.9"), eintrag("v2.8.0-beta.1"))
+    assert update("2.7.2", Channel.BETA, *entries) == "2.8.0-beta.1"
+    assert update("2.7.2", Channel.STABLE, *entries) == "2.7.9"
+    assert update("2.8.0-beta.1", Channel.BETA, *entries) is None  # kein Downgrade auf 2.7.9
+    assert update("2.7.2", Channel.BETA, eintrag("v2.8.0-beta.1", draft=True)) is None  # Entwürfe nie
 
 
 def test_missing_flags_count_as_draft_and_prerelease():
