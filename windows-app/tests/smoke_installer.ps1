@@ -111,7 +111,8 @@ if ($Previous) {
     $oldEntry = Get-ItemProperty -LiteralPath $appKey
     # Version nach SemVer vergleichen (nie per Textmuster): 2.6.0 und neuer legen dieselben Daten an
     $previousVersion = [version]"0.0"
-    if (-not [version]::TryParse([string]$oldEntry.DisplayVersion, [ref]$previousVersion)) { throw "Version der Vorversion unbekannt: $($oldEntry.DisplayVersion)" }
+    # Vorabversionen (z. B. 3.0.0-beta.2): verglichen wird die Versionsnummer ohne Zusatz
+    if (-not [version]::TryParse(([string]$oldEntry.DisplayVersion).Split('-')[0], [ref]$previousVersion)) { throw "Version der Vorversion unbekannt: $($oldEntry.DisplayVersion)" }
     if (Test-Path (Join-Path $oldTarget "app\start.py")) {
         $previousKind = "2.2"
         if (-not (Test-Path $oldShortcut)) { throw "Verknuepfung der Vorversion fehlt: $oldShortcut" }
@@ -188,6 +189,10 @@ foreach ($file in "app\vertragdesk.py", "app\ui", "app\qml", "runtime\tcl", "run
     if (Test-Path (Join-Path $target $file)) { throw "Nach der Installation noch vorhanden: $file" }
 }
 if (-not (Get-ChildItem (Join-Path $target "runtime\Lib\site-packages\pikepdf.libs") -Filter "qpdf*.dll")) { throw "qpdf-Bibliothek fehlt" }
+# Texterkennung (OCR): Tesseract mit seinen Bibliotheken, Sprachdaten und Lizenz im eigenen Ordner
+foreach ($file in "ocr\tesseract.exe", "ocr\libtesseract-5.dll", "ocr\libleptonica-6.dll", "ocr\tessdata\deu.traineddata", "ocr\tessdata\eng.traineddata", "ocr\tessdata\osd.traineddata", "ocr\LICENSE.txt", "LICENSE", "THIRD_PARTY_LICENSES.md") {
+    if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
+}
 if (-not (Test-Path $shortcut)) { throw "Startmenue-Verknuepfung fehlt: $shortcut" }
 $version = (Get-Content (Join-Path $target "VERSION") -Raw).Trim()
 $entries = AppEntries

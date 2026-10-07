@@ -1,10 +1,11 @@
 # Lizenzen von Drittanbietern
 
-PDF Tool (Windows-App) wird mit einer eingebetteten Python-Laufzeit und den folgenden Paketen
+PDF Tool (Windows-App) wird mit einer eingebetteten Python-Laufzeit, den folgenden Paketen und der
+Texterkennung Tesseract ([eigener Abschnitt](#texterkennung-ocr-tesseract-und-seine-bibliotheken))
 ausgeliefert. Die Versionen und SHA-256-Prüfsummen stehen in
 [`windows-app/runtime-requirements.txt`](windows-app/runtime-requirements.txt) bzw. in
-[`windows-app/build.py`](windows-app/build.py) (Python). Alle Pakete werden unverändert als
-Original-Wheels von PyPI bzw. als Original-Archiv von python.org übernommen.
+[`windows-app/build.py`](windows-app/build.py) (Python, Tesseract, Sprachdaten). Alle Pakete werden
+unverändert als Original-Wheels von PyPI bzw. als Original-Archiv von python.org übernommen.
 
 Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweiligen Paket:
 
@@ -14,6 +15,8 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 - Pakete: `%LOCALAPPDATA%\PDF-Tool\runtime\Lib\site-packages\<Paket>-<Version>.dist-info\`
   (bei pikepdf zusätzlich `…\pikepdf-10.15.0.dist-info\licenses\third-party-licenses\`, bei
   pypdfium2 `…\pypdfium2-5.13.0.dist-info\licenses\`)
+- Texterkennung: `%LOCALAPPDATA%\PDF-Tool\ocr\LICENSE.txt` (Apache-2.0 – Tesseract und Sprachdaten);
+  die Lizenzen der übrigen Bibliotheken nennt der Abschnitt zur Texterkennung
 
 ## Laufzeit und Pakete
 
@@ -49,12 +52,67 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 
 Nicht mitgeliefert: lxml (von pikepdf nur für XMP-Metadaten benötigt – PDF Tool schreibt
 Metadaten unverändert und braucht es nicht), qpdf- oder Ghostscript-Programme, Kommandozeilen-
-werkzeuge. pypdf wird ohne optionale Zusatzpakete (cryptography, PyCryptodome) ausgeliefert;
-Verschlüsselung übernimmt weiterhin qpdf. fontTools gehört seit 3.0.0 für den PDF Editor zur
+werkzeuge außer `tesseract.exe` (Texterkennung, siehe unten). pypdf wird ohne optionale
+Zusatzpakete (cryptography, PyCryptodome) ausgeliefert; Verschlüsselung übernimmt weiterhin qpdf.
+fontTools gehört seit 3.0.0 für den PDF Editor zur
 Laufzeit; Schriften selbst werden nie mitgeliefert, aus PDFs extrahiert oder weitergegeben. Von PySide6 bleiben nur die Module,
 Plugins und QML-Module, die die App lädt (`windows-app/qtruntime.py`): keine Entwicklerwerkzeuge
 (Designer, Linguist, qmlls …), keine weiteren Stile, kein Software-OpenGL (`opengl32sw.dll`), keine
 Übersetzungen – die Dateien selbst bleiben unverändert (Original-Wheel).
+
+## Texterkennung (OCR): Tesseract und seine Bibliotheken
+
+Die Texterkennung des PDF Editors läuft lokal mit Tesseract im Programmordner
+(`%LOCALAPPDATA%\PDF-Tool\ocr\`). Quelle ist der signierte Windows-Installer der UB Mannheim aus dem
+Release 5.5.3 von tesseract-ocr
+(`https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe`,
+SHA-256 `bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4`). Übernommen werden
+unverändert nur `tesseract.exe` und die 33 DLLs, die es laut Importtabellen direkt oder indirekt lädt
+(`windows-app/build.py`, `TESSERACT_DLLS`) – keine Trainingswerkzeuge, kein ICU, Pango, Cairo,
+GLib, FreeType oder HarfBuzz des Installers. Versionen laut den Dateien selbst (Versionsressource,
+Versionsfunktion oder Versionstext); »–«: in der Datei nicht vermerkt.
+
+| Komponente (Datei in `ocr\`) | Version | Lizenz | Verwendet für | Quelle |
+| --- | --- | --- | --- | --- |
+| Tesseract OCR (`tesseract.exe`, `libtesseract-5.dll`, `tessdata\pdf.ttf`) | 5.5.3 (Build 5.5.3.20260724) | Apache-2.0 | Texterkennung, Text-only-PDF | https://github.com/tesseract-ocr/tesseract |
+| Sprachdaten `deu`, `eng`, `osd` (`tessdata\*.traineddata`, tessdata_fast) | Commit 87416418657359cb625c412a48b6e1d6d41c29bd | Apache-2.0 | Deutsch, Englisch, Lageerkennung | https://github.com/tesseract-ocr/tessdata_fast |
+| Leptonica (`libleptonica-6.dll`) | 1.87.0 | BSD-2-Clause | Bildverarbeitung für Tesseract | http://www.leptonica.org |
+| GCC-Laufzeit (`libgcc_s_seh-1.dll`, `libstdc++-6.dll`) | GCC 14 (mingw-w64, POSIX-Threads) | GPL-3.0-or-later WITH GCC-exception-3.1 | C/C++-Laufzeit | https://gcc.gnu.org |
+| winpthreads (`libwinpthread-1.dll`) | – (mingw-w64) | MIT, Teile BSD-3-Clause | POSIX-Threads | https://www.mingw-w64.org |
+| libarchive (`libarchive-13.dll`) | 3.8.8 | BSD-2-Clause | von Tesseract gebunden (Sprachdaten in Archiven) | https://libarchive.org |
+| libcurl (`libcurl-4.dll`), TLS über Windows-Schannel | 8.21.0 | curl | von Tesseract gebunden (Bilder per URL – PDF Tool übergibt nur lokale Dateien) | https://curl.se |
+| libssh2 (`libssh2-1.dll`) | 1.11.1 | BSD-3-Clause | von libcurl benötigt | https://libssh2.org |
+| libpsl (`libpsl-5.dll`) mit eingebauter Public Suffix List | 0.21.5 | MIT (Public Suffix List: MPL-2.0) | von libcurl benötigt | https://github.com/rockdaboot/libpsl |
+| libidn2 (`libidn2-0.dll`) | 2.3.8 | LGPL-3.0-or-later OR GPL-2.0-or-later | von libcurl benötigt | https://www.gnu.org/software/libidn/ |
+| libunistring (`libunistring-5.dll`) | 1.4.2 | LGPL-3.0-or-later OR GPL-2.0-or-later | von libidn2 benötigt | https://www.gnu.org/software/libunistring/ |
+| libiconv (`libiconv-2.dll`) | 1.19 | LGPL-2.1-or-later | Zeichensätze (libarchive, libidn2) | https://www.gnu.org/software/libiconv/ |
+| libintl aus gettext (`libintl-8.dll`) | 1.0 | LGPL-2.1-or-later | von libidn2 benötigt | https://www.gnu.org/software/gettext/ |
+| Brotli (`libbrotlidec.dll`, `libbrotlicommon.dll`) | 1.2.0 | MIT | von libcurl benötigt | https://github.com/google/brotli |
+| Zstandard (`libzstd.dll`) | 1.5.7 | BSD-3-Clause (alternativ GPL-2.0-only) | Kompression (libarchive, libcurl, libtiff) | https://facebook.github.io/zstd/ |
+| XZ Utils, liblzma (`liblzma-5.dll`) | 5.8.3 | 0BSD | Kompression (libarchive, libtiff) | https://tukaani.org/xz/ |
+| LZ4 (`liblz4.dll`) | 1.10.0 | BSD-2-Clause | Kompression (libarchive) | https://lz4.org |
+| bzip2 (`libbz2-1.dll`) | 1.0.8 | bzip2-1.0.6 | Kompression (libarchive) | https://sourceware.org/bzip2/ |
+| libb2, BLAKE2 (`libb2-1.dll`) | – | CC0-1.0 (alternativ OpenSSL oder Apache-2.0) | Prüfsummen (libarchive) | https://github.com/BLAKE2/libb2 |
+| Expat (`libexpat-1.dll`) | 2.8.2 | MIT | XML (libarchive) | https://libexpat.github.io |
+| zlib (`zlib1.dll`) | 1.3.2 | Zlib | Kompression | https://zlib.net |
+| LibTIFF (`libtiff-6.dll`) | 4.7.2 | libtiff | Bildformat TIFF (Leptonica) | https://libtiff.gitlab.io/libtiff/ |
+| JBIG-KIT (`libjbig-0.dll`) | 2.1 | GPL-2.0-or-later | JBIG in TIFF (libtiff) | https://www.cl.cam.ac.uk/~mgk25/jbigkit/ |
+| LERC (`libLerc.dll`) | – | Apache-2.0 | Kompression in TIFF (libtiff) | https://github.com/Esri/lerc |
+| libdeflate (`libdeflate.dll`) | – | MIT | Kompression in TIFF (libtiff) | https://github.com/ebiggers/libdeflate |
+| libjpeg-turbo (`libjpeg-8.dll`) | 3.2.0 | IJG AND BSD-3-Clause AND Zlib | Bildformat JPEG | https://libjpeg-turbo.org |
+| libpng (`libpng16-16.dll`) | 1.6.58 | libpng-2.0 | Bildformat PNG (Seitenbild für die Erkennung) | http://www.libpng.org |
+| OpenJPEG (`libopenjp2-7.dll`) | 2.5.4 | BSD-2-Clause | Bildformat JPEG 2000 | https://www.openjpeg.org |
+| GIFLIB (`libgif-7.dll`) | – | MIT | Bildformat GIF | https://giflib.sourceforge.net |
+| libwebp (`libwebp-7.dll`, `libwebpmux-3.dll`, `libsharpyuv-0.dll`) | 1.6.0 | BSD-3-Clause | Bildformat WebP | https://chromium.googlesource.com/webm/libwebp |
+
+Gebaut sind `tesseract.exe` und `libtesseract-5.dll` von der UB Mannheim mit einem mingw-w64-Cross-
+Compiler (GCC 14), die übrigen DLLs stammen aus MSYS2 (mingw64; Quellen und Build-Skripte:
+https://github.com/msys2/MINGW-packages, Quellarchive: https://repo.msys2.org/mingw/sources/).
+Alle Teile sind mit der GPL-3.0-or-later von PDF Tool vereinbar; nichts davon steht unter der AGPL.
+JBIG-KIT (GPL-2.0-or-later, von LibTIFF gebunden) ist nur unter einer GPL nutzbar – für PDF Tool
+(GPL-3.0-or-later) ist das erfüllt. Die LGPL-Bibliotheken (libiconv, libintl, libidn2, libunistring)
+liegen als eigene DLLs neben `tesseract.exe` und lassen sich durch kompatible Fassungen ersetzen; ihr
+Quellcode (wie der von JBIG-KIT und der GCC-Laufzeit) ist unter den genannten Adressen erhältlich.
 
 ## Geprüfte, aber nicht verwendete Engines (erweiterte PDF-Wiederherstellung, 2.6.0)
 
