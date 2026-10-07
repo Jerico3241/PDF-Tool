@@ -2,6 +2,103 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.2.0-beta.1
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Schützen und Weitergeben: Schwärzen, Bereinigen,
+Kennwortschutz, Reduzieren, Verkleinern, Kopf-/Fußzeile, Seitenzahlen und Wasserzeichen, Stempel und Unterschrift;
+dazu Links, Lesezeichen bearbeiten und Seiten zuschneiden. Mehr Komfort: Tabs mit Kontextmenü, Umordnen und
+„Geschlossenen Tab wieder öffnen“, letzte Sitzung beim Start, Nachtmodus, Schnellwerkzeuge auf der Startseite und
+„Per E-Mail senden“. Details in den [Release Notes](release-notes/3.2.0-beta.1.md).
+
+## Schützen und Weitergeben (Reader, Schaltfläche „Schützen“)
+
+- Schwärzen (`tools/pdf_editor/redact.py`, Werkzeug `redact`): Bereiche aufziehen oder Text markieren
+  (`redactMarks`, `addRedactArea`, `redactSelection`), „Schwärzen anwenden“ nach Rückfrage. Entfernt Glyphen aus
+  dem Inhaltsstrom (TJ mit Abständen), Pfade ganz im Bereich, Bildpunkte (Bild und weiche Maske neu kodiert),
+  Inhalte kopierter Formular-XObjects, Kommentare, Links und Formularfelder im Bereich, Vorschaubilder,
+  `/ActualText`/`/Alt`/`/E` und passende Strukturelemente. Nicht sicher teilbare Inhalte (Inline-Bilder, Masken,
+  JBIG2, unbekannte Schriften) und Reste nach der PDFium-Prüfung: Seite mit 200 dpi als Bild; bleibt dann noch
+  Text, wird alles zurückgenommen. „Suchen und schwärzen“: IBAN mit Prüfziffer, E-Mail, Telefon, Datum, eigene
+  Begriffe – nur vormerken. Seitenänderungen verwerfen offene Bereiche.
+- Dokument bereinigen (`sanitize.py`): zählen, dann Metadaten, Skripte und unsichere Aktionen, Anhänge,
+  versteckte Daten und auf Wunsch Kommentare entfernen (Dialog `checklist`).
+- Reduzieren (`flatten.py`): Erscheinungsbilder von Feldern und Kommentaren als Formular-XObject in die Seite.
+- Kennwortschutz (`protect.py`, Dialog `protect`): Kennwort zum Öffnen, Einschränkungen mit eigenem
+  Berechtigungskennwort, AES-256 (R6), ändern oder entfernen; gilt ab dem nächsten Speichern, geprüft mit dem
+  neuen Kennwort. „Einschränkungen aufheben …“ prüft das Berechtigungskennwort an der Originaldatei.
+- PDF verkleinern (`optimize.py`, Dialog `optimize`): Kopie mit Bildern auf 110/150/220 dpi (JPEG, nur mit
+  Gewinn), Ungenutztes entfernt, Objektströme; Original unverändert, Kennwortschutz bleibt.
+
+## Seiten gestalten (Reader, Schaltfläche „Seiten gestalten“)
+
+- Kopf- und Fußzeile, Seitenzahlen, Bates-Nummern und Wasserzeichen (`pagemarks.py`, Dialoge `header_footer`,
+  `watermark` mit Vorschau): eigener markierter Inhaltsstrom je Seite, aufrecht auch auf gedrehten Seiten,
+  ersetzbar (ein Schritt) und entfernbar; Platzhalter `{seite}`, `{seiten}`, `{datum}`, `{datei}`, `{bates}`.
+- Seiten zuschneiden (`crop.py`, Dialog `crop`): Ränder in Millimetern oder an den Inhalt angepasst, CropBox,
+  zurücksetzbar.
+- Lesezeichen bearbeiten (`outline.py`): hinzufügen, umbenennen (F2), Ziel auf die angezeigte Seite, verschieben,
+  ein-/ausrücken, löschen (Entf) – Seitenleiste „Lesezeichen“ (Schaltfläche unten, Kontextmenü, leerer Zustand).
+
+## Unterschreiben und Stempeln
+
+- `stamps.py`: Anmerkung `/Stamp` mit eigenem Erscheinungsbild (BBox in Anzeigegröße, Matrix gegen die
+  Seitendrehung); verschieben und Größe ändern ändern nur `/Rect` (`annotations.RESIZABLE` um `/Stamp` ergänzt,
+  Seitenverhältnis bleibt). Stempel-Vorgaben und eigener Text mit zweiter Zeile (`{datum}`, `{zeit}`).
+- Unterschrift zeichnen (Bézier-Kurven) oder aus einem Bild (Papier durchsichtig, Tintenfarbe, weiche Maske);
+  Dialog `signature`. Gespeicherte Unterschriften (`SignatureStore`, `unterschriften.json` im Datenordner,
+  höchstens sechs, atomar, löschbar) nur auf Wunsch – nicht in Sicherung oder Support-Paket.
+- Nach dem Setzen ist „Auswählen“ aktiv und der neue Stempel bzw. die Unterschrift ausgewählt.
+
+## Links
+
+- Links aller Seiten (`links.py`, `linkPages`) werden nach jeder Änderung neu gelesen. „Auswählen“: Zeiger und
+  Ziel beim Zeigen, Klick ohne Ziehen folgt (Seite sofort, Webadresse nach Rückfrage über `files.open_url`);
+  andere Aktionen nie. Werkzeug `link`: Bereich aufziehen, Ziel Seite oder http/https/mailto (Dialog `link`);
+  ändern, Ziel öffnen, entfernen über Klick bzw. Kontextmenü.
+
+## Reader-Komfort
+
+- Dokument-Tabs (`AppTabs.qml`, `ReaderController`): Kontextmenü (Schließen, Andere Tabs schließen, Tabs rechts
+  schließen, Pfad kopieren, Im Ordner anzeigen, Geschlossenen Tab wieder öffnen; Kontextmenü-Taste bzw.
+  Umschalt+F10), Umordnen per Ziehen (`moveTab`, gleitende Nachbarn, am Rand blättert die Leiste weiter) und mit
+  Strg+Umschalt+←/→. Die Liste blättert nur noch mit Mausrad und ‹ ›.
+- „Geschlossenen Tab wieder öffnen“ (Strg+Umschalt+T, `reopenClosed`): die zehn zuletzt geschlossenen Dokumente
+  mit Pfad, auf der zuletzt gezeigten Seite.
+- Einstellung „PDFs der letzten Sitzung beim Start wieder öffnen“ (`reader_sitzung_wiederherstellen`, Standard
+  aus): Beim Beenden merkt sich der Reader Pfade, Seiten und das aktive Dokument (`reader_sitzung`); der nächste
+  Start öffnet sie im Hintergrund nach der Absturz-Wiederherstellung – ohne Rückfragen, fehlende oder geschützte
+  Dateien werden übergangen und gezählt. Ausschalten entfernt die Liste.
+- Nachtmodus (`reader_nachtmodus`, Ansicht-Menü und Einstellungen): Seitenbilder umgekehrt und abgemildert
+  (`night_image`, Bildkennung `~n`, eigener Eintrag im Zwischenspeicher). Datei, Drucken und Export unverändert.
+- Schnellwerkzeuge auf der Startseite (`Reader.quickTools`, `quickTool`): PDF verkleinern, Schwärzen,
+  Kennwortschutz, Wasserzeichen, Seitenzahlen, Dokument bereinigen, Unterschreiben, Zusammenführen – PDF wählen,
+  sie öffnet sich im Reader, das Werkzeug startet (`open_paths(…, then=…)`, `runAction`).
+
+## Per E-Mail senden
+
+- `qtapp/mail.py`: neue Nachricht im E-Mail-Programm mit der PDF als Anhang – Simple MAPI (`MAPISendMailW`, sonst
+  `MAPISendMail`) mit `MAPI_DIALOG` nur, wenn ein E-Mail-Programm eingetragen ist; sonst bzw. nach einem Fehler
+  `mailto:` mit Empfänger und Betreff und die Datei im Explorer markiert. Gesendet wird nie von PDF Tool; im
+  Hintergrund, höchstens eine Nachricht zugleich; protokolliert werden nur Fehlercodes.
+- Reader („Weitere Befehle“ → „Per E-Mail senden …“, mit Rückfrage bei ungespeicherten Änderungen),
+  „Übersicht erstellen“ (nach dem Erstellen, an den Rechnungsempfänger wie in der PDF) und Stapel (Detail eines
+  Eintrags, an dessen Rechnungsempfänger).
+
+## Oberfläche
+
+- Werkzeugleiste: Werkzeug „Links“, Gruppe „Unterschreiben“ (Unterschrift, Stempel), Menüs „Schützen“ (markiert,
+  solange „Schwärzen“ aktiv ist) und „Seiten gestalten“; schwebende Leiste mit den Einstellungen der neuen
+  Werkzeuge. Neue Dialoginhalte (`Dialogs/`): `ChecklistContent`, `ProtectContent`, `OptimizeContent`,
+  `HeaderFooterContent`, `WatermarkContent`, `RedactSearchContent`, `SignatureContent`, `LinkContent`,
+  `CropContent`. Neue Symbole aus den Fluent UI System Icons: crop, weather_moon, document_header_footer,
+  document_page_number, bookmark_add, eye_off, link_edit, arrow_minimize.
+- Startseite: Name und Beschreibung eines Werkzeugs brechen nur zwischen Wörtern um. Passt das längste Wort
+  nicht in die Spalte (breite Schrift, schmales Fenster), stehen die Werkzeuge untereinander; `test_qt_shell`
+  prüft jedes Wort in allen Fenstergrößen.
+- Tests: `test_editor_redact.py`, `test_editor_cleanup.py`, `test_editor_protect.py`, `test_editor_optimize.py`,
+  `test_editor_pagemarks.py`, `test_editor_stamps.py`, `test_editor_navigation.py`, `test_qt_protect.py`,
+  `test_qt_comfort.py`, `test_mail.py`.
+
 # PDF Tool 3.1.0
 
 Freigegebene Version – getestet als Betas 3.0.0-beta.1 bis 3.1.0-beta.4, Funktionsumfang wie 3.1.0-beta.4.

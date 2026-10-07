@@ -14,3 +14,12 @@ PasswordContent 1.0 PasswordContent.qml
 ReaderPropertiesContent 1.0 ReaderPropertiesContent.qml
 OcrContent 1.0 OcrContent.qml
 FieldPropertiesContent 1.0 FieldPropertiesContent.qml
+ChecklistContent 1.0 ChecklistContent.qml
+ProtectContent 1.0 ProtectContent.qml
+OptimizeContent 1.0 OptimizeContent.qml
+HeaderFooterContent 1.0 HeaderFooterContent.qml
+WatermarkContent 1.0 WatermarkContent.qml
+RedactSearchContent 1.0 RedactSearchContent.qml
+SignatureContent 1.0 SignatureContent.qml
+LinkContent 1.0 LinkContent.qml
+CropContent 1.0 CropContent.qml

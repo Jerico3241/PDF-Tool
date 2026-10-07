@@ -2,14 +2,16 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.1.0
+Version 3.2.0-beta.1 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
   und zum Bearbeiten – Text und einzelne Objekte direkt im PDF ändern oder
   hinzufügen, Bilder und Grafiken, Seiten organisieren, Kommentare,
   Formulare ausfüllen und gestalten, Texterkennung (OCR) für gescannte
-  Seiten – mit Rückgängig und sicherem Speichern.
+  Seiten, Stempel und Unterschrift; vor dem Weitergeben schwärzen,
+  bereinigen, mit Kennwort schützen, verkleinern, Seitenzahlen und
+  Wasserzeichen – mit Rückgängig und sicherem Speichern.
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
   vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
@@ -27,7 +29,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.1.0.exe
+PDF-Tool-Setup-3.2.0-beta.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -36,6 +38,42 @@ Tesseract mit deutschen und englischen Sprachdaten. Eine eigene
 Python-Installation, qpdf, Ghostscript, Tesseract oder andere
 Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 3.2 (Beta 1) – Schützen und Weitergeben
+------------------------------------------------------
+Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
+(Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.2.0 Beta“.
+Neue Schaltflächen im Reader: „Schützen“ (Schild), „Seiten gestalten“,
+„Unterschreiben“ und das Werkzeug „Links“.
+- Schwärzen: Bereiche aufziehen oder Text markieren; „Schwärzen anwenden“
+  entfernt Text, Bildpunkte, Grafiken, Kommentare und Formularfelder im
+  Bereich wirklich aus der Datei – nicht nur abgedeckt. „Suchen und
+  schwärzen“ findet IBANs, E-Mail-Adressen, Telefonnummern, Datumsangaben
+  und eigene Begriffe.
+- Dokument bereinigen: Metadaten, Skripte, Anhänge, versteckte Daten und
+  auf Wunsch Kommentare vor dem Weitergeben entfernen.
+- Kennwortschutz (AES-256): Kennwort zum Öffnen und/oder Einschränkungen
+  (Drucken, Kopieren, Ändern …); ändern oder entfernen.
+- Reduzieren: Formularfelder, Kommentare, Stempel und Unterschriften fest
+  in die Seite übernehmen. PDF verkleinern: Kopie mit kleineren Bildern,
+  das Original bleibt unverändert.
+- Kopf- und Fußzeile, Seitenzahlen („Seite 1 von 3“), Bates-Nummern und
+  Wasserzeichen – mit Vorschau, ersetzbar und wieder entfernbar. Seiten
+  zuschneiden.
+- Unterschrift zeichnen oder aus einem Bild einlesen, auf Wunsch nur auf
+  diesem PC speichern; Stempel wie GENEHMIGT, BEZAHLT, ENTWURF oder eigener
+  Text mit Datum. Eine sichtbare Unterschrift ist keine digitale Signatur.
+- Links anklicken (Webadressen erst nach Rückfrage), Links setzen und
+  ändern; Lesezeichen hinzufügen, umbenennen, verschieben und löschen.
+- Per E-Mail senden: Ihr E-Mail-Programm öffnet eine neue Nachricht mit der
+  PDF als Anhang – aus dem Reader, nach „PDF erstellen“ (an den
+  Rechnungsempfänger) und im Stapel. Gesendet wird nur im E-Mail-Programm.
+- Tabs: Kontextmenü (schließen, andere oder rechts schließen, Pfad
+  kopieren, im Ordner anzeigen), umordnen per Ziehen, Strg+Umschalt+T
+  öffnet das zuletzt geschlossene PDF wieder. Auf Wunsch öffnet der Start
+  die PDFs der letzten Sitzung (Einstellungen → PDF Reader).
+- Nachtmodus (Seiten dunkel, nur die Anzeige) und Schnellwerkzeuge auf der
+  Startseite: PDF wählen, das Werkzeug startet sofort.
 
 Neu in Version 3.1 – PDF Reader & Editor, Tabs statt Seitenleiste
 ------------------------------------------------------------------
@@ -289,7 +327,9 @@ Ihre Daten:       %APPDATA%\PDF-Tool
                   Vertragsstände im Ordner contract-history, Vorlagen,
                   Textbausteine, Kopf- und Fußzeile, Zyklus-Regeln, Design,
                   Akzentfarbe, aktueller Stapel stapel.json, Protokolle
-                  pdf-repair.log und stapel.log)
+                  pdf-repair.log und stapel.log; gespeicherte
+                  Unterschriften unterschriften.json – nur auf Wunsch,
+                  nicht in Sicherungen oder Support-Paketen)
 PDF Editor:       %LOCALAPPDATA%\PDF-Tool-Editor
                   (ungespeicherte Änderungen für den Fall eines Absturzes,
                   Sicherungskopien vor dem Überschreiben einer PDF – je
@@ -318,6 +358,11 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 3.1.0 auf 3.2.0-beta.1 (Kanal „Beta“): Das Setup
+ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
+unverändert. Ohne „Beta-Versionen erhalten“ (Kanal „Stable“) wird diese
+Beta nicht angeboten.
 
 Update von PDF Tool 2.8 auf 3.1.0: Das Setup ersetzt nur die
 Programmdateien, legt die Texterkennung im Unterordner „ocr“ an und trägt

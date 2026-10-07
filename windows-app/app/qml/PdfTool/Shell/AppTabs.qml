@@ -13,6 +13,9 @@ import PdfTool.Controls
 // Bewegung der Dokument-Tabs: ein neuer Tab blendet ein, ein geschlossener blendet aus, die übrigen rücken weich
 // nach; der Punkt für »ungespeichert« blendet ein und aus (sein Platz ist immer reserviert). »Reduziert«: nur
 // Überblenden, »Aus«: alles sofort.
+// Dokument-Tabs lassen sich mit der Maus an eine andere Stelle ziehen (Strg+Umschalt+←/→ im fokussierten Tab): Der
+// gezogene Tab folgt dem Zeiger, die Nachbarn weichen weich aus, beim Loslassen gleitet er an seinen Platz. Rechtsklick
+// (Kontextmenü-Taste, Umschalt+F10) öffnet das Kontextmenü des Tabs.
 Item {
     id: bar
     objectName: "appTabs"
@@ -75,6 +78,77 @@ Item {
         return null
     }
 
+    // Ziehen eines Dokument-Tabs. Lagen in Inhaltskoordinaten der Liste; Reihenfolge aus dem Modell, Breiten von den Tabs
+    // selbst (bei Platzmangel sind alle gleich breit) – nie Lagen, die gerade eine Animation verschiebt.
+    property string dragKey: ""     // gezogener Tab ("" = keiner)
+    property real dragStart: 0      // seine Lage beim Beginn
+    property real dragScroll: 0     // Bildlauf der Liste beim Beginn
+    property real dragShift: 0      // Weg des Zeigers seit dem Beginn
+    property real dragWidth: 0
+    readonly property real dragRaw: dragStart + dragShift + docs.contentX - dragScroll
+    // Lage des gezogenen Tabs: folgt dem Zeiger und bleibt ganz im sichtbaren Teil der Liste
+    readonly property real dragX: {
+        var low = Math.max(0, docs.contentX)
+        var high = Math.max(low, Math.min(docs.contentWidth, docs.contentX + docs.width) - dragWidth)
+        return Math.max(low, Math.min(high, dragRaw))
+    }
+    function slotWidth(row) {
+        if (bar.docsOverflow) return Metrics.appDocTabMinWidth
+        var key = Reader.tabs.get(row).key
+        var slots = docs.contentItem.children
+        for (var i = 0; i < slots.length; ++i)
+            if (slots[i].key === key) return slots[i].width
+        return Metrics.appDocTabMinWidth
+    }
+    function slotLeft(row) {
+        var left = 0
+        for (var i = 0; i < row; ++i) left += slotWidth(i) + docs.spacing
+        return left
+    }
+    function startTabDrag(slot) {
+        dragStart = slotLeft(slot.index)
+        dragScroll = docs.contentX
+        dragShift = 0
+        dragWidth = slot.width
+        dragKey = slot.key
+    }
+    // Überschreitet die Mitte des gezogenen Tabs die Mitte eines Nachbarn, tauschen beide die Stelle – ein Schritt je
+    // Aufruf (die Liste ordnet ihre Einträge erst danach neu an)
+    function dragTabTo(shift) {
+        if (dragKey === "") return
+        dragShift = shift
+        var row = Reader.tabs.indexOf(dragKey)
+        if (row < 0) {
+            dragKey = ""
+            return
+        }
+        var center = dragX + dragWidth / 2
+        if (row < Reader.tabs.count - 1 && center > slotLeft(row + 1) + slotWidth(row + 1) / 2)
+            Reader.moveTab(row, row + 1)
+        else if (row > 0 && center < slotLeft(row - 1) + slotWidth(row - 1) / 2)
+            Reader.moveTab(row, row - 1)
+    }
+    // Bei Platzmangel: am Rand der Liste blättert sie um einen Tab weiter, solange der Zeiger dort bleibt
+    Timer {
+        interval: 350
+        repeat: true
+        running: bar.dragKey !== "" && bar.docsOverflow
+        onTriggered: {
+            if (bar.dragRaw < docs.contentX - 0.5)
+                docsWheel.move(true, -bar.docPitch, true)
+            else if (bar.dragRaw + bar.dragWidth > docs.contentX + docs.width + 0.5)
+                docsWheel.move(true, bar.docPitch, true)
+        }
+    }
+    // Kontextmenü eines Dokument-Tabs an der Stelle ``at`` im Tab (Rechtsklick) bzw. unter ihm (Tastatur)
+    function openTabMenu(slot, tab, at) {
+        tabMenu.key = slot.key
+        tabMenu.path = slot.path
+        tabMenu.row = slot.index
+        if (at) tabMenu.popup(tab, at.x, at.y)
+        else tabMenu.popup(tab, 0, tab.height + 4)
+    }
+
     RowLayout {
         id: row
         anchors.fill: parent
@@ -132,8 +206,9 @@ Item {
             }
         }
         // Dokumente: ein Tab je PDF; der aktive bleibt im Blick. Haben nicht alle Platz, zeigt die Leiste nur ganze,
-        // gleich breite Tabs und ‹ › zum Blättern – Mausrad und Ziehen verschieben ebenfalls um ganze Tabs. Die Liste
-        // reicht 1 px über die Leiste hinaus: Dort geht der aktive Tab in die Inhaltsebene über.
+        // gleich breite Tabs und ‹ › zum Blättern – das Mausrad verschiebt ebenfalls um ganze Tabs. Ziehen mit der Maus
+        // ordnet einen Tab um (am Rand der Leiste blättert sie dabei weiter). Die Liste reicht 1 px über die Leiste
+        // hinaus: Dort geht der aktive Tab in die Inhaltsebene über.
         Item {
             id: docsArea
             readonly property real wanted: bar.docsOverflow ? bar.docsShown * bar.docPitch - docs.spacing + bar.docsScrollWidth : docs.contentWidth
@@ -165,6 +240,8 @@ Item {
                 model: Reader.tabs
                 spacing: 2
                 clip: true
+                // Ziehen gehört den Tabs (umordnen) – die Liste selbst blättert nur mit Mausrad, ‹ › und am Rand beim Ziehen
+                interactive: false
                 boundsBehavior: Flickable.StopAtBounds
                 snapMode: bar.docsOverflow ? ListView.SnapToItem : ListView.NoSnap
                 Accessible.role: Accessible.PageTabList
@@ -179,6 +256,8 @@ Item {
                 // schmaleres Fenster oder schmalere Tabs: der aktive bleibt ganz zu sehen
                 onWidthChanged: Qt.callLater(revealActive)
                 onContentWidthChanged: Qt.callLater(revealActive)
+                // Blättert die Liste beim Ziehen weiter, folgt der gezogene Tab dem Zeiger und tauscht weiter die Stelle
+                onContentXChanged: if (bar.dragKey !== "") bar.dragTabTo(bar.dragShift)
                 Component.onCompleted: revealActive()
                 // Mausrad über den Tabs: waagerecht um ganze Tabs (nur wenn nicht alle Platz haben)
                 PWheelScroll { id: docsWheel; objectName: "readerTabsWheel"; flickable: docs; sideways: true; notch: bar.docsOverflow ? bar.docPitch : 0 }
@@ -195,6 +274,11 @@ Item {
                     enabled: Motion.moves && !App.closing
                     NumberAnimation { properties: "x"; duration: Motion.expand; easing.type: Motion.decelerate }
                 }
+                // Umgeordnet (Ziehen, Strg+Umschalt+←/→): der Tab gleitet an seine neue Stelle
+                move: Transition {
+                    enabled: Motion.moves && !App.closing
+                    NumberAnimation { properties: "x"; duration: Motion.expand; easing.type: Motion.decelerate }
+                }
                 // Die Liste legt ihre Einträge oben an: Der Tab steht unten in einer Hülle über die ganze Höhe
                 delegate: Item {
                     id: docSlot
@@ -202,15 +286,21 @@ Item {
                     required property string name
                     required property bool dirty
                     required property string tip
+                    required property string path
                     required property int index
+                    readonly property real shift: docTab.x  // Versatz des Tabs beim Ziehen – die Markierung folgt ihm
                     width: docTab.width
                     height: docs.height
+                    z: docTab.dragged ? 1 : 0
                     // Die Liste legt Einträge erst nach der Änderung des Modells an: dann die Markierung neu ausrichten
                     Component.onCompleted: bar.tabsRevision++
                     Component.onDestruction: bar.tabsRevision++
                     AppTab {
                         id: docTab
+                        readonly property bool dragged: bar.dragKey === docSlot.key
+                        property real settle: 0  // nach dem Loslassen: Versatz zum Platz, gleitet weich auf 0
                         objectName: "readerTab_" + docSlot.index
+                        x: dragged ? bar.dragX - docSlot.x : settle
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: 1
                         width: bar.docsOverflow ? Metrics.appDocTabMinWidth : Math.min(implicitWidth, bar.docTabCap)
@@ -228,6 +318,42 @@ Item {
                         active: bar.activeKey === "doc:" + docSlot.key
                         onClicked: Reader.showTab(docSlot.key)
                         onCloseRequested: Reader.closeTab(docSlot.key)
+                        // Kontextmenü (Kontextmenü-Taste, Umschalt+F10); Strg+Umschalt+←/→ verschiebt den Tab
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
+                                bar.openTabMenu(docSlot, docTab, null)
+                                event.accepted = true
+                            } else if ((event.key === Qt.Key_Left || event.key === Qt.Key_Right) && (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier)) {
+                                Reader.moveTab(docSlot.index, docSlot.index + (event.key === Qt.Key_Left ? -1 : 1))
+                                event.accepted = true
+                            }
+                        }
+                        TapHandler {
+                            objectName: "readerTabMenuTap"
+                            acceptedButtons: Qt.RightButton
+                            onTapped: (eventPoint) => bar.openTabMenu(docSlot, docTab, eventPoint.position)
+                        }
+                        // Ziehen: der Tab folgt dem Zeiger (nur waagerecht), beim Loslassen gleitet er an seinen Platz
+                        DragHandler {
+                            objectName: "readerTabDrag"
+                            target: null
+                            yAxis.enabled: false
+                            acceptedButtons: Qt.LeftButton
+                            enabled: Reader.tabs.count > 1
+                            onActiveChanged: {
+                                if (active) {
+                                    settleTab.stop()
+                                    docTab.settle = 0
+                                    bar.startTabDrag(docSlot)
+                                } else if (docTab.dragged) {
+                                    docTab.settle = bar.dragX - docSlot.x
+                                    bar.dragKey = ""
+                                    settleTab.restart()
+                                }
+                            }
+                            onActiveTranslationChanged: if (active) bar.dragTabTo(activeTranslation.x)
+                        }
+                        NumberAnimation { id: settleTab; target: docTab; property: "settle"; to: 0; duration: Motion.expand; easing.type: Motion.decelerate }
                     }
                 }
             }
@@ -289,7 +415,7 @@ Item {
         // Lage und Breite eines Tabs in der Leiste (Dokument-Tabs: verschoben um den Bildlauf, sichtbarer Teil)
         function frame(item) {
             var inDocs = item.parent === docs.contentItem
-            var left = inDocs ? docsArea.x + docs.x + item.x - docs.contentX : item.x
+            var left = inDocs ? docsArea.x + docs.x + item.x + item.shift - docs.contentX : item.x
             var right = left + item.width
             if (inDocs) {
                 left = Math.max(left, docsArea.x + docs.x)
@@ -341,5 +467,60 @@ Item {
         PMenuItem { objectName: "menuHelp"; text: "Kurzanleitung"; iconName: "question_circle"; onTriggered: App.showHelp() }
         PMenuItem { objectName: "menuNews"; text: "Neu in dieser Version"; iconName: "megaphone"; onTriggered: App.showChangelog() }
         PMenuItem { objectName: "menuAbout"; text: "Über PDF Tool"; iconName: "info"; onTriggered: App.showAbout() }
+    }
+
+    // Kontextmenü eines Dokument-Tabs. Die Aktion läuft erst nach dem Ausblenden (Rückfragen beim Schließen).
+    PMenu {
+        id: tabMenu
+        objectName: "readerTabMenu"
+        property string key: ""
+        property string path: ""
+        property int row: -1
+        PMenuItem {
+            objectName: "tabMenuClose"
+            text: "Schließen"
+            iconName: "dismiss"
+            onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeTab(key) } }
+        }
+        PMenuItem {
+            objectName: "tabMenuCloseOthers"
+            text: "Andere Tabs schließen"
+            iconName: "dismiss_circle"
+            enabled: Reader.tabs.count > 1
+            onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeOtherTabs(key) } }
+        }
+        PMenuItem {
+            objectName: "tabMenuCloseRight"
+            text: "Tabs rechts schließen"
+            iconName: "arrow_next"
+            enabled: tabMenu.row >= 0 && tabMenu.row < Reader.tabs.count - 1
+            onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeTabsRight(key) } }
+        }
+        PMenuItem {
+            objectName: "tabMenuCopyPath"
+            text: "Pfad kopieren"
+            iconName: "copy"
+            enabled: tabMenu.path !== ""
+            onTriggered: App.copyPath(tabMenu.path)
+        }
+        PMenuItem {
+            objectName: "tabMenuShowFolder"
+            text: "Im Ordner anzeigen"
+            iconName: "folder_open"
+            enabled: tabMenu.path !== ""
+            onTriggered: { var path = tabMenu.path; tabMenu.afterClose = function() { Reader.showInFolder(path) } }
+        }
+        T.MenuSeparator {
+            topPadding: 4
+            bottomPadding: 4
+            contentItem: Rectangle { implicitWidth: 180; implicitHeight: 1; color: Theme.divider }
+        }
+        PMenuItem {
+            objectName: "tabMenuReopen"
+            text: "Geschlossenen Tab wieder öffnen"
+            iconName: "arrow_undo"
+            enabled: Reader.canReopen
+            onTriggered: tabMenu.afterClose = function() { Reader.reopenClosed() }
+        }
     }
 }

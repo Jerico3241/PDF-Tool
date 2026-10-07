@@ -206,7 +206,7 @@ def save(document: EditorDocument, target: str | os.PathLike, *, backup_dir: Pat
     except BaseException:
         _remove(temp)
         raise
-    stamp = _reopen_check(target, digest, document.password, pages, backup)
+    stamp = _reopen_check(target, digest, document.save_password, pages, backup)
     document.mark_saved(target, stamp)
     return SaveResult(target, len(data), checked, backup)
 
@@ -259,7 +259,7 @@ def _prepare(document: EditorDocument) -> tuple[bytes, int, int]:
         data = document.serialize(keep_encryption=True)
     except (pikepdf.PdfError, RuntimeError, ValueError) as exc:
         raise SaveFailed(f"Der bearbeitete Stand ließ sich nicht als PDF schreiben. {UNCHANGED}", str(exc)[:200], kind=SERIALIZE_FAILED, phase="serialize", backend="pikepdf/qpdf", error=exc) from exc
-    return data, validate(data, document.password, expected), expected.pages
+    return data, validate(data, document.save_password, expected), expected.pages
 
 
 def _write_temp(handle, data: bytes) -> None:

@@ -12,13 +12,17 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, export, formdesign, forms, images, metadata, objectops, ocr, outline, pages, recovery, render, save, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
 from tools.pdf_editor.geometry import normalize, union
 
 from .engine import raster_to_qimage
+
+RIGHTS = (("print", "print"), ("copy", "copy"), ("edit", "edit"), ("annotate", "annotate"), ("fill_forms", "fill"), ("assemble", "assemble"))
+SIGNATURE_HEIGHT = 36.0  # Höhe einer Unterschrift bei einem Klick (Anzeige-Punkte)
+MAX_LINKS = 5000
 
 
 @dataclass
@@ -703,6 +707,199 @@ class Session:
 
     def set_metadata(self, values: dict) -> None:
         metadata.update(self.document, self.history, **{key: values.get(key) for key in ("title", "author", "subject", "keywords")})
+
+    # Schützen und Weitergeben ----------------------------------------------------------------------------------
+    def protection(self) -> dict:
+        """Stand des Kennwortschutzes für den Dialog – ohne Kennwörter."""
+        return protect.current(self.document)
+
+    def set_protection(self, values: dict) -> str:
+        plan = protect.Protection(
+            user_password=str(values.get("userPassword") or ""),
+            owner_password=str(values.get("ownerPassword") or ""),
+            **{key: bool(values.get(name, True)) for key, name in RIGHTS},
+        )
+        return protect.set_protection(self.document, self.history, plan)
+
+    def unlock(self, owner_password: str) -> bool:
+        return protect.unlock(self.document, owner_password)
+
+    def cleanup_findings(self) -> dict:
+        return sanitize.inspect(self.document).as_dict()
+
+    def cleanup(self, options: dict) -> dict:
+        defaults = sanitize.CleanOptions()
+        chosen = sanitize.CleanOptions(**{name: bool(options.get(name, getattr(defaults, name))) for name in ("metadata", "javascript", "attachments", "comments", "hidden")})
+        return sanitize.clean(self.document, self.history, chosen).as_dict()
+
+    def flatten_counts(self) -> dict:
+        return flatten.count(self.document)
+
+    def flatten(self, fields: bool, comments: bool) -> dict:
+        result = flatten.flatten(self.document, self.history, fields=fields, comments=comments)
+        return {"fields": result.fields, "comments": result.comments, "hidden": result.hidden, "skipped": result.skipped}
+
+    def size_now(self) -> int:
+        """Größe des aktuellen Stands, wie er gespeichert würde (Bytes)."""
+        return optimize.estimate(self.document)
+
+    def optimize_copy(self, target: str, level: str) -> dict:
+        result = optimize.optimize_copy(self.document, target, level)
+        return {"path": str(result.path), "before": result.before, "after": result.after, "images": result.images, "skipped": result.skipped, "percent": result.saved_percent}
+
+    def marks_present(self) -> dict:
+        return pagemarks.present(self.document)
+
+    def add_header_footer(self, spec: dict) -> dict:
+        items = [pagemarks.TextMark(str(text), position) for position, text in (spec.get("items") or {}).items() if position in pagemarks.POSITIONS and str(text).strip()]
+        plan = pagemarks.HeaderFooter(
+            items,
+            font=str(spec.get("font") or "Helvetica"),
+            size=max(5.0, min(48.0, float(spec.get("size") or 9))),
+            color=_rgb(spec.get("color")) or (0, 0, 0),
+            margin=max(4.0, min(144.0, float(spec.get("margin") or 28))),
+            pages=self._page_spec(spec.get("pages")),
+            start=int(spec.get("start") or 1),
+            bates_prefix=str(spec.get("batesPrefix") or ""),
+            bates_digits=max(1, min(12, int(spec.get("batesDigits") or 6))),
+            bates_start=max(0, int(spec.get("batesStart") or 1)),
+            bates_suffix=str(spec.get("batesSuffix") or ""),
+        )
+        result = pagemarks.add_header_footer(self.document, self.history, plan)
+        return {"pages": result.pages, "replaced": result.replaced}
+
+    def add_watermark(self, spec: dict) -> dict:
+        plan = pagemarks.Watermark(
+            str(spec.get("text") or ""),
+            font=str(spec.get("font") or "Helvetica-Bold"),
+            size=max(0.0, min(400.0, float(spec.get("size") or 0))),
+            color=_rgb(spec.get("color")) or (190, 30, 45),
+            opacity=float(spec.get("opacity") or 0.25),
+            angle=float(spec.get("angle") or 0),
+            behind=bool(spec.get("behind")),
+            pages=self._page_spec(spec.get("pages")),
+        )
+        result = pagemarks.add_watermark(self.document, self.history, plan)
+        return {"pages": result.pages, "replaced": result.replaced}
+
+    def page_marks(self, kind: str, spec: dict, replace: bool) -> dict:
+        """Kopf-/Fußzeile (``Header``) bzw. Wasserzeichen hinzufügen – ``replace``: die bisherigen von PDF Tool
+        ersetzen (ein Schritt für Rückgängig)."""
+        add = self.add_header_footer if kind == pagemarks.HEADER else self.add_watermark
+        if not replace:
+            return add(spec)
+        with commands.group(self.document, self.history, "Kopf- und Fußzeile ersetzen" if kind == pagemarks.HEADER else "Wasserzeichen ersetzen"):
+            pagemarks.remove_marks(self.document, self.history, (kind,))
+            return add(spec)
+
+    def remove_marks(self, kinds: list[str]) -> int:
+        chosen = tuple(kind for kind in pagemarks.KINDS if kind in kinds) or pagemarks.KINDS
+        return pagemarks.remove_marks(self.document, self.history, chosen)
+
+    def _page_spec(self, value) -> list[int] | None:
+        """»« oder »alle« = alle Seiten; sonst eine Angabe wie »1-3, 5« (wirft ``EditorError``)."""
+        text = str(value or "").strip()
+        if not text or text.lower() == "alle":
+            return None
+        try:
+            return pages.parse_pages(text, self.document.page_count)
+        except ValueError as exc:
+            raise EditorError(str(exc)) from exc
+
+    # Schwärzen
+    def redact_find(self, kinds: list[str], terms: list[str], match_case: bool, scope: list[int] | None) -> list[dict]:
+        found = redact.find_matches(self.document, [kind for kind in kinds if kind in redact.PATTERNS], [term for term in terms if term.strip()], scope, match_case=match_case)
+        result = []
+        for match in found:
+            geo = self.document.geometry(match.page)
+            result.append({"page": match.page, "kind": match.kind, "label": redact.PATTERN_LABELS.get(match.kind, ""), "rects": [[round(v, 2) for v in geo.rect_to_view(rect)] for rect in match.rects]})
+        return result
+
+    def redact_apply(self, marks: list[dict]) -> dict:
+        chosen = []
+        for mark in marks:
+            page = int(mark["page"])
+            if not 0 <= page < self.document.page_count:
+                continue
+            chosen.append(redact.Mark(page, self.document.geometry(page).rect_to_page(normalize(tuple(float(v) for v in mark["rect"])))))
+        if not chosen:
+            raise EditorError("Es ist nichts zum Schwärzen markiert.")
+        result = redact.apply_marks(self.document, self.history, chosen)
+        return {"areas": result.areas, "chars": result.chars, "images": result.images, "paths": result.paths, "annotations": result.annotations, "rasterized": [page + 1 for page in result.rasterized], "notes": list(result.notes)}
+
+    # Stempel und Unterschrift
+    def add_stamp(self, page: int, view_rect, spec: dict) -> str:
+        key = str(spec.get("preset") or "")
+        subtitle = str(spec.get("subtitle") or "")
+        if key in stamps.PRESETS:
+            stamp = stamps.Stamp.preset(key, subtitle)
+        else:
+            stamp = stamps.Stamp(str(spec.get("text") or ""), subtitle, _rgb(spec.get("color")) or (190, 30, 45))
+        rect = self._place(view_rect, *stamps.stamp_size(stamp))
+        return stamps.add_stamp(self.document, self.history, page, self.document.geometry(page).rect_to_page(normalize(tuple(rect))), stamp)
+
+    def add_signature(self, page: int, view_rect, data: dict) -> str:
+        signature = stamps.Signature.from_dict(data)
+        height = SIGNATURE_HEIGHT
+        rect = self._place(view_rect, height * max(0.2, min(12.0, signature.aspect)), height)
+        return stamps.add_signature(self.document, self.history, page, self.document.geometry(page).rect_to_page(normalize(tuple(rect))), signature)
+
+    @staticmethod
+    def _place(view_rect, width: float, height: float) -> list[float]:
+        """Aufgezogener Rahmen – oder bei einem Klick (kleiner Rahmen) die natürliche Größe um diese Stelle."""
+        u0, v0, u1, v1 = (float(v) for v in view_rect)
+        if u1 - u0 >= 8 and v1 - v0 >= 6:
+            return [u0, v0, u1, v1]
+        cu, cv = (u0 + u1) / 2, (v0 + v1) / 2
+        return [cu - width / 2, cv - height / 2, cu + width / 2, cv + height / 2]
+
+    # Lesezeichen, Links, Zuschneiden ------------------------------------------------------------------------------
+    def add_bookmark(self, title: str, page: int, after: int, child: bool) -> int:
+        return outline.add_bookmark(self.document, self.history, title, page, after=after if after >= 0 else None, child=child)
+
+    def rename_bookmark(self, index: int, title: str) -> None:
+        outline.rename_bookmark(self.document, self.history, index, title)
+
+    def delete_bookmark(self, index: int) -> None:
+        outline.delete_bookmark(self.document, self.history, index)
+
+    def set_bookmark_page(self, index: int, page: int) -> None:
+        outline.set_bookmark_page(self.document, self.history, index, page)
+
+    def move_bookmark(self, index: int, direction: str) -> int:
+        return outline.move_bookmark(self.document, self.history, index, direction)
+
+    def links(self) -> list[dict]:
+        """Links aller Seiten (Anzeige-Punkte) – Ziel als Seite oder Webadresse, sonst ohne Ziel."""
+        numbers = links.page_numbers(self.document)
+        result: list[dict] = []
+        for index in range(self.document.page_count):
+            geo = None
+            for link in links.list_links(self.document, index, numbers):
+                geo = geo or self.document.geometry(index)
+                result.append({"key": link.key, "page": index, "view": [round(v, 2) for v in geo.rect_to_view(link.rect)], "target": link.target_page, "uri": link.uri, "ours": link.ours})
+                if len(result) >= MAX_LINKS:
+                    return result
+        return result
+
+    def add_link(self, page: int, view_rect, target_page: int, uri: str) -> str:
+        rect = self.document.geometry(page).rect_to_page(normalize(tuple(float(v) for v in view_rect)))
+        return links.add_link(self.document, self.history, page, rect, target_page=target_page if target_page >= 0 else None, uri=uri or None)
+
+    def update_link(self, key: str, target_page: int, uri: str) -> None:
+        links.update_link(self.document, self.history, key, target_page=target_page if target_page >= 0 else None, uri=uri or None)
+
+    def delete_link(self, key: str) -> None:
+        links.delete_link(self.document, self.history, key)
+
+    def crop(self, indexes: list[int], margins: list[float]) -> int:
+        return crop.crop_pages(self.document, self.history, indexes, tuple(float(v) for v in margins))  # type: ignore[arg-type]
+
+    def reset_crop(self, indexes: list[int]) -> int:
+        return crop.reset_crop(self.document, self.history, indexes)
+
+    def content_margins(self, page: int) -> list[float]:
+        return [round(v, 1) for v in crop.content_margins(self.document, page)]
 
     # Rückgängig, Speichern, Sicherung -----------------------------------------------------------------------------
     def undo(self) -> str:

@@ -36,7 +36,7 @@ from tools.contract_overview.history import report
 from tools.contract_overview.overview import contract_summary, excel_files, is_excel
 
 from .. import dialogs as dialog_service
-from .. import files
+from .. import files, mail
 from ..base import Observable, prop
 from ..models import KeyedListModel
 from .comparison import AFTER_EXPORT, NO_CUSTOMER, ComparisonView, snapshot_facts
@@ -1761,6 +1761,19 @@ class BatchController(Observable):
         item = self.current()
         if item is not None and item.output:
             self.app.open_folder_of(item.output, "batch_detail_info")
+
+    @Slot()
+    def mailPdf(self) -> None:  # noqa: N802
+        """Erstellte PDF dieses Eintrags per E-Mail senden: neue Nachricht im E-Mail-Programm, an den
+        Rechnungsempfänger des Eintrags (falls bekannt) – gesendet wird dort, nie von PDF Tool."""
+        item = self.current()
+        if item is None or not item.output:
+            return
+        if not Path(item.output).is_file():
+            self.app.notify("batch_detail_info", "warning", f"Die Datei »{Path(item.output).name}« gibt es nicht mehr.", title="Senden nicht möglich")
+            return
+        res = self.resolution(item.id)
+        mail.send_and_report(self.app, item.output, "batch_detail_info", to=res.email if res is not None else "")
 
     @Slot()
     def removeCurrent(self) -> None:  # noqa: N802

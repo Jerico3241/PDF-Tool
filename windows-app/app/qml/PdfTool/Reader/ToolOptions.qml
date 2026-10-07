@@ -43,7 +43,8 @@ Item {
         default: return "Feld"
         }
     }
-    readonly property bool coloredTool: ["addText", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox"].indexOf(tool) >= 0
+    readonly property bool coloredTool: ["addText", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox"].indexOf(tool) >= 0 || (tool === "stamp" && doc !== null && doc.stampPreset === "custom")
+    readonly property bool stampSelected: annotationSelected && annotation !== null && annotation.subtype === "/Stamp"  // Stempel/Unterschrift: Farbe fest
     readonly property bool strokeTool: ["ink", "rect", "ellipse", "line", "arrow"].indexOf(tool) >= 0
     readonly property bool sizeTool: tool === "addText" || tool === "textbox"
     readonly property string toolColor: doc ? (tool === "highlight" ? doc.markColor : doc.toolColor) : "#000000"
@@ -70,6 +71,12 @@ Item {
             if (root.fieldChosen) return "Ziehen verschiebt, die Ecken ändern die Größe; Doppelklick: Eigenschaften. Pfeiltasten, Entf, Strg+D."
             return "Feldart wählen und auf der Seite aufziehen – oder ein Feld anklicken. Rechtsklick legt ein Feld genau dort an."
         case "select": return root.annotationSelected ? (root.ownAnnotation ? "Ziehen verschiebt; die Ecken ändern die Größe." : "Kommentar aus einem anderen Programm – Text und Farbe lassen sich ändern, Ziehen verschiebt.") : ""
+        case "redact":
+            if (root.doc && root.doc.redactMode === "text") return "Über den Text ziehen, der entfernt werden soll. Rot umrandet = vorgemerkt; Rechtsklick entfernt eine Markierung."
+            return "Bereiche aufziehen, die entfernt werden sollen. Rot umrandet = vorgemerkt; Rechtsklick entfernt eine Markierung."
+        case "stamp": return "In die Seite klicken oder einen Rahmen aufziehen. Mit »Auswählen« lässt sich der Stempel verschieben und vergrößern."
+        case "signature": return root.doc && root.doc.signatures.length > 0 ? "In die Seite klicken oder einen Rahmen aufziehen. Keine digitale Signatur." : "Zuerst eine Unterschrift erstellen."
+        case "link": return "Bereich aufziehen und das Ziel wählen. Einen vorhandenen Link anklicken ändert ihn, Rechtsklick entfernt ihn."
         default: return ""
         }
     }
@@ -111,7 +118,7 @@ Item {
             // Farbe
             PIconButton {
                 id: colorButton
-                visible: root.coloredTool || root.annotationSelected
+                visible: root.coloredTool || (root.annotationSelected && !root.stampSelected)
                 iconName: "color"
                 tip: "Farbe"
                 onClicked: colors.open()
@@ -224,7 +231,75 @@ Item {
                 currentIndex: root.annotation ? Math.max(0, indexOfValue(Math.round(root.annotation.fontSize))) : 2
                 onActivated: (index) => root.doc.styleAnnotation(root.selected.key, "fontSize", model[index].value)
             }
-            PButton { visible: root.annotationSelected; iconName: "delete"; text: "Kommentar löschen"; onClicked: root.doc.deleteAnnotation(root.selected.key) }
+            PButton { visible: root.annotationSelected; iconName: "delete"; text: root.stampSelected ? (root.annotation.label === "Unterschrift" ? "Unterschrift löschen" : "Stempel löschen") : "Kommentar löschen"; onClicked: root.doc.deleteAnnotation(root.selected.key) }
+
+            // Schwärzen: Bereich oder Text markieren, Suchen, Markierungen verwerfen, anwenden
+            PIconButton { objectName: "readerRedactArea"; visible: root.tool === "redact"; toggle: true; checked: root.doc !== null && root.doc.redactMode === "area"; iconName: "square"; tip: "Bereiche aufziehen"; onClicked: root.doc.setRedactMode("area") }
+            PIconButton { objectName: "readerRedactText"; visible: root.tool === "redact"; toggle: true; checked: root.doc !== null && root.doc.redactMode === "text"; iconName: "text_edit_style"; tip: "Text markieren"; onClicked: root.doc.setRedactMode("text") }
+            PButton { objectName: "readerRedactSearch"; visible: root.tool === "redact"; kind: "subtle"; iconName: "document_search"; text: "Suchen …"; onClicked: root.doc.searchRedact() }
+            PIconButton { objectName: "readerRedactClear"; visible: root.tool === "redact" && root.doc.redactCount > 0; iconName: "dismiss_circle"; tip: "Alle Markierungen verwerfen"; onClicked: root.doc.clearRedactMarks() }
+            PButton {
+                objectName: "readerRedactApply"
+                visible: root.tool === "redact"
+                kind: "danger"
+                iconName: "eye_off"
+                enabled: root.doc !== null && root.doc.redactCount > 0
+                text: root.doc && root.doc.redactCount > 0 ? "Schwärzen anwenden (" + root.doc.redactCount + ")" : "Schwärzen anwenden"
+                onClicked: root.doc.applyRedaction()
+            }
+
+            // Stempel: Vorgabe oder eigener Text, zweite Zeile
+            PComboBox {
+                objectName: "readerStampPreset"
+                visible: root.tool === "stamp"
+                preferredWidth: 170
+                label: "Stempel"
+                model: root.doc ? root.doc.stampPresets.concat([{ "key": "custom", "label": root.doc.stampText !== "" ? root.doc.stampText + " (eigener)" : "Eigener Text …" }]) : []
+                textRole: "label"
+                valueRole: "key"
+                currentIndex: root.doc ? Math.max(0, indexOfValue(root.doc.stampPreset)) : 0
+                onActivated: (index) => root.doc.setStampPreset(model[index].key)
+            }
+            PComboBox {
+                objectName: "readerStampSubtitle"
+                visible: root.tool === "stamp"
+                preferredWidth: 170
+                label: "Zweite Zeile"
+                readonly property var options: [{ "key": "", "label": "Ohne zweite Zeile" }, { "key": "{datum}", "label": "Datum" }, { "key": "{datum} {zeit}", "label": "Datum und Uhrzeit" }]
+                readonly property bool customLine: root.doc !== null && root.doc.stampSubtitle !== "" && root.doc.stampSubtitle !== "{datum}" && root.doc.stampSubtitle !== "{datum} {zeit}"
+                model: options.concat([{ "key": "custom", "label": customLine ? root.doc.stampSubtitle : "Eigener Text …" }])
+                textRole: "label"
+                valueRole: "key"
+                currentIndex: !root.doc ? 0 : (customLine ? 3 : Math.max(0, indexOfValue(root.doc.stampSubtitle)))
+                onActivated: (index) => root.doc.setStampSubtitle(model[index].key)
+            }
+
+            // Unterschrift: gespeicherte (und die dieser Sitzung) zur Auswahl, neue anlegen, löschen
+            Repeater {
+                model: root.tool === "signature" && root.doc ? root.doc.signatures : []
+                PButton {
+                    id: signatureChoice
+                    required property var modelData
+                    objectName: "readerSignatureChoice"
+                    kind: "subtle"
+                    toggle: true
+                    checked: root.doc.signatureChoice === modelData.id
+                    implicitWidth: Math.min(150, Math.max(64, 30 * modelData.aspect)) + 12
+                    tip: modelData.label + (modelData.stored ? "" : " (nicht gespeichert)")
+                    onClicked: root.doc.chooseSignature(modelData.id)
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        radius: 3
+                        color: Theme.paper
+                        border.width: signatureChoice.checked ? 2 : 1
+                        border.color: signatureChoice.checked ? Theme.accent : Theme.border
+                        Image { anchors.fill: parent; anchors.margins: 3; source: signatureChoice.modelData.preview; fillMode: Image.PreserveAspectFit; smooth: true; mipmap: true }
+                    }
+                }
+            }
+            PButton { objectName: "readerSignatureNew"; visible: root.tool === "signature"; kind: "subtle"; iconName: "add"; text: root.doc && root.doc.signatures.length > 0 ? "Neu …" : "Unterschrift erstellen …"; onClicked: root.doc.newSignature() }
+            PIconButton { objectName: "readerSignatureDelete"; visible: root.tool === "signature" && root.doc && root.doc.signatureChoice !== ""; iconName: "delete"; tip: "Gewählte Unterschrift löschen"; onClicked: root.doc.deleteSignature(root.doc.signatureChoice) }
             // Bilder
             PButton {
                 objectName: "readerInsertImage"

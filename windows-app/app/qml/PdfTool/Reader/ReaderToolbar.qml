@@ -6,7 +6,9 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // Befehlsleiste des Readers: Datei (Öffnen, Speichern, Drucken), Rückgängig/Wiederholen, Werkzeuge
-// (Auswählen, Text bearbeiten, Objekt bearbeiten, Text hinzufügen, Bilder, Kommentieren, Zeichnen, Formular),
+// (Auswählen, Text bearbeiten, Objekt bearbeiten, Text hinzufügen, Bilder, Link, Kommentieren, Zeichnen, Formular,
+// Unterschreiben/Stempel), »Schützen und Weitergeben« (Schwärzen, Bereinigen, Kennwortschutz, Reduzieren,
+// Verkleinern) und »Seiten gestalten« (Kopf-/Fußzeile, Seitenzahlen, Wasserzeichen, Zuschneiden);
 // rechts Ansicht, Seiten organisieren und »Mehr«. Bei schmalem Fenster wandern die rechten Einträge in
 // »Mehr«. Die Umschalter der Seitenleisten (Seiten, Lesezeichen, Suchen; Kommentare, Eigenschaften)
 // sitzen nicht hier, sondern in den Randleisten bei ihrer Seitenleiste.
@@ -21,10 +23,12 @@ Rectangle {
     property string lastComment: "highlight"
     property string lastDraw: "ink"
     property string lastForm: "form"
+    property string lastSign: "signature"
     onToolChanged: {
         if (commentTools.indexOf(tool) >= 0) lastComment = tool
         if (drawTools.indexOf(tool) >= 0) lastDraw = tool
         if (tool === "form" || tool === "formDesign") lastForm = tool
+        if (tool === "signature" || tool === "stamp") lastSign = tool
     }
 
     function toolIcon(name) {
@@ -39,6 +43,8 @@ Rectangle {
         case "ellipse": return "circle"
         case "line": return "line"
         case "arrow": return "arrow_up_right"
+        case "signature": return "signature"
+        case "stamp": return "document_checkmark"
         default: return "cursor"
         }
     }
@@ -54,6 +60,8 @@ Rectangle {
         case "ellipse": return "Ellipse"
         case "line": return "Linie"
         case "arrow": return "Pfeil"
+        case "signature": return "Unterschrift"
+        case "stamp": return "Stempel"
         default: return name
         }
     }
@@ -137,6 +145,7 @@ Rectangle {
         ToolButton { objectName: "readerToolObjects"; toolKey: "objects"; iconName: "select_object"; tip: "Objekt bearbeiten: Text und andere PDF-Inhalte einzeln auswählen und bearbeiten." }
         ToolButton { objectName: "readerToolAddText"; toolKey: "addText"; iconName: "text_add"; tip: "Text hinzufügen" }
         ToolButton { objectName: "readerToolImage"; toolKey: "image"; iconName: "image"; tip: "Bilder: auswählen, verschieben, Größe ändern, einfügen" }
+        ToolButton { objectName: "readerToolLink"; toolKey: "link"; iconName: "link"; tip: "Links: Bereich aufziehen und mit einer Seite oder Webadresse verknüpfen; vorhandene Links bearbeiten" }
         // Kommentieren und Zeichnen: zuletzt benutztes Werkzeug + Auswahl
         Row {
             spacing: 0
@@ -153,6 +162,34 @@ Rectangle {
             spacing: 0
             ToolButton { id: formButton; objectName: "readerToolForm"; toolKey: root.lastForm; iconName: root.lastForm === "formDesign" ? "form_new" : "form"; tip: root.lastForm === "formDesign" ? "Formular gestalten: Felder anlegen, verschieben, Größe und Eigenschaften ändern" : "Formular ausfüllen" }
             PIconButton { objectName: "readerFormMenu"; implicitWidth: 18; iconName: "chevron_down"; tip: "Formularwerkzeug wählen"; onClicked: formMenu.popup(formButton, 0, formButton.height) }
+        }
+        // Unterschreiben: gespeicherte oder neue Unterschrift bzw. Stempel (zuletzt benutztes Werkzeug + Auswahl)
+        Row {
+            spacing: 0
+            ToolButton { id: signButton; objectName: "readerToolSign"; toolKey: root.lastSign; iconName: root.toolIcon(root.lastSign); tip: root.lastSign === "stamp" ? "Stempel setzen (GENEHMIGT, ENTWURF, eigener Text …)" : "Unterschreiben: Unterschrift zeichnen oder einlesen und auf die Seite setzen (keine digitale Signatur)" }
+            PIconButton { objectName: "readerSignMenu"; implicitWidth: 18; iconName: "chevron_down"; tip: "Unterschrift oder Stempel wählen"; onClicked: signMenu.popup(signButton, 0, signButton.height) }
+        }
+        Separator {}
+        // Schützen und Weitergeben – »Schwärzen« ist ein Werkzeug: solange es aktiv ist, ist diese Schaltfläche markiert
+        PIconButton {
+            id: protectButton
+            objectName: "readerProtect"
+            iconName: "shield"
+            tip: "Schützen und Weitergeben: Schwärzen, Dokument bereinigen, Kennwortschutz, Reduzieren, PDF verkleinern"
+            toggle: true
+            checked: root.tool === "redact"
+            enabled: root.doc !== null
+            onCheckedChanged: if (checked) root.activeTool = protectButton
+            Component.onCompleted: if (checked) root.activeTool = protectButton
+            onClicked: protectMenu.popup(protectButton, 0, protectButton.height)
+        }
+        PIconButton {
+            id: pageDesignButton
+            objectName: "readerPageDesign"
+            iconName: "document_header_footer"
+            tip: "Seiten gestalten: Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Zuschneiden"
+            enabled: root.doc !== null
+            onClicked: pageDesignMenu.popup(pageDesignButton, 0, pageDesignButton.height)
         }
 
         Item { Layout.fillWidth: true }
@@ -215,11 +252,50 @@ Rectangle {
         PMenuItem { objectName: "readerToolFormDesign"; text: "Formular gestalten (Felder anlegen und bearbeiten)"; iconName: "form_new"; onTriggered: root.doc.setTool("formDesign") }
     }
     PMenu {
+        id: signMenu
+        objectName: "readerSignToolMenu"
+        PMenuItem { objectName: "readerToolSignature"; text: "Unterschrift setzen"; iconName: "signature"; onTriggered: root.doc.setTool("signature") }
+        PMenuItem { text: "Neue Unterschrift …"; iconName: "pen"; onTriggered: { var d = root.doc; signMenu.afterClose = function() { d.newSignature() } } }
+        PMenuItem { objectName: "readerToolStamp"; text: "Stempel"; iconName: "document_checkmark"; onTriggered: root.doc.setTool("stamp") }
+    }
+    PMenu {
+        id: protectMenu
+        objectName: "readerProtectMenu"
+        PMenuItem { objectName: "readerToolRedact"; text: "Schwärzen (Bereiche oder Text markieren)"; iconName: "eye_off"; onTriggered: root.doc.setTool("redact") }
+        PMenuItem { text: "Suchen und schwärzen …"; iconName: "document_search"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.searchRedact() } } }
+        PMenuItem { objectName: "readerMenuClean"; text: "Dokument bereinigen …"; iconName: "shield_checkmark"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.cleanDocument() } } }
+        PMenuItem { objectName: "readerMenuProtect"; text: "Kennwortschutz …"; iconName: "lock_closed"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.protectDocument() } } }
+        PMenuItem {
+            text: "Einschränkungen aufheben …"
+            iconName: "key"
+            // nur bei Einschränkungen (Berechtigungen) – mit dem Berechtigungskennwort aufhebbar
+            visible: root.doc !== null && Object.keys(root.doc.permissions).some(function(key) { return root.doc.permissions[key] === false })
+            onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.unlockPermissions() } }
+        }
+        PMenuItem { objectName: "readerMenuFlatten"; text: "Reduzieren (Formulare und Kommentare fest übernehmen) …"; iconName: "layer"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.flattenDocument() } } }
+        PMenuItem { objectName: "readerMenuOptimize"; text: "PDF verkleinern …"; iconName: "arrow_minimize"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.optimizeDocument() } } }
+    }
+    PMenu {
+        id: pageDesignMenu
+        objectName: "readerPageDesignMenu"
+        PMenuItem { objectName: "readerMenuHeaderFooter"; text: "Kopf- und Fußzeile, Seitenzahlen …"; iconName: "document_page_number"; onTriggered: { var d = root.doc; pageDesignMenu.afterClose = function() { d.headerFooterDocument() } } }
+        PMenuItem { objectName: "readerMenuWatermark"; text: "Wasserzeichen …"; iconName: "layer"; onTriggered: { var d = root.doc; pageDesignMenu.afterClose = function() { d.watermarkDocument() } } }
+        PMenuItem { text: "Kopf-/Fußzeile und Wasserzeichen entfernen …"; iconName: "eraser"; onTriggered: { var d = root.doc; pageDesignMenu.afterClose = function() { d.removePageMarks() } } }
+        PMenuItem { objectName: "readerMenuCrop"; text: "Seiten zuschneiden …"; iconName: "crop"; onTriggered: { var d = root.doc; pageDesignMenu.afterClose = function() { d.cropPages([]) } } }
+        PMenuItem { text: "Lesezeichen für diese Seite …"; iconName: "bookmark_add"; onTriggered: { var d = root.doc; pageDesignMenu.afterClose = function() { d.addBookmark("", false) } } }
+    }
+    PMenu {
         id: viewMenu
         PMenuItem { text: "Einzelseite"; iconName: "document_one_page"; onTriggered: root.doc.setViewMode("single") }
         PMenuItem { text: "Fortlaufend"; iconName: "document_one_page_multiple"; onTriggered: root.doc.setViewMode("continuous") }
         PMenuItem { text: "Zwei Seiten"; iconName: "book_open"; onTriggered: root.doc.setViewMode("two") }
         PMenuItem { text: "Fortlaufend, zwei Seiten"; iconName: "layout_column_two"; onTriggered: root.doc.setViewMode("continuousTwo") }
+        PMenuItem {
+            objectName: "readerNightMode"
+            text: Reader.nightMode ? "Nachtmodus ausschalten" : "Nachtmodus (Seiten dunkel)"
+            iconName: "weather_moon"
+            onTriggered: Reader.setNightMode(!Reader.nightMode)
+        }
     }
     PMenu {
         id: moreMenu
@@ -234,6 +310,7 @@ Rectangle {
         PMenuItem { text: "Erkannten Text entfernen"; iconName: "eraser"; enabled: root.doc !== null && !root.doc.ocrRunning; onTriggered: root.doc.removeRecognizedText([]) }
         PMenuItem { text: "PDFs anhängen …"; iconName: "merge"; enabled: root.doc !== null; onTriggered: root.doc.mergeFiles() }
         PMenuItem { text: "Dokument teilen …"; iconName: "document_landscape_split"; enabled: root.doc !== null; onTriggered: root.doc.splitDocument("") }
+        PMenuItem { objectName: "readerMenuMail"; text: "Per E-Mail senden …"; iconName: "mail"; enabled: root.doc !== null; onTriggered: moreMenu.afterClose = function() { Reader.sendByMail() } }
         PMenuItem { text: "Eigenschaften"; iconName: "info"; enabled: root.doc !== null; onTriggered: root.doc.showProperties() }
         PMenuItem { text: "Pfad kopieren"; iconName: "copy"; enabled: root.doc !== null && root.doc.path !== ""; onTriggered: App.copyPath(root.doc.path) }
         PMenuItem { text: "Ordner öffnen"; iconName: "folder"; enabled: root.doc !== null && root.doc.path !== ""; onTriggered: Reader.showInFolder(root.doc.path) }

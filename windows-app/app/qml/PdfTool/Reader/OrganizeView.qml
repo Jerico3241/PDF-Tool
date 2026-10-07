@@ -364,7 +364,7 @@ FocusScope {
                         readonly property bool fresh: loadedRevision === root.revision
                         anchors.fill: parent
                         anchors.margins: 1
-                        source: root.doc ? "image://pdfpage/" + root.doc.docId + "/" + cell.index + "/" + Math.round(thumb.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
+                        source: root.doc ? "image://pdfpage/" + root.doc.docId + Reader.imageTag + "/" + cell.index + "/" + Math.round(thumb.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
                         onImageReady: {
                             loadedRevision = root.revision
                             cell.settle()
@@ -568,7 +568,7 @@ FocusScope {
                 asynchronous: true
                 cache: false
                 smooth: true
-                source: root.doc && ghost.first >= 0 && dragArea.dragging ? "image://pdfpage/" + root.doc.docId + "/" + ghost.first + "/" + Math.round(ghost.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
+                source: root.doc && ghost.first >= 0 && dragArea.dragging ? "image://pdfpage/" + root.doc.docId + Reader.imageTag + "/" + ghost.first + "/" + Math.round(ghost.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
             }
         }
         Rectangle {

@@ -127,7 +127,7 @@ def test_no_app_code_uses_pikepdf_metadata_that_needs_lxml() -> None:
     assert found == []
     editor = APP_DIR / "tools" / "pdf_editor"
     writes = [line for file in ("document.py", "pages.py") for line in (editor / file).read_text(encoding="utf-8").splitlines() if ".save(buffer" in line]
-    assert len(writes) == 3 and all("fix_metadata_version=False" in line for line in writes)
+    assert len(writes) == 4 and all("fix_metadata_version=False" in line for line in writes)
 
 
 def test_xmp_sync_keeps_the_packet_and_refuses_unsafe_or_broken_xmp() -> None:

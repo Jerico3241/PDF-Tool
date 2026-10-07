@@ -95,8 +95,9 @@ def list_annotations(document: EditorDocument, page: int | None = None) -> list[
             rect = _rect(annot)
             if rect is None:
                 continue
+            label = "Unterschrift" if subtype == "/Stamp" and annot.get("/PTKind") == Name("/Signature") and _ours(annot) else LABELS.get(subtype, subtype.lstrip("/"))
             result.append(AnnotationInfo(
-                key_of(annot, index, position), index, subtype, LABELS.get(subtype, subtype.lstrip("/")), rect, _color(annot.get("/C")),
+                key_of(annot, index, position), index, subtype, label, rect, _color(annot.get("/C")),
                 _text(annot.get("/Contents")), _text(annot.get("/T")), _date(annot.get("/M")), str(annot.get("/PTEditor", "")) == "PDF Tool",
                 reply_to=_parent_key(annot, index, positions),
                 width=float(annot.BS.W) if isinstance(annot.get("/BS"), Dictionary) and "/W" in annot.BS else None,
@@ -270,6 +271,8 @@ def update(document: EditorDocument, history: History, key: str, *, contents: st
     """Inhalt bzw. Farbe ändern; das Erscheinungsbild eigener Anmerkungen wird neu erzeugt."""
     document.ensure_editable("annotate")
     page, _position, annot = find(document, key)
+    if color is not None and annot.get("/Subtype") == Name.Stamp and _ours(annot):
+        raise UnsupportedEdit("Die Farbe eines Stempels oder einer Unterschrift lässt sich nicht ändern – bitte neu setzen.")
     with commands.record(document, history, "Kommentar ändern", pages=(page,)) as rec:
         rec.object(annot, ("/Contents", "/C", "/M", "/AP", "/DA"))
         if contents is not None:
@@ -285,7 +288,7 @@ def update(document: EditorDocument, history: History, key: str, *, contents: st
 
 
 KEEP = object()  # Eigenschaft unverändert lassen
-RESIZABLE = ("/Square", "/Circle", "/FreeText", "/Ink", "/Line")
+RESIZABLE = ("/Square", "/Circle", "/FreeText", "/Ink", "/Line", "/Stamp")  # Stempel und Unterschrift: nur /Rect (das Bild folgt)
 
 
 def restyle(document: EditorDocument, history: History, key: str, *, width: float | None = None, fill=KEEP, opacity: float | None = None, font_size: float | None = None) -> None:

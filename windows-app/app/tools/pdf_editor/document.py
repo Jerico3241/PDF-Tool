@@ -28,6 +28,7 @@ from .errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired, Rea
 from .geometry import PageGeometry, Rect, rotation_of
 
 DEFAULT_MEDIABOX: Rect = (0.0, 0.0, 612.0, 792.0)  # US Letter – Standard laut PDF-Norm
+RESTRICTED_REASON = "Der Ersteller dieses PDFs hat das Bearbeiten nicht erlaubt."
 HEADER_WINDOW = 1024  # »%PDF-« muss in den ersten 1024 Bytes stehen (wie bei Acrobat/PDFium)
 TEXTPAGE_CACHE = 24  # geladene Textseiten je Dokument
 
@@ -97,7 +98,9 @@ class EditorDocument:
         self._textpages: dict[int, object] = {}
         self._geometry: dict[int, PageGeometry] = {}
         self.permissions = _permissions(pdf)
-        self.read_only_reason = "" if self.permissions.edit else "Der Ersteller dieses PDFs hat das Bearbeiten nicht erlaubt."
+        self.read_only_reason = "" if self.permissions.edit else RESTRICTED_REASON
+        # Kennwortschutz für das nächste Speichern (``protect``): ``None`` = wie die Datei
+        self.protection = None
         self.closed = False
         # Quellen eingefügter Seiten (andere PDFs): qpdf liest deren Stream-Daten erst beim
         # Schreiben – sie bleiben deshalb geöffnet, solange das Dokument offen ist.
@@ -173,7 +176,25 @@ class EditorDocument:
 
     @property
     def encrypted(self) -> bool:
+        """Verschlüsselt gespeichert – wie die Datei oder wie der festgelegte Kennwortschutz."""
+        if self.protection is not None:
+            return self.protection.enabled
         return bool(self.pdf.is_encrypted)
+
+    @property
+    def save_password(self) -> str | None:
+        """Kennwort, mit dem sich der gespeicherte Stand öffnen lässt (Prüfung nach dem Schreiben)."""
+        if self.protection is not None:
+            return self.protection.effective_owner or None
+        return self.password
+
+    def original_bytes(self) -> bytes:
+        """Die Datei, wie sie geöffnet wurde (verschlüsselt wie auf der Platte)."""
+        if self._data is not None:
+            return self._data
+        buffer = io.BytesIO()
+        self.pdf.save(buffer, encryption=True if self.pdf.is_encrypted else False, fix_metadata_version=False)
+        return buffer.getvalue()
 
     @property
     def page_count(self) -> int:
@@ -255,13 +276,23 @@ class EditorDocument:
         Immer ``fix_metadata_version=False``: Sonst liest pikepdf beim Schreiben die XMP-Metadaten
         mit lxml, um dort die PDF-Version nachzutragen – lxml gehört nicht zur Laufzeit der App
         (runtime-requirements.txt), und jedes PDF mit XMP-Metadaten ließe sich nicht speichern.
-        Die XMP-Metadaten bleiben deshalb unverändert (Eigenschaften ändern: ``metadata.update``)."""
+        Die XMP-Metadaten bleiben deshalb unverändert (Eigenschaften ändern: ``metadata.update``).
+
+        Ein festgelegter Kennwortschutz (``protection``) ersetzt beim Speichern die Verschlüsselung der
+        Datei – auch bei allen weiteren Speichervorgängen."""
         buffer = io.BytesIO()
         if for_view:
             self.pdf.save(buffer, encryption=False, compress_streams=False, fix_metadata_version=False, object_stream_mode=pikepdf.ObjectStreamMode.preserve)
         else:
-            self.pdf.save(buffer, encryption=True if (keep_encryption and self.encrypted) else False, compress_streams=True, fix_metadata_version=False, object_stream_mode=pikepdf.ObjectStreamMode.preserve)
+            self.pdf.save(buffer, encryption=self._encryption(keep_encryption), compress_streams=True, fix_metadata_version=False, object_stream_mode=pikepdf.ObjectStreamMode.preserve)
         return buffer.getvalue()
+
+    def _encryption(self, keep: bool):
+        if not keep:
+            return False
+        if self.protection is not None:
+            return self.protection.encryption() if self.protection.enabled else False
+        return True if self.pdf.is_encrypted else False
 
     def _close_view(self) -> None:
         for page, textpage in self._textpages.values():

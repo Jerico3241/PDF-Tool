@@ -6,7 +6,8 @@ und Speichern. Jede Änderung wirkt sofort – ohne Neustart.
 
 PDF Reader: Standardzoom und Seitenleiste für neu geöffnete Dokumente. Der Standard »Zuletzt
 verwendet« (``last``) übernimmt wie bisher die zuletzt eingestellte Ansicht bzw. Seitenleiste;
-der Reader fragt beim Öffnen ``reader_start_view`` und ``reader_start_panel``.
+der Reader fragt beim Öffnen ``reader_start_view`` und ``reader_start_panel``. Dazu »PDFs der letzten
+Sitzung beim Start wieder öffnen« (Standard: aus) – die Liste selbst führt der Reader.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ PROFILE_TEXTS = {
 # PDF Reader: Ansicht beim Öffnen (Schlüssel in gui-config.json; fehlt er: »last« wie bisher)
 READER_ZOOM_KEY = "reader_zoom_beim_oeffnen"
 READER_PANEL_KEY = "reader_leiste_beim_oeffnen"
+READER_SESSION_KEY = "reader_sitzung_wiederherstellen"  # PDFs der letzten Sitzung beim Start (fehlt er: aus)
 READER_ZOOMS = (("last", "Zuletzt verwendet"), ("width", "Seitenbreite"), ("page", "Ganze Seite"), ("100", "100 %"))
 READER_PANELS = (("last", "Zuletzt verwendet"), ("thumbs", "Seiten"), ("outline", "Lesezeichen"), ("none", "Keine"))
 
@@ -42,6 +44,7 @@ class SettingsController(Observable):
     customerRecordsChanged, customerRecords = prop(bool, "customerRecords", False)
     readerZoomChanged, readerZoom = prop(str, "readerZoom", "last")  # Standardzoom beim Öffnen
     readerPanelChanged, readerPanel = prop(str, "readerPanel", "last")  # Seitenleiste beim Öffnen
+    readerRestoreSessionChanged, readerRestoreSession = prop(bool, "readerRestoreSession", False)  # letzte Sitzung beim Start
 
     def __init__(self, app, theme: ThemeController, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -50,6 +53,7 @@ class SettingsController(Observable):
         self.customers = None  # CustomerController, sobald das Werkzeug eingerichtet ist
         self.set_quietly("readerZoom", _choice(app.cfg.get(READER_ZOOM_KEY), READER_ZOOMS))
         self.set_quietly("readerPanel", _choice(app.cfg.get(READER_PANEL_KEY), READER_PANELS))
+        self.set_quietly("readerRestoreSession", app.cfg.get(READER_SESSION_KEY) is True)
         app.register_config(self.config)
 
     def attach_customers(self, customers) -> None:
@@ -144,8 +148,18 @@ class SettingsController(Observable):
         die gewählte – ``thumbs`` (Seiten), ``outline`` (Lesezeichen), ``""`` (keine)."""
         return {"thumbs": "thumbs", "outline": "outline", "none": ""}.get(self.readerPanel, last)
 
+    @Slot(bool)
+    def setReaderRestoreSession(self, enabled: bool) -> None:  # noqa: N802
+        """PDFs der letzten Sitzung beim Start wieder öffnen. Aus: die gemerkte Liste wird entfernt."""
+        enabled = bool(enabled)
+        if enabled == self.readerRestoreSession:
+            return
+        self.readerRestoreSession = enabled
+        self.app.persist()
+        self.app.set_status("PDFs der letzten Sitzung werden beim Start wieder geöffnet." if enabled else "PDFs der letzten Sitzung werden beim Start nicht mehr geöffnet.", "success")
+
     def config(self) -> dict:
-        return {READER_ZOOM_KEY: self.readerZoom, READER_PANEL_KEY: self.readerPanel}
+        return {READER_ZOOM_KEY: self.readerZoom, READER_PANEL_KEY: self.readerPanel, READER_SESSION_KEY: self.readerRestoreSession}
 
     # Kundenakte -------------------------------------------------------------------------------------
     @Slot(bool)

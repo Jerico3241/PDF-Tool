@@ -299,6 +299,17 @@ PPage {
                 onClicked: Contracts.startPdf()
             }
             PButton { large: true; iconName: "folder_open"; text: "Ordner öffnen"; tip: "Zielordner im Explorer öffnen"; onClicked: Contracts.openFolder() }
+            // Nach dem Erstellen: die PDF als Anhang einer neuen E-Mail (an den Rechnungsempfänger, falls bekannt)
+            PButton {
+                objectName: "createMailPdf"
+                large: true
+                iconName: "mail"
+                text: "Per E-Mail senden"
+                tip: Contracts.lastPdfMailTip
+                visible: Contracts.lastPdf !== ""
+                enabled: !Contracts.busy
+                onClicked: Contracts.sendPdfByMail()
+            }
             Row {
                 spacing: 8
                 height: Metrics.controlHeightLarge
@@ -314,6 +325,7 @@ PPage {
             }
         }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("pdf_info") }
+        PInfoBar { objectName: "createMailInfo"; Layout.fillWidth: true; notice: Notices.area("pdf_mail_info") }
         Rectangle { Layout.fillWidth: true; Layout.topMargin: 14; Layout.bottomMargin: 12; height: 1; color: Theme.divider }
         RowLayout {
             Layout.fillWidth: true

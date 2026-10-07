@@ -73,6 +73,8 @@ jobs:
             dateien: reader reader_layout reader_v31 pages_v31 forms_v31
           - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
             dateien: objects objects_v31 edit_v31 reader_motion ocr
+          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite
+            dateien: protect comfort
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -157,8 +159,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
-      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern)
-        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py -q -p no:cacheprovider
+      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern, Per E-Mail senden)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py windows-app/tests/test_mail.py -q -p no:cacheprovider
 
       - name: 1. Tests (Vorlagen 2.0, Regelwerk 2.0 samt PDF-Pipeline, Sicherung und Wiederherstellung, Diagnose und Support-Paket)
         run: python -m pytest windows-app/tests/test_templates.py windows-app/tests/test_rules.py windows-app/tests/test_rules_pipeline.py windows-app/tests/test_backup.py windows-app/tests/test_diagnostics.py -v -p no:cacheprovider
@@ -176,6 +178,9 @@ jobs:
 
       - name: 1. Tests (PDF Editor – Kern, Speichern, Text, Objekte, Seiten, Bilder, Anmerkungen, Formulare ausfüllen und gestalten, Anhänge, Texterkennung, Eigenschaften)
         run: python -m pytest windows-app/tests/test_editor_core.py windows-app/tests/test_editor_save.py windows-app/tests/test_editor_text.py windows-app/tests/test_editor_objects.py windows-app/tests/test_editor_pages.py windows-app/tests/test_editor_images.py windows-app/tests/test_editor_annotations.py windows-app/tests/test_editor_forms.py windows-app/tests/test_editor_formdesign.py windows-app/tests/test_editor_properties.py windows-app/tests/test_editor_objectops.py windows-app/tests/test_editor_attachments.py windows-app/tests/test_editor_ocr.py -q -rs -p no:cacheprovider
+
+      - name: 1. Tests (PDF Editor – Schwärzen, Bereinigen, Reduzieren, Kennwortschutz, Verkleinern, Kopf-/Fußzeile und Wasserzeichen, Stempel und Unterschrift, Lesezeichen, Links, Zuschneiden)
+        run: python -m pytest windows-app/tests/test_editor_redact.py windows-app/tests/test_editor_cleanup.py windows-app/tests/test_editor_protect.py windows-app/tests/test_editor_optimize.py windows-app/tests/test_editor_pagemarks.py windows-app/tests/test_editor_stamps.py windows-app/tests/test_editor_navigation.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider

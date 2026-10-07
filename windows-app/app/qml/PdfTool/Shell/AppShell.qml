@@ -158,4 +158,6 @@ FocusScope {
     // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument)
     readonly property string currentTab: App.currentPage === "settings" ? "settings" : App.currentTool
     Shortcut { sequence: "Ctrl+W"; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }
+    // Zuletzt geschlossenes Dokument wieder öffnen – auf jeder Seite, wie im Browser
+    Shortcut { objectName: "reopenShortcut"; sequence: "Ctrl+Shift+T"; enabled: !Dialogs.open && Reader.canReopen; onActivated: Reader.reopenClosed() }
 }

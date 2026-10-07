@@ -153,6 +153,38 @@ PPage {
         }
     }
 
+    // Nachtmodus: nur die Anzeige der Seiten – Datei, Drucken und Export bleiben unverändert
+    PSettingsCard {
+        objectName: "readerNightCard"
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        iconName: "weather_moon"
+        title: "Nachtmodus"
+        description: "Seiten dunkelgrau mit heller Schrift – angenehmer bei wenig Licht. Nur die Anzeige: Datei, Drucken und Export bleiben unverändert."
+        PToggle {
+            objectName: "readerNightToggle"
+            label: "Nachtmodus"
+            checked: Reader.nightMode
+            onToggled: Reader.setNightMode(checked)
+        }
+    }
+
+    // Letzte Sitzung: beim Beenden gemerkt (nur Pfade, lokal in den Einstellungen), beim nächsten Start wieder geöffnet
+    PSettingsCard {
+        objectName: "readerSessionCard"
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        iconName: "history"
+        title: "PDFs der letzten Sitzung beim Start wieder öffnen"
+        description: "Beim Beenden merkt sich PDF Tool die geöffneten PDFs (nur Pfade, lokal auf diesem PC) und öffnet sie beim nächsten Start wieder – ungespeicherte Änderungen nicht."
+        PToggle {
+            objectName: "readerSessionToggle"
+            label: "PDFs der letzten Sitzung beim Start wieder öffnen"
+            checked: Settings.readerRestoreSession
+            onToggled: Settings.setReaderRestoreSession(checked)
+        }
+    }
+
     PSectionTitle { text: "Vertragsübersichten" }
 
     PSettingsCard {

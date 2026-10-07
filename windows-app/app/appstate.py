@@ -141,12 +141,12 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "PDF Reader & Editor: PDFs in Tabs lesen, durchsuchen und drucken – und bearbeiten: Text und einzelne Objekte direkt im PDF ändern, Bilder, Seiten organisieren, Kommentare, mit Rückgängig und sicherem Speichern.",
-    "Tabs statt Seitenleiste: ⌂ Start, geöffnete Werkzeuge und PDFs als Tabs oben wie in Adobe Acrobat, ≡ Menü; neue Startseite mit Werkzeugen, Ablagefläche und »Zuletzt verwendet«.",
-    "Formulare ausfüllen und gestalten: Textfelder, Kontrollkästchen, Optionsfelder, Dropdowns und Listen anlegen, verschieben, in der Größe ändern und ihre Eigenschaften bearbeiten.",
-    "Texterkennung (OCR) für gescannte PDFs – vollständig lokal und im Setup enthalten: Der Text wird durchsuchbar und kopierbar, das Aussehen der Seiten bleibt gleich.",
-    "Schneller und ruhiger: Die Startseite steht im ersten Bild, PDFs per Doppelklick öffnen direkt im Reader, »PDF reparieren« arbeitet viele Dateien mehrfach so schnell ab, das Mausrad scrollt gleichmäßig wie in Edge und Chrome.",
-    "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
+    "Schwärzen: Bereiche oder Text vormerken und wirklich aus der Datei entfernen – nicht nur abdecken. »Suchen und schwärzen« findet IBANs, E-Mail-Adressen, Telefonnummern, Datumsangaben und eigene Begriffe.",
+    "Vor dem Weitergeben: Dokument bereinigen, Kennwortschutz mit AES-256, Reduzieren und PDF verkleinern – alles über die neue Schaltfläche »Schützen«.",
+    "Seiten gestalten: Kopf- und Fußzeile, Seitenzahlen, Bates-Nummern und Wasserzeichen mit Vorschau, Seiten zuschneiden. Dazu Lesezeichen und Links setzen, ändern und löschen.",
+    "Unterschreiben: Unterschrift zeichnen oder aus einem Bild einlesen, Stempel wie GENEHMIGT oder BEZAHLT mit Datum – danach gleich verschieben und in der Größe ändern.",
+    "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite.",
+    "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
