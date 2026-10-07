@@ -112,6 +112,14 @@ def _editor_folder(monkeypatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def _assistant_folder(monkeypatch, tmp_path_factory):
+    """Sprachmodelle des KI-Assistenten liegen in Tests in einem eigenen Ordner – nie im echten %LOCALAPPDATA% –, und
+    einen KI-Prozess gibt es nur, wenn ein Test die Attrappe ausdrücklich einsetzt (``PDFTOOL_LLAMA_SERVER``)."""
+    monkeypatch.setenv("PDFTOOL_AI_DIR", str(tmp_path_factory.mktemp("ki")))
+    monkeypatch.delenv("PDFTOOL_LLAMA_SERVER", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _updates_offline(monkeypatch, tmp_path_factory):
     """Tests gehen nie ins Internet und starten nie ein Setup: Der Updater der App fragt eine nicht
     erreichbare lokale Adresse (offline), Downloads landen in einem eigenen Testordner, der

@@ -137,6 +137,20 @@ class Session:
     def text(self, page: int, start: int, count: int) -> str:
         return textlayer.text(self.document, page, start, count)
 
+    def page_texts(self, limit: int = 2_000_000) -> list[str]:
+        """Text aller Seiten (KI-Assistent) – zusammen höchstens ``limit`` Zeichen; danach folgen leere Seiten."""
+        result: list[str] = []
+        used = 0
+        for page in range(self.document.page_count):
+            if used >= limit:
+                result.append("")
+                continue
+            value = textlayer.text(self.document, page)
+            value = value[: max(0, limit - used)]
+            used += len(value)
+            result.append(value)
+        return result
+
     def selection_rects(self, page: int, start: int, count: int) -> list[list[float]]:
         geo = self.document.geometry(page)
         return [list(geo.rect_to_view(rect)) for rect in textlayer.rects(self.document, page, start, count)]
