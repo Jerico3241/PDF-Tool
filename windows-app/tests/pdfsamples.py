@@ -10,6 +10,7 @@ import io
 import os
 import random
 import re
+import zlib
 from pathlib import Path
 
 import pikepdf
@@ -356,4 +357,122 @@ def truncated_generator(path: Path) -> Path:
         out += b"%d 0 obj\n" % picture + image + b"\nendobj\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(bytes(out) + b"\x00" * 13)
+    return path
+
+
+# --- Fremde Daten vor bzw. nach der PDF -----------------------------------------------------------------------------
+
+MAIL_HEADER = (
+    b"Return-Path: <rechnung@example.org>\r\n"
+    + b"Received: from mail.example.org by mx.example.org; Mon, 5 Oct 2026 10:00:00 +0200\r\n" * 20
+    + b'Subject: Rechnung\r\nContent-Type: application/pdf; name="Rechnung.pdf"\r\nContent-Transfer-Encoding: binary\r\n\r\n'
+)
+HTTP_HEADER = b"HTTP/1.1 200 OK\r\nContent-Type: application/pdf\r\nCache-Control: no-cache\r\nX-Trace: " + b"0123456789abcdef" * 80 + b"\r\n\r\n"
+HTML_PAGE = b"<!DOCTYPE html>\n<html><head><title>Download</title></head><body>" + b"<p>Der Download startet gleich.</p>\n" * 40 + b"</body></html>\n"
+BOM_AND_GARBAGE = b"\xef\xbb\xbf" + bytes(byte | 0x80 for byte in random.Random(7).randbytes(1500))  # nur Bytes ab 0x80
+
+
+def with_prefix(path: Path, prefix: bytes, source: Path | None = None) -> Path:
+    """Fremde Daten vor der PDF – z. B. ein E-Mail- oder HTTP-Kopf, eine HTML-Seite oder Müll."""
+    data = file_bytes(source) if source is not None else healthy(path.with_name("_quelle_" + path.name), pages=3).read_bytes()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(prefix + data)
+    return path
+
+
+def with_suffix(path: Path, suffix: bytes, source: Path | None = None) -> Path:
+    """Fremde Daten nach dem letzten %%EOF."""
+    data = file_bytes(source) if source is not None else healthy(path.with_name("_quelle_" + path.name), pages=3).read_bytes()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data + suffix)
+    return path
+
+
+def eof_damaged(path: Path) -> Path:
+    """Kennung %%EOF beschädigt (»%%E0F«), startxref bleibt."""
+    data = classic_bytes(classic_objects(2))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data.replace(b"%%EOF", b"%%E0F"))
+    return path
+
+
+# --- Beschädigte Datenströme ----------------------------------------------------------------------------------------
+
+IMAGE_SIZE = (40, 30)
+
+
+def content_lines(page: int, count: int = 50) -> bytes:
+    """Inhaltsstrom mit ``count`` Textzeilen, jede ein eigener Textblock (BT … ET)."""
+    return b"".join(b"BT /F1 12 Tf 72 %d Td (Zeile %d von Seite %d) Tj ET\n" % (780 - 14 * n, n + 1, page) for n in range(count))
+
+
+def flate_truncated(path: Path, pages: int = 3, damaged: int = 2, keep: float = 0.5) -> Path:
+    """Der Flate-Inhaltsstrom von Seite ``damaged`` bricht ab (nur ``keep`` der Daten); /Length passt
+    dazu – Querverweise, Trailer und Seitenbaum sind intakt."""
+    objs = classic_objects(pages)
+    packed = zlib.compress(content_lines(damaged))
+    cut = packed[: int(len(packed) * keep)]
+    objs[3 + 2 * damaged] = b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(cut) + cut + b"\nendstream"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(classic_bytes(objs))
+    return path
+
+
+def a85_truncated(path: Path) -> Path:
+    """Inhaltsstrom der ersten Seite (ASCII85 + Flate wie bei reportlab) bricht nach der Hälfte ab;
+    Leerzeichen halten /Length und alle Offsets gleich."""
+    data = healthy(path.with_name("_quelle_" + path.name)).read_bytes()
+    match = re.search(rb"/Filter \[ /ASCII85Decode /FlateDecode \] /Length (\d+)\s*>>\s*stream\r?\n", data)
+    start, length = match.end(), int(match.group(1))
+    half = length // 2
+    path.write_bytes(data[: start + half] + b" " * (length - half) + data[start + length :])
+    return path
+
+
+def form_truncated(path: Path) -> Path:
+    """Seite 1 zeichnet ein Formular (Form-XObject), dessen Flate-Inhalt abbricht."""
+    objs = classic_objects(2)
+    packed = zlib.compress(b"q\n" + content_lines(1) + b"Q\n")
+    cut = packed[: len(packed) // 2]
+    objs[20] = (
+        b"<< /Type /XObject /Subtype /Form /BBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Length %d /Filter /FlateDecode >>\nstream\n" % len(cut)
+        + cut
+        + b"\nendstream"
+    )
+    text = b"q /Fm1 Do Q"
+    objs[5] = b"<< /Length %d >>\nstream\n" % len(text) + text + b"\nendstream"
+    objs[4] = objs[4].replace(b"/Font << /F1 3 0 R >>", b"/Font << /F1 3 0 R >> /XObject << /Fm1 20 0 R >>")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(classic_bytes(objs))
+    return path
+
+
+def image_pixels(width: int = IMAGE_SIZE[0], height: int = IMAGE_SIZE[1]) -> bytes:
+    """RGB-Verlauf (reproduzierbar, nirgends weiß)."""
+    return b"".join(bytes([(x * 6) % 200, (y * 8) % 200, 120]) for y in range(height) for x in range(width))
+
+
+def image_truncated(path: Path, kind: str = "rgb") -> Path:
+    """Eine Seite mit einem Bild (Flate), dessen Daten nach der Hälfte abbrechen. ``kind``: »rgb«
+    (ohne Prädiktor), »png« (PNG-Prädiktor) oder »indexed« (Farbpalette – nicht sicher zu retten)."""
+    width, height = IMAGE_SIZE
+    pixels = image_pixels()
+    extra = b"/ColorSpace /DeviceRGB /BitsPerComponent 8"
+    if kind == "png":
+        data = b"".join(b"\x00" + pixels[row * width * 3 : (row + 1) * width * 3] for row in range(height))
+        extra += b" /DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns %d >>" % width
+    elif kind == "indexed":
+        data = bytes((x + y) % 4 for y in range(height) for x in range(width))
+        extra = b"/ColorSpace [/Indexed /DeviceRGB 3 <FF000000FF000000FFFFFFFF>] /BitsPerComponent 8"
+    else:
+        data = pixels
+    packed = zlib.compress(data)
+    cut = packed[: len(packed) // 2]
+    objs = classic_objects(1)
+    objs[20] = b"<< /Type /XObject /Subtype /Image /Width %d /Height %d %s /Filter /FlateDecode /Length %d >>\nstream\n" % (width, height, extra, len(cut)) + cut + b"\nendstream"
+    text = b"q 200 0 0 150 72 500 cm /Im1 Do Q BT /F1 24 Tf 72 700 Td (Bildseite) Tj ET"
+    objs[5] = b"<< /Length %d >>\nstream\n" % len(text) + text + b"\nendstream"
+    objs[4] = objs[4].replace(b"/Font << /F1 3 0 R >>", b"/Font << /F1 3 0 R >> /XObject << /Im1 20 0 R >>")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(classic_bytes(objs))
     return path

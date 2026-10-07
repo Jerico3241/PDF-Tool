@@ -1,5 +1,6 @@
 """Erweiterte PDF-Wiederherstellung: pypdf als dritte Engine, Rohanalyse, Neuaufbau von
-Querverweisen, Trailer, startxref, %%EOF und Seitenbaum.
+Querverweisen, Trailer, startxref, %%EOF und Seitenbaum; fremde Daten vor bzw. nach der PDF
+und die Rettung beschädigter Datenströme.
 
 Alle Test-PDFs entstehen programmatisch (``pdfsamples.py``). Geprüft wird nie nur das
 Öffnen: Seitenzahl, Text, Seitengröße und Darstellbarkeit der Ausgabe.
@@ -7,8 +8,10 @@ Alle Test-PDFs entstehen programmatisch (``pdfsamples.py``). Geprüft wird nie n
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import time
+import zlib
 from pathlib import Path
 
 import pikepdf
@@ -18,7 +21,7 @@ import pytest
 import pdfsamples as samples
 from tools.pdf_repair import engine
 from tools.pdf_repair.models import STAGES, Condition, Method, RepairMode, RepairStatus
-from tools.pdf_repair.recovery import lenient, rebuild, scanner
+from tools.pdf_repair.recovery import lenient, rebuild, scanner, streams
 
 pypdf = pytest.importorskip("pypdf")
 
@@ -356,3 +359,308 @@ def test_tolerant_engine_wins_when_it_keeps_more_than_pdfium(tmp_path: Path, mon
     assert result.pages_after == 5 and not any("Lesezeichen" in w for w in result.warnings)
     with pikepdf.open(result.output_path) as pdf:
         assert "/Outlines" in pdf.Root
+
+
+# --- Fremde Daten vor bzw. nach der PDF -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [samples.MAIL_HEADER, samples.HTTP_HEADER, samples.HTML_PAGE, samples.BOM_AND_GARBAGE],
+    ids=["E-Mail-Kopf", "HTTP-Kopf", "HTML", "BOM-und-Muell"],
+)
+def test_data_before_the_pdf_header_is_removed(tmp_path: Path, prefix: bytes) -> None:
+    """»%PDF-« erst hinter Byte 1024: Die PDF-Daten allein durchlaufen die Stufen; Analyse,
+    Bericht und Ergebnis nennen die entfernten Daten."""
+    assert len(prefix) > engine.HEAD_BYTES
+    damaged = samples.with_prefix(tmp_path / "Anhang.pdf", prefix, samples.healthy(tmp_path / "quelle.pdf", pages=3))
+    analysis = engine.analyze(damaged)
+    assert analysis.condition is Condition.REPAIRABLE and analysis.repairable and analysis.looks_like_pdf
+    assert analysis.data_before == len(prefix) and analysis.data_after == 0
+    assert analysis.structural_errors == [engine.FINDINGS["header"]]  # die PDF selbst ist heil – kein Folgebefund
+    checks = {check.key: check for check in analysis.checks}
+    assert checks["header"].ok is False and checks["header"].detail.startswith("PDF 1.3 – erst nach")
+    assert checks["xref"].ok and checks["trailer"].ok and checks["eof"].ok
+    assert analysis.pdfium_pages == 3 and analysis.rasterizable_pages == 3  # auch PDFium liest die PDF-Daten
+    result, stages = repair(damaged, tmp_path)
+    assert "trim" in stages
+    assert result.status is RepairStatus.REPAIRED and result.method is Method.REWRITE
+    assert result.data_removed == len(prefix) and result.pages_before == result.pages_after == 3
+    assert any(action.startswith("Daten vor dem PDF-Anfang entfernt") for action in result.repair_actions)
+    assert len(result.warnings) == 1 and result.warnings[0].startswith("Vor dem PDF-Anfang standen")
+    assert Path(result.output_path).read_bytes().startswith(b"%PDF-")
+    assert_usable(result.output_path, 3, ["Seite 1", "Seite 2", "Seite 3"])
+
+
+def test_data_before_a_damaged_pdf_no_longer_hides_it(tmp_path: Path) -> None:
+    """Vorspann und zerstörte Struktur zugleich: bisher »keine lesbare PDF«, jetzt erweiterte Wiederherstellung."""
+    damaged = samples.with_prefix(tmp_path / "Download.pdf", samples.HTTP_HEADER, samples.real_case(tmp_path / "_struktur.pdf"))
+    analysis = engine.analyze(damaged)
+    assert analysis.condition is Condition.RAW_RECOVERABLE and analysis.error is None and analysis.pages_expected == 3
+    assert analysis.structural_errors[0] == engine.FINDINGS["header"]
+    result, _stages = repair(damaged, tmp_path)
+    assert result.status is RepairStatus.REPAIRED and result.method is Method.PAGE_TREE_REBUILD
+    assert result.data_removed == len(samples.HTTP_HEADER)
+    assert result.repair_actions[1].startswith("Daten vor dem PDF-Anfang entfernt")
+    assert_usable(result.output_path, 3, ["Seite 1 von 3", "Seite 2 von 3", "Seite 3 von 3"])
+    # Die Kopie der Eingabe ist wieder entfernt, nur die Ausgabe bleibt
+    assert samples.files_in(tmp_path / "arbeit") == [engine.CLEAN_DIR]
+    assert samples.files_in(tmp_path / "arbeit" / engine.CLEAN_DIR) == [Path(result.output_path).name]
+
+
+def test_header_search_has_limits(tmp_path: Path, monkeypatch) -> None:
+    """Kein Vorspann: eine kleine Markierung (bis 1 KB – das lesen alle Engines) und eine Kennung, vor der
+    schon PDF-Objekte stehen (zerstörte Kennung, eingebettete PDF). Gesucht wird nur bis HEADER_LIMIT."""
+    source = samples.healthy(tmp_path / "quelle.pdf", pages=1)
+    bom = samples.with_prefix(tmp_path / "bom.pdf", b"\xef\xbb\xbf", source)
+    analysis = engine.analyze(bom)
+    assert analysis.condition is Condition.HEALTHY and analysis.data_before == 0
+    data = source.read_bytes()
+    embedded = tmp_path / "eingebettet.pdf"
+    embedded.write_bytes(b"%XXX-1.3" + data[8:] + b"y" * 2000 + b"%PDF-1.7\n")
+    assert engine._scan(embedded, embedded.stat().st_size).before == 0
+    monkeypatch.setattr(engine, "HEADER_LIMIT", 4096)
+    near = samples.with_prefix(tmp_path / "nah.pdf", b"x" * 2000, source)
+    assert engine._scan(near, near.stat().st_size).before == 2000
+    far = samples.with_prefix(tmp_path / "weit.pdf", b"x" * 5000, source)
+    assert engine._scan(far, far.stat().st_size).before == 0
+
+
+def test_data_after_the_last_eof_is_removed(tmp_path: Path) -> None:
+    """Mehr als 1 KB nach dem letzten %%EOF (z. B. ein angehängtes Download-Fenster): kein »abgeschnitten«,
+    sondern fremde Daten – sie werden entfernt und genannt."""
+    suffix = b"\r\n" + samples.HTML_PAGE * 4
+    damaged = samples.with_suffix(tmp_path / "Download.pdf", suffix, samples.healthy(tmp_path / "quelle.pdf", pages=3))
+    analysis = engine.analyze(damaged)
+    assert analysis.condition is Condition.REPAIRABLE and analysis.data_after == len(suffix) and analysis.data_before == 0
+    assert analysis.structural_errors == [engine.FINDINGS["tail"]]
+    checks = {check.key: check for check in analysis.checks}
+    assert checks["eof"].ok is False and checks["eof"].detail.startswith("%%EOF vorhanden, danach")
+    result, stages = repair(damaged, tmp_path)
+    assert "trim" in stages and result.status is RepairStatus.REPAIRED and result.data_removed == len(suffix)
+    assert any(action.startswith("Daten nach dem Dateiende (%%EOF) entfernt") for action in result.repair_actions)
+    assert result.warnings[0].startswith("Nach dem Dateiende (%%EOF) standen")
+    output = Path(result.output_path).read_bytes()
+    assert output.rstrip().endswith(b"%%EOF") and b"<html>" not in output
+    assert_usable(result.output_path, 3, ["Seite 1", "Seite 2", "Seite 3"])
+
+
+def test_trailing_pdf_data_is_never_cut(tmp_path: Path) -> None:
+    """Folgt auf %%EOF noch PDF-Struktur (ein abgeschnittenes inkrementelles Update), ist das kein Nachspann:
+    nichts wird abgeschnitten, das fehlende Dateiende bleibt ein Befund. Bis 1 KB nach %%EOF stören nicht."""
+    data = samples.classic_bytes(samples.classic_objects(2))
+    damaged = tmp_path / "update.pdf"
+    damaged.write_bytes(data + b"5 0 obj\n<< /Length 9000 >>\nstream\n" + b"0 0 m 10 10 l S\n" * 300)
+    analysis = engine.analyze(damaged)
+    assert analysis.data_after == 0 and engine.FINDINGS["tail"] not in analysis.structural_errors
+    assert engine.FINDINGS["eof"] in analysis.structural_errors
+    small = samples.with_suffix(tmp_path / "klein.pdf", b"\n" + b"x" * 500, samples.healthy(tmp_path / "quelle.pdf", pages=1))
+    analysis = engine.analyze(small)
+    assert analysis.condition is Condition.HEALTHY and analysis.data_after == 0
+
+
+def test_foreign_data_around_an_unreadable_file_leaves_nothing(tmp_path: Path) -> None:
+    damaged = samples.with_prefix(tmp_path / "kaputt.pdf", samples.MAIL_HEADER, samples.garbage(tmp_path / "_zufall.pdf"))
+    result, _stages = repair(damaged, tmp_path)
+    assert result.status is RepairStatus.FAILED and result.output_path is None and result.data_removed == 0
+    assert samples.files_in(tmp_path / "arbeit") == []
+
+
+# --- Beschädigte Datenströme ------------------------------------------------------------------------------------------
+
+
+def operators(pdf_path: str, index: int) -> list[str]:
+    with pikepdf.open(pdf_path, attempt_recovery=False) as pdf:
+        assert pdf.get_warnings() == []
+        found = [str(operator) for _operands, operator in pikepdf.parse_content_stream(pdf.pages[index])]
+        assert pdf.get_warnings() == []  # vollständig lesbar
+        return found
+
+
+def test_truncated_flate_content_is_partially_rescued(tmp_path: Path) -> None:
+    """Abgeschnittener Inhaltsstrom: Der lesbare Teil bis zum letzten vollständigen Befehl wird übernommen,
+    die Seite ist teilweise darstellbar – das Ergebnis heißt ehrlich »teilweise wiederhergestellt«."""
+    damaged = samples.flate_truncated(tmp_path / "strom.pdf")
+    analysis = engine.analyze(damaged)
+    assert analysis.condition is Condition.DAMAGED and analysis.incomplete_pages == [2]
+    result, _stages = repair(damaged, tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED  # nie »repariert«
+    assert result.streams_rescued == 1 and result.incomplete_pages == [2] and result.pages_after == 3
+    assert result.warnings[0] == "2 von 3 Seiten konnten vollständig rekonstruiert werden."
+    assert "1 Datenstrom teilweise gerettet: Übernommen wurde nur der lesbare Teil, der beschädigte Rest fehlt." in result.warnings
+    assert any(action.startswith("1 Inhaltsstrom teilweise gerettet") for action in result.repair_actions)
+    found = operators(result.output_path, 1)
+    assert found[-1] == "ET" and 0 < found.count("Tj") < 50  # offener Textblock geschlossen
+    content = texts(result.output_path)
+    assert "Zeile 1 von Seite 2" in content[1] and "Zeile 50 von Seite 2" not in content[1]
+    assert "Seite 1 von 3" in content[0] and "Seite 3 von 3" in content[2]
+    doc = pdfium.PdfDocument(result.output_path)
+    try:
+        assert doc[1].render(scale=0.3).to_pil().getextrema() != ((255, 255), (255, 255), (255, 255))
+    finally:
+        doc.close()
+
+
+def test_rescued_stream_ends_at_the_last_complete_operator(tmp_path: Path) -> None:
+    """ASCII85 + Flate (wie bei reportlab), abgeschnitten: qpdf übernähme den Strom stillschweigend gekürzt,
+    mitten in einem Befehl. Gerettet wird bis zum letzten vollständigen Befehl, die Seite zählt als unvollständig."""
+    damaged = samples.a85_truncated(tmp_path / "a85.pdf")
+    with pikepdf.open(samples.healthy(tmp_path / "vorlage.pdf")) as pdf:
+        original = [str(operator) for _operands, operator in pikepdf.parse_content_stream(pdf.pages[0])]
+    result, _stages = repair(damaged, tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.incomplete_pages == [1] and result.streams_rescued == 1
+    found = operators(result.output_path, 0)
+    assert 0 < len(found) < len(original) and found[:-1] == original[: len(found) - 1] and found[-1] == "ET"
+
+
+def test_truncated_form_xobject_is_rescued(tmp_path: Path) -> None:
+    result, _stages = repair(samples.form_truncated(tmp_path / "formular.pdf"), tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.incomplete_pages == [1] and result.streams_rescued == 1
+    with pikepdf.open(result.output_path, attempt_recovery=False) as pdf:
+        form = pdf.pages[0].obj.Resources.XObject.Fm1
+        assert form.read_bytes().rstrip().endswith(b"Q") and pdf.get_warnings() == []  # Grafikzustand geschlossen
+    content = texts(result.output_path)
+    assert "Zeile 1 von Seite 1" in content[0] and "Zeile 50 von Seite 1" not in content[0]
+    assert "Seite 2 von 2" in content[1]
+
+
+@pytest.mark.parametrize("kind", ["rgb", "png"], ids=["ohne-Praediktor", "PNG-Praediktor"])
+def test_truncated_image_keeps_readable_rows(tmp_path: Path, kind: str) -> None:
+    """Bild sicher rettbar (Flate, RGB): lesbare Zeilen bleiben, fehlende werden weiß – nichts wird erfunden."""
+    result, _stages = repair(samples.image_truncated(tmp_path / f"bild-{kind}.pdf", kind), tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.incomplete_pages == [1] and result.streams_rescued == 1
+    assert any(action.startswith("1 Bild teilweise gerettet") for action in result.repair_actions)
+    width, height = samples.IMAGE_SIZE
+    row = width * 3
+    pixels = samples.image_pixels()
+    with pikepdf.open(result.output_path, attempt_recovery=False) as pdf:
+        image = pikepdf.PdfImage(pdf.pages[0].obj.Resources.XObject.Im1).as_pil_image().convert("RGB")
+        assert pdf.get_warnings() == []
+    assert image.size == (width, height)
+    data = image.tobytes()
+    kept = next(index for index in range(height) if data[index * row : (index + 1) * row] != pixels[index * row : (index + 1) * row])
+    assert 0 < kept < height
+    assert data[kept * row :] == b"\xff" * ((height - kept) * row)
+
+
+def test_unsafe_image_stays_unchanged_and_is_reported(tmp_path: Path) -> None:
+    """Bild mit Farbpalette: fehlende Zeilen ließen sich nicht sicher »weiß« füllen – unverändert, gemeldet."""
+    damaged = samples.image_truncated(tmp_path / "palette.pdf", "indexed")
+    with pikepdf.open(damaged) as pdf:
+        before = pdf.pages[0].obj.Resources.XObject.Im1.read_raw_bytes()
+    result, _stages = repair(damaged, tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.incomplete_pages == [1] and result.streams_rescued == 0
+    assert "Ein beschädigtes Bild ließ sich nicht sicher retten und wurde unverändert übernommen." in result.warnings
+    with pikepdf.open(result.output_path) as pdf:
+        assert pdf.pages[0].obj.Resources.XObject.Im1.read_raw_bytes() == before
+
+
+def test_stream_without_checksum_is_rewritten_completely(tmp_path: Path) -> None:
+    """Fehlt einem Flate-Strom nur die Prüfsumme am Ende, ist nichts verloren: neu geschrieben, »repariert«.
+    Ein leerer Datenstrom (leere Seite) gilt nie als beschädigt."""
+    objs = samples.classic_objects(2)
+    packed = zlib.compress(samples.content_lines(1))[:-4]
+    objs[5] = b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(packed) + packed + b"\nendstream"
+    objs[7] = b"<< /Length 0 /Filter /FlateDecode >>\nstream\n\nendstream"
+    damaged = tmp_path / "pruefsumme.pdf"
+    damaged.write_bytes(samples._cut_structure(samples.classic_bytes(objs)))  # dazu: xref, Trailer und %%EOF fehlen
+    result, _stages = repair(damaged, tmp_path)
+    assert result.status is RepairStatus.REPAIRED and result.incomplete_pages == [] and result.streams_rescued == 0
+    assert any(action == "1 Datenstrom ohne gültiges Ende vollständig gelesen und neu geschrieben" for action in result.repair_actions)
+    assert operators(result.output_path, 0).count("Tj") == 50
+    assert "Zeile 50 von Seite 1" in texts(result.output_path)[0]
+
+
+def test_corrupt_stream_without_readable_operator_stays_unchanged(tmp_path: Path) -> None:
+    result, _stages = repair(samples.corrupt_stream(tmp_path / "strom.pdf"), tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.streams_rescued == 0
+    assert "Einzelne Datenströme waren schon im Original nicht lesbar und wurden unverändert übernommen." in result.warnings
+
+
+def test_rescue_after_selection_when_only_pdfium_succeeds(tmp_path: Path, monkeypatch) -> None:
+    """PDFium übernimmt beschädigte Ströme unverändert – gerettet wird nach der Auswahl, dann erneut geprüft."""
+    for stage in ("_stage_rewrite", "_stage_pages", "_stage_lenient", "_stage_raw"):
+        monkeypatch.setattr(engine, stage, lambda *args: None)
+    result, stages = repair(samples.flate_truncated(tmp_path / "strom.pdf"), tmp_path)
+    assert result.method is Method.PDFIUM and "streams_rescue" in stages
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.streams_rescued == 1 and result.incomplete_pages == [2]
+    assert operators(result.output_path, 1)[-1] == "ET"
+    assert samples.files_in(tmp_path / "arbeit") == [Path(result.output_path).name]
+
+
+def test_rescue_is_dropped_without_improvement(tmp_path: Path, monkeypatch) -> None:
+    """Nichts verschlechtern: Prüft die gerettete Fassung nicht besser, bleibt die bisherige Ausgabe."""
+    for stage in ("_stage_rewrite", "_stage_pages", "_stage_lenient", "_stage_raw"):
+        monkeypatch.setattr(engine, stage, lambda *args: None)
+    original = engine.validate
+
+    def stricter(path: Path, password: str | None = None) -> engine.Validation:
+        check = original(path, password)
+        if path.name.endswith("-datenstroeme.pdf"):
+            check.problems = check.problems + ["absichtlich schlechter"] * 10
+        return check
+
+    monkeypatch.setattr(engine, "validate", stricter)
+    result, _stages = repair(samples.flate_truncated(tmp_path / "strom.pdf"), tmp_path)
+    assert result.method is Method.PDFIUM and result.streams_rescued == 0
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.incomplete_pages == [2]
+    assert any("Gerettete Datenströme verworfen" in line for line in result.technical)
+    assert samples.files_in(tmp_path / "arbeit") == ["stufe3-pdfium.pdf"]
+
+
+def test_encrypted_file_with_truncated_stream_stays_protected(tmp_path: Path) -> None:
+    plain = samples.flate_truncated(tmp_path / "_offen.pdf")
+    damaged = tmp_path / "geschuetzt.pdf"
+    with pikepdf.open(plain) as pdf:
+        pdf.save(damaged, encryption=pikepdf.Encryption(user="geheim", owner="geheim", R=6))
+    result, _stages = repair(damaged, tmp_path, password="geheim")
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED and result.streams_rescued == 1 and result.incomplete_pages == [2]
+    with pytest.raises(pikepdf.PasswordError):
+        pikepdf.open(result.output_path)
+    with pikepdf.open(result.output_path, password="geheim", attempt_recovery=False) as pdf:
+        assert pdf.is_encrypted and pdf.get_warnings() == []
+        assert str(pikepdf.parse_content_stream(pdf.pages[1])[-1].operator) == "ET"
+
+
+# --- Bausteine der Rettung ----------------------------------------------------------------------------------------
+
+
+def test_content_is_cut_at_the_last_complete_operator() -> None:
+    cut = streams.cut_content(b"q 1 0 0 1 0 0 cm BT /F1 12 Tf (Hal(l)o \\) Welt) Tj ET BT /F1 9 Tf [(Ab) -20 (c")
+    assert cut.data == b"q 1 0 0 1 0 0 cm BT /F1 12 Tf (Hal(l)o \\) Welt) Tj ET BT /F1 9 Tf\nET Q\n"
+    assert cut.operators == 8 and cut.closed == ["ET", "Q"]
+    complete = b"/P <</MCID 0>> BDC BT <48656C6C6F> Tj ET EMC BX /X 1 Vendor EX 0 g"
+    assert streams.cut_content(complete).data == complete + b"\n"  # Wörterbücher, Hex-Text, BX … EX
+    image = b"q BI /W 2 /H 1 /BPC 8 /CS /G ID \x00\xff EI Q"
+    assert streams.cut_content(image).data == image + b"\n"
+    assert streams.cut_content(b"q BI /W 2 /H 1 /BPC 8 /CS /G ID \x00").data == b"q\nQ\n"  # Inline-Bild abgeschnitten
+    assert streams.cut_content(b"0 0 m 10 10 l S \x93\x01Zufall 1 2 Tx").data == b"0 0 m 10 10 l S\n"  # unbekannt: Schluss
+    assert streams.cut_content(b"BT /F1 12 Tf 16.").data == b"BT /F1 12 Tf\nET\n"  # Operanden ohne Befehl fallen weg
+    assert streams.cut_content(b"(nur Text ohne Ende") is None and streams.cut_content(b"") is None
+
+
+def test_flate_is_read_as_far_as_possible() -> None:
+    data = bytes(range(256)) * 64
+    packed = zlib.compress(data)
+    assert streams.inflate(packed, 1 << 20) == streams.Decoded(data, True)
+    part = streams.inflate(packed[: len(packed) // 2], 1 << 20)
+    assert not part.complete and 0 < len(part.data) < len(data) and data.startswith(part.data)
+    assert streams.inflate(packed[:-4], 1 << 20) == streams.Decoded(data, True)  # nur die Prüfsumme fehlt
+    assert not streams.inflate(packed[:-4] + bytes(4), 1 << 20).complete  # falsche Prüfsumme: beschädigt
+    bomb = streams.inflate(zlib.compress(bytes(10 << 20)), 1 << 20)  # Schutz vor »Zip-Bomben«
+    assert not bomb.complete and len(bomb.data) == 1 << 20
+    assert streams.flate_ok(packed) and not streams.flate_ok(packed[:-4]) and not streams.flate_ok(packed[:100])
+    assert streams.flate_complete(packed) and streams.flate_complete(packed[:-4])  # nur die Prüfsumme fehlt
+    assert not streams.flate_complete(packed[:-4] + bytes(4)) and not streams.flate_complete(packed[:100])
+
+
+def test_ascii_filters_are_read_tolerantly() -> None:
+    assert streams.ascii_hex(b"48 65 6C 6c 6F>") == streams.Decoded(b"Hello", True)
+    assert streams.ascii_hex(b"48656C6") == streams.Decoded(b"Hel", False)  # abgeschnitten: halbe Ziffer fällt weg
+    text = b"Hallo Welt, 1234"
+    encoded = base64.a85encode(text) + b"~>"
+    assert streams.ascii85(encoded) == streams.Decoded(text, True)
+    assert streams.ascii85(b"z!!!!!~>") == streams.Decoded(bytes(8), True)
+    cut = streams.ascii85(encoded[:12])
+    assert not cut.complete and cut.data == text[:8]
+    assert STAGES["trim"] and STAGES["streams_rescue"]

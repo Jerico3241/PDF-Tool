@@ -410,6 +410,8 @@ Details für Mitwirkende: [`windows-app/ARCHITECTURE.md`](../windows-app/ARCHITE
   Zwischendateien. Schutz vor Ressourcenbomben: Der Arbeitsspeicher des Arbeitsprozesses ist
   begrenzt (Windows-Job-Objekt), Bildgröße und Zahl der untersuchten Objekte je Seite haben
   Obergrenzen; stürzt eine Engine an einer manipulierten Datei ab, endet nur der Arbeitsprozess.
+  Technische Meldungen des Arbeitsprozesses (Bereich `repair`, ohne Inhalte, Passwörter, Datei-
+  oder Ordnernamen) reicht die Pipe an die App weiter; sie stehen in `pdf-tool.log`.
 
 ## Erweiterte PDF-Reparatur
 
@@ -425,6 +427,22 @@ technischen Details. Code: `app/tools/pdf_repair/recovery/`.
   (`strict=False`) → Rohanalyse → neue Querverweistabelle, Trailer, startxref und `%%EOF` →
   bei Bedarf neuer Seitenbaum → Normalisierung mit qpdf → Prüfung. Ein vollständiges Ergebnis ohne
   Verluste beendet die Suche; der Rettungsmodus (Bilder) folgt nur nach Bestätigung.
+- **Fremde Daten vor bzw. nach der PDF:** Steht `%PDF-` erst hinter Byte 1024 (E-Mail- oder
+  HTTP-Kopf, HTML, BOM mit Datenmüll – gesucht wird in den ersten 8 MB) oder folgen auf das letzte
+  `%%EOF` mehr als 1 KB ohne PDF-Struktur, durchläuft zuerst eine Kopie nur mit den PDF-Daten alle
+  Stufen; ihre Kandidaten werden geprüft und bewertet wie alle anderen, das Original folgt, wenn sie
+  kein vollständiges Ergebnis liefert. Analyse, Details („Daten vor dem PDF-Anfang entfernt
+  (2.880 Byte)“) und Ergebnis nennen das. Stehen vor der Kennung schon PDF-Objekte oder folgt auf
+  `%%EOF` noch PDF-Struktur (z. B. ein abgeschnittenes Update), wird nichts abgeschnitten.
+- **Datenströme retten** (`recovery/streams.py`): Flate-Ströme, die sich nicht vollständig
+  dekodieren lassen, werden mit `zlib.decompressobj` so weit wie möglich gelesen – bevor qpdf eine
+  Ausgabe schreibt (sonst übernähme qpdf sie unverändert oder, mit ASCII85 davor, stillschweigend
+  gekürzt) und noch einmal nach der Auswahl, falls die beste Ausgabe sie noch enthält (z. B. von
+  PDFium). Inhaltsströme von Seiten und Formularen enden am letzten vollständigen Befehl, offene
+  Blöcke (`BT`, `q`, `BDC`) werden geschlossen. Bilder nur, wenn es sicher geht (Flate ohne oder
+  mit PNG-Prädiktor, Grau/RGB/CMYK, kein `/Decode`, keine Maske; fehlende Zeilen weiß), sonst
+  unverändert und gemeldet. Seiten mit beschädigten Strömen zählen als unvollständig; das Ergebnis
+  heißt „teilweise wiederhergestellt“ („1 Datenstrom teilweise gerettet …“), nie „repariert“.
 - **Dritte Engine:** pypdf (BSD-3-Clause) liest mit eigenen, toleranteren Regeln; dem Ergebnis wird
   nicht vertraut – es wird mit qpdf normalisiert und wie jede Ausgabe geprüft. PyMuPDF und
   Ghostscript wurden wegen ihrer AGPL-Lizenz nicht verwendet (siehe `THIRD_PARTY_LICENSES.md`).

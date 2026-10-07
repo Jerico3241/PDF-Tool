@@ -33,6 +33,7 @@ HELP_NOTES = (
     "Die Originaldateien werden nie verändert, umbenannt oder überschrieben. Standardname: »<Name>_repariert.pdf«; gibt es den Namen schon, wird nummeriert: »<Name>_repariert (1).pdf« …",
     "Nicht jede Datei lässt sich vollständig wiederherstellen; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
     "Öffnet keine PDF-Engine die Datei, sucht PDF Tool die noch vorhandenen PDF-Objekte direkt in der Datei und baut Querverweise, Trailer und Seitenbaum neu auf (»PDF-Struktur rekonstruieren«).",
+    "Fremde Daten vor oder nach der PDF (z. B. ein E-Mail-Kopf) werden entfernt und im Ergebnis genannt. Von beschädigten Datenströmen wird der lesbare Teil übernommen; das Ergebnis heißt dann »teilweise wiederhergestellt«.",
     "Der Rettungsmodus überträgt lesbare Seiten als Bilder – nur für die einzelne Datei und nur nach Bestätigung, weil Text- und Vektorinformationen verloren gehen.",
     "Passwörter gelten nur für ihre Datei und werden nicht gespeichert. Technische Details stehen im Protokoll pdf-repair.log im Datenordner.",
 )

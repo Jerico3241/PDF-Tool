@@ -306,8 +306,9 @@ def rebuild_tree(pdf, scan: RawScan, technical: list[str]) -> TreeResult | None:
         root_pages = pdf.Root.get("/Pages")
         if _is_dict(root_pages):
             roots.append(root_pages)
-    except Exception:  # noqa: BLE001
-        pass
+    except (pikepdf.PdfError, ValueError, TypeError) as exc:
+        # Katalog ohne lesbaren Seitenbaum: die Knoten und Seiten aus der Rohanalyse genügen
+        technical.append(f"Seitenbaum: /Pages des Katalogs nicht lesbar ({type(exc).__name__})")
     for raw in scan.of_kind("Pages"):
         try:
             node = pdf.get_object((raw.number, raw.generation))
@@ -560,5 +561,8 @@ def finish(source: str | Path, target: str | Path, scan: RawScan, technical: lis
                 except Exception:  # noqa: BLE001
                     incomplete.append(index)
             pages = len(pdf.pages)
-            pdf.save(target, fix_metadata_version=False)
+            # Datenströme unverändert schreiben: Beim Komprimieren dekodierte qpdf beschädigte (z. B.
+            # ASCII85 + Flate) und kürzte sie stillschweigend – gerettet und komprimiert wird erst bei
+            # der Normalisierung
+            pdf.save(target, fix_metadata_version=False, compress_streams=False)
     return FinishResult(pages, tree, fonts, incomplete)

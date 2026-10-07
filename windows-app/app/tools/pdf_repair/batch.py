@@ -69,7 +69,7 @@ class Phase(str, Enum):
 
 
 # Fortschrittsmeldungen der Engine (``models.STAGES``) → Schritt
-_REPAIR_STAGES = {"rewrite", "write", "pages", "lenient", "raw_scan", "xref_rebuild", "trailer_rebuild", "page_tree_rebuild", "normalize", "raster"}
+_REPAIR_STAGES = {"trim", "rewrite", "write", "pages", "lenient", "raw_scan", "xref_rebuild", "trailer_rebuild", "page_tree_rebuild", "normalize", "raster", "streams_rescue"}
 
 
 def phase_of(kind: str, stage: str) -> Phase:
