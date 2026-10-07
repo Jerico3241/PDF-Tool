@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.1.0-beta.4 (Beta zum Testen)
+Version 3.1.0
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -27,7 +27,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.1.0-beta.4.exe
+PDF-Tool-Setup-3.1.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -37,96 +37,61 @@ Python-Installation, qpdf, Ghostscript, Tesseract oder andere
 Zusatzprogramme sind nicht nötig.
 
 
-Neu in Version 3.1 (Beta 4) – Tabs; Formulare, Texterkennung, Objekte
-----------------------------------------------------------------------
-Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
-(Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.1.0 Beta“.
-Neu in Beta 4 – Tabs statt Seitenleiste (wie in Adobe Acrobat):
-- Oben eine Tab-Leiste: ⌂ Start, daneben jedes geöffnete PDF und jedes
-  geöffnete Werkzeug als Tab, „+“ öffnet weitere PDFs; ≡ öffnet das Menü,
-  rechts Kurzanleitung und Einstellungen. Die Seitenleiste links entfällt –
-  PDFs und Werkzeuge haben die ganze Fensterbreite. Werkzeug-Tabs schließen
-  mit ×, mittlerer Maustaste oder Strg+W; Eingaben bleiben erhalten.
+Neu in Version 3.1 – PDF Reader & Editor, Tabs statt Seitenleiste
+------------------------------------------------------------------
+Für Anwender von 2.8 das bisher größte Update (getestet als Betas 3.0.0-beta.1
+bis 3.1.0-beta.4):
+- Tabs statt Seitenleiste (wie in Adobe Acrobat): Oben eine Tab-Leiste mit
+  ⌂ Start, daneben jedes geöffnete PDF und jedes geöffnete Werkzeug als
+  Tab, „+“ öffnet weitere PDFs; ≡ öffnet das Menü, rechts Kurzanleitung und
+  Einstellungen. PDFs und Werkzeuge haben die ganze Fensterbreite.
+  Werkzeug-Tabs schließen mit ×, mittlerer Maustaste oder Strg+W; Eingaben
+  bleiben erhalten.
 - Neue Startseite: Werkzeuge, eine Ablagefläche zum Öffnen von PDFs und
   „Zuletzt verwendet“ mit Ordner, Zeitpunkt und Größe.
-- Der Reader erscheint mit dem geöffneten PDF; nach dem letzten
-  geschlossenen PDF geht es zur Startseite.
-Neu in Beta 3 – Feinschliff:
-- Scrollen: Jede Mausrad-Raste verschiebt gleich weit, auch wenn das Rad
-  zügig gedreht wird; je Raste so weit wie in Edge und Chrome.
-- PDF Reader: Ein Klick auf das gewählte Werkzeug schaltet es ab (zurück zu
-  „Auswählen“). Neues Werkzeug „Verschieben“: das Dokument mit der Maus
-  ziehen; neben den Seiten geht das in jedem Werkzeug, Umschalt + Mausrad
-  verschiebt waagerecht.
-- Viele Korrekturen an der Oberfläche: Markierung der gewählten Ansicht in
-  den Vertragsübersichten, keine springenden Ansichten, Leiste in „Seiten
-  organisieren“, eingeklappte Navigation ohne große Lücke, einheitliche
-  Abstände und Texte.
-Neu in Beta 2 – schneller, ohne neue Funktionen:
-- Start: Die Startseite steht im ersten Bild; die PDF-Bibliotheken lädt
-  PDF Tool erst nach dem Start im Hintergrund.
-- PDF per Doppelklick bzw. „Öffnen mit“: PDF Tool startet direkt im Reader
-  statt über die Startseite.
-- Der Reader ist sofort da, auch gleich nach dem Start; sein Dokumentbereich
-  entsteht im Hintergrund.
-- PDF reparieren: Ein Arbeitsprozess erledigt mehrere Dateien nacheinander –
-  viele PDFs werden mehrfach so schnell analysiert und repariert; die
-  Oberfläche wartet nie auf den Start eines Arbeitsprozesses.
-- Arbeitsspeicher: Seitenbilder geschlossener PDFs bleiben nicht im
-  Zwischenspeicher.
-Seit Beta 1:
-- Formulare gestalten: Textfelder, Kontrollkästchen, Optionsfelder,
-  Dropdowns und Listen anlegen (Rahmen aufziehen oder klicken), verschieben,
-  in der Größe ändern, duplizieren, löschen und ihre Eigenschaften ändern
-  (Name, Kurzinfo, Pflichtfeld, Schreibschutz, Schriftgröße, Optionen …).
+- PDF Reader: PDFs öffnen (auch per Doppelklick und „Öffnen mit“ im
+  Explorer, ohne PDF Tool zur Standard-App zu machen), Miniaturen,
+  Lesezeichen, Anhänge, Suche (Strg+F), Zoom (Strg+Mausrad, freie
+  Eingabe), Ansichten, Vollbild (F11), „Gehe zu Seite“ (Strg+G),
+  Textauswahl, Drucken mit Seitenbereichen, Eigenschaften.
+- PDF Editor: Text direkt im PDF ändern oder hinzufügen – PDF Tool nennt den
+  Weg („Direkt im PDF geändert“, „Neu gesetzt“ oder „Kompatibilitätsmodus“;
+  eine Überlagerung ist keine Schwärzung). Schriftart, unterstrichen,
+  durchgestrichen, Ausrichtung und eigene Farben. Rückgängig (Strg+Z).
+- Objekt bearbeiten: eine Zeile, eine Tabellenzelle, ein Wort, ein Bild oder
+  eine Grafik einzeln ändern, verschieben, löschen, drehen, ausrichten, in
+  den Vorder- oder Hintergrund stellen; Ausschneiden, Kopieren und Einfügen –
+  auch in einem anderen Tab und aus anderen Programmen.
+- Seiten organisieren: drehen, löschen, duplizieren, leere Seite, Seiten aus
+  einer anderen PDF einfügen (auch nur „2, 4-5“), PDFs anhängen, als neue
+  PDF speichern, teilen, als PNG/JPEG exportieren; Rahmenauswahl, Seiten in
+  ein PDF in einem anderen Tab kopieren.
+- Kommentare: markieren, unterstreichen, durchstreichen, Notiz, Freihand
+  (auch als sichtbare Unterschrift), Rechteck, Ellipse, Linie, Pfeil,
+  Textfeld – nachträglich formatieren, Größe ändern, beantworten.
+- Formulare ausfüllen und gestalten: Textfelder, Kontrollkästchen,
+  Optionsfelder, Dropdowns und Listen anlegen (Rahmen aufziehen oder
+  klicken), verschieben, in der Größe ändern, duplizieren, löschen und ihre
+  Eigenschaften ändern (Name, Kurzinfo, Pflichtfeld, Schreibschutz,
+  Schriftgröße, Optionen …).
 - Texterkennung (OCR) für gescannte PDFs – vollständig lokal, im Setup
   enthalten (Deutsch, Englisch): Der Text wird durchsuchbar und kopierbar,
   das Aussehen der Seiten bleibt gleich. Läuft im Hintergrund mit
   Fortschritt und „Abbrechen“; Rückgängig nimmt sie vollständig zurück.
-- Objekt bearbeiten: auch Linien, Rahmen und Grafiken; gemischte Auswahl
-  aus Text, Bildern und Grafiken; Drehen, Ausrichten und Verteilen, Vorder-
-  und Hintergrund, Deckkraft; Ausschneiden, Kopieren und Einfügen – auch in
-  einem anderen Tab und aus anderen Programmen (Text, Bilder).
-- Text: Schriftart, unterstrichen, durchgestrichen, Ausrichtung und eigene
-  Farben.
-- Seiten: Rahmenauswahl in „Seiten organisieren“, Seiten kopieren und in
-  einem anderen Tab einfügen, nur ausgewählte Seiten aus einer PDF
-  einfügen („2, 4-5“), Kontextmenü der Miniaturen, gewählte Seiten drucken.
-- Kommentare: Linienstärke, Füllung, Deckkraft und Schriftgröße
-  nachträglich ändern, Größe an den Ecken, Antworten in der Seitenleiste.
-- Reader: Vollbild (F11), Seitenleiste „Anhänge“, Seitenleisten und Suche
-  je Tab, „Gehe zu Seite“ (Strg+G), freie Zoomeingabe, Ansicht beim Öffnen
-  einstellbar (Einstellungen → PDF Reader).
-- PDF reparieren: rettet PDFs mit fremden Daten vor oder nach dem
-  PDF-Inhalt (z. B. aus E-Mail- oder Webseiten-Exporten) und beschädigte
-  Datenströme so weit wie möglich.
-
-Neu in Version 3.0 (Beta 2) – PDF Reader & Editor
--------------------------------------------------
-Neu in Beta 2:
-- Speichern repariert: PDFs mit XMP-Metadaten (die meisten PDFs aus
-  Office-Programmen, Acrobat oder Scannern) lassen sich wieder speichern;
-  Fehler beim Speichern werden verständlich gemeldet, mit „Speichern
-  unter …“ direkt in der Meldung.
-- Objekt bearbeiten: eine Zeile, eine Tabellenzelle oder ein Wort einzeln
-  ändern, verschieben, löschen oder formatieren; alles andere auf der Seite
-  bleibt an seinem Platz.
-- Aufgeräumter Reader: Umschalter im Kopf der Seitenleisten, feste Breiten,
-  eingeklappte Navigation im Dokument, Textauswahl ohne eigene Leiste
-  (Aktionen im Kontextmenü) und weiche Bewegungen nach dem
-  Animationsprofil (Einstellungen → Animationen).
-Seit Beta 1:
-- PDF Reader: PDFs öffnen (auch „Öffnen mit“ im Explorer, ohne PDF Tool zur
-  Standard-App zu machen), Tabs, Miniaturen, Lesezeichen, Suche (Strg+F),
-  Zoom (Strg+Mausrad), Ansichten, Textauswahl, Drucken, Eigenschaften.
-- PDF Editor: Text direkt im PDF ändern oder hinzufügen – PDF Tool nennt den
-  Weg („Direkt im PDF geändert“, „Neu gesetzt“ oder „Kompatibilitätsmodus“;
-  eine Überlagerung ist keine Schwärzung). Bilder, Seiten organisieren,
-  Kommentare, Formulare ausfüllen, Rückgängig (Strg+Z).
 - Sicheres Speichern (Strg+S): Die neue Datei wird vor dem Ersetzen geprüft;
-  bei einem Fehler bleibt das Original unverändert. Vor dem Überschreiben
-  wird der vorherige Stand gesichert. Ungespeicherte Änderungen werden nach
-  einem Absturz zum Wiederherstellen angeboten.
+  bei einem Fehler bleibt das Original unverändert, die Meldung bietet
+  „Speichern unter …“ an. Vor dem Überschreiben wird der vorherige Stand
+  gesichert. Ungespeicherte Änderungen werden nach einem Absturz zum
+  Wiederherstellen angeboten.
+- PDF reparieren: ein Arbeitsprozess erledigt mehrere Dateien nacheinander –
+  viele PDFs werden mehrfach so schnell analysiert und repariert; PDFs mit
+  fremden Daten vor oder nach dem PDF-Inhalt (z. B. aus E-Mail- oder
+  Webseiten-Exporten) und beschädigte Datenströme werden so weit wie
+  möglich gerettet.
+- Schneller und ruhiger: Die Startseite steht im ersten Bild, PDFs per
+  Doppelklick öffnen direkt im Reader; jede Mausrad-Raste verschiebt gleich
+  weit wie in Edge und Chrome; weiche Bewegungen nach dem Animationsprofil
+  (Einstellungen → Animationen).
 - PDF-JavaScript wird nie ausgeführt; Passwörter bleiben nur im
   Arbeitsspeicher.
 
@@ -354,21 +319,12 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 3.1.0-beta.3 auf 3.1.0-beta.4 (Kanal „Beta“): Das Setup
-ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
-unverändert; die zuletzt geöffneten PDFs stehen auf der Startseite.
-
-Update von PDF Tool 3.0.0-beta.2 auf 3.1.0-beta.4 (Kanal „Beta“): Das Setup
-ersetzt nur die Programmdateien und legt die Texterkennung im Unterordner
-„ocr“ an. Alle Einstellungen und Daten bleiben unverändert; der gewählte
-Kanal „Beta“ erscheint als eingeschalteter Schalter „Beta-Versionen
-erhalten“.
-
-Update von PDF Tool 2.8 auf 3.1.0-beta.4 (Kanal „Beta“): Das Setup ersetzt
-nur die Programmdateien und trägt PDF Tool unter „Öffnen mit“ für
-PDF-Dateien ein (die Standard-App für PDF bleibt unverändert). Alle
-Einstellungen und Daten bleiben unverändert. Der Kanal „Stable“ erhält diese
-Beta nicht.
+Update von PDF Tool 2.8 auf 3.1.0: Das Setup ersetzt nur die
+Programmdateien, legt die Texterkennung im Unterordner „ocr“ an und trägt
+PDF Tool unter „Öffnen mit“ für PDF-Dateien ein (die Standard-App für PDF
+bleibt unverändert). Alle Einstellungen und Daten bleiben unverändert. Wer
+eine Beta von 3.0 oder 3.1 nutzt (Kanal „Beta“), erhält 3.1.0 als Update;
+Daten, Einstellungen und der Kanal „Beta“ bleiben erhalten.
 
 Update von PDF Tool 2.7.2 auf 2.8.0: Das Setup ersetzt nur die
 Programmdateien. Vorlagen bis 2.7 werden beim ersten Start einmalig als
