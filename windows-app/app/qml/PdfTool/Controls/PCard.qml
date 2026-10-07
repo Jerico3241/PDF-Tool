@@ -46,6 +46,7 @@ Rectangle {
                 Layout.alignment: Qt.AlignTop
                 spacing: 2
                 PText {
+                    id: titleText
                     text: card.title
                     textStyle: "bodyStrong"
                     Layout.fillWidth: true
@@ -63,6 +64,9 @@ Rectangle {
             Row {
                 id: headerRightSlot
                 Layout.alignment: Qt.AlignTop
+                // Ohne Untertitel mittig zur Titelzeile (sonst säße eine Schaltfläche tiefer als der Titel);
+                // der Titel bleibt, wo er in allen Karten steht
+                Layout.topMargin: card.subtitle === "" ? Math.min(0, Math.round((titleText.implicitHeight - implicitHeight) / 2)) : 0
                 spacing: 4
             }
         }

@@ -289,7 +289,7 @@ Item {
                         id: pickButton
                         objectName: "repairPick"
                         kind: "accent"
-                        iconName: "open"
+                        iconName: "folder_open"
                         text: "PDFs auswählen"
                         tip: "Eine oder mehrere PDFs auswählen (Strg+O)"
                         onClicked: Repair.pick()
