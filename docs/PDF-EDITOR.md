@@ -8,7 +8,7 @@ kommentieren – vollständig lokal. Kurzfassung für Anwender: [README](../READ
 
 | Teil | Aufgabe | Code |
 | --- | --- | --- |
-| Engine (ohne Oberfläche) | Dokument, Darstellung, Textschicht, Suche, Gliederung, Text bearbeiten, Bilder, Seiten, Anmerkungen, Formulare, Metadaten, Bildexport, Rückgängig, Speichern, Sitzungssicherung | `windows-app/app/tools/pdf_editor/` |
+| Engine (ohne Oberfläche) | Dokument, Darstellung, Textschicht, Suche, Gliederung, Text bearbeiten, Bilder, Seiten, Anmerkungen, Formulare, Metadaten, Bildexport, Texterkennung, Rückgängig, Speichern, Sitzungssicherung | `windows-app/app/tools/pdf_editor/` |
 | Arbeitsthread | ein Thread für alle Zugriffe auf geöffnete Dokumente; Aufträge mit Priorität (Bearbeiten/Öffnen/Speichern vor sichtbaren Seiten vor Miniaturen vor Suche), Seitenbilder abbrechbar; die Suche gibt dringenden Aufträgen zwischendurch Vorrang | `app/qtapp/reader/engine.py` |
 | Controller | Tabs, Öffnen (Dialog, Ziehen, »Zuletzt geöffnet«, »Öffnen mit«), Ansicht, Werkzeuge, Dialoge | `app/qtapp/reader/controller.py`, `document.py`, `session.py`, `printing.py` |
 | Oberfläche | Seitenansicht (virtualisiert), Tabs, Befehls- und Werkzeugleiste, Miniaturen, Lesezeichen, Suche, Kommentare, »Seiten organisieren« | `app/qml/PdfTool/Reader/` |
@@ -198,7 +198,8 @@ oder Spalten:
 Alle Toleranzen sind relativ zur Schriftgröße in Seitenkoordinaten, also unabhängig von Zoom und
 DPI. Unsichtbarer Text (Darstellungsart 3, etwa die Texterkennung über einem Scan) ist kein Objekt.
 Auf Seiten ohne Text steht »Auf dieser Seite wurde kein bearbeitbarer PDF-Text erkannt.«. Bilder
-bleiben dort trotzdem wählbar. OCR gibt es nicht.
+bleiben dort trotzdem wählbar. Gescannte Seiten macht die [Texterkennung](#texterkennung-ocr)
+durchsuchbar; ihr Text bleibt unsichtbar und ist ebenfalls kein Objekt.
 
 **Zuordnung zum Inhaltsstrom.** Die Textobjekte von PDFium werden den Textoperatoren zugeordnet
 (gleiche Reihenfolge, gleicher Text). Danach werden je Operator die Codes einzeln den Zeichen
@@ -291,6 +292,38 @@ Seitenstand (Revision), sonst wird neu analysiert.
   Erscheinungsbild wird neu erzeugt, damit der Wert in jedem Programm gleich aussieht.
   Schreibgeschützte, Passwort- und Signaturfelder werden nicht geändert; bei XFA wird nur der
   AcroForm-Teil bearbeitet. **PDF-JavaScript wird nie ausgeführt** (auch keine Berechnungen).
+- **Formulare gestalten** (Werkzeug »Formular gestalten«, Pfeil neben »Formular«; Engine
+  `formdesign.py`): Textfeld, Kontrollkästchen, Optionsfeld (Gruppe; weitere Optionen über »Option
+  hinzufügen«), Dropdown und Liste anlegen – Feldart wählen und einen Rahmen aufziehen, klicken
+  (Standardgröße) oder per Rechtsklick »… hier«. Felder ziehen verschiebt sie, die Ecken ändern die
+  Größe (frei, mit Umschalt im Seitenverhältnis), Pfeiltasten verschieben (1 pt, mit Umschalt 10 pt;
+  gesammelt als ein Schritt), Strg+D dupliziert (bei Optionsfeldern: neue Option derselben Gruppe), Entf
+  löscht. Doppelklick, Eingabetaste oder »Eigenschaften …« öffnet den Dialog »Feldeigenschaften«:
+  Name, Kurzinfo, Pflichtfeld, schreibgeschützt, mehrzeilig, Zeichenzahl, Schriftgröße, Ausrichtung,
+  Optionen, Exportwert, Rahmen und Hintergrund. Neue Felder sind gewöhnliche AcroForm-Felder mit
+  gezeichneten Erscheinungsbildern für jeden Zustand (ohne Schrift für Haken und Punkt) und
+  Standardschriften in den Formularressourcen – sie lassen sich in jedem Programm ausfüllen. Jede
+  Änderung ist ein Schritt für Rückgängig; Arrays und Dictionaries werden nie in place verändert.
+  Fremde Kästchen behalten ihr Aussehen, solange Rahmen und Hintergrund nicht geändert werden;
+  Signaturfelder und Schaltflächen lassen sich verschieben, skalieren und löschen, aber nicht
+  duplizieren. XFA-Formulare werden nicht umgestaltet (ein XFA-Programm zeigte neue Felder nicht).
+
+## Texterkennung (OCR)
+
+`tools/pdf_editor/ocr.py` legt über gescannte Seiten eine unsichtbare Textebene – vollständig lokal
+mit Tesseract. Die Seite sieht danach aus wie vorher; Suche, Auswahl und Kopieren finden den Text.
+
+- **Engine:** gebündelt unter `<Installationsordner>\ocr\` (Tesseract 5.5.3, Windows-Build der UB
+  Mannheim: nur `tesseract.exe` und die DLLs aus seinen Importtabellen; Sprachdaten Deutsch, Englisch
+  und Lageerkennung aus `tessdata_fast`; `build.py`, geprüft von `release_check.check_ocr`). Sonst
+  `PDFTOOL_TESSERACT` (Pfad zur ausführbaren Datei) oder `tesseract` im PATH.
+- **Ablauf:** `render_page_image` zeichnet im Arbeitsthread die sichtbare Seite (CropBox, Drehung)
+  mit 300 dpi. `recognize` startet Tesseract in einem beliebigen Thread als eigenen Prozess; Bild und
+  Ergebnis liegen in einem privaten Temp-Ordner, der immer gelöscht wird, Abbrechen beendet den
+  Prozess. `apply_text_layers` übernimmt im Arbeitsthread die Text-only-PDF als Formular-XObject
+  `/PTOCRn`, platziert über `PageGeometry.to_page`, ersetzt eine vorhandene Ebene – ein Schritt für
+  Rückgängig, geprüft wie beim Bearbeiten (Darstellung unverändert, Text lesbar).
+- **Datenschutz:** Nichts verlässt den Rechner, erkannte Texte werden nicht protokolliert.
 
 ## Rückgängig und Wiederholen
 
@@ -375,8 +408,12 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
 
 ## Tests
 
-- Engine: `tests/test_editor_*.py` (Kern, Text, Seiten, Bilder, Anmerkungen, Formulare,
-  Eigenschaften) mit künstlichen PDFs aus `tests/editorsamples.py`.
+- Engine: `tests/test_editor_*.py` (Kern, Text, Seiten, Bilder, Anmerkungen, Formulare ausfüllen und
+  gestalten, Eigenschaften) mit künstlichen PDFs aus `tests/editorsamples.py`.
+- Formulare gestalten: `tests/test_editor_formdesign.py` (alle Feldarten anlegen, ausfüllen, speichern,
+  neu öffnen; verschieben, Größe, duplizieren, löschen, Eigenschaften, Rückgängig, XFA, Berechtigungen)
+  und `tests/test_qt_forms_v31.py` (Werkzeugleiste, Rahmen aufziehen, Klick, Kontextmenü, Ziehen,
+  Ecken, Strg+D, Entf, Pfeiltasten, Dialog, danach ausfüllen und speichern).
 - Oberfläche: `tests/test_qt_reader.py` – Maus und Tastatur wie von Hand (Auswahl, Zoom mit
   Strg+Mausrad, Text ändern, Zeichnen, Bilder, Formulare, Seiten organisieren, Speichern, Passwort,
   beschädigte und signierte PDFs, »Öffnen mit«, Sitzungssicherung, Datenschutz).
@@ -406,18 +443,27 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   - einheitliche Köpfe (kein Titel gekürzt), leere Zustände, Befehlsleiste ohne Umschalter
   - eingeklappte Navigation im Dokument
   - kein Neuanordnen in jedem Bild (Animationsprofile „Vollständig“ und „Aus“)
+- Texterkennung: `tests/test_editor_ocr.py` – Scans aus `editorsamples.scanned` (aufrecht, `/Rotate`,
+  CropBox, gemischt), Lage der Treffer, Darstellung, Rückgängig, Ersetzen, Speichern, Abbruch, fehlende
+  Sprache. Tests mit Tesseract laufen nur, wenn eine Engine gefunden wird; die Textebene prüfen die
+  übrigen auch ohne.
 - Laufzeit und Setup: `tests/smoke_runtime.py` (Text direkt ändern, Schrift-Teilmenge einbetten,
-  speichern) und `tests/smoke_installer.ps1` (»Öffnen mit«, zweiter Start reicht die PDF weiter,
-  Standard-App für PDF unverändert, Deinstallation entfernt die Einträge).
+  speichern, Texterkennung mit der gebündelten Engine) und `tests/smoke_installer.ps1` (»Öffnen mit«,
+  zweiter Start reicht die PDF weiter, Standard-App für PDF unverändert, Deinstallation entfernt die
+  Einträge).
 
-## Bekannte Einschränkungen (3.0.0-beta.2)
+## Bekannte Einschränkungen (3.1.0-beta.1)
 
 - Textauswahl innerhalb einer Seite (nicht über Seitengrenzen hinweg).
 - Keine Schwärzung: Eine echte Schwärzung (Entfernen von Text, Bildern und Vektoren eines
   Bereichs) ist nicht enthalten. Die Überlagerung ist ausdrücklich keine Schwärzung.
 - Digitale Signaturen werden erkannt, aber nicht erstellt; eine sichtbare Unterschrift entsteht
   mit dem Freihand-Werkzeug.
-- XFA-Formulare: nur der AcroForm-Teil; PDF-JavaScript (Berechnungen, Prüfungen) läuft nie.
+- XFA-Formulare: nur der AcroForm-Teil lässt sich ausfüllen, nicht gestalten; PDF-JavaScript
+  (Berechnungen, Prüfungen) läuft nie.
+- Texterkennung: gebündelt sind nur Deutsch und Englisch; Seiten, die schon Text haben (auch die
+  Textebene eines anderen Programms), werden nicht erkannt – ersetzt oder entfernt werden nur
+  Textebenen von PDF Tool.
 - Text in Type3-Schriften und mit anderen CMaps als Identity-H/V wird nicht direkt geändert (neu
   gesetzt oder überlagert – der Hinweis nennt den Weg).
 - Objekt bearbeiten:
@@ -426,8 +472,7 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   - **Nur überlagert** werden Text in Formular-XObjects, senkrechter Text (Identity-V),
     Type3-Schriften und Seiten mit unklarer Struktur. Diese Texte lassen sich weder verschieben
     noch formatieren.
-  - **Schrift** und **Drehung** werden angezeigt, aber nicht geändert.
-  - **Noch nicht enthalten:** Vektorobjekte (Linien, Rechtecke, Pfade), Einrasten beim Ziehen und
-    manuelles Gruppieren.
+  - **Drehen** in 90°-Schritten (Schaltflächen, Kontextmenü); beliebige Winkel nicht.
+  - **Noch nicht enthalten:** Einrasten beim Ziehen und manuelles Gruppieren.
   - **Bilder** wie im Bildwerkzeug: Bilder in Formular-XObjects und Inline-Bilder werden nur
     geändert, wo das sicher möglich ist.

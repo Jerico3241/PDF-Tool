@@ -133,7 +133,12 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
   Fortschritt nur für die betroffene Zeile und Rolle.
 - PDF Reader & Editor: ein eigener Arbeitsthread (`qtapp/reader/engine.py`) für alle Zugriffe auf
   geöffnete Dokumente, Aufträge mit Priorität (Bearbeiten vor sichtbaren Seiten vor Miniaturen vor
-  Suche), Seitenbilder abbrechbar und in einem begrenzten Zwischenspeicher.
+  Suche), Seitenbilder abbrechbar und in einem begrenzten Zwischenspeicher. Die Texterkennung läuft
+  als Hintergrundauftrag im App-Arbeitsthread (Tesseract als eigener Prozess, abbrechbar); Änderungen
+  am Dokument warten, bis sie fertig ist. Einstellungen des Readers in `gui-config.json`:
+  `reader_zoom_beim_oeffnen` (`last`, `width`, `page`, `100`), `reader_leiste_beim_oeffnen` (`last`,
+  `thumbs`, `outline`, `none`) – fehlt der Schlüssel oder ist der Wert unbekannt: `last` – und
+  `reader_ocr_sprachen` (zuletzt gewählte Sprachen der Texterkennung).
 - `timers.Timers` – benannte, abbrechbare Zeitgeber (verzögertes Speichern, Entprellen der Suche).
 
 ## QML-Oberfläche (`app/qml`)
@@ -276,8 +281,10 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
   über `tests/caret_geometry.py` – je Skalierung ein eigener Prozess).
 - PDF reparieren: `tests/test_pdf_repair_batch.py` (Liste, Zustände, Namen, Konflikte ohne Qt),
   `tests/test_qt_repair.py` (eine PDF wie bis 2.7.0, mehrere PDFs, Namen; bis zu 100 PDFs).
-- PDF Reader & Editor: `tests/test_editor_*.py` (Engine) und `tests/test_qt_reader.py` (Oberfläche mit
-  Maus und Tastatur); Messung: `tests/bench_editor.py`.
+- PDF Reader & Editor: `tests/test_editor_*.py` (Engine) und `tests/test_qt_reader.py`,
+  `test_qt_reader_v31.py`, `test_qt_objects*.py`, `test_qt_pages_v31.py`, `test_qt_edit_v31.py`,
+  `test_qt_forms_v31.py`, `test_qt_ocr.py` (Oberfläche mit Maus und Tastatur); Messung:
+  `tests/bench_editor.py`.
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
   (`tests/fixtures/config_v22.json` … `config_v272.json`, dazu Kundenakten und ein Vertragsstand)
   in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.
@@ -287,9 +294,9 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 ## CI
 
 - **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Pull Request, Push auf `main` und manuell):
-  Tests (die Qt-Tests in fünf gleichzeitig laufenden Jobs auf eigenen Rechnern) → Setup bauen →
-  Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen stabilen Version
-  (`windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
+  Tests (die Qt-Tests in sechs gleichzeitig laufenden Jobs auf eigenen Rechnern) → Setup bauen →
+  Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen veröffentlichten Version
+  (für eine Beta auch eine Beta; `windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test
   → QML-Smoke-Test → Updater-E2E-Test → auf `main` nach allen Jobs: Release Candidate
   `PDF-Tool-Release-Candidate-<Commit-SHA>` (Setup, Prüfsumme, Manifest; `windows-app/release_candidate.py`).

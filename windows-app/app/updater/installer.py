@@ -5,6 +5,9 @@ Konsolenfenster, vom App-Prozess gelöst) und beendet sich dann wie über das Sc
 Der Hilfsprozess wartet auf ihr Ende, prüft das Setup erneut und startet es. Das Inno-Setup
 aktualisiert die vorhandene Installation (gleiche AppId) und bietet am Ende »PDF Tool starten«
 an. Benutzerdaten liegen außerhalb des Programmordners und bleiben unberührt.
+
+Protokoll (Kategorie ``installer``): Start des Hilfsprozesses mit dem Namen des Setups – ohne
+Ordner. Was der Hilfsprozess danach tut, steht in seinem eigenen Protokoll (``update-start.log``).
 """
 
 from __future__ import annotations
@@ -14,10 +17,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+from diagnostics.applog import INSTALLER
+from diagnostics.applog import get as get_log
+
 LAUNCH_SCRIPT = Path(__file__).resolve().with_name("launch.py")
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+logger = get_log(INSTALLER)
 
 
 def helper_python() -> Path:
@@ -49,8 +56,11 @@ class Launcher:
         if os.name == "nt":
             flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
             try:
-                return subprocess.Popen(args, creationflags=flags | CREATE_BREAKAWAY_FROM_JOB, **options)
+                helper = subprocess.Popen(args, creationflags=flags | CREATE_BREAKAWAY_FROM_JOB, **options)
             except OSError:
                 # Läuft die App in einem Job ohne Erlaubnis zum Lösen: ohne diese Angabe starten
-                return subprocess.Popen(args, creationflags=flags, **options)
-        return subprocess.Popen(args, start_new_session=True, **options)
+                helper = subprocess.Popen(args, creationflags=flags, **options)
+        else:
+            helper = subprocess.Popen(args, start_new_session=True, **options)
+        logger.info("Hilfsprozess gestartet: %s startet nach dem Ende von Prozess %d", Path(setup).name, int(wait_pid))
+        return helper

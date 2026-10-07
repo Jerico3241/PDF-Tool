@@ -31,6 +31,10 @@ from .session import THUMB_WIDTH, Session
 
 RECENT_LIMIT = 12
 TAB_LIMIT = 24
+LEFT_PANELS = ("thumbs", "outline", "search", "attachments", "")
+RIGHT_PANELS = ("comments", "properties", "")
+CLIP_FORMAT = "application/x-pdftool-objects"  # Kennung kopierter Objekte in der Zwischenablage des Systems
+_OCR_PROBE: dict = {"done": False, "engine": None}  # Texterkennung: einmal je Programmlauf gesucht
 MAX_WIDTH = 12000  # Pixel – breitere Seitenbilder gibt es nicht (der Ausschnitt bleibt scharf)
 # Farben der Werkzeuge (Text, Zeichnen, Markieren, Kommentare) – Farben auf dem Papier
 TOOL_COLORS = (
@@ -57,10 +61,17 @@ class ReaderController(Observable):
     currentKeyChanged, currentKey = prop(str, "currentKey", "")
     recentChanged, recent = prop(list, "recent", [])
     dropHighlightChanged, dropHighlight = prop(bool, "dropHighlight", False)
-    leftPanelChanged, leftPanel = prop(str, "leftPanel", "thumbs")  # thumbs, outline, search oder ""
+    # Seitenleisten und »Seiten organisieren« des aktuellen Tabs – jeder Tab merkt sich seine eigenen
+    leftPanelChanged, leftPanel = prop(str, "leftPanel", "thumbs")  # thumbs, outline, search, attachments oder ""
     rightPanelChanged, rightPanel = prop(str, "rightPanel", "")  # comments, properties oder ""
     organizeChanged, organize = prop(bool, "organize", False)  # Ansicht »Seiten organisieren«
     openingChanged, opening = prop(int, "opening", 0)  # Dateien, die gerade geöffnet werden
+    fullScreenChanged, fullScreen = prop(bool, "fullScreen", False)  # Vollbild (nur das Dokument)
+    canPasteChanged, canPaste = prop(bool, "canPaste", False)  # Zwischenablage: Objekte, Bild oder Text
+    pageClipChanged, pageClip = prop(int, "pageClip", 0)  # kopierte Seiten (Anzahl; über Tabs hinweg)
+    # Texterkennung: "" (noch nicht gesucht), "pruefen", "bereit" oder "fehlt"; installierte Sprachen
+    ocrStateChanged, ocrState = prop(str, "ocrState", "")
+    ocrLanguagesChanged, ocrLanguages = prop(list, "ocrLanguages", [])
 
     currentChanged = Signal()
 
@@ -77,12 +88,24 @@ class ReaderController(Observable):
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
         view = cfg.get("reader_ansicht") if isinstance(cfg.get("reader_ansicht"), dict) else {}
         self._view = {"fit": view.get("fit", "width") if view.get("fit") in ("width", "page", "") else "width", "zoom": float(view.get("zoom", 100) or 100), "mode": view.get("mode", "continuous")}
-        if view.get("links") in ("thumbs", "outline", "search", ""):
+        if view.get("links") in LEFT_PANELS:
             self.set_quietly("leftPanel", view.get("links"))
+        self._window_before_full = None  # Fensterzustand vor dem Vollbild
+        self._watching_window = False
+        self._attachment_dir: str | None = None  # eigener Ordner für geöffnete Anhänge (beim Beenden gelöscht)
+        self._clip = None  # kopierte Objekte (objectops.Clip) – gilt für alle Tabs
+        self._ocr_engine = None  # ocr.OcrEngine, sobald gefunden
+        chosen = cfg.get("reader_ocr_sprachen")
+        self._ocr_chosen = [str(code) for code in chosen if isinstance(code, str)][:6] if isinstance(chosen, list) else []
+        self._clip_cut = False
+        self._page_data: bytes | None = None  # kopierte Seiten als kleine PDF
+        self._paste_counts: dict[tuple[str, int], int] = {}  # wie oft je Dokument und Seite eingefügt
+        self._clipboard_watched = False
         self.source_dir = str(cfg.get("ordner_reader") or "")
         self._external: list[str] = []
         self._refresh_recent()
         app.observe("ready", self._ready)
+        app.observe("currentPage", self._page_changed)
 
     # QML: aktuelles Dokument ---------------------------------------------------------------------------------
     def _get_current(self):
@@ -107,6 +130,7 @@ class ReaderController(Observable):
             try:
                 image = session.render(page, max(8, min(int(width), MAX_WIDTH)), kind, region)
             except Exception as exc:  # noqa: BLE001 - eine Seite ohne Bild statt Absturz
+                _log("render").warning("Seite %d ließ sich nicht darstellen (%s): %s", page + 1, kind, type(exc).__name__)
                 deliver(None, type(exc).__name__)
                 return None
             if image is not None:
@@ -215,18 +239,32 @@ class ReaderController(Observable):
         def done(state) -> None:
             self.opening = max(0, self.opening - 1)
             self._docs[ident] = controller
+            # Zuletzt verwendete Ansicht vorher merken: apply_state passt die Seitenbreite ein und meldet diese
+            # Ansicht als zuletzt verwendet – sonst ginge die gemerkte verloren
+            remembered = dict(self._view)
             controller.apply_state(state)
-            fit = self._view["fit"]
-            controller.viewMode = self._view["mode"] if self._view["mode"] in ("continuous", "single", "two", "continuousTwo") else "continuous"
+            # Ansicht und linke Seitenleiste: zuletzt verwendet (Standard) oder die Vorgabe der Einstellungen
+            settings = self.app.settings
+            view = settings.reader_start_view(remembered) if settings is not None else remembered
+            fit = view["fit"]
+            controller.viewMode = view["mode"] if view["mode"] in ("continuous", "single", "two", "continuousTwo") else "continuous"
             if fit:
                 controller.fit = fit
             else:
                 controller.fit = ""
-                controller.setZoom(self._view["zoom"])
+                controller.setZoom(view["zoom"])
+            if settings is not None:
+                self.leftPanel = settings.reader_start_panel(self.leftPanel)
             controller.opening_notice()
             controller.load_outline()
             controller.loadAnnotations()
             controller.loadFields()
+            controller.loadAttachments()
+            controller.check_scanned()
+            self.watch_clipboard()
+            self.probe_ocr()
+            # Seitenleisten wie im bisher aktiven Tab (bzw. wie zuletzt verwendet)
+            controller.panels = {"left": self.leftPanel, "right": self.rightPanel, "organize": False}
             self.tabs.set_items([*self.tabs.items(), self._tab_item(controller)])
             self.activate(ident)
             if recovered is None:
@@ -296,10 +334,20 @@ class ReaderController(Observable):
         controller = self._docs.get(key)
         if controller is None or controller is self._current:
             return
+        self._remember_panels()
         self._current = controller
+        # Seitenleisten und »Seiten organisieren« des Tabs (Tabs beeinflussen sich nicht gegenseitig)
+        panels = controller.panels or {}
+        self.leftPanel = panels.get("left", self.leftPanel)
+        self.rightPanel = panels.get("right", self.rightPanel)
+        self.organize = bool(panels.get("organize", False))
         self.currentKey = key
         self.hasDocument = True
         self.currentChanged.emit()
+
+    def _remember_panels(self) -> None:
+        if self._current is not None:
+            self._current.panels = {"left": self.leftPanel, "right": self.rightPanel, "organize": self.organize}
 
     @Slot(int)
     def activateIndex(self, offset: int) -> None:  # noqa: N802 - Strg+Tab / Strg+Umschalt+Tab
@@ -351,6 +399,7 @@ class ReaderController(Observable):
             else:
                 self.hasDocument = False
                 self.organize = False
+                self.leaveFullScreen()
                 self.currentChanged.emit()
         controller.deleteLater()
 
@@ -393,32 +442,85 @@ class ReaderController(Observable):
 
     @Slot(str)
     def setLeftPanel(self, panel: str) -> None:  # noqa: N802
+        if panel not in LEFT_PANELS:
+            return
         self.leftPanel = "" if panel == self.leftPanel else panel
+        self._remember_panels()
         self.app.schedule_save()
 
     @Slot(str)
     def showLeftPanel(self, panel: str) -> None:  # noqa: N802
-        """Linke Seitenleiste zeigen (ohne Umschalten): ``thumbs``, ``outline`` oder ``search``."""
-        if panel in ("thumbs", "outline", "search") and panel != self.leftPanel:
+        """Linke Seitenleiste zeigen (ohne Umschalten): ``thumbs``, ``outline``, ``search`` oder ``attachments``."""
+        if panel in LEFT_PANELS and panel and panel != self.leftPanel:
             self.leftPanel = panel
+            self._remember_panels()
             self.app.schedule_save()
 
     @Slot(str)
     def setRightPanel(self, panel: str) -> None:  # noqa: N802
-        self.rightPanel = "" if panel == self.rightPanel else panel
+        if panel in RIGHT_PANELS:
+            self.rightPanel = "" if panel == self.rightPanel else panel
+            self._remember_panels()
 
     @Slot(str)
     def showRightPanel(self, panel: str) -> None:  # noqa: N802
         """Rechte Seitenleiste zeigen (ohne Umschalten): ``comments`` oder ``properties``."""
-        if panel in ("comments", "properties"):
+        if panel in RIGHT_PANELS and panel:
             self.rightPanel = panel
+            self._remember_panels()
 
     @Slot(bool)
     def setOrganize(self, value: bool) -> None:  # noqa: N802
         self.organize = bool(value) and self.hasDocument
+        self._remember_panels()
+
+    # Vollbild ----------------------------------------------------------------------------------------------
+    @Slot()
+    def toggleFullScreen(self) -> None:  # noqa: N802
+        """F11: Vollbild mit dem Dokument (Navigation, Tabs und Leisten ausgeblendet) bzw. zurück."""
+        if self.fullScreen:
+            self.leaveFullScreen()
+            return
+        window = getattr(self.app, "window", None)
+        if window is None or not self.hasDocument:
+            return
+        self._window_before_full = window.visibility()
+        self.fullScreen = True
+        if not self._watching_window:
+            window.visibilityChanged.connect(self._window_visibility)
+            self._watching_window = True
+        window.showFullScreen()
+
+    @Slot()
+    def leaveFullScreen(self) -> None:  # noqa: N802
+        if not self.fullScreen:
+            return
+        self.fullScreen = False
+        window = getattr(self.app, "window", None)
+        if window is None:
+            return
+        from PySide6.QtGui import QWindow
+
+        before, self._window_before_full = self._window_before_full, None
+        if before == QWindow.Visibility.Maximized:
+            window.showMaximized()
+        else:
+            window.showNormal()
+
+    def _window_visibility(self, visibility) -> None:
+        """Vollbild außerhalb der App beendet (z. B. Fenster minimiert): Zustand nachziehen."""
+        from PySide6.QtGui import QWindow
+
+        if self.fullScreen and visibility not in (QWindow.Visibility.FullScreen, QWindow.Visibility.Hidden):
+            self.fullScreen = False
+            self._window_before_full = None
+
+    def _page_changed(self, page: str) -> None:
+        if page != "reader":
+            self.leaveFullScreen()
 
     def config(self) -> dict:
-        return {"reader_zuletzt": list(self._recent_paths), "reader_ansicht": {**self._view, "links": self.leftPanel}, "ordner_reader": self.source_dir}
+        return {"reader_zuletzt": list(self._recent_paths), "reader_ansicht": {**self._view, "links": self.leftPanel}, "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen)}
 
     # Dateiauswahl -------------------------------------------------------------------------------------------------
     def pick_pdf(self, title: str) -> str:
@@ -426,6 +528,15 @@ class ReaderController(Observable):
 
     def pick_pdfs(self, title: str) -> list[str]:
         return files.open_files(title, self.app.initial_dir("reader", self.source_dir), files.PDF_FILTER)
+
+    def pick_file(self, title: str) -> str:
+        return files.open_file(title, self.app.initial_dir("reader", self.source_dir), "Alle Dateien (*.*)")
+
+    def pick_save_file(self, name: str, title: str) -> str:
+        folder = self.app.initial_dir("reader", self.source_dir)
+        suffix = Path(name).suffix.lower()
+        pattern = f"{suffix[1:].upper()}-Datei (*{suffix});;Alle Dateien (*.*)" if suffix else "Alle Dateien (*.*)"
+        return files.save_file(title, str(Path(folder) / name), pattern)
 
     def pick_image(self) -> str:
         return files.open_file("Bild wählen", self.app.initial_dir("logo", ""), "Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)")
@@ -501,6 +612,185 @@ class ReaderController(Observable):
         for key in list(self._docs):
             self._finish_close(key, discard_recovery=True)
         self.engine.shutdown()
+        self._remove_attachment_dir()
+        self._unwatch_clipboard()
+        self._release_clipboard()
+
+    # Geöffnete Anhänge ------------------------------------------------------------------------------------
+    def attachment_dir(self) -> str:
+        """Eigener Ordner für Anhänge, die mit ihrem Programm geöffnet werden (beim Beenden entfernt)."""
+        if self._attachment_dir is None or not Path(self._attachment_dir).is_dir():
+            import tempfile
+
+            self._attachment_dir = tempfile.mkdtemp(prefix="pdf-tool-anhaenge-")
+        return self._attachment_dir
+
+    def _remove_attachment_dir(self) -> None:
+        folder, self._attachment_dir = self._attachment_dir, None
+        if folder is None:
+            return
+        import shutil
+
+        def failed(_function, _path, exc) -> None:
+            # Noch in einem anderen Programm geöffnet: bleibt im Temp-Ordner (Windows räumt ihn auf)
+            _log().info("Geöffneter Anhang ließ sich nicht entfernen: %s", type(exc).__name__)
+
+        shutil.rmtree(folder, onexc=failed)
+
+    # Zwischenablage für Objekte -----------------------------------------------------------------------------
+    # Kopierte Objekte bleiben als kleine PDF im Arbeitsspeicher (über Tabs hinweg); die Zwischenablage des
+    # Systems erhält ihren Text, bei Bildern das Bild und eine Kennung. Steht dort inzwischen etwas anderes,
+    # fügt Strg+V das ein (Bild bzw. Text) – nie veraltete Objekte.
+    def watch_clipboard(self) -> None:
+        from PySide6.QtGui import QGuiApplication
+
+        board = QGuiApplication.clipboard()
+        if board is not None and not self._clipboard_watched:
+            board.dataChanged.connect(self._clipboard_changed)
+            self._clipboard_watched = True
+        self._clipboard_changed()
+
+    def _unwatch_clipboard(self) -> None:
+        """Beim Beenden: die Zwischenablage meldet sich beim Abbau der Anwendung noch einmal – dann darf
+        sie kein schon abgebautes Objekt mehr erreichen."""
+        if not self._clipboard_watched:
+            return
+        from PySide6.QtGui import QGuiApplication
+
+        self._clipboard_watched = False
+        board = QGuiApplication.clipboard()
+        if board is not None:
+            try:
+                board.dataChanged.disconnect(self._clipboard_changed)
+            except (RuntimeError, TypeError) as exc:  # nicht (mehr) verbunden
+                _log("ui").info("Zwischenablage war nicht verbunden: %s", type(exc).__name__)
+
+    def _release_clipboard(self) -> None:
+        """Vor dem Beenden: Unsere Daten in der Zwischenablage (in Python angelegt) durch Qt-eigene ersetzen –
+        Text bzw. Bild bleiben für andere Programme erhalten, nur die interne Kennung entfällt. Sonst würde Qt sie
+        erst nach dem Ende von Python abbauen, und das Programm stürzt beim Beenden ab (PySide6)."""
+        from PySide6.QtGui import QGuiApplication
+
+        board = QGuiApplication.clipboard()
+        data = board.mimeData() if board is not None else None
+        if data is None or not data.hasFormat(CLIP_FORMAT):
+            return
+        text = data.text() if data.hasText() else ""
+        if text:
+            board.setText(text)
+            return
+        image = board.image() if data.hasImage() else None
+        if image is not None and not image.isNull():
+            board.setImage(image)
+        else:
+            board.clear()
+
+    def _clipboard_changed(self) -> None:
+        if not self._clipboard_watched:
+            return
+        self.canPaste = self.paste_source(peek=True)[0] is not None
+
+    def set_clip(self, clip, picture=None, *, cut: bool = False) -> None:
+        from PySide6.QtCore import QByteArray, QMimeData
+        from PySide6.QtGui import QGuiApplication
+
+        self._clip = clip
+        self._clip_cut = cut  # ausgeschnitten: das erste Einfügen auf der Quellseite kommt an die alte Stelle
+        self._paste_counts = {}
+        mime = QMimeData()
+        if clip.text:
+            mime.setText(clip.text)
+        if picture is not None and not picture.isNull():
+            mime.setImageData(picture)
+        mime.setData(CLIP_FORMAT, QByteArray(clip.token.encode("ascii")))
+        board = QGuiApplication.clipboard()
+        if board is None:
+            self.app.set_status("Die Zwischenablage ist nicht verfügbar.", "error")
+            return
+        board.setMimeData(mime)
+        self._clipboard_changed()
+        count = max(1, clip.count)
+        self.app.set_status("1 Objekt kopiert." if count == 1 else f"{count} Objekte kopiert.", "success")
+
+    def paste_source(self, *, peek: bool = False) -> tuple[str | None, object]:
+        """Was Strg+V einfügt: ``("clip", Clip)``, ``("image", QImage)``, ``("text", str)`` oder nichts."""
+        from PySide6.QtGui import QGuiApplication
+
+        board = QGuiApplication.clipboard()
+        data = board.mimeData() if board is not None else None
+        if data is None:
+            return None, None
+        if self._clip is not None and data.hasFormat(CLIP_FORMAT) and bytes(data.data(CLIP_FORMAT).data()).decode("ascii", "replace") == self._clip.token:
+            return "clip", self._clip
+        if data.hasImage():
+            if peek:
+                return "image", None
+            image = board.image()
+            if not image.isNull():
+                return "image", image
+        text = data.text() if data.hasText() else ""
+        if text.strip():
+            return "text", text
+        return None, None
+
+    def set_page_clip(self, data: bytes, count: int) -> None:
+        self._page_data = data
+        self.pageClip = count
+        self.app.set_status("1 Seite kopiert." if count == 1 else f"{count} Seiten kopiert.", "success")
+
+    def page_clip(self) -> bytes | None:
+        return self._page_data
+
+    def paste_nudge(self, ident: str, page: int, clip) -> int:
+        """Wiederholtes Einfügen an derselben Stelle versetzt die Kopien – auf der Quellseite schon die erste."""
+        key = (ident, page)
+        count = self._paste_counts.get(key, 1 if tuple(clip.source) == key and not self._clip_cut else 0)
+        self._paste_counts[key] = count + 1
+        return count
+
+
+    # Texterkennung (OCR) -------------------------------------------------------------------------------------
+    def probe_ocr(self) -> None:
+        """Tesseract einmal je Programmlauf im Hintergrund suchen (der erste Start prüft unter Windows der
+        Virenscanner); danach gilt das Ergebnis für alle Tabs."""
+        if self.ocrState in ("pruefen", "bereit"):
+            return
+        from tools.pdf_editor import ocr
+
+        def found(engine) -> None:
+            _OCR_PROBE["done"], _OCR_PROBE["engine"] = True, engine
+            self._ocr_engine = engine
+            self.ocrLanguages = [{"code": code, "label": ocr.language_label(code)} for code in engine.languages] if engine is not None else []
+            self.ocrState = "bereit" if engine is not None else "fehlt"
+            if engine is None:
+                _log("ocr").info("Texterkennung: keine Engine gefunden")
+
+        if _OCR_PROBE["done"]:
+            found(_OCR_PROBE["engine"])
+            return
+        self.ocrState = "pruefen"
+
+        def failed(exc: BaseException, _details: str) -> None:
+            _log("ocr").warning("Texterkennung: Suche fehlgeschlagen (%s)", type(exc).__name__)
+            self.ocrState = "fehlt"
+
+        self.app.worker.run(ocr.find_engine, found, failed)
+
+    def ocr_engine(self):
+        return self._ocr_engine
+
+    def ocr_languages(self) -> list[str]:
+        """Zuletzt gewählte Sprachen (sofern installiert), sonst Deutsch bzw. die erste installierte."""
+        installed = [entry["code"] for entry in self.ocrLanguages]
+        chosen = [code for code in self._ocr_chosen if code in installed]
+        if chosen:
+            return chosen
+        return ["deu"] if "deu" in installed else installed[:1]
+
+    def remember_ocr_languages(self, codes: list[str]) -> None:
+        if codes and codes != self._ocr_chosen:
+            self._ocr_chosen = list(codes)
+            self.app.schedule_save()
 
 
 class ReaderTool:
@@ -581,3 +871,10 @@ def _looks_like_pdf(path: str) -> bool:
             return b"%PDF-" in handle.read(1024)
     except OSError:
         return False
+
+
+def _log(category: str = "pdf"):
+    """Logger eines festen Protokollbereichs (``diagnostics.applog``: pdf, render, ocr, ui …) – ohne Inhalte."""
+    from diagnostics.applog import get
+
+    return get(category)

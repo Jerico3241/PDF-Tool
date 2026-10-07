@@ -99,14 +99,16 @@ def rotate(document: EditorDocument, history: History, pages, degrees: int) -> N
 
 
 # --- Löschen -----------------------------------------------------------------------------------------
-def delete(document: EditorDocument, history: History, pages) -> list[str]:
-    """Seiten löschen. Mindestens eine Seite bleibt. Liefert Hinweise (z. B. entfernte Felder)."""
+def delete(document: EditorDocument, history: History, pages, *, cut: bool = False) -> list[str]:
+    """Seiten löschen (``cut``: ausgeschnitten – so heißt dann auch der Schritt für »Rückgängig«). Mindestens
+    eine Seite bleibt. Liefert Hinweise (z. B. entfernte Felder)."""
     document.ensure_editable("assemble")
     chosen = _indexes(document, pages)
     if len(chosen) >= document.page_count:
         raise UnsupportedEdit("Mindestens eine Seite muss im Dokument bleiben.")
     pdf = document.pdf
-    with commands.record(document, history, _title("Seite löschen", "Seiten löschen", len(chosen))) as rec:
+    title = _title("Seite ausschneiden", "Seiten ausschneiden", len(chosen)) if cut else _title("Seite löschen", "Seiten löschen", len(chosen))
+    with commands.record(document, history, title) as rec:
         rec.page_order()
         removed = {pdf.pages[index].obj.objgen for index in chosen}
         removed_annots = set()
@@ -456,6 +458,24 @@ def extract(document: EditorDocument, pages, target: str | os.PathLike) -> Path:
         raise SaveFailed("Es gibt bereits eine Datei mit diesem Namen.")
     if document.path is not None and save._same(document.path, target):  # noqa: SLF001
         raise SaveFailed("Das geöffnete Dokument kann nicht als Ziel dienen.")
+    data = _pages_pdf(document, chosen)
+    save.write_copy(document, data, target)
+    return target
+
+
+def copy_pages(document: EditorDocument, pages) -> bytes:
+    """Seiten als kleine PDF im Arbeitsspeicher (Zwischenablage für Seiten, auch in andere Tabs) – mit
+    Anmerkungen und Formularfeldern; geprüft wie »Als neue PDF«. Das Dokument bleibt unverändert."""
+    if not document.permissions.copy or not document.permissions.assemble:
+        raise ReadOnlyDocument("Die Berechtigungen dieses PDFs erlauben nicht, Seiten zu kopieren.")
+    chosen = [int(i) for i in pages]
+    if not chosen or min(chosen) < 0 or max(chosen) >= document.page_count:
+        raise UnsupportedEdit("Die Auswahl enthält eine Seite, die es nicht gibt.")
+    return _pages_pdf(document, chosen)
+
+
+def _pages_pdf(document: EditorDocument, chosen: list[int]) -> bytes:
+    """Neue PDF aus den Seiten ``chosen`` (Reihenfolge wie angegeben) – geschrieben und wieder geöffnet."""
     out = pikepdf.new()
     try:
         source_form = document.pdf.acroform if document.pdf.Root.get("/AcroForm") is not None else None
@@ -476,8 +496,7 @@ def extract(document: EditorDocument, pages, target: str | os.PathLike) -> Path:
     finally:
         out.close()
     _check_new_file(data, len(chosen))
-    save.write_copy(document, data, target)
-    return target
+    return data
 
 
 def split(document: EditorDocument, ranges: list[list[int]], folder: str | os.PathLike, stem: str) -> list[Path]:

@@ -6,6 +6,7 @@ Alle Test-PDFs entstehen programmatisch (siehe ``pdfsamples.py``).
 from __future__ import annotations
 
 import hashlib
+import logging
 import subprocess
 import sys
 import tempfile
@@ -283,6 +284,61 @@ def test_technical_messages_contain_no_full_path(tmp_path: Path) -> None:
     assert analysis.technical and not any(str(folder) in line for line in analysis.technical)
 
 
+DAMAGE = [
+    # (Schaden, Erzeuger, ehrliches Ergebnis, Seiten der Ausgabe)
+    ("eof-fehlt", samples.only_eof_missing, RepairStatus.REPAIRED, 2),
+    ("eof-beschaedigt", samples.eof_damaged, RepairStatus.REPAIRED, 2),
+    ("startxref-falsch", samples.xref_offset, RepairStatus.REPAIRED, 5),
+    ("xref-zerstoert", samples.xref_garbage, RepairStatus.REPAIRED, 5),
+    ("xref-fehlt", samples.xref_missing, RepairStatus.REPAIRED, 2),
+    ("trailer-fehlt", samples.trailer_removed, RepairStatus.REPAIRED, 5),
+    ("seitenbaum-ins-leere", samples.real_case, RepairStatus.REPAIRED, 3),
+    ("seitenbaum-eltern", samples.broken_parents, RepairStatus.REPAIRED, 3),
+    ("datenstrom-abgeschnitten", samples.flate_truncated, RepairStatus.PARTIALLY_RECOVERED, 3),
+    ("datei-abgeschnitten", samples.truncated, RepairStatus.PARTIALLY_RECOVERED, 5),
+    ("muell-vor-header", lambda path: samples.with_prefix(path, samples.MAIL_HEADER), RepairStatus.REPAIRED, 3),
+    ("muell-nach-eof", lambda path: samples.with_suffix(path, b"\n" + samples.HTML_PAGE * 3), RepairStatus.REPAIRED, 3),
+]
+
+
+@pytest.mark.parametrize("make,status,pages", [case[1:] for case in DAMAGE], ids=[case[0] for case in DAMAGE])
+def test_every_damage_case_gets_an_honest_result(tmp_path: Path, make, status, pages) -> None:
+    """Jeder Schadensfall: analysiert, repariert, geprüft – Original bitgleich, Ergebnis ehrlich gekennzeichnet."""
+    damaged = make(tmp_path / "Beschädigt.pdf")
+    before = digest(damaged)
+    analysis = engine.analyze(damaged)
+    assert digest(damaged) == before
+    assert analysis.repairable and analysis.condition is not Condition.HEALTHY and analysis.structural_errors
+    result = run_repair(damaged, tmp_path)  # prüft auch: Original unverändert
+    assert result.status is status and result.pages_after == pages and result.error is None
+    with open_output(result) as out:
+        assert out.get_warnings() == [] and len(out.pages) == pages
+    if status is RepairStatus.PARTIALLY_RECOVERED:
+        assert result.incomplete_pages and result.warnings[0].endswith("Seiten konnten vollständig rekonstruiert werden.")
+    else:
+        assert result.incomplete_pages == [] and result.streams_rescued == 0
+    target = process.deliver(Path(result.output_path), damaged)
+    assert target.name == "Beschädigt_repariert.pdf" and digest(damaged) == before
+
+
+def test_repaired_output_never_replaces_an_existing_file(tmp_path: Path) -> None:
+    damaged = samples.flate_truncated(tmp_path / "Vertrag.pdf")
+    existing = [tmp_path / "Vertrag_repariert.pdf", tmp_path / "vertrag_repariert (1).pdf"]
+    for path in existing:
+        path.write_bytes(b"%PDF-1.4 fremde Datei")
+    hashes = {path: digest(path) for path in [damaged, *existing]}
+    result = run_repair(damaged, tmp_path)
+    assert result.status is RepairStatus.PARTIALLY_RECOVERED
+    target = process.deliver(Path(result.output_path), damaged)
+    assert target.name == "Vertrag_repariert (2).pdf" and digest(target) == digest(Path(result.output_path))
+    assert {path: digest(path) for path in hashes} == hashes  # Original und vorhandene Dateien unverändert
+    folder = tmp_path / "Ausgabe"
+    folder.mkdir()
+    (folder / "Vertrag_repariert.pdf").write_bytes(b"alt")
+    assert process.deliver(Path(result.output_path), damaged, folder).name == "Vertrag_repariert (1).pdf"
+    assert (folder / "Vertrag_repariert.pdf").read_bytes() == b"alt"
+
+
 def test_engine_works_without_lxml(tmp_path: Path) -> None:
     """Die Laufzeit liefert lxml nicht mit – Analyse und Reparatur dürfen es nicht brauchen."""
     pdf = samples.xref_offset(tmp_path / "kaputt.pdf")
@@ -406,6 +462,87 @@ def test_job_reports_crash(tmp_path: Path) -> None:
     job._process.kill()
     events = job.wait(30)
     assert events[-1][0] == "crash"
+
+
+class _Keep(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+@pytest.fixture
+def repair_log():
+    """Protokoll des Bereichs »repair« (``diagnostics.applog``) mitlesen."""
+    logger = logging.getLogger("pdftool.repair")
+    keep, level = _Keep(), logger.level
+    logger.addHandler(keep)
+    logger.setLevel(logging.DEBUG)
+    yield keep.messages
+    logger.removeHandler(keep)
+    logger.setLevel(level)
+
+
+def test_worker_log_lines_go_to_the_app_log_not_into_events(repair_log) -> None:
+    class Exited:
+        exitcode = 0
+
+        def is_alive(self) -> bool:
+            return False
+
+        def join(self, timeout: float | None = None) -> None:
+            pass
+
+    class Receiver:
+        def __init__(self) -> None:
+            self.items = [("log", logging.INFO, "Priorität nicht gesenkt (PermissionError)"), ("progress", "open", None), ("result", "fertig")]
+
+        def poll(self) -> bool:
+            return bool(self.items)
+
+        def recv(self):
+            return self.items.pop(0)
+
+        def close(self) -> None:
+            pass
+
+    job = process.Job.__new__(process.Job)
+    job.kind, job.done, job.cancelled, job.work_dir = "analyze", False, False, None
+    job._receiver, job._process, job._reaper = Receiver(), Exited(), None
+    assert job.events() == [("progress", "open", None), ("result", "fertig")]
+    assert repair_log == ["Arbeitsprozess (analyze): Priorität nicht gesenkt (PermissionError)"]
+
+
+def test_worker_forwards_its_log_through_the_pipe(monkeypatch) -> None:
+    class Pipe:
+        def __init__(self) -> None:
+            self.sent: list[tuple] = []
+
+        def send(self, item) -> None:
+            self.sent.append(item)
+
+    class Broken:
+        def send(self, item) -> None:
+            raise BrokenPipeError(32, "Broken pipe")
+
+    record = logging.LogRecord("pdftool.repair", logging.WARNING, __file__, 1, "Engine %s nicht verfügbar (%s)", ("qpdf", "ImportError"), None)
+    pipe = Pipe()
+    process._ToApp(pipe).handle(record)
+    assert pipe.sent == [("log", logging.WARNING, "Engine qpdf nicht verfügbar (ImportError)")]
+    monkeypatch.setattr(logging, "raiseExceptions", False)
+    process._ToApp(Broken()).handle(record)  # App nicht mehr erreichbar: kein Absturz des Arbeitsprozesses
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="unter Windows über die Prozess-Priorität (ctypes)")
+def test_lower_priority_failure_is_logged(monkeypatch, repair_log) -> None:
+    def refuse(_increment: int) -> int:
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(process.os, "nice", refuse)
+    process._lower_priority()  # kein Fehler nach außen
+    assert repair_log == ["Arbeitsprozess: Priorität nicht gesenkt (PermissionError)"]
 
 
 def test_worker_errors_are_readable_and_without_paths() -> None:

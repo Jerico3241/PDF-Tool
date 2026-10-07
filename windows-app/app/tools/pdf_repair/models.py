@@ -124,6 +124,8 @@ class PdfAnalysis:
     repairable: bool = False
     rasterizable_pages: int = 0  # Seiten, die sich für den Rettungsmodus darstellen lassen
     raw: RawStructure | None = None  # Rohanalyse (nur bei beschädigten Dateien)
+    data_before: int = 0  # fremde Daten vor dem PDF-Anfang (Byte), z. B. ein E-Mail- oder HTTP-Kopf
+    data_after: int = 0  # fremde Daten nach dem letzten %%EOF (Byte)
     error: str | None = None
 
     @property
@@ -142,6 +144,8 @@ class PdfRepairResult:
     pages_before: int | None = None
     pages_after: int | None = None
     incomplete_pages: list[int] = field(default_factory=list)  # Seitennummern (ab 1) der Ausgabe mit beschädigtem Inhalt
+    data_removed: int = 0  # entfernte fremde Daten vor bzw. nach der PDF (Byte)
+    streams_rescued: int = 0  # Datenströme, von denen nur der lesbare Teil übernommen wurde
     warnings: list[str] = field(default_factory=list)
     repair_actions: list[str] = field(default_factory=list)
     error: str | None = None
@@ -159,6 +163,7 @@ STAGES = {
     "open": "Dokumentstruktur wird analysiert …",
     "streams": "Datenströme werden geprüft …",
     "second": "Zweite Engine prüft die Datei …",
+    "trim": "Fremde Daten vor bzw. nach der PDF werden entfernt …",
     "rewrite": "Objekte werden rekonstruiert …",
     "write": "PDF wird neu geschrieben …",
     "pages": "Lesbare Seiten werden übertragen …",
@@ -169,6 +174,7 @@ STAGES = {
     "page_tree_rebuild": "Seitenstruktur wird neu aufgebaut …",
     "normalize": "PDF wird normalisiert …",
     "raster": "Seiten werden als Bilder gerettet …",
+    "streams_rescue": "Beschädigte Datenströme werden gerettet …",
     "validate": "Reparierte Datei wird geprüft …",
     "finish": "Ausgabe wird gespeichert …",
 }

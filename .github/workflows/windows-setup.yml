@@ -5,11 +5,14 @@ name: Windows-Setup
 #   1. Tests – Kernlogik, Vorlagen, Regelwerk, Sicherung/Wiederherstellung, Diagnose,
 #      Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.2), PDF reparieren, Updater
 #      (lokaler Testserver, nie Live-GitHub), PDF Editor; die Qt-Oberflächentests laufen gleichzeitig
-#      in fünf eigenen Jobs (je ein eigener Rechner)
+#      in sechs eigenen Jobs (je ein eigener Rechner); Texterkennung mit echtem Tesseract prüft der
+#      Runtime-Smoke-Test am gebündelten Tesseract des Setups (Schritt 5)
 #   2. Setup bauen (prüft Setup, Prüfsumme, Version und Release Notes)
 #   3. Clean-Install-Test der neuen Version
-#   4. Upgrade-Test: unmittelbar vorherige stabile Version → neue Version (nach SemVer ermittelt,
-#      veröffentlichtes Setup, zwischengespeichert – nie ein altes Setup neu bauen)
+#   4. Upgrade-Test: unmittelbar vorherige veröffentlichte Version → neue Version (nach SemVer
+#      ermittelt: für eine Beta die höchste Version davor, auch eine Beta – 3.0.0-beta.2 → 3.1.0-beta.1;
+#      für Stable die höchste stabile – 2.8.0 → 3.0.0; veröffentlichtes Setup, zwischengespeichert –
+#      nie ein altes Setup neu bauen)
 #   5. Runtime-Smoke-Test  6. QML-Smoke-Test
 #   7. Updater-E2E-Test: Mock-Release → Download → SHA-256 → bereit → Start des Setups über den
 #      Hilfsprozess (Inno-Setup-Attrappe); nur lesend HTTPS zu GitHub (Schannel)
@@ -19,8 +22,8 @@ name: Windows-Setup
 # Veröffentlicht wird nur über den Workflow »Release« (release.yml): Er lädt den Release Candidate
 # eines erfolgreichen main-Laufs für genau den Release-Commit und veröffentlicht ihn unverändert –
 # ohne neuen Build und ohne erneute Tests (Beta vor Stable, Hotfix-Regel, unveränderliche Releases).
-# Keine historische Update-Matrix: ältere Versionen prüft nur der manuelle Workflow
-# »Deep Compatibility Test« (deep-compatibility.yml).
+# Keine historische Update-Matrix: genau ein Update aktuell → neu; ältere Versionen prüft nur der
+# manuelle Workflow »Deep Compatibility Test« (deep-compatibility.yml).
 
 on:
   push:
@@ -28,11 +31,13 @@ on:
     paths:
       - "windows-app/**"
       - "THIRD_PARTY_LICENSES.md"
+      - "LICENSE"
       - ".github/workflows/windows-setup.yml"
   pull_request:
     paths:
       - "windows-app/**"
       - "THIRD_PARTY_LICENSES.md"
+      - "LICENSE"
       - ".github/workflows/windows-setup.yml"
   # Erneuter vollständiger Lauf – z. B. wenn der Release Candidate eines main-Stands abgelaufen ist
   # oder ein Commit auf main wegen der Pfadfilter keinen Lauf hatte
@@ -64,8 +69,10 @@ jobs:
             dateien: customers batch caret
           - gruppe: Vorlagen, Regelwerk, Sicherung und Diagnose
             dateien: templates rules backup
-          - gruppe: PDF Reader & Editor
-            dateien: reader objects reader_layout reader_motion
+          - gruppe: PDF Reader – Ansicht, Seiten, Formulare
+            dateien: reader reader_layout reader_v31 pages_v31 forms_v31
+          - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
+            dateien: objects objects_v31 edit_v31 reader_motion ocr
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -167,8 +174,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_config_migration.py -v -p no:cacheprovider
 
-      - name: 1. Tests (PDF Editor – Kern, Speichern, Text bearbeiten, Seiten, Bilder, Anmerkungen, Formulare, Eigenschaften)
-        run: python -m pytest windows-app/tests/test_editor_core.py windows-app/tests/test_editor_save.py windows-app/tests/test_editor_text.py windows-app/tests/test_editor_objects.py windows-app/tests/test_editor_pages.py windows-app/tests/test_editor_images.py windows-app/tests/test_editor_annotations.py windows-app/tests/test_editor_forms.py windows-app/tests/test_editor_properties.py -q -p no:cacheprovider
+      - name: 1. Tests (PDF Editor – Kern, Speichern, Text, Objekte, Seiten, Bilder, Anmerkungen, Formulare ausfüllen und gestalten, Anhänge, Texterkennung, Eigenschaften)
+        run: python -m pytest windows-app/tests/test_editor_core.py windows-app/tests/test_editor_save.py windows-app/tests/test_editor_text.py windows-app/tests/test_editor_objects.py windows-app/tests/test_editor_pages.py windows-app/tests/test_editor_images.py windows-app/tests/test_editor_annotations.py windows-app/tests/test_editor_forms.py windows-app/tests/test_editor_formdesign.py windows-app/tests/test_editor_properties.py windows-app/tests/test_editor_objectops.py windows-app/tests/test_editor_attachments.py windows-app/tests/test_editor_ocr.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider
@@ -188,7 +195,7 @@ jobs:
       - name: Release-Dateien prüfen (Namen, Version, Prüfsumme gehört zum Setup, Release Notes)
         run: python windows-app/release_check.py windows-app/dist
 
-      - name: Versionen des Update-Tests ermitteln (vorherige stabile Version nach SemVer)
+      - name: Versionen des Update-Tests ermitteln (unmittelbar vorherige veröffentlichte Version nach SemVer – bei einer Beta auch eine Beta)
         id: versions
         shell: pwsh
         env:
@@ -196,7 +203,7 @@ jobs:
         run: |
           $current = (Get-Content windows-app/VERSION -Raw).Trim()
           $previous = python windows-app/releases.py previous --repo "${{ github.repository }}"
-          if ($LASTEXITCODE -ne 0 -or -not $previous) { throw "Keine vorherige stabile Version gefunden" }
+          if ($LASTEXITCODE -ne 0 -or -not $previous) { throw "Keine vorherige veröffentlichte Version gefunden" }
           $previous = "$previous".Trim()
           $setup = (Get-ChildItem windows-app/dist/*.exe | Select-Object -First 1).FullName
           Write-Host "Clean install: PDF Tool $current"

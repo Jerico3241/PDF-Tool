@@ -16,6 +16,22 @@ Ablauf im Modus AUTO: qpdf neu schreiben → Seiten einzeln (qpdf) → Seiten ü
 pypdf → Rohrekonstruktion. Jeder Kandidat wird geprüft; der beste gewinnt (vollständige
 Seitenzahl vor Struktur vor Methode). Ein vollständiges Ergebnis beendet die Suche.
 
+Zwei Strategien ergänzen die Stufen:
+
+* **Fremde Daten vor bzw. nach der PDF** (``_scan``): Steht »%PDF-« erst hinter Byte 1024
+  (z. B. nach einem E-Mail- oder HTTP-Kopf, HTML oder anderen Daten; gesucht wird in den ersten
+  8 MB) oder folgen auf das letzte %%EOF mehr Daten, als die Engines überspringen, durchläuft
+  zuerst eine Kopie nur mit den PDF-Daten alle Stufen. Ihre Kandidaten werden geprüft und
+  bewertet wie alle anderen; das Original folgt, wenn sie kein vollständiges Ergebnis liefert.
+* **Datenströme retten** (``recovery.streams``, Modus AUTO): Bevor qpdf eine Ausgabe schreibt
+  (Stufen 2, 3a, 4 und 5), wird von Flate-Datenströmen, die sich nicht vollständig dekodieren
+  lassen, der lesbare Teil übernommen – bei Inhaltsströmen bis zum letzten vollständigen Befehl,
+  bei Bildern nur, wenn das sicher geht. Seiten mit beschädigten Strömen zählen als unvollständig,
+  das Ergebnis höchstens als »teilweise wiederhergestellt«. Meldet die Prüfung der besten Ausgabe
+  danach noch unlesbare Ströme (z. B. von PDFium unverändert übernommen), folgt derselbe Schritt
+  noch einmal; diese Fassung wird wie jede Ausgabe geprüft und nur übernommen, wenn sie nichts
+  verschlechtert.
+
 Grundsätze
 ----------
 * Die Originaldatei wird nur gelesen. Ausgaben entstehen ausschließlich im
@@ -33,18 +49,25 @@ import math
 import mmap
 import os
 import re
+import shutil
+import tempfile
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 from .models import Check, Condition, Method, PdfAnalysis, PdfRepairResult, RawStructure, RepairMode, RepairStatus
-from .recovery import lenient, rebuild, scanner
+from .recovery import lenient, rebuild, scanner, streams
 
 Progress = Callable[..., None]
 
 HEAD_BYTES = 1024
 TAIL_BYTES = 4096
+HEADER_LIMIT = 8 << 20  # so weit wird »%PDF-« gesucht, wenn sie nicht am Anfang steht
+TAIL_LIMIT = 1024  # so viele Byte nach %%EOF überspringen alle Engines (so verlangt es die PDF-Norm)
+INPUT_DIR = "eingabe"  # im Arbeitsordner: Kopie der Eingabe ohne fremde Daten
+CLEAN_DIR = "bereinigt"  # … und die Ausgaben der Stufen für diese Kopie
 RASTER_DPI = 150
 RASTER_MAX_PIXELS = 24_000_000  # je Seite – schützt vor riesigen Bitmaps
 JPEG_QUALITY = 85
@@ -53,6 +76,8 @@ MAX_FIELDS = 10_000
 MAX_PAGE_REFS = 5_000  # je Seite untersuchte Objekte (Inhalt und Ressourcen)
 
 FINDINGS = {
+    "header": "Vor dem PDF-Anfang stehen fremde Daten (z. B. ein E-Mail- oder Webseiten-Kopf).",
+    "tail": "Nach dem Dateiende (%%EOF) folgen fremde Daten.",
     "xref": "Die Querverweistabelle (xref) ist beschädigt.",
     "trailer": "Der Trailer fehlt oder ist beschädigt.",
     "streams": "Datenströme sind beschädigt oder unvollständig.",
@@ -63,6 +88,8 @@ FINDINGS = {
     "other": "Weitere Unstimmigkeiten in der Dateistruktur.",
 }
 ACTIONS = {
+    "header": "Daten vor dem PDF-Anfang entfernt",
+    "tail": "Daten nach dem Dateiende (%%EOF) entfernt",
     "xref": "Querverweistabelle neu aufgebaut",
     "trailer": "Trailer neu geschrieben",
     "streams": "Lesbare Teile beschädigter Datenströme übernommen",
@@ -99,6 +126,21 @@ def _noop(*_args) -> None:
     pass
 
 
+def _log():
+    """Protokoll des Bereichs »repair« – im Arbeitsprozess reicht ``process`` es an die App weiter.
+    Nur technische Angaben: keine Inhalte der PDF, keine Passwörter, keine Datei- oder Ordnernamen."""
+    from diagnostics.applog import get
+
+    return get("repair")
+
+
+def _amount(size: int) -> str:
+    """»2.880 Byte«, ab 1 MB »8,4 MB«."""
+    if size < 1 << 20:
+        return f"{size:,} Byte".replace(",", ".")
+    return f"{size / (1 << 20):.1f} MB".replace(".", ",")
+
+
 # --- Datei ---------------------------------------------------------------------------
 
 
@@ -112,21 +154,105 @@ def file_digest(path: Path) -> tuple[int, float, str]:
     return stat.st_size, stat.st_mtime, digest.hexdigest()
 
 
+_HEADER_RE = re.compile(rb"%PDF-(\d\.\d)")
+_EOF_AFTER_RE = re.compile(rb"startxref\s+\d+\s*\Z")  # ein echtes Dateiende: startxref, Offset, %%EOF
+_STRUCTURE_RE = re.compile(rb"(?<![0-9])\d{1,10}\s+\d{1,5}\s+obj\b|\bxref\b|\btrailer\b|startxref")
+
+
 @dataclass
 class _Scan:
-    header: bool
+    header: bool  # »%PDF-« in den ersten 1024 Byte – dort, wo die Engines sie suchen
     version: str | None
     eof: bool
     startxref: bool
+    before: int = 0  # fremde Daten vor dem PDF-Anfang (»%PDF-« erst hinter Byte 1024)
+    after: int = 0  # fremde Daten nach dem letzten %%EOF (mehr, als die Engines überspringen)
+    size: int = 0
 
 
 def _scan(path: Path, size: int) -> _Scan:
+    """PDF-Kennung, Dateiende und fremde Daten davor bzw. danach – ohne die Datei in den Speicher zu lesen."""
     with open(path, "rb") as handle:
         head = handle.read(HEAD_BYTES)
         handle.seek(max(0, size - TAIL_BYTES))
         tail = handle.read()
-    match = re.search(rb"%PDF-(\d\.\d)", head)
-    return _Scan(bool(match), match.group(1).decode() if match else None, b"%%EOF" in tail, b"startxref" in tail)
+        match = _HEADER_RE.search(head)
+        found = _Scan(bool(match), match.group(1).decode() if match else None, b"%%EOF" in tail, b"startxref" in tail, size=size)
+        if size == 0:
+            return found
+        with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data:
+            if match is None:
+                found.before, found.version = _far_header(data, size)
+            found.after = _foreign_tail(data, size, found.before)
+    if found.after:
+        found.eof = found.startxref = True  # die PDF selbst endet regulär, danach folgen fremde Daten
+    return found
+
+
+def _far_header(data, size: int) -> tuple[int, str | None]:
+    """»%PDF-« hinter Byte 1024 (gesucht bis HEADER_LIMIT): (Position, Version). Zählt nur, wenn davor
+    keine PDF-Objekte stehen – sonst ist die Kennung am Anfang zerstört und dies z. B. eine
+    eingebettete PDF."""
+    match = _HEADER_RE.search(data, 0, min(size, HEADER_LIMIT))
+    if match is None or _OBJ_HEADER_RE.search(data, 0, match.start()):
+        return 0, None
+    return match.start(), match.group(1).decode()
+
+
+def _foreign_tail(data, size: int, start: int) -> int:
+    """Fremde Daten nach dem letzten %%EOF (Byte): nur, wenn davor ein echtes Dateiende steht
+    (startxref mit Offset), es mehr sind, als die Engines überspringen, und darunter keine
+    PDF-Struktur ist – sonst wäre es z. B. ein abgeschnittenes inkrementelles Update."""
+    last = data.rfind(b"%%EOF", start)
+    if last < 0 or not _EOF_AFTER_RE.search(data, max(start, last - 64), last):
+        return 0
+    end = last + 5
+    for eol in (b"\r\n", b"\n", b"\r"):
+        if data[end : end + len(eol)] == eol:
+            end += len(eol)
+            break
+    if size - end <= TAIL_LIMIT or _STRUCTURE_RE.search(data, end):
+        return 0
+    return size - end
+
+
+def _write_pdf_data(path: Path, scan: _Scan, target: Path) -> Path:
+    """Nur die PDF-Daten in eine neue Datei kopieren – ohne fremde Daten davor und danach.
+    Exklusiv geschrieben: eine vorhandene Datei wird nie überschrieben."""
+    remaining = scan.size - scan.after - scan.before
+    with open(path, "rb") as source, open(target, "xb") as out:
+        source.seek(scan.before)
+        while remaining > 0:
+            block = source.read(min(1 << 20, remaining))
+            if not block:
+                break
+            out.write(block)
+            remaining -= len(block)
+    return target
+
+
+@contextmanager
+def _pdf_data(path: Path, scan: _Scan, technical: list[str]):
+    """Für die Analyse: bei fremden Daten davor oder danach eine Kopie nur mit den PDF-Daten (im
+    Temp-Ordner, gleicher Dateiname – die Meldungen lauten wie beim Original), sonst das Original."""
+    if not (scan.before or scan.after):
+        yield path
+        return
+    from .process import TEMP_PREFIX
+
+    folder = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
+    try:
+        try:
+            copy = _write_pdf_data(path, scan, folder / path.name)
+        except OSError as exc:
+            technical.append(f"Kopie ohne fremde Daten nicht möglich ({type(exc).__name__}) – das Original wird geprüft")
+            copy = path
+        yield copy
+    finally:
+        try:
+            shutil.rmtree(folder)
+        except OSError as exc:
+            _log().info("Analyse: Temp-Ordner nicht entfernt (%s) – das übernimmt die nächste Aufräumrunde", type(exc).__name__)
 
 
 def engine_name() -> str:
@@ -135,15 +261,15 @@ def engine_name() -> str:
         import pikepdf
 
         parts.append(f"qpdf {pikepdf.__libqpdf_version__}")
-    except Exception:  # pragma: no cover - ohne pikepdf nicht lauffähig
-        pass
+    except (ImportError, OSError, AttributeError) as exc:  # pragma: no cover - ohne pikepdf nicht lauffähig
+        _log().warning("Engine qpdf nicht verfügbar (%s)", type(exc).__name__)
     try:
         import pypdfium2
 
         info = getattr(pypdfium2, "PDFIUM_INFO", "")
         parts.append(f"PDFium {getattr(info, 'build', info)}")
-    except Exception:  # pragma: no cover
-        pass
+    except (ImportError, OSError) as exc:  # pragma: no cover
+        _log().warning("Engine PDFium nicht verfügbar (%s)", type(exc).__name__)
     return " · ".join(parts)
 
 
@@ -348,6 +474,59 @@ def _lost_page_content(path: Path, pdf) -> set[int]:
     return lost
 
 
+def _damaged_streams(pdf, technical: list[str]) -> tuple[dict[int, str] | None, set[int]]:
+    """Flate-Datenströme, die sich nicht vollständig dekodieren lassen (Objektnummer → Art), und die
+    Seiten (0-basiert), deren Inhalt oder Ressourcen sie brauchen. qpdf übernimmt solche Ströme beim
+    Neuschreiben teils gekürzt, ohne dass die Ausgabe danach auffällt – gezählt wird deshalb, was in
+    der Quelle beschädigt ist. Fehlt nur die Prüfsumme, ist nichts verloren: Diese Ströme werden
+    neu geschrieben, ihre Seiten zählen nicht als unvollständig. ``None``: Prüfung nicht möglich."""
+    import pikepdf
+
+    try:
+        damaged, restorable = streams.damaged(pdf, technical)
+        numbers = set(damaged) - restorable
+        if not numbers:
+            return damaged, set()
+        return damaged, {index for index, page in enumerate(pdf.pages) if numbers & _page_refs(page.obj)}
+    except (pikepdf.PikepdfError, RuntimeError, ValueError, TypeError) as exc:
+        technical.append(f"Datenströme: Prüfung nicht möglich ({type(exc).__name__})")
+        return None, set()
+
+
+def _rescue_streams(pdf, technical: list[str], known: dict[int, str] | None = None) -> _Rescue:
+    """Beschädigte Flate-Datenströme retten, bevor qpdf das Dokument schreibt – qpdf übernähme sie
+    sonst unverändert oder (mit vorgeschalteten ASCII-Filtern) stillschweigend gekürzt, mitten in
+    einem Befehl. Seiten, die beschädigte Datenströme brauchen, zählen danach als unvollständig.
+    ``known``: für dasselbe Dokument schon ermittelt (``_source_info``) – nur diese werden geprüft."""
+    import pikepdf
+
+    try:
+        found = streams.rescue(pdf, technical, set(known) if known is not None else None)
+        damaged = set(found.partial) | set(found.kept)
+        pages = {index for index, page in enumerate(pdf.pages) if damaged & _page_refs(page.obj)} if damaged else set()
+    except (pikepdf.PikepdfError, RuntimeError, ValueError, TypeError, MemoryError) as exc:
+        technical.append(f"Datenströme: Prüfung unterbrochen ({type(exc).__name__})")
+        return _Rescue(uncertain=True)
+    return _Rescue(pages, dict(found.partial), len(found.restored), list(found.kept.values()))
+
+
+def _rescue_actions(partial: dict[int, str], restored: int) -> list[str]:
+    """Durchgeführte Schritte der Rettung (»Details«)."""
+    actions = []
+    contents, images = streams.count(partial, streams.CONTENT), streams.count(partial, streams.IMAGE)
+    if contents:
+        actions.append(f"{contents} {'Inhaltsstrom' if contents == 1 else 'Inhaltsströme'} teilweise gerettet: lesbarer Teil bis zum letzten vollständigen Befehl übernommen, offene Blöcke geschlossen")
+    if images:
+        actions.append(f"{images} {'Bild' if images == 1 else 'Bilder'} teilweise gerettet: lesbare Zeilen übernommen, fehlende Zeilen weiß aufgefüllt")
+    if restored:
+        actions.append(f"{_streams_word(restored)} ohne gültiges Ende vollständig gelesen und neu geschrieben")
+    return actions
+
+
+def _streams_word(count: int) -> str:
+    return f"{count} {'Datenstrom' if count == 1 else 'Datenströme'}"
+
+
 class _DeepCheck:
     """Wie ``qpdf --check``: alle Datenströme dekodieren und die Inhalte jeder Seite
     einzeln lesen – ein Fehler auf einer Seite bricht die Prüfung nicht ab."""
@@ -439,8 +618,8 @@ def _form_info(pdf) -> tuple[bool, int, int]:
     try:
         if "/Perms" in pdf.Root:  # zertifiziertes Dokument (DocMDP)
             signed = max(signed, 1)
-    except Exception:
-        pass
+    except (pikepdf.PikepdfError, ValueError, TypeError) as exc:
+        _log().info("Formularprüfung: Eintrag /Perms nicht lesbar (%s)", type(exc).__name__)
     return isinstance(acro, pikepdf.Dictionary) and count > 0, count, signed
 
 
@@ -580,14 +759,29 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
         result.checks.append(Check("header", "PDF-Kennung", False, "Datei ist leer"))
         return result
     scan = _scan(path, result.size)
-    result.looks_like_pdf = scan.header
+    result.looks_like_pdf = scan.header or bool(scan.before)
     result.pdf_version = scan.version
-    result.checks.append(Check("header", "PDF-Kennung", scan.header, f"PDF {scan.version}" if scan.header else "nicht gefunden"))
-    result.checks.append(Check("eof", "Dateiende", scan.eof, "vollständig" if scan.eof else "Kennung %%EOF fehlt – Datei möglicherweise abgeschnitten"))
+    result.data_before, result.data_after = scan.before, scan.after
+    if scan.before:
+        result.checks.append(Check("header", "PDF-Kennung", False, f"PDF {scan.version} – erst nach {_amount(scan.before)} fremder Daten"))
+    else:
+        result.checks.append(Check("header", "PDF-Kennung", scan.header, f"PDF {scan.version}" if scan.header else "nicht gefunden"))
+    if scan.after:
+        result.checks.append(Check("eof", "Dateiende", False, f"%%EOF vorhanden, danach {_amount(scan.after)} fremde Daten"))
+    else:
+        result.checks.append(Check("eof", "Dateiende", scan.eof, "vollständig" if scan.eof else "Kennung %%EOF fehlt – Datei möglicherweise abgeschnitten"))
+    technical: list[str] = []
+    # Stehen fremde Daten vor oder nach der PDF, prüfen die Engines die PDF-Daten allein – so wie
+    # die Reparatur sie zuerst verarbeitet; die fremden Daten selbst sind ein eigener Befund.
+    with _pdf_data(path, scan, technical) as source:
+        _analyze_structure(result, source, scan, password, progress, technical)
+    return result
 
+
+def _analyze_structure(result: PdfAnalysis, path: Path, scan: _Scan, password: str | None, progress: Progress, technical: list[str]) -> None:
     progress("open")
     opened = _open_qpdf(path, password)
-    technical: list[str] = list(opened.warnings)
+    technical.extend(opened.warnings)
     if opened.password_problem:
         result.encrypted = True
         result.password_required = True
@@ -595,7 +789,7 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
         result.condition = Condition.ENCRYPTED
         result.checks.append(Check("encryption", "Verschlüsselung", None, "Passwort erforderlich" if not password else "Passwort falsch"))
         result.technical = technical[:MAX_TECHNICAL]
-        return result
+        return
 
     page_count: int | None = None
     incomplete: list[int] = []
@@ -621,6 +815,8 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
                 found = set(_incomplete_pages(pdf, _damaged_objects(technical), _mentioned_pages(technical))) | deep.bad_pages
                 if _findings(technical):
                     found |= _lost_page_content(path, pdf)
+                if {"streams", "content"} & set(_findings(technical)):
+                    found |= _damaged_streams(pdf, technical)[1]  # z. B. ein beschädigtes Bild der Seite
                 incomplete = sorted(found)
         finally:
             pdf.close()
@@ -659,7 +855,9 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
     if qpdf_ok and page_count is not None:
         result.readable_pages = page_count - len(incomplete)
 
-    if scan.header and not scan.eof and "eof" not in findings:
+    # Fremde Daten vor bzw. nach der PDF: eigene Befunde (die Engines haben die PDF-Daten allein geprüft)
+    findings[:0] = [key for key, amount in (("header", scan.before), ("tail", scan.after)) if amount and key not in findings]
+    if result.looks_like_pdf and not scan.eof and "eof" not in findings:
         findings.append("eof")  # fehlendes Dateiende ist ein Befund – die Reparatur schreibt es neu
     if qpdf_ok:
         if not findings and not incomplete and scan.header:
@@ -672,7 +870,7 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
         result.condition = Condition.DAMAGED
         if not findings:
             findings.append("pages")
-    elif scan.header and raw is not None and raw.recoverable:
+    elif result.looks_like_pdf and raw is not None and raw.recoverable:
         # Parser scheitern, die Rohdaten tragen aber noch: erweiterte Wiederherstellung möglich
         result.condition = Condition.RAW_RECOVERABLE
         findings.extend(key for key in _raw_findings(raw) if key not in findings)
@@ -681,7 +879,7 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
         if raw is not None and raw.encrypted and raw.objects:
             result.error = "Die PDF ist verschlüsselt und ihre Struktur ist beschädigt. Ohne vollständige Verschlüsselungsdaten ist keine Wiederherstellung möglich."
         else:
-            result.error = "Keine der Engines kann die Datei öffnen, und es wurde keine verwertbare PDF-Struktur gefunden." if scan.header else "Die Datei ist keine lesbare PDF."
+            result.error = "Keine der Engines kann die Datei öffnen, und es wurde keine verwertbare PDF-Struktur gefunden." if result.looks_like_pdf else "Die Datei ist keine lesbare PDF."
     if raw is not None and raw.encrypted and not result.encrypted:
         # Verschlüsselt, aber die Verschlüsselungsangaben (Trailer) fehlen: Der Inhalt ist nicht
         # lesbar, und ein Passwortschutz wird nie umgangen.
@@ -728,7 +926,6 @@ def analyze(path: str | os.PathLike, password: str | None = None, progress: Prog
     if result.encrypted:
         result.warnings.append("Die PDF ist verschlüsselt. Die reparierte Datei bleibt mit einem Passwort geschützt.")
     result.technical = technical[:MAX_TECHNICAL]
-    return result
 
 
 # --- Reparatur ------------------------------------------------------------------------------
@@ -745,6 +942,10 @@ class _Candidate:
     critical_loss: bool = False  # z. B. Anhänge verloren
     problems: list[str] = field(default_factory=list)
     doubtful: bool = False  # z. B. Ressourcen fehlten beim Neuaufbau – höchstens »teilweise«
+    notes: list[str] = field(default_factory=list)  # Hinweise ohne Verlust, z. B. entfernte fremde Daten
+    removed: int = 0  # entfernte fremde Daten vor bzw. nach der PDF (Byte)
+    rescued: int = 0  # Datenströme, von denen nur der lesbare Teil übernommen wurde
+    kept: list[str] = field(default_factory=list)  # Arten beschädigter Datenströme, unverändert übernommen
 
     @property
     def complete(self) -> int:
@@ -753,6 +954,27 @@ class _Candidate:
     def score(self) -> tuple:
         """Vollständige Seiten vor Seitenzahl vor Struktur (nie Bilder) vor Verlusten vor Methode."""
         return (self.complete, self.pages, self.method is not Method.RASTER, not self.critical_loss, -len(self.lost), PRIORITY[self.method])
+
+
+@dataclass
+class _Rescue:
+    """Beschädigte Datenströme eines Dokuments, gerettet, bevor qpdf es schreibt (``recovery.streams``)."""
+
+    pages: set[int] = field(default_factory=set)  # Seiten (0-basiert), die beschädigte Datenströme brauchen
+    partial: dict[int, str] = field(default_factory=dict)  # nur der lesbare Teil übernommen (Objekt → Art)
+    restored: int = 0  # vollständig gelesen und neu geschrieben
+    kept: list[str] = field(default_factory=list)  # beschädigt, unverändert übernommen (Arten)
+    uncertain: bool = False  # Prüfung unterbrochen – das Ergebnis gilt höchstens als »teilweise«
+
+    def apply(self, candidate: _Candidate) -> None:
+        """Auf den Kandidaten übertragen (gleiche Seitenfolge). Teilweise Gerettetes ist nie vollständig."""
+        candidate.incomplete = sorted(set(candidate.incomplete) | self.pages)
+        candidate.rescued += len(self.partial)
+        candidate.kept += self.kept
+        candidate.doubtful = candidate.doubtful or bool(self.partial) or self.uncertain
+        candidate.actions += _rescue_actions(self.partial, self.restored)
+        if self.uncertain:
+            candidate.notes.append("Beschädigte Datenströme ließen sich nicht vollständig prüfen.")
 
 
 @dataclass
@@ -770,6 +992,8 @@ class _Source:
     findings: list[str] = field(default_factory=list)
     raw: scanner.RawScan | None = None  # Rohanalyse, wenn qpdf den Seitenbaum nicht liest
     tree_damaged: bool = False  # Seitenbaum mit Verweisen ins Leere (qpdf überspringt sie)
+    rescue: bool = False  # beschädigte Datenströme retten, bevor qpdf schreibt (Modus AUTO)
+    damaged: dict[int, str] | None = None  # beschädigte Datenströme der Quelle (Objekt → Art); None: nicht geprüft
 
 
 @dataclass
@@ -813,8 +1037,10 @@ def validate(path: Path, password: str | None = None) -> Validation:
     return Validation(True, pages, problems, incomplete)
 
 
-def _source_info(path: Path, password: str | None) -> _Source:
-    info = _Source()
+def _source_info(path: Path, password: str | None, deep: bool = False) -> _Source:
+    """Angaben zur Quelle. ``deep``: auch beschädigte Datenströme suchen und ihre Seiten als
+    unvollständig zählen (Modus AUTO – beschädigte Dateien)."""
+    info = _Source(rescue=deep)
     opened = _open_qpdf(path, password)
     info.password_problem = opened.password_problem
     if opened.password_problem:
@@ -837,6 +1063,9 @@ def _source_info(path: Path, password: str | None) -> _Source:
                 found = set(_incomplete_pages(pdf, _damaged_objects(technical), _mentioned_pages(technical)))
                 if _findings(technical):
                     found |= _lost_page_content(path, pdf)
+                if deep:
+                    info.damaged, pages = _damaged_streams(pdf, technical)
+                    found |= pages
                 info.incomplete = sorted(found)
         finally:
             pdf.close()
@@ -883,11 +1112,14 @@ def _stage_rewrite(path: Path, work: Path, password: str | None, source: _Source
         return None
     out = work / "stufe2.pdf"
     pdf = opened.pdf
+    rescued = _Rescue()
     try:
         pages = len(pdf.pages)
         if pages == 0:
             technical.append("Stufe 2: keine Seiten gefunden")
             return None
+        if source.rescue:
+            rescued = _rescue_streams(pdf, technical, source.damaged)  # dieselbe Quelle, dieselben Objektnummern
         progress("write", 0.0)
         _save_qpdf(pdf, out, progress, "write")
         _collect(pdf, path, technical)
@@ -898,7 +1130,9 @@ def _stage_rewrite(path: Path, work: Path, password: str | None, source: _Source
         pdf.close()
     actions = [ACTIONS[key] for key in source.findings if key in ACTIONS]
     actions += ["Objekte neu nummeriert und Datei neu geschrieben"]
-    return _Candidate(Method.REWRITE, out, pages, list(source.incomplete), actions)
+    candidate = _Candidate(Method.REWRITE, out, pages, list(source.incomplete), actions)
+    rescued.apply(candidate)
+    return candidate
 
 
 def _copy_attachments(src, dest, technical: list[str]) -> int:
@@ -938,12 +1172,15 @@ def _stage_pages(path: Path, work: Path, password: str | None, source: _Source, 
     out = work / "stufe3-seiten.pdf"
     probe = work / "seite.pdf"
     good: list[int] = []
+    rescued = _Rescue()
     try:
         try:
             total = len(src.pages)
         except Exception as exc:
             technical.append(f"Stufe 3 (Seiten): Seitenbaum nicht lesbar: {_clean(str(exc), path)}")
             return None
+        if source.rescue:
+            rescued = _rescue_streams(src, technical, source.damaged)
         for index in range(total):
             progress("pages", index / max(1, total))
             try:
@@ -965,8 +1202,8 @@ def _stage_pages(path: Path, work: Path, password: str | None, source: _Source, 
                 info = src.trailer.get("/Info")
                 if info is not None:
                     dest.trailer.Info = dest.copy_foreign(info)
-            except Exception:
-                pass
+            except (pikepdf.PikepdfError, ValueError, TypeError) as exc:
+                technical.append(f"Stufe 3 (Seiten): Dokumentinformationen nicht übertragbar ({type(exc).__name__})")
             if source.attachments:
                 copied = _copy_attachments(src, dest, technical)
                 if copied < source.attachments:
@@ -982,7 +1219,10 @@ def _stage_pages(path: Path, work: Path, password: str | None, source: _Source, 
         src.close()
     incomplete = [good.index(i) for i in source.incomplete if i in good]
     actions = ["Lesbare Seiten einzeln geprüft und in eine neue PDF übertragen", f"{len(good)} von {total} Seiten übertragen"]
-    return _Candidate(Method.PAGES, out, len(good), incomplete, actions, lost, critical)
+    candidate = _Candidate(Method.PAGES, out, len(good), incomplete, actions, lost, critical)
+    rescued.pages = {good.index(i) for i in rescued.pages if i in good}  # Seiten der neuen PDF
+    rescued.apply(candidate)
+    return candidate
 
 
 def _stage_pdfium(path: Path, work: Path, password: str | None, source: _Source, progress: Progress, technical: list[str]) -> _Candidate | None:
@@ -1089,26 +1329,30 @@ def _stage_raster(path: Path, work: Path, password: str | None, source: _Source,
     return _Candidate(Method.RASTER, out, drawn, [], actions, lost, True)
 
 
-def _normalize(source: Path, target: Path, progress: Progress, technical: list[str], label: str) -> bool:
-    """Kandidat mit qpdf öffnen und neu schreiben – erst die normalisierte Datei wird geprüft."""
+def _normalize(source: Path, target: Path, progress: Progress, technical: list[str], label: str, rescue: bool = False) -> _Rescue | None:
+    """Kandidat mit qpdf öffnen und neu schreiben – erst die normalisierte Datei wird geprüft.
+    ``rescue``: beschädigte Datenströme vorher retten. ``None``: Normalisierung nicht möglich."""
     progress("normalize")
     opened = _open_qpdf(source, None)
     if opened.pdf is None:
         technical.append(f"{label}: Normalisierung nicht möglich: {opened.error or 'Passwort'}")
-        return False
+        return None
     pdf = opened.pdf
+    rescued = _Rescue()
     try:
         if len(pdf.pages) == 0:
             technical.append(f"{label}: keine Seiten nach der Normalisierung")
-            return False
+            return None
+        if rescue:
+            rescued = _rescue_streams(pdf, technical)
         _save_qpdf(pdf, target, progress, "normalize")
         _collect(pdf, source, technical)
     except Exception as exc:  # noqa: BLE001
         technical.append(f"{label}: Normalisierung fehlgeschlagen: {_clean(str(exc), source)}")
-        return False
+        return None
     finally:
         pdf.close()
-    return True
+    return rescued
 
 
 def _stage_lenient(path: Path, work: Path, password: str | None, source: _Source, progress: Progress, technical: list[str]) -> _Candidate | None:
@@ -1120,9 +1364,9 @@ def _stage_lenient(path: Path, work: Path, password: str | None, source: _Source
         raw_out.unlink(missing_ok=True)
         return None
     out = work / "stufe4-pypdf.pdf"
-    ok = _normalize(raw_out, out, progress, technical, "Stufe 4 (pypdf)")
+    rescued = _normalize(raw_out, out, progress, technical, "Stufe 4 (pypdf)", source.rescue)
     raw_out.unlink(missing_ok=True)
-    if not ok:
+    if rescued is None:
         return None
     lost = list(found.lost)
     critical = False
@@ -1130,7 +1374,9 @@ def _stage_lenient(path: Path, work: Path, password: str | None, source: _Source
         lost.append(f"{source.attachments} Dateianhänge konnten nicht übernommen werden.")
         critical = True
     actions = ["Dritte Engine (pypdf) hat die Datei mit toleranteren Regeln gelesen", f"{found.pages} von {found.total} Seiten übertragen", "Ergebnis mit qpdf normalisiert"]
-    return _Candidate(Method.LENIENT, out, found.pages, [], actions, lost, critical)
+    candidate = _Candidate(Method.LENIENT, out, found.pages, [], actions, lost, critical)
+    rescued.apply(candidate)
+    return candidate
 
 
 def _stage_raw(path: Path, work: Path, password: str | None, source: _Source, progress: Progress, technical: list[str]) -> _Candidate | None:
@@ -1206,7 +1452,8 @@ def _stage_raw(path: Path, work: Path, password: str | None, source: _Source, pr
             doubtful = True
         if done.fonts.skipped:
             technical.append(f"Stufe 5: Schriften mit Zwei-Byte-Codes nicht ersetzt: {', '.join(done.fonts.skipped)}")
-        if not _normalize(finished_path, out, progress, technical, "Stufe 5"):
+        rescued = _normalize(finished_path, out, progress, technical, "Stufe 5", source.rescue)
+        if rescued is None:
             return None
     except (OSError, ValueError, MemoryError) as exc:
         technical.append(f"Stufe 5: Neuaufbau fehlgeschlagen: {_clean(str(exc), path)}")
@@ -1220,6 +1467,7 @@ def _stage_raw(path: Path, work: Path, password: str | None, source: _Source, pr
     actions.append("Ergebnis mit qpdf normalisiert")
     candidate = _Candidate(method, out, done.pages, done.incomplete, actions, lost, False)
     candidate.doubtful = doubtful
+    rescued.apply(candidate)
     return candidate
 
 
@@ -1239,6 +1487,155 @@ def _encrypt_like_source(candidate: _Candidate, password: str | None, technical:
     candidate.path = target
     candidate.actions.append("Mit dem eingegebenen Passwort geschützt (AES-256)")
     return True
+
+
+def _stage_streams(best: _Candidate, password: str | None, progress: Progress, technical: list[str]) -> _Candidate:
+    """Datenströme retten (nach der Auswahl): Meldet die Prüfung der besten Ausgabe noch unlesbare
+    Flate-Datenströme (z. B. von PDFium unverändert übernommen), wird ihr lesbarer Teil übernommen
+    (``recovery.streams``). Die neue Ausgabe wird wie jede andere geprüft und nur übernommen, wenn
+    sie nichts verschlechtert – sonst bleibt ``best`` (mit der Angabe, was sich nicht retten ließ)."""
+    import pikepdf
+
+    progress("streams_rescue")
+    opened = _open_qpdf(best.path, password, recovery=False)
+    if opened.pdf is None:
+        technical.append(f"Datenströme: Ausgabe nicht lesbar: {opened.error or 'Passwort'}")
+        return best
+    pdf = opened.pdf
+    out = best.path.with_name(best.path.stem + "-datenstroeme.pdf")
+    try:
+        found = streams.rescue(pdf, technical)
+        damaged = {**found.partial, **found.restored, **found.kept}
+        refs = [_page_refs(page.obj) for page in pdf.pages] if damaged else []
+        if found.changed:
+            _save_qpdf(pdf, out, progress, "streams_rescue")
+    except (pikepdf.PikepdfError, OSError, RuntimeError, ValueError, TypeError, MemoryError) as exc:
+        technical.append(f"Datenströme: Rettung nicht möglich ({type(exc).__name__})")
+        out.unlink(missing_ok=True)
+        return best
+    finally:
+        pdf.close()
+
+    def using(numbers) -> set[int]:
+        """Seiten (0-basiert), deren Inhalt oder Ressourcen diese Objekte brauchen."""
+        wanted = set(numbers)
+        return {index for index, used in enumerate(refs) if used & wanted}
+
+    if found.changed:
+        progress("validate")
+        check = validate(out, password)
+        technical.extend(check.problems)
+        if check.ok and check.pages == best.pages and len(check.problems) < len(best.problems) and set(check.incomplete) <= set(best.incomplete):
+            rescued = _Candidate(best.method, out, check.pages, list(best.incomplete), list(best.actions), list(best.lost), best.critical_loss, check.problems, best.doubtful)
+            rescued.notes, rescued.removed, rescued.rescued = list(best.notes), best.removed, best.rescued
+            # In der Ausgabe noch Beschädigtes ersetzt die bisherige Angabe – es ist jetzt gerettet oder bleibt
+            _Rescue(using(found.partial) | using(found.kept) | set(check.incomplete), dict(found.partial), len(found.restored), list(found.kept.values())).apply(rescued)
+            return rescued
+        technical.append("Gerettete Datenströme verworfen: Die Prüfung ergab keine Verbesserung")
+        out.unlink(missing_ok=True)
+    # Unverändert übernommen: Seiten, die beschädigte Datenströme brauchen, sind nicht vollständig
+    best.kept = list(damaged.values())
+    best.incomplete = sorted(set(best.incomplete) | using(damaged))
+    return best
+
+
+def _kept_texts(kept: list[str]) -> list[str]:
+    """Hinweise zu beschädigten Datenströmen, die unverändert übernommen wurden."""
+    images = kept.count(streams.IMAGE)
+    texts = []
+    if images:
+        texts.append(
+            "Ein beschädigtes Bild ließ sich nicht sicher retten und wurde unverändert übernommen."
+            if images == 1
+            else f"{images} beschädigte Bilder ließen sich nicht sicher retten und wurden unverändert übernommen."
+        )
+    if len(kept) > images or not images:
+        texts.append("Einzelne Datenströme waren schon im Original nicht lesbar und wurden unverändert übernommen.")
+    return texts
+
+
+@dataclass
+class _Input:
+    """Eingabe der Stufen: das Original oder eine Kopie nur mit den PDF-Daten."""
+
+    path: Path
+    work: Path  # Ordner für die Ausgaben der Stufen
+    source: _Source
+    removed: int = 0  # entfernte fremde Daten (Byte)
+    actions: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+
+def _trimmed_input(path: Path, size: int, work: Path, password: str | None, deep: bool, progress: Progress, technical: list[str]) -> _Input | None:
+    """Stehen fremde Daten vor oder nach der PDF (z. B. ein E-Mail- oder HTTP-Kopf, HTML), entsteht
+    im Arbeitsordner eine Kopie nur mit den PDF-Daten – sie durchläuft die Stufen wie das Original."""
+    try:
+        edges = _scan(path, size)
+    except OSError as exc:
+        technical.append(f"Suche nach fremden Daten nicht möglich ({type(exc).__name__})")
+        return None
+    if not (edges.before or edges.after):
+        return None
+    progress("trim")
+    target = work / CLEAN_DIR
+    try:
+        (work / INPUT_DIR).mkdir(exist_ok=True)
+        target.mkdir(exist_ok=True)
+        copy = _write_pdf_data(path, edges, work / INPUT_DIR / path.name)
+    except OSError as exc:
+        technical.append(f"Kopie ohne fremde Daten nicht möglich ({type(exc).__name__}) – nur das Original wird verarbeitet")
+        return None
+    technical.append(f"Fremde Daten: {edges.before} Byte vor dem PDF-Anfang, {edges.after} Byte nach dem letzten %%EOF – zuerst wird die PDF ohne sie verarbeitet")
+    entry = _Input(copy, target, _source_info(copy, password, deep), edges.before + edges.after)
+    if edges.before:
+        entry.actions.append(f"{ACTIONS['header']} ({_amount(edges.before)})")
+        entry.notes.append(f"Vor dem PDF-Anfang standen {_amount(edges.before)} fremde Daten (z. B. ein E-Mail- oder Webseiten-Kopf). Sie gehören nicht zur PDF und wurden entfernt.")
+    if edges.after:
+        entry.actions.append(f"{ACTIONS['tail']} ({_amount(edges.after)})")
+        entry.notes.append(f"Nach dem Dateiende (%%EOF) standen {_amount(edges.after)} fremde Daten. Sie gehören nicht zur PDF und wurden entfernt.")
+    return entry
+
+
+def _run_stages(entry: _Input, stages, password: str | None, expected: int | None, progress: Progress, technical: list[str], candidates: list[_Candidate]) -> bool:
+    """Die Stufen auf eine Eingabe anwenden; jeder Kandidat wird geprüft und gesammelt.
+    ``True``: ein Kandidat ist vollständig ohne Verluste – weitere Stufen und Eingaben sind nicht nötig."""
+    source = entry.source
+    for stage in stages:
+        candidate = stage(entry.path, entry.work, password, source, progress, technical)
+        if candidate is None:
+            continue
+        candidate.actions[:0] = entry.actions
+        candidate.notes += entry.notes
+        candidate.removed = entry.removed
+        if source.encrypted and candidate.method in (Method.PDFIUM, Method.RASTER, Method.LENIENT):
+            _encrypt_like_source(candidate, password, technical)
+        progress("validate")
+        check = validate(candidate.path, password)
+        technical.extend(check.problems)
+        if not check.ok:
+            technical.append(f"Ausgabe von {candidate.method.value} verworfen")
+            candidate.path.unlink(missing_ok=True)
+            continue
+        candidate.pages = check.pages
+        candidate.problems = check.problems
+        candidate.incomplete = sorted(set(candidate.incomplete) | set(check.incomplete))
+        candidates.append(candidate)
+        best_possible = expected or check.pages
+        if candidate.complete >= best_possible and not candidate.critical_loss and not candidate.lost and not candidate.doubtful:
+            return True  # vollständig ohne Verluste – weitere Stufen nicht nötig
+    return False
+
+
+def _tidy(work: Path) -> None:
+    """Kopie der Eingabe entfernen; den Ordner der Ausgaben für sie nur, wenn er leer ist (die Ausgabe bleibt)."""
+    try:
+        if (work / INPUT_DIR).is_dir():
+            shutil.rmtree(work / INPUT_DIR)
+        clean = work / CLEAN_DIR
+        if clean.is_dir() and not any(clean.iterdir()):
+            clean.rmdir()
+    except OSError as exc:
+        _log().info("Arbeitsordner: Kopie der Eingabe nicht entfernt (%s) – sie verschwindet mit dem Arbeitsordner", type(exc).__name__)
 
 
 def _page_list(pages: list[int], limit: int = 12) -> str:
@@ -1272,6 +1669,8 @@ def repair(
 
     Das Ergebnis enthält den Pfad der geprüften Ausgabe; übernommen wird sie vom
     aufrufenden Prozess (eindeutiger Name neben dem Original bzw. im Zielordner).
+    Stehen fremde Daten vor oder nach der PDF, durchläuft zuerst eine Kopie ohne sie die Stufen;
+    danach werden, wenn nötig, beschädigte Datenströme der besten Ausgabe gerettet.
     """
     progress = progress or _noop
     path = Path(path)
@@ -1290,7 +1689,8 @@ def repair(
         return result
 
     progress("open")
-    source = _source_info(path, password)
+    deep = mode is RepairMode.AUTO
+    source = _source_info(path, password, deep)
     if source.password_problem:
         result.status = RepairStatus.ENCRYPTED
         result.error = "Das Passwort fehlt oder ist falsch."
@@ -1313,53 +1713,56 @@ def repair(
         stages = (_stage_rewrite,)
     else:
         stages = (_stage_rewrite, _stage_pages, _stage_pdfium, _stage_lenient, _stage_raw)
-    for stage in stages:
-        candidate = stage(path, work, password, source, progress, technical)
-        if candidate is None:
-            continue
-        if source.encrypted and candidate.method in (Method.PDFIUM, Method.RASTER, Method.LENIENT):
-            _encrypt_like_source(candidate, password, technical)
-        progress("validate")
-        check = validate(candidate.path, password)
-        technical.extend(check.problems)
-        if not check.ok:
-            technical.append(f"Ausgabe von {candidate.method.value} verworfen")
-            candidate.path.unlink(missing_ok=True)
-            continue
-        candidate.pages = check.pages
-        candidate.problems = check.problems
-        candidate.incomplete = sorted(set(candidate.incomplete) | set(check.incomplete))
-        candidates.append(candidate)
-        best_possible = expected or check.pages
-        if candidate.complete >= best_possible and not candidate.critical_loss and not candidate.lost and not candidate.doubtful:
-            break  # vollständig ohne Verluste – weitere Stufen nicht nötig
-
-    # Original unverändert? (nur gelesen – geprüft wird trotzdem)
+    inputs = [_Input(path, work, source)]
     try:
-        _size, _mtime, after = file_digest(path)
-    except OSError:
-        after = ""
-    if after != digest:
-        for candidate in candidates:
-            candidate.path.unlink(missing_ok=True)
-        result.error = "Die Datei wurde während der Verarbeitung verändert oder gelöscht. Es wurde keine Ausgabe gespeichert."
-        result.technical = technical[:MAX_TECHNICAL]
-        return result
+        trimmed = _trimmed_input(path, size, work, password, deep, progress, technical) if size else None
+        if trimmed is not None:
+            inputs.insert(0, trimmed)  # zuerst die PDF-Daten allein, danach (wenn nötig) das Original
+            known = [n for n in (expected, trimmed.source.pages, trimmed.source.pdfium_pages) if n]
+            expected = max(known) if known else None
+            result.pages_before = expected
+        for entry in inputs:
+            if _run_stages(entry, stages, password, expected, progress, technical, candidates):
+                break  # vollständig ohne Verluste – das Original muss nicht mehr durch die Stufen
+            if mode is RepairMode.RASTER and candidates:
+                break  # Rettungsmodus: ein Ergebnis genügt (jede Seite als Bild – das dauert)
+        best = max(candidates, key=lambda c: c.score()) if candidates else None
+        if best is not None and best.problems and best.method is not Method.RASTER:
+            rescued = _stage_streams(best, password, progress, technical)
+            if rescued is not best:
+                best.path.unlink(missing_ok=True)
+                candidates[candidates.index(best)] = rescued
+                best = rescued
 
-    if not candidates:
-        result.error = "Keine Stufe konnte eine lesbare PDF erzeugen."
-        result.technical = technical[:MAX_TECHNICAL]
-        return result
-    best = max(candidates, key=lambda c: c.score())
-    for candidate in candidates:
-        if candidate is not best:
-            candidate.path.unlink(missing_ok=True)
+        # Original unverändert? (nur gelesen – geprüft wird trotzdem)
+        try:
+            _size, _mtime, after = file_digest(path)
+        except OSError:
+            after = ""
+        if after != digest:
+            for candidate in candidates:
+                candidate.path.unlink(missing_ok=True)
+            result.error = "Die Datei wurde während der Verarbeitung verändert oder gelöscht. Es wurde keine Ausgabe gespeichert."
+            result.technical = technical[:MAX_TECHNICAL]
+            return result
+
+        if best is None:
+            result.error = "Keine Stufe konnte eine lesbare PDF erzeugen."
+            result.technical = technical[:MAX_TECHNICAL]
+            return result
+        for candidate in candidates:
+            if candidate is not best:
+                candidate.path.unlink(missing_ok=True)
+    finally:
+        _tidy(work)
     expected = max(expected or 0, best.pages)
     result.output_path = str(best.path)
     result.method = best.method
     result.size_after = best.path.stat().st_size
     result.pages_before = expected
     result.pages_after = best.pages
+    result.data_removed = best.removed
+    result.streams_rescued = best.rescued
     result.repair_actions = [f"{expected} Seiten erkannt", *best.actions, f"{best.pages} Seiten geschrieben"]
     if best.method is Method.REWRITE:
         kept = [name for name, present in (("Metadaten", source.metadata), ("Lesezeichen", source.outlines), ("Formulare", source.forms)) if present]
@@ -1367,7 +1770,9 @@ def repair(
             kept.append(f"{source.attachments} Dateianhänge")
         if kept:
             result.repair_actions.append(", ".join(kept) + " übernommen")
-    result.warnings = list(best.lost)
+    result.warnings = list(best.lost) + list(best.notes)
+    if best.rescued:
+        result.warnings.append(f"{_streams_word(best.rescued)} teilweise gerettet: Übernommen wurde nur der lesbare Teil, der beschädigte Rest fehlt.")
     if best.incomplete:
         result.incomplete_pages = [index + 1 for index in best.incomplete]
         result.warnings.append(f"Seiten mit fehlendem oder beschädigtem Inhalt: {_page_list(result.incomplete_pages)} – übernommen, soweit lesbar.")
@@ -1375,8 +1780,8 @@ def repair(
         result.warnings.insert(0, f"{best.complete} von {expected} Seiten konnten vollständig rekonstruiert werden.")
     if source.signatures:
         result.warnings.append("Digitale Signaturen sind nach der Reparatur möglicherweise ungültig.")
-    if best.problems:
-        result.warnings.append("Einzelne Datenströme waren schon im Original nicht lesbar und wurden unverändert übernommen.")
+    if best.problems or best.kept:
+        result.warnings += _kept_texts(best.kept)
     complete = best.complete >= expected and not best.critical_loss and not best.doubtful and best.method is not Method.RASTER
     result.status = RepairStatus.REPAIRED if complete else RepairStatus.PARTIALLY_RECOVERED
     result.technical = technical[:MAX_TECHNICAL]

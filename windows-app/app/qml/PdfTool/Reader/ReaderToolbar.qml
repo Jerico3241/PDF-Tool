@@ -20,9 +20,11 @@ Rectangle {
     readonly property var drawTools: ["ink", "rect", "ellipse", "line", "arrow"]
     property string lastComment: "highlight"
     property string lastDraw: "ink"
+    property string lastForm: "form"
     onToolChanged: {
         if (commentTools.indexOf(tool) >= 0) lastComment = tool
         if (drawTools.indexOf(tool) >= 0) lastDraw = tool
+        if (tool === "form" || tool === "formDesign") lastForm = tool
     }
 
     function toolIcon(name) {
@@ -140,7 +142,12 @@ Rectangle {
             ToolButton { id: drawButton; objectName: "readerToolDraw"; toolKey: root.lastDraw; iconName: root.toolIcon(root.lastDraw); tip: "Zeichnen: " + root.toolName(root.lastDraw) }
             PIconButton { implicitWidth: 18; iconName: "chevron_down"; tip: "Zeichenwerkzeug wählen"; onClicked: drawMenu.popup(drawButton, 0, drawButton.height) }
         }
-        ToolButton { objectName: "readerToolForm"; toolKey: "form"; iconName: "form"; tip: "Formular ausfüllen" }
+        // Formulare: ausfüllen oder gestalten (zuletzt benutztes Werkzeug + Auswahl)
+        Row {
+            spacing: 0
+            ToolButton { id: formButton; objectName: "readerToolForm"; toolKey: root.lastForm; iconName: root.lastForm === "formDesign" ? "form_new" : "form"; tip: root.lastForm === "formDesign" ? "Formular gestalten: Felder anlegen, verschieben, Größe und Eigenschaften ändern" : "Formular ausfüllen" }
+            PIconButton { objectName: "readerFormMenu"; implicitWidth: 18; iconName: "chevron_down"; tip: "Formularwerkzeug wählen"; onClicked: formMenu.popup(formButton, 0, formButton.height) }
+        }
 
         Item { Layout.fillWidth: true }
 
@@ -196,6 +203,12 @@ Rectangle {
         PMenuItem { text: "Pfeil"; iconName: "arrow_up_right"; onTriggered: root.doc.setTool("arrow") }
     }
     PMenu {
+        id: formMenu
+        objectName: "readerFormToolMenu"
+        PMenuItem { objectName: "readerToolFormFill"; text: "Formular ausfüllen"; iconName: "form"; onTriggered: root.doc.setTool("form") }
+        PMenuItem { objectName: "readerToolFormDesign"; text: "Formular gestalten (Felder anlegen und bearbeiten)"; iconName: "form_new"; onTriggered: root.doc.setTool("formDesign") }
+    }
+    PMenu {
         id: viewMenu
         PMenuItem { text: "Einzelseite"; iconName: "document_one_page"; onTriggered: root.doc.setViewMode("single") }
         PMenuItem { text: "Fortlaufend"; iconName: "document_one_page_multiple"; onTriggered: root.doc.setViewMode("continuous") }
@@ -211,6 +224,8 @@ Rectangle {
         PMenuItem { text: "Seiten als PNG exportieren (150 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "png", 150) }
         PMenuItem { text: "Seiten als PNG exportieren (300 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "png", 300) }
         PMenuItem { text: "Seiten als JPEG exportieren (150 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "jpeg", 150) }
+        PMenuItem { objectName: "readerMenuOcr"; text: "Text erkennen (OCR) …"; iconName: "document_search"; enabled: root.doc !== null && !root.doc.ocrRunning; onTriggered: root.doc.recognizeText([]) }
+        PMenuItem { text: "Erkannten Text entfernen"; iconName: "eraser"; enabled: root.doc !== null && !root.doc.ocrRunning; onTriggered: root.doc.removeRecognizedText([]) }
         PMenuItem { text: "PDFs anhängen …"; iconName: "merge"; enabled: root.doc !== null; onTriggered: root.doc.mergeFiles() }
         PMenuItem { text: "Dokument teilen …"; iconName: "document_landscape_split"; enabled: root.doc !== null; onTriggered: root.doc.splitDocument("") }
         PMenuItem { text: "Eigenschaften"; iconName: "info"; enabled: root.doc !== null; onTriggered: root.doc.showProperties() }

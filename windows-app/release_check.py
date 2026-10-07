@@ -13,6 +13,10 @@ Geprüft wird:
 * die Prüfsumme gehört exakt zum Setup (SHA-256 neu berechnet)
 * die Dateiversion im Setup ist ``X.Y.Z`` (ohne Vorabkennung – Windows kennt nur Zahlen)
 * die Release Notes ``windows-app/release-notes/<Version>.md`` sind vorhanden
+* im Paket, aus dem das Setup entsteht (``build/payload`` neben ``dist``, sofern vorhanden, oder
+  ``--payload``), liegt die Texterkennung vollständig: ``ocr\\tesseract.exe`` (64 Bit), jede DLL, die es
+  direkt oder indirekt lädt (außer denen von Windows), und die Sprachdaten ``deu``, ``eng``, ``osd``
+  (``check_ocr`` – auch ``build.py`` ruft es auf)
 
 Mit ``--github-output`` schreibt das Skript die Angaben für den Release-Schritt: ``version``,
 ``tag`` (``v<Version>``), ``title`` (``PDF Tool <Version>``), ``prerelease`` (``true`` für Beta),
@@ -34,6 +38,14 @@ from updater.semver import Version  # noqa: E402 - dieselbe SemVer-Auswertung wi
 
 SETUP_PREFIX = "PDF-Tool-Setup-"
 _CHECKSUM = re.compile(r"^(?P<hash>[0-9a-f]{64})  (?P<name>[^\r\n]+)\r?\n$")
+# Texterkennung im Paket (build.py, ``prepare_ocr``)
+OCR_DIR = "ocr"
+OCR_LANGUAGES = ("deu", "eng", "osd")
+OCR_FILES = ("LICENSE.txt", "tessdata/pdf.ttf")
+OCR_MIN_LANGUAGE_SIZE = 500_000  # kleinere Sprachdaten sind abgeschnitten (tessdata_fast: deu 1,5 MB)
+# DLLs, die Windows selbst mitbringt (System32) – alle anderen, die tesseract.exe lädt, müssen in ocr\ liegen
+WINDOWS_DLLS = frozenset({"advapi32.dll", "bcrypt.dll", "crypt32.dll", "gdi32.dll", "iphlpapi.dll", "kernel32.dll", "msvcrt.dll", "secur32.dll", "user32.dll", "wldap32.dll", "ws2_32.dll"})
+PE_MACHINE_X64 = 0x8664
 
 
 def parse(version: str) -> Version | None:
@@ -131,6 +143,63 @@ def check(dist: Path, version: str, notes_dir: Path | None = None, min_size: int
     return problems
 
 
+def pe_machine(path: Path) -> int | None:
+    """Zielprozessor einer Windows-Programmdatei (``0x8664`` = 64 Bit) oder ``None``."""
+    with open(path, "rb") as handle:
+        head = handle.read(4096)
+    if head[:2] != b"MZ" or len(head) < 0x40:
+        return None
+    offset = int.from_bytes(head[0x3C:0x40], "little")
+    if head[offset : offset + 4] != b"PE\0\0":
+        return None
+    return int.from_bytes(head[offset + 4 : offset + 6], "little")
+
+
+def check_ocr(payload: Path) -> list[str]:
+    """Probleme der Texterkennung im Paket (leer = in Ordnung): ``ocr\\tesseract.exe`` für 64 Bit, jede DLL,
+    die es direkt oder indirekt lädt, liegt daneben oder gehört zu Windows (``WINDOWS_DLLS``), keine
+    überzähligen DLLs, Sprachdaten ``OCR_LANGUAGES``, ``pdf.ttf`` und die Lizenz."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    from qtruntime import pe_imports  # dieselbe Auswertung der Importtabellen wie für PySide6
+
+    folder = Path(payload) / OCR_DIR
+    executable = folder / "tesseract.exe"
+    if not executable.is_file():
+        return [f"Texterkennung fehlt im Paket: {OCR_DIR}/tesseract.exe"]
+    problems: list[str] = []
+    if pe_machine(executable) != PE_MACHINE_X64:
+        problems.append(f"{OCR_DIR}/tesseract.exe ist keine Windows-Programmdatei für 64 Bit")
+    present = {path.name.lower(): path for path in folder.glob("*.dll")}
+    missing: set[str] = set()
+    seen: set[Path] = set()
+    queue = [executable]
+    while queue:
+        current = queue.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        for name in pe_imports(current):
+            key = name.lower()
+            if key in present:
+                queue.append(present[key])
+            elif key not in WINDOWS_DLLS and not key.startswith(("api-ms-win-", "ext-ms-win-")):
+                missing.add(name)
+    if missing:
+        problems.append(f"Für die Texterkennung fehlen DLLs in {OCR_DIR}/: " + ", ".join(sorted(missing, key=str.lower)))
+    unused = sorted(path.name for path in present.values() if path not in seen)
+    if unused:
+        problems.append(f"Nicht benötigte DLLs in {OCR_DIR}/: " + ", ".join(unused))
+    for language in OCR_LANGUAGES:
+        data = folder / "tessdata" / f"{language}.traineddata"
+        if not data.is_file() or data.stat().st_size < OCR_MIN_LANGUAGE_SIZE:
+            problems.append(f"Sprachdaten fehlen: {OCR_DIR}/tessdata/{language}.traineddata")
+    for rel in OCR_FILES:
+        if not (folder / rel).is_file():
+            problems.append(f"Im Paket fehlt: {OCR_DIR}/{rel}")
+    return problems
+
+
 def outputs(version: str) -> dict[str, str]:
     name = f"{SETUP_PREFIX}{version}.exe"
     return {
@@ -149,9 +218,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("dist", type=Path, help="Ordner mit Setup und .sha256")
     parser.add_argument("--version", default=None, help="Version (Standard: windows-app/VERSION)")
     parser.add_argument("--github-output", type=Path, default=None, help="Angaben für den Release-Schritt anhängen")
+    parser.add_argument("--payload", type=Path, default=None, help="Paketordner des Setups prüfen (Standard: build/payload neben dist, sofern vorhanden)")
     args = parser.parse_args(argv)
     version = (args.version or (HERE / "VERSION").read_text(encoding="utf-8")).strip()
     problems = check(args.dist, version)
+    payload = args.payload or Path(args.dist).resolve().parent / "build" / "payload"
+    if args.payload is not None or payload.is_dir():
+        problems += check_ocr(payload)
+        if not problems:
+            print(f"Paket: Texterkennung vollständig ({OCR_DIR}/tesseract.exe, Sprachdaten {', '.join(OCR_LANGUAGES)})")
     if problems:
         for problem in problems:
             print(f"FEHLER: {problem}", file=sys.stderr)

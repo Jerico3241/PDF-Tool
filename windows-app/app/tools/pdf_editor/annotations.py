@@ -54,6 +54,11 @@ class AnnotationInfo:
     author: str
     modified: str
     ours: bool  # von PDF Tool angelegt (Erscheinungsbild wird neu erzeugt)
+    reply_to: str = ""  # Antwort auf diesen Kommentar (Schlüssel), sonst leer
+    width: float | None = None  # Linienstärke (Freihand, Formen, Linien, Textfeld)
+    fill: tuple[int, int, int] | None = None  # Füllung (Rechteck, Ellipse, Textfeld)
+    opacity: float = 1.0
+    font_size: float | None = None  # Textfeld
 
 
 @dataclass
@@ -80,6 +85,7 @@ def list_annotations(document: EditorDocument, page: int | None = None) -> list[
         annots = document.pdf.pages[index].obj.get("/Annots")
         if not isinstance(annots, Array):
             continue
+        positions = {annot.objgen: (index, position) for position, annot in enumerate(annots) if isinstance(annot, Dictionary) and annot.is_indirect}
         for position, annot in enumerate(annots):
             if not isinstance(annot, Dictionary):
                 continue
@@ -92,8 +98,29 @@ def list_annotations(document: EditorDocument, page: int | None = None) -> list[
             result.append(AnnotationInfo(
                 key_of(annot, index, position), index, subtype, LABELS.get(subtype, subtype.lstrip("/")), rect, _color(annot.get("/C")),
                 _text(annot.get("/Contents")), _text(annot.get("/T")), _date(annot.get("/M")), str(annot.get("/PTEditor", "")) == "PDF Tool",
+                reply_to=_parent_key(annot, index, positions),
+                width=float(annot.BS.W) if isinstance(annot.get("/BS"), Dictionary) and "/W" in annot.BS else None,
+                fill=_color(annot.get("/IC")),
+                opacity=_number(annot.get("/CA"), 1.0),
+                font_size=_da_size(annot) if subtype == "/FreeText" else None,
             ))
     return result
+
+
+def _number(value, default: float) -> float:
+    try:
+        return float(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _parent_key(annot, page: int, positions: dict) -> str:
+    """Schlüssel des Kommentars, auf den ``annot`` antwortet (``/IRT``) – leer, wenn keine Antwort."""
+    parent = annot.get("/IRT")
+    if not isinstance(parent, Dictionary) or not parent.is_indirect:
+        return ""
+    found = positions.get(parent.objgen)
+    return key_of(parent, *found) if found is not None else ""
 
 
 def find(document: EditorDocument, key: str) -> tuple[int, int, pikepdf.Object]:
@@ -255,6 +282,128 @@ def update(document: EditorDocument, history: History, key: str, *, contents: st
         annot.M = String(_now())
         if _ours(annot):
             _appearance(document, page, annot)
+
+
+KEEP = object()  # Eigenschaft unverändert lassen
+RESIZABLE = ("/Square", "/Circle", "/FreeText", "/Ink", "/Line")
+
+
+def restyle(document: EditorDocument, history: History, key: str, *, width: float | None = None, fill=KEEP, opacity: float | None = None, font_size: float | None = None) -> None:
+    """Eigenschaften eines Kommentars aus PDF Tool nachträglich ändern: Linienstärke, Füllung (``None`` =
+    keine), Deckkraft und Schriftgröße (Textfeld). Das Erscheinungsbild wird neu erzeugt. Kommentare anderer
+    Programme behalten ihr Erscheinungsbild – dort lassen sich nur Text und Farbe ändern."""
+    document.ensure_editable("annotate")
+    page, _position, annot = find(document, key)
+    if not _ours(annot):
+        raise UnsupportedEdit("Dieser Kommentar stammt aus einem anderen Programm – hier lassen sich nur Text und Farbe ändern.")
+    subtype = annot.get("/Subtype")
+    with commands.record(document, history, "Kommentar formatieren", pages=(page,)) as rec:
+        rec.object(annot, ("/BS", "/IC", "/CA", "/DA", "/M", "/AP", "/Rect"))
+        if width is not None:
+            if subtype not in (Name.Ink, Name.Square, Name.Circle, Name.Line, Name.FreeText):
+                raise UnsupportedEdit("Diese Art Kommentar hat keine Linienstärke.")
+            value = max(0.0, min(50.0, float(width)))
+            annot.BS = Dictionary(W=round(value, 2), S=Name.S)
+            if subtype == Name.Ink:  # die Linie darf nicht über den Rahmen hinausragen
+                points = [float(v) for stroke in annot.InkList for v in stroke]
+                xs, ys = points[0::2], points[1::2]
+                annot.Rect = Array([round(v, 3) for v in inflate((min(xs), min(ys), max(xs), max(ys)), value / 2 + 1)])
+        if fill is not KEEP:
+            if subtype not in (Name.Square, Name.Circle, Name.FreeText):
+                raise UnsupportedEdit("Diese Art Kommentar lässt sich nicht füllen.")
+            if fill is None:
+                if "/IC" in annot:
+                    del annot["/IC"]
+            else:
+                annot.IC = _rgb(fill)
+        if opacity is not None:
+            value = max(0.05, min(1.0, float(opacity)))
+            if value >= 0.999:
+                if "/CA" in annot:
+                    del annot["/CA"]
+            else:
+                annot.CA = round(value, 3)
+        if font_size is not None:
+            if subtype != Name.FreeText:
+                raise UnsupportedEdit("Nur Textfelder haben eine Schriftgröße.")
+            color = _color(annot.get("/C")) or (0, 0, 0)
+            annot.DA = String(f"/Helv {fmt(max(4.0, min(144.0, float(font_size))))} Tf {_rgb_ops(color)} rg")
+        annot.M = String(_now())
+        _appearance(document, page, annot)
+
+
+def resize(document: EditorDocument, history: History, key: str, rect: Rect) -> None:
+    """Größe eines Kommentars aus PDF Tool ändern (Rechteck, Ellipse, Textfeld, Freihand, Linie): Geometrie
+    wird vom alten auf den neuen Rahmen abgebildet, das Erscheinungsbild neu erzeugt."""
+    document.ensure_editable("annotate")
+    page, _position, annot = find(document, key)
+    if not _ours(annot):
+        raise UnsupportedEdit("Die Größe lässt sich nur bei Kommentaren aus PDF Tool ändern.")
+    if str(annot.get("/Subtype")) not in RESIZABLE:
+        raise UnsupportedEdit("Die Größe dieser Art Kommentar lässt sich nicht ändern.")
+    old = _rect(annot)
+    new = normalize(tuple(float(v) for v in rect))
+    if new[2] - new[0] < 4 or new[3] - new[1] < 4:
+        raise UnsupportedEdit("Der Kommentar wäre zu klein.")
+    sx = (new[2] - new[0]) / max(0.01, old[2] - old[0])
+    sy = (new[3] - new[1]) / max(0.01, old[3] - old[1])
+
+    def scaled(array: Array) -> Array:
+        values = [float(v) for v in array]
+        return Array([round(new[0] + (v - old[0]) * sx if i % 2 == 0 else new[1] + (v - old[1]) * sy, 3) for i, v in enumerate(values)])
+
+    with commands.record(document, history, "Kommentargröße ändern", pages=(page,)) as rec:
+        rec.object(annot, ("/Rect", "/InkList", "/L", "/M", "/AP"))
+        annot.Rect = Array([round(v, 3) for v in new])
+        if isinstance(annot.get("/InkList"), Array):
+            annot.InkList = Array([scaled(stroke) for stroke in annot.InkList])
+        if isinstance(annot.get("/L"), Array):
+            annot.L = scaled(annot.L)
+        annot.M = String(_now())
+        _appearance(document, page, annot)
+
+
+def add_reply(document: EditorDocument, history: History, key: str, text: str, *, author: str = "") -> str:
+    """Antwort auf einen Kommentar (``/IRT``, wie in Acrobat): eine Notiz ohne eigenes Bild auf der Seite –
+    andere Programme zeigen sie im Verlauf des Kommentars."""
+    document.ensure_editable("annotate")
+    if not text.strip():
+        raise UnsupportedEdit("Es wurde kein Text eingegeben.")
+    page, _position, parent = find(document, key)
+    if not parent.is_indirect:
+        raise UnsupportedEdit("Auf diesen Kommentar lässt sich nicht antworten.")
+    now = _now()
+    reply = Dictionary(
+        Type=Name.Annot,
+        Subtype=Name.Text,
+        Rect=Array([round(v, 3) for v in _rect(parent)]),
+        Contents=String(text),
+        IRT=parent,
+        RT=Name.R,
+        F=28,  # Drucken, nicht zoomen, nicht drehen – wie Antworten in Acrobat
+        NM=String(str(uuid.uuid4())),
+        M=String(now),
+        CreationDate=String(now),
+        PTEditor=String("PDF Tool"),
+    )
+    if author:
+        reply.T = String(author)
+    color = _color(parent.get("/C"))
+    if color is not None:
+        reply.C = _rgb(color)
+    pdf = document.pdf
+    with commands.record(document, history, "Antwort hinzufügen", pages=(page,)) as rec:
+        obj = rec.page(page, ("/Annots",))
+        reply = pdf.make_indirect(reply)
+        reply.P = obj
+        empty = pdf.make_stream(b"")
+        empty.Type = Name.XObject
+        empty.Subtype = Name.Form
+        empty.BBox = Array([0, 0, 0, 0])
+        reply.AP = Dictionary(N=empty)  # nichts auf der Seite zeichnen
+        annots = obj.get("/Annots")
+        obj.Annots = Array([*(list(annots) if isinstance(annots, Array) else []), reply])
+    return key_of(reply, page, 0)
 
 
 def move(document: EditorDocument, history: History, key: str, dx: float, dy: float) -> None:

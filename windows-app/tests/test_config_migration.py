@@ -3,8 +3,9 @@
 Datenmigrationstest ≠ Installer-Upgrade-Test: Ob die App die Daten älterer Versionen versteht,
 prüft dieser Test direkt am Python-Code – in wenigen Sekunden, ohne ein altes Setup zu
 installieren. Als echter (langsamer) Windows-Setup-Test läuft im normalen Workflow nur noch das
-Update von der unmittelbar vorherigen stabilen Version; die vollständige historische
-Installer-Prüfung gibt es nur noch manuell (Workflow »Deep Compatibility Test«).
+Update von der unmittelbar vorherigen veröffentlichten Version (bei einer Beta auch einer Beta); die
+vollständige historische Installer-Prüfung gibt es nur noch manuell (Workflow »Deep Compatibility
+Test«).
 
 Fixtures (``tests/fixtures``) – so, wie die jeweilige Version ihre Daten geschrieben hat:
 

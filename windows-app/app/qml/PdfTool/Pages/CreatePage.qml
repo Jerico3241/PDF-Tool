@@ -179,7 +179,8 @@ PPage {
                 PButton { text: "Durchsuchen"; iconName: "folder_open"; tip: "Excel-Datei wählen (Strg+O)"; onClicked: Contracts.pickExcel() }
                 PIconButton { iconName: "copy"; tip: "Pfad der Excel-Datei kopieren"; onClicked: Contracts.copyExcelPath() }
             }
-            // Status der Prüfung: die einzige Stelle mit den Vertragszahlen
+            // Status der Prüfung: die einzige Stelle mit den Vertragszahlen (die Statusleiste unten
+            // nennt nur das Ergebnis, z. B. »Excel geprüft.«)
             PInfoBar { Layout.fillWidth: true; notice: Notices.area("info_excel"); closable: false }
             // Darunter nur, was die Statuszeile nicht schon sagt
             PCollapse {

@@ -8,14 +8,15 @@ berücksichtigt); umgerechnet wird hier mit der Seitengeometrie.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, commands, export, forms, images, metadata, outline, pages, recovery, render, save, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, export, formdesign, forms, images, metadata, objectops, ocr, outline, pages, recovery, render, save, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
-from tools.pdf_editor.geometry import normalize
+from tools.pdf_editor.geometry import normalize, union
 
 from .engine import raster_to_qimage
 
@@ -54,7 +55,8 @@ class Session:
         original = Path(info.original) if info.original else None
         document = EditorDocument.from_bytes(data, name=info.name, path=original, password=password, stamp=None)
         session = cls(ident, document)
-        document.revision = 1  # wiederhergestellt = ungespeichert
+        document.revision = 1
+        document.saved_state = -1  # wiederhergestellt = ungespeichert (auch nach Rückgängig)
         session.recovered_from = info
         return session
 
@@ -200,8 +202,25 @@ class Session:
     def object_edit(self, page: int, ident: str, text: str) -> dict:
         return self._object_result(object_edit.edit_text(self.document, self.history, self.page_objects(page), ident, text), page)
 
+    def _mixed_result(self, area, page: int) -> dict:
+        """Ergebnis einer Bedienung mit gemischter Auswahl – der Modus ehrlich: »neu gesetzt«, sobald ein Teil
+        neu gesetzt wurde (nicht nur der zuletzt geänderte)."""
+        geo = self.document.geometry(page)
+        last = self.history.last
+        steps = last.commands if isinstance(last, commands.CommandGroup) else ([last] if last is not None else [])
+        modes = [step.info.get("mode", "") for step in steps]
+        mode = next((wanted for wanted in (textedit.OVERLAY, textedit.RECONSTRUCTED) if wanted in modes), textedit.NATIVE)
+        return {"mode": mode, "label": textedit.MODE_LABELS[mode], "notes": [], "view": list(geo.rect_to_view(area)) if area else [], "page": page}
+
+    @staticmethod
+    def _only_text(idents) -> bool:
+        return all(objectops.parse(ident).kind == objectops.TEXT for ident in idents)
+
     def object_delete(self, page: int, idents: list[str]) -> dict:
-        return self._object_result(object_edit.delete(self.document, self.history, self.page_objects(page), list(idents)), page)
+        found = self.page_objects(page)
+        if self._only_text(idents):
+            return self._object_result(object_edit.delete(self.document, self.history, found, list(idents)), page)
+        return self._mixed_result(objectops.delete(self.document, self.history, found, list(idents)), page)
 
     def _page_shift(self, page: int, du: float, dv: float) -> tuple[float, float]:
         """Verschiebung in der Anzeige (Punkte) → Seitenkoordinaten (Drehung der Seite berücksichtigt)."""
@@ -212,43 +231,194 @@ class Session:
 
     def object_move(self, page: int, idents: list[str], du: float, dv: float) -> dict:
         dx, dy = self._page_shift(page, du, dv)
-        return self._object_result(object_edit.move(self.document, self.history, self.page_objects(page), list(idents), dx, dy), page)
+        found = self.page_objects(page)
+        if self._only_text(idents):
+            return self._object_result(object_edit.move(self.document, self.history, found, list(idents), dx, dy), page)
+        return self._mixed_result(objectops.move_each(self.document, self.history, found, {ident: (dx, dy) for ident in idents}, title="Verschieben"), page)
 
     def object_style(self, page: int, idents: list[str], name: str, value) -> dict:
-        kwargs = {"size": {"size": float(value)}, "spacing": {"spacing": float(value)}, "color": {"color": _rgb(str(value))}}.get(name)
-        if kwargs is None or (name == "color" and kwargs["color"] is None):
+        """Eine Eigenschaft der Auswahl ändern: Text (Größe, Zeichenabstand, Farbe, Schrift, Fett, Kursiv),
+        Vektorobjekte (Strich-, Füllfarbe, Linienstärke) und für alle die Deckkraft."""
+        found = self.page_objects(page)
+        if name in ("color", "stroke", "fill"):
+            converted = _rgb(str(value))
+            if converted is None:
+                raise EditorError("Diese Farbe lässt sich nicht verwenden.")
+        elif name in ("size", "spacing", "width", "opacity"):
+            converted = float(value)
+        elif name == "family":
+            converted = str(value)
+        elif name in ("bold", "italic"):
+            converted = bool(value)
+        else:
             raise EditorError("Diese Eigenschaft lässt sich nicht ändern.")
-        return self._object_result(object_edit.restyle(self.document, self.history, self.page_objects(page), list(idents), **kwargs), page)
+        if name in ("size", "spacing", "color") and self._only_text(idents):
+            outcome = object_edit.restyle(self.document, self.history, found, list(idents), **{name: converted})
+            return self._object_result(outcome, page)
+        return self._mixed_result(objectops.style(self.document, self.history, found, list(idents), name, converted), page)
 
-    def object_duplicate(self, page: int, ident: str) -> dict:
+    def object_duplicate(self, page: int, idents: list[str]) -> dict:
         dx, dy = self._page_shift(page, 12.0, 12.0)  # in der Anzeige nach rechts unten versetzt
-        return self._object_result(object_edit.duplicate(self.document, self.history, self.page_objects(page), ident, (dx, dy)), page)
+        found = self.page_objects(page)
+        if len(idents) == 1 and self._only_text(idents):
+            return self._object_result(object_edit.duplicate(self.document, self.history, found, idents[0], (dx, dy)), page)
+        return self._mixed_result(objectops.duplicate(self.document, self.history, found, list(idents), (dx, dy)), page)
+
+    def _view_boxes(self, found, idents, *, readable: bool = False) -> dict[str, tuple[float, float, float, float]]:
+        geo = self.document.geometry(found.page)
+        boxes = (objectops.bounds_of_readable if readable else objectops.bounds_of)(self.document, found, idents)
+        return {ident: geo.rect_to_view(box) for ident, box in boxes.items()}
 
     def object_align(self, page: int, idents: list[str], how: str) -> dict:
-        """Ausrichten in der Anzeige (links, rechts, oben, unten) – auch auf gedrehten Seiten."""
+        """Ausrichten in der Anzeige (links, Mitte, rechts, oben, Mitte, unten) bzw. gleichmäßig verteilen
+        (waagerecht, senkrecht) – auch auf gedrehten Seiten und für gemischte Auswahlen."""
         found = self.page_objects(page)
-        views = {item["id"]: item["view"] for item in object_edit.describe(self.document, found)["segments"]}
-        boxes = {}
-        for ident in idents:
-            segment_id, _, word = ident.partition("/")
-            if word:
-                segment = found.segment(segment_id)
-                match = next((w for w in segment.words if w.id == ident), None)
-                boxes[ident] = list(self.document.geometry(page).rect_to_view(match.bounds)) if match else None
-            else:
-                boxes[ident] = views.get(ident)
-        boxes = {key: value for key, value in boxes.items() if value}
+        boxes = self._view_boxes(found, idents)
         if len(boxes) < 2:
             raise EditorError("Zum Ausrichten mindestens zwei Objekte auswählen.")
-        index = {"left": 0, "top": 1, "right": 2, "bottom": 3}.get(how)
-        if index is None:
+        moves: dict[str, tuple[float, float]] = {}
+        if how in ("left", "top", "right", "bottom"):
+            index = {"left": 0, "top": 1, "right": 2, "bottom": 3}[how]
+            edge = (min if index in (0, 1) else max)(box[index] for box in boxes.values())
+            for ident, box in boxes.items():
+                moves[ident] = (edge - box[index], 0.0) if index in (0, 2) else (0.0, edge - box[index])
+        elif how in ("hcenter", "vcenter"):
+            area = None
+            for box in boxes.values():
+                area = union(area, box)
+            if how == "hcenter":
+                middle = (area[0] + area[2]) / 2
+                moves = {ident: (middle - (box[0] + box[2]) / 2, 0.0) for ident, box in boxes.items()}
+            else:
+                middle = (area[1] + area[3]) / 2
+                moves = {ident: (0.0, middle - (box[1] + box[3]) / 2) for ident, box in boxes.items()}
+        elif how in ("hspace", "vspace"):
+            if len(boxes) < 3:
+                raise EditorError("Zum Verteilen mindestens drei Objekte auswählen.")
+            lo, hi = (0, 2) if how == "hspace" else (1, 3)
+            ordered = sorted(boxes.items(), key=lambda item: (item[1][lo] + item[1][hi]) / 2)
+            total = sum(box[hi] - box[lo] for _ident, box in ordered)
+            start, end = ordered[0][1][lo], ordered[-1][1][hi]
+            gap = (end - start - total) / (len(ordered) - 1)
+            position = start
+            for ident, box in ordered:
+                shift = position - box[lo]
+                moves[ident] = (shift, 0.0) if how == "hspace" else (0.0, shift)
+                position += box[hi] - box[lo] + gap
+        else:
             raise EditorError("Unbekannte Ausrichtung.")
-        edge = (min if index in (0, 1) else max)(box[index] for box in boxes.values())
-        shifts = {}
-        for ident, box in boxes.items():
-            du, dv = (edge - box[index], 0.0) if index in (0, 2) else (0.0, edge - box[index])
-            shifts[ident] = self._page_shift(page, du, dv)
-        return self._object_result(object_edit.move_each(self.document, self.history, found, shifts), page)
+        shifts = {ident: self._page_shift(page, du, dv) for ident, (du, dv) in moves.items() if abs(du) > 0.01 or abs(dv) > 0.01}
+        if not shifts:
+            return {"mode": textedit.NATIVE, "label": textedit.MODE_LABELS[textedit.NATIVE], "notes": [], "view": [], "page": page}
+        title = "Verteilen" if how in ("hspace", "vspace") else "Ausrichten"
+        result = self._mixed_result(objectops.move_each(self.document, self.history, found, shifts, title=title), page)
+        result["views"] = [[box[0] + moves[ident][0], box[1] + moves[ident][1], box[2] + moves[ident][0], box[3] + moves[ident][1]] for ident, box in boxes.items()]
+        return result
+
+    def _view_transform(self, page: int, func) -> tuple:
+        """Abbildung in der Anzeige (u, v → u', v') als Matrix im Seitenraum."""
+        geo = self.document.geometry(page)
+
+        def mapped(x: float, y: float) -> tuple[float, float]:
+            return geo.to_page(*func(*geo.to_view(x, y)))
+
+        return tuple(round(value, 9) for value in objectops.affine(mapped))
+
+    def object_rotate(self, page: int, idents: list[str], degrees: float) -> dict:
+        """Auswahl um ihre Mitte drehen – ``degrees`` im Uhrzeigersinn, wie in der Anzeige."""
+        found = self.page_objects(page)
+        boxes = self._view_boxes(found, idents)
+        area = None
+        for box in boxes.values():
+            area = union(area, box)
+        if area is None:
+            raise EditorError("Es ist nichts ausgewählt.")
+        cu, cv = (area[0] + area[2]) / 2, (area[1] + area[3]) / 2
+        rad = math.radians(float(degrees))
+        cos, sin = round(math.cos(rad), 12), round(math.sin(rad), 12)
+
+        def turn(u: float, v: float) -> tuple[float, float]:
+            du, dv = u - cu, v - cv  # v zeigt nach unten: so dreht es im Uhrzeigersinn
+            return cu + du * cos - dv * sin, cv + du * sin + dv * cos
+
+        result = self._mixed_result(objectops.transform(self.document, self.history, found, list(idents), self._view_transform(page, turn), title="Drehen"), page)
+        views = []
+        for box in boxes.values():
+            corners = [turn(u, v) for u, v in ((box[0], box[1]), (box[2], box[1]), (box[0], box[3]), (box[2], box[3]))]
+            views.append([min(c[0] for c in corners), min(c[1] for c in corners), max(c[0] for c in corners), max(c[1] for c in corners)])
+        result["views"] = views
+        return result
+
+    def object_resize(self, page: int, idents: list[str], view_rect) -> dict:
+        """Bilder und Vektorobjekte auf einen neuen Bereich (Anzeige) bringen – Text ändert man über die
+        Schriftgröße."""
+        if any(objectops.parse(ident).kind == objectops.TEXT for ident in idents):
+            raise EditorError("Die Größe von Text ändert man über die Schriftgröße.")
+        found = self.page_objects(page)
+        old = None
+        for box in self._view_boxes(found, idents).values():
+            old = union(old, box)
+        new = normalize(tuple(float(value) for value in view_rect))
+        if old is None or new[2] - new[0] < 1 or new[3] - new[1] < 1:
+            raise EditorError("Diese Größe ist zu klein.")
+        sx = (new[2] - new[0]) / max(0.01, old[2] - old[0])
+        sy = (new[3] - new[1]) / max(0.01, old[3] - old[1])
+
+        def fit(u: float, v: float) -> tuple[float, float]:
+            return new[0] + (u - old[0]) * sx, new[1] + (v - old[1]) * sy
+
+        return self._mixed_result(objectops.transform(self.document, self.history, found, list(idents), self._view_transform(page, fit), title="Größe ändern"), page)
+
+    def object_arrange(self, page: int, idents: list[str], front: bool) -> dict:
+        return self._mixed_result(objectops.arrange(self.document, self.history, self.page_objects(page), list(idents), bool(front)), page)
+
+    def object_copy(self, page: int, idents: list[str]) -> objectops.Clip:
+        """Auswahl in die Zwischenablage der Objekte (das Dokument bleibt unverändert)."""
+        return objectops.copy(self.document, self.page_objects(page), list(idents), self.ident)
+
+    def object_picture(self, page: int, idents: list[str]):
+        """Bild der Auswahl für andere Programme (Zwischenablage des Systems) – nur ohne Text: so, wie die
+        Objekte auf der Seite zu sehen sind (bei einem Bild etwa in seiner Auflösung, höchstens 4000 Pixel)."""
+        if not idents or any(objectops.parse(ident).kind == objectops.TEXT for ident in idents):
+            return None
+        found = self.page_objects(page)
+        area = None
+        for box in self._view_boxes(found, idents, readable=True).values():
+            area = union(area, box)
+        if area is None or area[2] - area[0] < 1 or area[3] - area[1] < 1:
+            return None
+        scale = 2.0
+        if len(idents) == 1 and objectops.parse(idents[0]).kind == objectops.IMAGE:
+            item = next((entry for entry in images.list_images(self.document, page) if entry.index == objectops.parse(idents[0]).index), None)
+            if item is not None and item.pixels[0]:
+                scale = item.pixels[0] / (area[2] - area[0])
+        scale = max(1.0, min(scale, 4.0, 4000 / (area[2] - area[0]), 4000 / (area[3] - area[1])))
+        return raster_to_qimage(render.render_region(self.document, page, tuple(area), scale))
+
+    def object_paste(self, page: int, clip: objectops.Clip, at, nudge: int) -> dict:
+        placed = objectops.paste(self.document, self.history, page, clip, tuple(at) if at else None, nudge=nudge)
+        return {**self._mixed_result(None, page), "view": list(placed)}
+
+    # Texterkennung (OCR) -----------------------------------------------------------------------------------------
+    def ocr_scan(self, pages) -> tuple[list[dict], int]:
+        """Welche Seiten brauchen eine Texterkennung? Dazu der Stand des Dokuments (für die spätere Prüfung)."""
+        scans = ocr.scan_pages(self.document, pages)
+        return [{"page": scan.page, "chars": scan.chars, "cover": scan.image_cover, "layer": scan.ocr_layer, "needs": scan.needs_ocr} for scan in scans], self.document.revision
+
+    def ocr_image(self, page: int) -> tuple[bytes, int, int]:
+        """Seitenbild für Tesseract (Graustufen-PNG), verwendete Auflösung und Stand des Dokuments."""
+        png, dpi = ocr.render_page_image(self.document, page)
+        return png, dpi, self.document.revision
+
+    def ocr_apply(self, results: list, revision: int) -> int:
+        """Erkannten Text als unsichtbare Textebene übernehmen – nur, wenn das Dokument noch so ist wie beim
+        Erkennen (ein Schritt für Rückgängig)."""
+        if self.document.revision != revision:
+            raise ocr.OcrError("Das Dokument wurde während der Texterkennung geändert. Bitte den Text erneut erkennen.")
+        return ocr.apply_text_layers(self.document, self.history, results)
+
+    def ocr_remove(self, pages) -> int:
+        return ocr.remove_text_layers(self.document, self.history, pages)
 
     # Bilder ---------------------------------------------------------------------------------------------------
     def images(self, page: int) -> list[dict]:
@@ -285,7 +455,14 @@ class Session:
         for info in annotations.list_annotations(self.document, page):
             geo = self.document.geometry(info.page)
             color = "#%02X%02X%02X" % info.color if info.color else ""
-            result.append({"key": info.key, "page": info.page, "label": info.label, "subtype": info.subtype, "view": list(geo.rect_to_view(info.rect)), "contents": info.contents, "author": info.author, "modified": info.modified, "color": color, "ours": info.ours})
+            result.append({
+                "key": info.key, "page": info.page, "label": info.label, "subtype": info.subtype, "view": list(geo.rect_to_view(info.rect)),
+                "contents": info.contents, "author": info.author, "modified": info.modified, "color": color, "ours": info.ours,
+                "replyTo": info.reply_to, "width": info.width if info.width is not None else -1.0,
+                "fill": "#%02X%02X%02X" % info.fill if info.fill else "", "opacity": info.opacity,
+                "fontSize": info.font_size if info.font_size is not None else -1.0,
+                "resizable": info.ours and info.subtype in annotations.RESIZABLE and not info.reply_to,
+            })
         return result
 
     def markup(self, page: int, kind: str, view_rects: list, color: str, contents: str) -> str:
@@ -327,6 +504,27 @@ class Session:
     def delete_annotation(self, key: str) -> None:
         annotations.delete(self.document, self.history, key)
 
+    def restyle_annotation(self, key: str, name: str, value) -> None:
+        """Eine Eigenschaft eines Kommentars: width, fill (Farbe oder leer = keine), opacity (0–1), fontSize."""
+        if name == "width":
+            annotations.restyle(self.document, self.history, key, width=float(value))
+        elif name == "fill":
+            annotations.restyle(self.document, self.history, key, fill=_rgb(str(value)) if value else None)
+        elif name == "opacity":
+            annotations.restyle(self.document, self.history, key, opacity=float(value))
+        elif name == "fontSize":
+            annotations.restyle(self.document, self.history, key, font_size=float(value))
+        else:
+            raise EditorError("Diese Eigenschaft lässt sich nicht ändern.")
+
+    def resize_annotation(self, key: str, view_rect) -> None:
+        page, _position, _annot = annotations.find(self.document, key)
+        rect = self.document.geometry(page).rect_to_page(normalize(tuple(float(v) for v in view_rect)))
+        annotations.resize(self.document, self.history, key, rect)
+
+    def reply_annotation(self, key: str, text: str) -> str:
+        return annotations.add_reply(self.document, self.history, key, text)
+
     # Formulare ------------------------------------------------------------------------------------------------
     def fields(self) -> list[dict]:
         result = []
@@ -342,12 +540,91 @@ class Session:
     def set_field(self, key: str, value) -> None:
         forms.set_value(self.document, self.history, key, value)
 
+    # Formulare gestalten (Koordinaten der Anzeige, je Seite) --------------------------------------------------
+    def design_widgets(self) -> list[dict]:
+        result = []
+        for item in formdesign.list_widgets(self.document):
+            geo = self.document.geometry(item.page)
+            result.append({
+                "key": item.key, "field": item.field, "name": item.name, "kind": item.kind, "page": item.page,
+                "view": [round(v, 2) for v in geo.rect_to_view(item.rect)], "export": item.export, "tooltip": item.tooltip,
+                "required": item.required, "readOnly": item.read_only, "multiline": item.multiline, "maxLength": item.max_length,
+                "fontSize": item.font_size, "align": item.align, "options": list(item.options), "border": item.border,
+                "background": item.background, "siblings": item.siblings, "ours": item.ours,
+            })
+        return result
+
+    def _page_rect(self, page: int, view_rect) -> tuple[float, float, float, float]:
+        return self.document.geometry(page).rect_to_page(normalize(tuple(float(v) for v in view_rect)))
+
+    def _free_spot(self, page: int, view_rect, gap: float = 8.0) -> list[float]:
+        """Platz für eine Kopie: darunter, sonst rechts daneben, sonst leicht versetzt (in der Anzeige)."""
+        geo = self.document.geometry(page)
+        u0, v0, u1, v1 = view_rect
+        width, height = u1 - u0, v1 - v0
+        if v1 + gap + height <= geo.height:
+            return [u0, v1 + gap, u1, v1 + gap + height]
+        if u1 + gap + width <= geo.width:
+            return [u1 + gap, v0, u1 + gap + width, v1]
+        return [u0 + 12, v0 + 12, u1 + 12, v1 + 12]
+
+    def _widget_view(self, key: str) -> tuple[int, list[float]]:
+        for item in formdesign.list_widgets(self.document):
+            if item.key == key:
+                return item.page, list(self.document.geometry(item.page).rect_to_view(item.rect))
+        raise EditorError("Das Formularfeld ist nicht mehr vorhanden.")
+
+    def create_field(self, page: int, kind: str, view_rect) -> str:
+        return formdesign.create(self.document, self.history, page, kind, self._page_rect(page, view_rect))
+
+    def move_field(self, key: str, du: float, dv: float) -> None:
+        page, view = self._widget_view(key)
+        moved = self._page_rect(page, [view[0] + du, view[1] + dv, view[2] + du, view[3] + dv])
+        current = self._page_rect(page, view)
+        formdesign.move(self.document, self.history, [key], moved[0] - current[0], moved[1] - current[1])
+
+    def resize_field(self, key: str, view_rect) -> None:
+        page, _view = self._widget_view(key)
+        formdesign.resize(self.document, self.history, key, self._page_rect(page, view_rect))
+
+    def delete_field(self, key: str) -> None:
+        formdesign.delete(self.document, self.history, [key])
+
+    def duplicate_field(self, key: str) -> str:
+        page, view = self._widget_view(key)
+        target = self._page_rect(page, self._free_spot(page, view))
+        current = self._page_rect(page, view)
+        return formdesign.duplicate(self.document, self.history, [key], target[0] - current[0], target[1] - current[1])[0]
+
+    def add_field_option(self, key: str) -> str:
+        page, view = self._widget_view(key)
+        return formdesign.add_option(self.document, self.history, key, self._page_rect(page, self._free_spot(page, view, 6.0)))
+
+    def field_properties(self, key: str, changes: dict) -> None:
+        formdesign.set_properties(self.document, self.history, key, changes)
+
+    # Anhänge ------------------------------------------------------------------------------------------------------
+    def attachments(self) -> list[dict]:
+        return [{"key": item.key, "name": item.name, "description": item.description, "size": item.size, "modified": item.modified, "page": item.page, "openable": item.openable} for item in attachments.list_attachments(self.document)]
+
+    def save_attachment(self, key: str, target: str) -> str:
+        return str(attachments.save_to(self.document, key, target))
+
+    def open_attachment(self, key: str, folder: str) -> str:
+        return str(attachments.export_for_opening(self.document, key, folder))
+
+    def add_attachment(self, path: str, description: str) -> str:
+        return attachments.add(self.document, self.history, path, description)
+
+    def remove_attachment(self, key: str) -> None:
+        attachments.remove(self.document, self.history, key)
+
     # Seiten ------------------------------------------------------------------------------------------------------
     def rotate_pages(self, indexes: list[int], degrees: int) -> None:
         pages.rotate(self.document, self.history, indexes, degrees)
 
-    def delete_pages(self, indexes: list[int]) -> list[str]:
-        return pages.delete(self.document, self.history, indexes)
+    def delete_pages(self, indexes: list[int], cut: bool = False) -> list[str]:
+        return pages.delete(self.document, self.history, indexes, cut=cut)
 
     def duplicate_pages(self, indexes: list[int]) -> list[str]:
         return pages.duplicate(self.document, self.history, indexes)
@@ -358,9 +635,28 @@ class Session:
     def move_pages(self, indexes: list[int], target: int) -> list[int]:
         return pages.move(self.document, self.history, indexes, target)
 
-    def insert_file(self, index: int, path: str, password: str | None) -> list[str]:
+    def source_pages(self, path: str, password: str | None) -> int:
+        """Seitenzahl einer anderen PDF (vor dem Einfügen – für die Auswahl der Seiten)."""
         source = pages.open_source(path, password)
-        return pages.insert_from(self.document, self.history, index, source)
+        try:
+            return len(source.pages)
+        finally:
+            source.close()
+
+    def insert_file(self, index: int, path: str, password: str | None, chosen: list[int] | None = None) -> list[str]:
+        source = pages.open_source(path, password)
+        return pages.insert_from(self.document, self.history, index, source, chosen)
+
+    def copy_pages(self, indexes: list[int]) -> bytes:
+        return pages.copy_pages(self.document, indexes)
+
+    def paste_pages(self, index: int, data: bytes) -> list[str]:
+        import io
+
+        import pikepdf
+
+        source = pikepdf.open(io.BytesIO(data))
+        return pages.insert_from(self.document, self.history, index, source, title="Seiten einfügen")
 
     def merge_files(self, paths: list[str]) -> list[str]:
         sources = [pages.open_source(path) for path in paths]
@@ -491,4 +787,6 @@ def _text_style(style: dict | None):
         bold=style.get("bold"),
         italic=style.get("italic"),
         align=style.get("align") or None,
+        underline=bool(style["underline"]) if style.get("underline") is not None else None,
+        strike=bool(style["strike"]) if style.get("strike") is not None else None,
     )

@@ -9,6 +9,7 @@ nach dem Ende der App startet (Tests 83–95, 98, 103–107 der Vorgabe).
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import subprocess
 import sys
@@ -161,6 +162,49 @@ def test_88_draft_is_invisible_in_both_channels(server, service_factory):
         service = service_factory(channel=channel)
         service.check(manual=True)
         assert settle(service, S.UP_TO_DATE) is S.UP_TO_DATE
+
+
+class Protokoll(logging.Handler):
+    """Meldungen eines Loggers mitschreiben (unabhängig davon, ob ``pdf-tool.log`` eingerichtet ist)."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(logging.INFO)
+        self.logger = logging.getLogger(name)
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(f"{record.name}: {record.getMessage()}")
+
+    def __enter__(self) -> "Protokoll":
+        self.level_before = self.logger.level
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(self)
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.logger.removeHandler(self)
+        self.logger.setLevel(self.level_before)
+
+
+def test_beta_channel_offers_only_marked_beta_tags(server, service_factory, tmp_path):
+    """Beta-Kanal: nur ``vX.Y.Z-beta.N`` mit Vorabversions-Markierung – kein unmarkiertes Beta-Tag,
+    kein ``-rc``/``-dev``; das Ergebnis steht im Protokoll (Kategorie »update«), ohne Pfade."""
+    server.publish("2.7.3-beta.1", prerelease=False)  # versehentlich nicht als Vorabversion markiert
+    server.publish("2.7.3-rc.1")
+    server.publish("2.7.3-dev.1", prerelease=False)
+    with Protokoll("pdftool.update") as protokoll:
+        service = service_factory(channel=Channel.BETA)
+        service.check(manual=True)
+        assert settle(service, S.UP_TO_DATE) is S.UP_TO_DATE and service.offer is None
+        server.publish("2.7.3-beta.2")
+        service.check(manual=True)
+        assert settle(service, S.AVAILABLE) is S.AVAILABLE and str(service.offer.version) == "2.7.3-beta.2"
+        service.set_channel(Channel.STABLE)
+        assert service.offer is None
+    assert "pdftool.update: Prüfung (manuell, Kanal beta): 3 Releases, kein neueres Update" in protokoll.lines
+    assert "pdftool.update: Prüfung (manuell, Kanal beta): 4 Releases, Update 2.7.3-beta.2" in protokoll.lines
+    assert "pdftool.update: Kanal: beta → stable" in protokoll.lines
+    assert not any(str(tmp_path) in line for line in protokoll.lines)
 
 
 def test_89_release_without_installer_is_ignored(server, service_factory):

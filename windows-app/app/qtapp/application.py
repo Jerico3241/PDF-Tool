@@ -31,7 +31,7 @@ from PySide6.QtWidgets import QApplication
 import winsys
 from appstate import APP_NAME, ICON_FILE, VERSION, load_config
 
-from .app import AppController
+from .app import AppController, window_title
 from .geometry import WindowState, initial_placement
 from .images import AppIconProvider, IconProvider, MicaProvider, PreviewProvider
 from .settings import SettingsController
@@ -82,6 +82,7 @@ class Runtime(QObject):
         self.app = AppController(cfg, self)
         self.app.theme = self.theme
         self.settings = SettingsController(self.app, self.theme, self)
+        self.app.settings = self.settings
         self.app.register_config(self.theme.config)
         self.singletons: dict[str, QObject] = {
             "ThemeBackend": self.theme,
@@ -131,7 +132,9 @@ def create_application(argv: list[str] | None = None) -> QApplication:
         QQuickStyle.setStyle("Basic")
         app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setApplicationDisplayName(APP_NAME)
+    # Anzeigename = Fenstertitel (bei einer Beta »PDF Tool 2.8.0 Beta«): Qt hängt den Anzeigenamen
+    # an jeden Fenstertitel an, der nicht auf ihn endet – im Hauptfenster stünde er sonst doppelt.
+    app.setApplicationDisplayName(window_title(VERSION))
     app.setApplicationVersion(VERSION)
     if ICON_FILE.is_file():
         app.setWindowIcon(QIcon(str(ICON_FILE)))
@@ -242,6 +245,10 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow
         window.frameSwapped.disconnect(first_frame)
         if cloaked:
             winsys.set_cloak(hwnd, False)
+        from diagnostics.applog import UI
+        from diagnostics.applog import get as get_log
+
+        get_log(UI).info("Oberfläche bereit: Fenster %d × %d, Skalierung %d %%", window.width(), window.height(), round(window.devicePixelRatio() * 100))
         app.after_start()
 
     window.frameSwapped.connect(first_frame, Qt.ConnectionType.QueuedConnection)
@@ -290,7 +297,7 @@ def start_log() -> None:
         qt = f"PySide6 {pyside}, Qt {qVersion()}"
     except Exception:  # noqa: BLE001
         qt = "Qt unbekannt"
-    applog.get("app").info("PDF Tool %s gestartet (Python %s, %s, %s)", VERSION, platform.python_version(), qt, info.os_brief())
+    applog.get(applog.UI).info("PDF Tool %s gestartet (Python %s, %s, %s)", VERSION, platform.python_version(), qt, info.os_brief())
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -340,9 +347,10 @@ def main(argv: list[str] | None = None) -> int:
     # Die QML-Engine endet vor den Controllern, an die ihre Bindungen gebunden sind.
     del engine
     sys.excepthook = sys.__excepthook__
+    from diagnostics.applog import UI
     from diagnostics.applog import get as get_log
 
-    get_log("app").info("PDF Tool beendet")
+    get_log(UI).info("PDF Tool beendet")
     if getattr(runtime.app, "restart_requested", False):
         restart_app()
     return code

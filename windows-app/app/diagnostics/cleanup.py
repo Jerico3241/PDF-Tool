@@ -4,7 +4,8 @@ Entfernt wird nur, was PDF Tool selbst anlegt und was älter als ein Tag ist (ei
 zweite Instanz verliert so nie eine Datei, an der sie gerade arbeitet):
 
 * im temporären Ordner von Windows: ``pdf-tool-vorschau-*``, ``pdf-tool-reparatur-*``,
-  ``pdf-tool-logo-*`` und ``pdf-tool-diagnose-*``;
+  ``pdf-tool-logo-*``, ``pdf-tool-diagnose-*``, ``pdf-tool-ocr-*`` (Texterkennung),
+  ``pdf-tool-anhaenge-*`` (geöffnete Anhänge) und ``pdf-tool-einfuegen-*`` (eingefügte Bilder);
 * im Datenordner und seinen Unterordnern: halbe atomare Schreibvorgänge (``.~*.tmp``,
   ``.gui-config-*.tmp``, ``.kundenakten-*.tmp``, ``.stapel-*.tmp``) sowie ein liegen gebliebener
   ``.wiederherstellung.tmp``;
@@ -21,7 +22,7 @@ import time
 from pathlib import Path
 
 MAX_AGE = 24 * 3600
-SYSTEM_TEMP = ("pdf-tool-vorschau-*", "pdf-tool-reparatur-*", "pdf-tool-logo-*", "pdf-tool-diagnose-*")
+SYSTEM_TEMP = ("pdf-tool-vorschau-*", "pdf-tool-reparatur-*", "pdf-tool-logo-*", "pdf-tool-diagnose-*", "pdf-tool-ocr-*", "pdf-tool-anhaenge-*", "pdf-tool-einfuegen-*")
 DATA_TEMP = (".~*.tmp", ".gui-config-*.tmp", ".kundenakten-*.tmp", ".stapel-*.tmp", ".releases-*.tmp")
 DATA_DIRS = ("", "vorlagen", "regelwerke", "contract-history")
 BACKUP_TEMP = (".~sicherung-*.partial",)

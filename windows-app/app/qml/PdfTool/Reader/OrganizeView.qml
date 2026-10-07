@@ -6,10 +6,11 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// »Seiten organisieren«: alle Seiten als Raster (virtualisiert). Auswahl mit Klick, Strg+Klick und
-// Umschalt+Klick (Strg+A: alle); ausgewählte Seiten per Ziehen an eine neue Stelle verschieben.
-// Befehle: drehen, löschen, duplizieren, leere Seite, Seiten aus einer PDF einfügen, als neue PDF
-// speichern (extrahieren), teilen, als Bilder exportieren. Alles lässt sich rückgängig machen.
+// »Seiten organisieren«: alle Seiten als Raster (virtualisiert). Auswahl mit Klick, Strg+Klick,
+// Umschalt+Klick und einem Rahmen auf freier Fläche (Strg+A: alle); ausgewählte Seiten per Ziehen an eine
+// neue Stelle verschieben. Befehle: drehen, löschen, duplizieren, kopieren, ausschneiden, einfügen (auch aus
+// einem anderen Tab, Strg+C/X/V), leere Seite, Seiten aus einer PDF einfügen (alle oder ausgewählte), als neue
+// PDF speichern (extrahieren), teilen, als Bilder exportieren, drucken. Alles lässt sich rückgängig machen.
 // Bewegung (»Vollständig«): Beim Ziehen werden die gewählten Seiten zu Platzhaltern an der neuen Stelle,
 // eine kleine Vorschau mit Schatten folgt dem Zeiger, die übrigen Seiten rücken weich in die neue
 // Reihenfolge; nach dem Ablegen rasten die Seiten ein. Gelöschte Seiten blenden aus, eingefügte blenden
@@ -54,6 +55,11 @@ FocusScope {
         selection = next
     }
     function chosen() { return hasSelection ? selectedPages : (doc ? [doc.currentPage] : []) }
+    // Einfügen aus der Zwischenablage: hinter die letzte gewählte Seite, sonst ans Ende
+    function pasteAfter() {
+        if (!doc) return
+        doc.pastePages(hasSelection ? selectedPages[selectedPages.length - 1] + 1 : doc.pageCount)
+    }
     readonly property int pages: doc ? doc.pageCount : 0
     onPagesChanged: { selection = ({}); anchorIndex = -1 }
     onDocChanged: { selection = ({}); anchorIndex = -1; pending = null }
@@ -216,10 +222,15 @@ FocusScope {
                 PIconButton { objectName: "readerOrganizeDelete"; iconName: "delete"; tip: "Löschen (Entf)"; onClicked: root.deleteChosen() }
                 PIconButton { iconName: "document_copy"; tip: "Duplizieren"; onClicked: root.duplicateChosen() }
                 PIconButton { iconName: "document_add"; tip: "Leere Seite danach einfügen"; onClicked: root.insertBlankAfter() }
-                PIconButton { iconName: "document_arrow_up"; tip: "Seiten aus PDF danach einfügen …"; onClicked: root.insertFileAfter() }
+                PIconButton { objectName: "readerOrganizeInsertFile"; iconName: "document_arrow_up"; tip: "Seiten aus PDF danach einfügen …"; onClicked: root.insertFileAfter() }
                 PButton { iconName: "arrow_export"; text: "Als neue PDF"; tip: "Gewählte Seiten als neue PDF speichern (extrahieren)"; onClicked: root.doc.extractPages(root.chosen()) }
                 PButton { iconName: "document_landscape_split"; text: "Teilen …"; onClicked: root.doc.splitDocument("") }
                 PButton { iconName: "image"; text: "Als Bilder"; tip: "Gewählte Seiten als PNG (150 dpi) speichern"; onClicked: root.doc.exportImages(root.chosen(), "png", 150) }
+                PIconButton { objectName: "readerOrganizeCopy"; iconName: "copy"; tip: "Kopieren (Strg+C) – auch zum Einfügen in einem anderen Tab"; onClicked: root.doc.copyPages(root.chosen()) }
+                PIconButton { objectName: "readerOrganizeCut"; iconName: "cut"; tip: "Ausschneiden (Strg+X)"; onClicked: root.doc.cutPages(root.chosen()) }
+                PIconButton { objectName: "readerOrganizePaste"; iconName: "clipboard_paste"; tip: "Einfügen (Strg+V) – hinter der Auswahl bzw. am Ende"; enabled: Reader.pageClip > 0; onClicked: root.pasteAfter() }
+                PIconButton { objectName: "readerOrganizePrint"; iconName: "print"; tip: "Gewählte Seiten drucken"; onClicked: root.doc.printPages(root.chosen()) }
+                PButton { objectName: "readerOrganizeOcr"; iconName: "document_search"; text: "Text erkennen …"; tip: "Gescannte Seiten durchsuchbar machen (OCR)"; enabled: !root.doc.ocrRunning; onClicked: root.doc.recognizeText(root.hasSelection ? root.selectedPages : []) }
                 PText {
                     height: Metrics.controlHeight
                     leftPadding: 8
@@ -389,7 +400,20 @@ FocusScope {
                 property real pointerX: 0
                 property real pointerY: 0
                 property int target: -1
+                // Rahmen auf freier Fläche: wählt alle Seiten, die er berührt (Strg/Umschalt: zur Auswahl dazu)
+                property bool marquee: false
+                property var marqueeBase: ({})
                 function cellAt(x, y) { return grid.indexAt(x + grid.contentX, y + grid.contentY) }
+                function marqueeSelect(x, y) {
+                    var x0 = Math.min(pressX, x) + grid.contentX, x1 = Math.max(pressX, x) + grid.contentX
+                    var y0 = Math.min(pressY, y) + grid.contentY, y1 = Math.max(pressY, y) + grid.contentY
+                    var next = Object.assign({}, marqueeBase)
+                    for (var n = 0; n < root.pages; ++n) {
+                        var cx = root.cellX(n) + 12, cy = root.cellY(n) + 12
+                        if (cx < x1 && cx + grid.cellWidth - 24 > x0 && cy < y1 && cy + grid.cellHeight - 24 > y0) next[n] = true
+                    }
+                    root.selection = next
+                }
                 function insertionAt(x, y) {
                     var cx = x + grid.contentX, cy = y + grid.contentY
                     var index = grid.indexAt(cx, cy)
@@ -403,7 +427,18 @@ FocusScope {
                     pressIndex = cellAt(event.x, event.y)
                     pressX = event.x
                     pressY = event.y
-                    if (pressIndex < 0) { if (!(event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier))) root.selection = ({}); return }
+                    if (pressIndex < 0) {
+                        if (!(event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier))) root.selection = ({})
+                        if (event.button === Qt.LeftButton) {
+                            marquee = true
+                            marqueeBase = Object.assign({}, root.selection)
+                            pointerX = event.x
+                            pointerY = event.y
+                        } else if (event.button === Qt.RightButton && Reader.pageClip > 0) {
+                            emptyMenu.popup()
+                        }
+                        return
+                    }
                     if (event.button === Qt.RightButton) {
                         if (!root.selection[pressIndex]) root.select(pressIndex, 0)
                         pageMenu.popup()
@@ -414,6 +449,10 @@ FocusScope {
                 onPositionChanged: (event) => {
                     pointerX = event.x
                     pointerY = event.y
+                    if (marquee && pressed) {
+                        marqueeSelect(event.x, event.y)
+                        return
+                    }
                     if (pressIndex < 0 || !pressed) return
                     if (!dragging && Math.abs(event.x - pressX) + Math.abs(event.y - pressY) > 8) dragging = true
                     if (dragging) {
@@ -423,6 +462,11 @@ FocusScope {
                 }
                 onReleased: (event) => {
                     scroller.speed = 0
+                    if (marquee) {
+                        marquee = false
+                        pressIndex = -1
+                        return
+                    }
                     if (dragging) {
                         // erst den Befehl (die Vorschau bleibt stehen, bis die neue Fassung da ist), dann Ende
                         if (target >= 0 && root.hasSelection) root.moveTo(target)
@@ -437,6 +481,7 @@ FocusScope {
                 }
                 onCanceled: {
                     scroller.speed = 0
+                    marquee = false
                     dragging = false
                     target = -1
                     pressIndex = -1
@@ -457,8 +502,24 @@ FocusScope {
                 running: speed !== 0
                 onTriggered: grid.contentY = Math.max(grid.originY, Math.min(grid.contentY + speed, grid.originY + grid.contentHeight - grid.height))
             }
+            Rectangle {
+                objectName: "readerOrganizeMarquee"
+                parent: grid
+                visible: dragArea.marquee && (Math.abs(dragArea.pointerX - dragArea.pressX) > 2 || Math.abs(dragArea.pointerY - dragArea.pressY) > 2)
+                x: Math.min(dragArea.pressX, dragArea.pointerX)
+                y: Math.min(dragArea.pressY, dragArea.pointerY)
+                width: Math.abs(dragArea.pointerX - dragArea.pressX)
+                height: Math.abs(dragArea.pointerY - dragArea.pressY)
+                z: 5
+                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.08)
+                border.width: 1
+                border.color: Theme.accent
+            }
             Keys.onPressed: (event) => {
                 if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) { root.selectAll(); event.accepted = true }
+                else if (event.matches(StandardKey.Copy)) { root.doc.copyPages(root.chosen()); event.accepted = true }
+                else if (event.matches(StandardKey.Cut)) { root.doc.cutPages(root.chosen()); event.accepted = true }
+                else if (event.matches(StandardKey.Paste)) { root.pasteAfter(); event.accepted = true }
                 else if (event.key === Qt.Key_Delete) { root.deleteChosen(); event.accepted = true }
                 else if (event.key === Qt.Key_Escape) {
                     if (dragArea.dragging) { dragArea.dragging = false; dragArea.target = -1; root.updatePreview() }
@@ -518,8 +579,17 @@ FocusScope {
         PMenuItem { text: "Nach rechts drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages(root.chosen(), 90) }
         PMenuItem { text: "Nach links drehen"; iconName: "arrow_rotate_counterclockwise"; onTriggered: root.doc.rotatePages(root.chosen(), -90) }
         PMenuItem { text: "Duplizieren"; iconName: "document_copy"; onTriggered: root.duplicateChosen() }
+        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyPages(root.chosen()) }
+        PMenuItem { text: "Ausschneiden"; iconName: "cut"; onTriggered: root.doc.cutPages(root.chosen()) }
+        PMenuItem { text: "Einfügen danach"; iconName: "clipboard_paste"; visible: Reader.pageClip > 0; onTriggered: root.pasteAfter() }
         PMenuItem { text: "Als neue PDF speichern …"; iconName: "arrow_export"; onTriggered: root.doc.extractPages(root.chosen()) }
+        PMenuItem { text: "Drucken …"; iconName: "print"; onTriggered: root.doc.printPages(root.chosen()) }
+        PMenuItem { text: "Text erkennen …"; iconName: "document_search"; enabled: !root.doc.ocrRunning; onTriggered: root.doc.recognizeText(root.chosen()) }
         PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.deleteChosen() }
         PMenuItem { text: "Anzeigen"; iconName: "eye"; onTriggered: { Reader.setOrganize(false); root.doc.goTo(root.chosen()[0]) } }
+    }
+    PMenu {
+        id: emptyMenu
+        PMenuItem { text: "Seiten am Ende einfügen"; iconName: "clipboard_paste"; onTriggered: root.doc.pastePages(root.doc.pageCount) }
     }
 }

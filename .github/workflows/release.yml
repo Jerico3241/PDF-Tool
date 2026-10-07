@@ -11,7 +11,9 @@ name: Release
 #   4. dessen Artifact »PDF-Tool-Release-Candidate-<Commit-SHA>« laden
 #   5. Manifest (Commit, Lauf, Version, Setup, SHA-256), Dateinamen, Prüfsumme (neu berechnet),
 #      Dateiversion, VERSION und Release Notes des Commits prüfen
-#   6. Beta vor Stable (Patch-Hotfix ohne Beta nur nach ausdrücklicher Entscheidung)
+#   6. Beta vor Stable: eine veröffentlichte Beta derselben Version, auf die ein Lauf von
+#      »Update-Test« (update-test.yml, main) erfolgreich aktualisiert hat (Patch-Hotfix ohne Beta nur
+#      nach ausdrücklicher Entscheidung)
 #   7. Release und Tag dürfen noch nicht existieren (nie überschreiben, nie verschieben)
 #   8. Release mit genau diesen beiden Dateien erstellen (Beta → Vorabversion, Stable → »Latest«),
 #      Tag auf den geprüften Commit, danach das veröffentlichte Release prüfen
@@ -45,7 +47,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write # Release und Tag anlegen
-      actions: read # main-Lauf und sein Artifact lesen
+      actions: read # main-Lauf, sein Artifact und die Läufe von »Update-Test« lesen
     steps:
       - name: 1. Release-Commit bestimmen
         id: commit
@@ -125,10 +127,11 @@ jobs:
           RUN: ${{ steps.run.outputs.run }}
         run: python3 tools/windows-app/release_candidate.py verify rc --commit "${SHA}" --run "${RUN}" --root release --github-output "${GITHUB_OUTPUT}"
 
-      - name: 6. Beta vor Stable (stabiles Release nur nach einer veröffentlichten Beta derselben Version)
+      - name: 6. Beta vor Stable (stabiles Release nur nach einer veröffentlichten und per »Update-Test« geprüften Beta derselben Version)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.check.outputs.tag }}
+          VERSION: ${{ steps.check.outputs.version }}
           PRERELEASE: ${{ steps.check.outputs.prerelease }}
           HOTFIX: ${{ inputs.hotfix_ohne_beta }}
         run: |
@@ -141,14 +144,23 @@ jobs:
           if [ -n "${betas}" ]; then
             echo "Veröffentlichte Betas von ${TAG}:"
             echo "${betas}"
-            exit 0
+            # Getestet: ein erfolgreicher main-Lauf von »Update-Test« mit einer dieser Betas als Ziel
+            # (Laufname »Update-Test <von> → X.Y.Z-beta.N (beta)«) – nur lesend über die Actions-API
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/update-test.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=100" > update-tests.json
+            if python3 tools/windows-app/releases.py tested-beta --ziel "${VERSION}" --runs update-tests.json --repo "${GITHUB_REPOSITORY}"; then
+              exit 0
+            fi
           fi
           patch="${TAG##*.}"
           if [ "${HOTFIX}" = "true" ] && [ "${patch}" != "0" ]; then
-            echo "Patch-Hotfix ${TAG} ohne vorherige Beta – ausdrücklich bestätigt (hotfix_ohne_beta)."
+            echo "Patch-Hotfix ${TAG} ohne vorherige (getestete) Beta – ausdrücklich bestätigt (hotfix_ohne_beta)."
             exit 0
           fi
-          echo "Sicherheitsabbruch: Für ${TAG} gibt es keine veröffentlichte Beta (${TAG}-beta.N). Jede neue Version beginnt als Beta; Stable erst nach Test und ausdrücklicher Freigabe." >&2
+          if [ -n "${betas}" ]; then
+            echo "Sicherheitsabbruch: Keine Beta von ${TAG} ist getestet – es fehlt ein erfolgreicher Lauf von »Update-Test« (update-test.yml) auf main mit einer veröffentlichten Beta ${TAG#v}-beta.N als Ziel (Kanal beta). Zuerst »Update-Test« für die Beta starten (ziel: ${TAG#v}-beta.N, kanal: beta); Stable erst nach Test und ausdrücklicher Freigabe." >&2
+          else
+            echo "Sicherheitsabbruch: Für ${TAG} gibt es keine veröffentlichte Beta (${TAG}-beta.N). Jede neue Version beginnt als Beta; Stable erst nach Test und ausdrücklicher Freigabe." >&2
+          fi
           exit 1
 
       - name: 7.–8. Unveränderliches Release erstellen (genau diese Dateien, Tag auf den geprüften Commit)

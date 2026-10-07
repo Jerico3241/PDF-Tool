@@ -7,20 +7,24 @@ Fenster (offscreen); nach jedem Test darf die QML-Engine keine Warnung gemeldet 
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from conftest import neustart, pump, wait_until
+from conftest import _prepare, neustart, pump, wait_until
 
 import appstate
+from qtapp.app import window_title
 from tools.registry import CONTRACTS, READER, REPAIR
 
 
 def test_start_and_version(app) -> None:
     assert app.app.version == appstate.VERSION
-    assert app.window.title() == "PDF Tool"
+    assert app.window.title() == window_title(appstate.VERSION) == app.app.windowTitle  # »PDF Tool« (Beta: mit Version)
     assert app.app.currentPage == "home"
     assert app.item("homePage") is not None
     assert app.item("toolCard_contracts") is not None and app.item("toolCard_repair") is not None
@@ -99,14 +103,18 @@ KARTEN = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenf
 
 
 def _pruefe_startseite(h) -> int:
-    """Symmetrie der Startseite; liefert die Zahl der Spalten."""
+    """Symmetrie der Startseite; liefert die Zahl der Spalten.
+
+    Alle Karten gleich breit und gleich hoch, auf ganzen Pixeln; die Gruppe steht mittig (gleiche
+    Ränder – nur bei ungerader Breite der Seite ein Pixel Unterschied); jede Zeile füllt die Gruppe
+    bzw. steht als unvollständige letzte Zeile mittig darin (gleicher Abstand links und rechts)."""
     karten = [h.item(name) for name in KARTEN]
     raster, hinweis = h.item("homeGrid"), h.item("homePrivacy")
     lagen = [_szene(k) for k in karten]
     a = lagen[0]
-    # exakt gleich groß (ganzzahlig), gleicher Innenaufbau
+    # exakt gleich groß, alles auf ganzen Pixeln, gleicher Innenaufbau
     for lage in lagen:
-        assert (lage[2], lage[3]) == (a[2], a[3]) and float(a[2]).is_integer() and float(a[3]).is_integer()
+        assert (lage[2], lage[3]) == (a[2], a[3]) and all(float(wert).is_integer() for wert in lage), lage
     for teil in ("toolIcon", "toolTitle", "toolFooter", "toolOpen", "toolShortcut"):
         for karte in karten[1:]:
             assert _teil(karten[0], teil) == _teil(karte, teil), teil
@@ -116,32 +124,36 @@ def _pruefe_startseite(h) -> int:
     assert fy + fh == pytest.approx(a[3] - 20, abs=0.5)
     sx, _sy, sw, _sh = _teil(karten[0], "toolShortcut")
     assert sx + sw == pytest.approx(a[2] - 20, abs=0.5)
-    # Gruppe mittig im Inhaltsbereich: gleicher Abstand links und rechts (± 1 px Rundung)
+    # Gruppe mittig im Inhaltsbereich, höchstens 1040 px, Ränder mindestens 36 px
     flaeche = raster.parentItem()
     while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
         flaeche = flaeche.parentItem()
     fx0, _fy0, fbreite, _fh0 = _szene(flaeche)
     gx, gy, gbreite, _gh = _szene(raster)
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
-    assert abs(links - rechts) <= 1, (links, rechts)
-    # Titel und Datenschutzhinweis an der linken Kante der Karten
-    assert _szene(hinweis)[0] == gx and min(lage[0] for lage in lagen) == gx
+    assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
+    assert gbreite <= 1040 and min(links, rechts) >= 36
+    # Titel und Datenschutzhinweis an der linken Kante der Gruppe
+    assert _szene(hinweis)[0] == gx and _szene(hinweis)[2] == gbreite
     titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
     assert _szene(titel)[0] == gx
-    # Raster: nebeneinander gleiche Oberkante, untereinander gleiche linke Kante, Abstand = Token
-    spalten = 2 if lagen[1][1] == a[1] else 1
-    for index, lage in enumerate(lagen):
-        zeile, spalte = divmod(index, spalten)
-        if spalte:
-            links = lagen[index - 1]
-            assert lage[1] == links[1] and lage[0] - (links[0] + links[2]) == 16
-        else:
-            assert lage[0] == gx
-        if zeile:
-            oben = lagen[index - spalten]
-            assert lage[0] == oben[0] and lage[1] - (oben[1] + oben[3]) == 16
-    if spalten == 2:  # zwei Spalten: Gruppe voll genutzt
-        assert lagen[1][0] + lagen[1][2] == pytest.approx(gx + gbreite, abs=0.5)
+    # Zeilen: gleiche Oberkante, Abstand 16 px zwischen den Karten und den Zeilen
+    zeilen: dict[float, list] = {}
+    for lage in lagen:
+        zeilen.setdefault(lage[1], []).append(lage)
+    oben = sorted(zeilen)
+    spalten = len(zeilen[oben[0]])
+    for nummer, y in enumerate(oben):
+        zeile = sorted(zeilen[y])
+        assert len(zeile) == spalten or (nummer == len(oben) - 1 and len(zeile) < spalten)  # nur die letzte Zeile unvollständig
+        for vorher, karte in zip(zeile, zeile[1:]):
+            assert karte[0] - (vorher[0] + vorher[2]) == 16
+        rand_links, rand_rechts = zeile[0][0] - gx, gx + gbreite - (zeile[-1][0] + zeile[-1][2])
+        assert rand_links == rand_rechts, (y, rand_links, rand_rechts)  # mittig in der Gruppe …
+        if len(zeile) == spalten:
+            assert rand_links == 0  # … volle Zeilen füllen sie ganz
+        if nummer:
+            assert y - (oben[nummer - 1] + a[3]) == 16
     return spalten
 
 
@@ -154,27 +166,99 @@ def _alle(wurzel) -> list:
     return alle
 
 
-@pytest.mark.parametrize("groesse,spalten", [((1366, 768), 2), ((1920, 1080), 2), ((2560, 1440), 2), ((1093, 614), 2), ((760, 700), 1)])
+# Fenstergrößen (geräteunabhängige Pixel) und erwartete Spalten: breit drei, mittel zwei (die dritte
+# Karte mittig darunter), schmal eine (760: kleinste Fensterbreite). 1093 × 614: 1366 × 768 bei 125 %;
+# 1280 × 720: 1920 × 1080 bei 150 %.
+GROESSEN = (((1920, 1080), 3), ((2560, 1440), 3), ((1366, 768), 3), ((1280, 720), 2), ((1093, 614), 2), ((900, 700), 2), ((760, 700), 1))
+
+
+@pytest.mark.parametrize("groesse,spalten", GROESSEN)
 def test_start_page_is_symmetric(ui_app, groesse, spalten) -> None:
     h = ui_app
     h.window.resize(*groesse)
     pump(0.6)
     assert _pruefe_startseite(h) == spalten
     breite = _szene(h.item("toolCard_contracts"))[2]
-    assert breite <= 512 or spalten == 1  # Gruppe höchstens 1040 px: nebeneinander nie übermäßig breit
-    assert breite >= 360 or spalten == 1  # nie schmaler als die Mindestbreite nebeneinander
+    if spalten == 3:
+        assert breite == (1040 - 2 * 16) / 3  # volle Gruppe
+    elif spalten == 2:
+        assert 360 <= breite <= (1040 - 16) / 2  # nie schmaler als die Mindestbreite nebeneinander
+
+
+def test_start_page_at_this_scale(ui_app) -> None:
+    """Alle Fenstergrößen bei der Skalierung dieses Prozesses (``QT_SCALE_FACTOR``, sonst 100 %)."""
+    h = ui_app
+    assert h.window.devicePixelRatio() == pytest.approx(float(os.environ.get("QT_SCALE_FACTOR") or 1))
+    for groesse, spalten in GROESSEN:
+        h.window.resize(*groesse)
+        pump(0.4)
+        assert _pruefe_startseite(h) == spalten, groesse
+
+
+@pytest.mark.parametrize("skalierung", ["1.25", "1.5", "1.75", "2"])
+def test_start_page_is_symmetric_at_every_scale(skalierung: str) -> None:
+    """Windows-Skalierung 125 … 200 %: Qt liest ``QT_SCALE_FACTOR`` nur beim Start – je Skalierung
+    prüft ein eigener Prozess ``test_start_page_at_this_scale`` (100 % prüfen die Tests oben)."""
+    env = {**os.environ, "QT_SCALE_FACTOR": skalierung, "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM", "offscreen")}
+    test = f"{Path(__file__).resolve()}::test_start_page_at_this_scale"
+    lauf = subprocess.run([sys.executable, "-m", "pytest", test, "-q", "-p", "no:cacheprovider"], cwd=Path(__file__).resolve().parents[1], env=env, capture_output=True, text=True, timeout=600)
+    assert lauf.returncode == 0, lauf.stdout[-6000:] + lauf.stderr[-3000:]
+    assert "1 passed" in lauf.stdout
 
 
 def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
     h = ui_app
-    h.window.resize(1366, 768)
-    pump(0.4)
-    karten = [h.item("toolCard_contracts"), h.item("toolCard_repair")]
-    vorher = _szene(karten[0])[3]
-    karten[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und die Karte höher macht, als sie es sonst wäre.")
-    pump(0.3)
-    assert _szene(karten[0])[3] > vorher  # alle Karten wachsen gemeinsam …
-    assert _pruefe_startseite(h) == 2  # … Fußzeile und Tastenkürzel bleiben auf einer Linie
+    for groesse, spalten in (((1366, 768), 3), ((1093, 614), 2)):
+        h.window.resize(*groesse)
+        pump(0.4)
+        karten = [h.item(name) for name in KARTEN]
+        beschreibung = karten[1].property("description")
+        vorher = _szene(karten[0])[3]
+        karten[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und die Karte höher macht, als sie es sonst wäre.")
+        pump(0.3)
+        assert _szene(karten[0])[3] > vorher  # alle Karten wachsen gemeinsam …
+        assert _pruefe_startseite(h) == spalten  # … Fußzeile und Tastenkürzel bleiben auf einer Linie
+        karten[1].setProperty("description", beschreibung)
+        pump(0.3)
+
+
+def test_window_title_marks_beta_versions() -> None:
+    """Fenstertitel aus der Versionsnummer: Stable »PDF Tool«, Beta »PDF Tool X.Y.Z Beta«."""
+    assert window_title("2.8.0") == "PDF Tool"
+    assert window_title("2.8.0-beta.1") == "PDF Tool 2.8.0 Beta"
+    assert window_title("10.20.30-beta.12") == "PDF Tool 10.20.30 Beta"
+    assert window_title("kaputt") == "PDF Tool"
+
+
+@pytest.mark.parametrize("version,titel", [("4.2.0-beta.3", "PDF Tool 4.2.0 Beta"), ("4.2.0", "PDF Tool")])
+def test_beta_is_marked_in_window_title_and_settings(qt_application, config_file: Path, monkeypatch, version: str, titel: str) -> None:
+    """Beta: Fenstertitel mit Version und das Etikett »Beta« in der Info-Karte der Einstellungen –
+    dasselbe wie in der Karte »Updates«; Stable: »PDF Tool«, kein Etikett."""
+    from qtutil import Harness
+
+    from qtapp import app as appmodule
+
+    monkeypatch.setattr(appmodule, "VERSION", version)
+    _prepare(config_file, monkeypatch, "full")
+    h = Harness(ui=True)
+    try:
+        assert h.app.windowTitle == titel and h.window.title() == titel
+        h.navigate("settings", 0.3)
+        etikett, updates = h.item("infoBeta"), h.item("updateCurrentBeta")
+        beta = version != "4.2.0"
+        assert etikett.property("visible") is beta and etikett.property("text") == ("Beta" if beta else "")
+        assert etikett.property("tone") == updates.property("tone") == "accent"
+        assert etikett.property("height") == updates.property("height")  # gleiches, dezentes Etikett
+        if beta:  # in der Zeile der Info-Karte, mittig neben »Über«
+            karte = h.item("infoCard")
+            ueber = next(e for e in _alle(karte) if e.property("text") == "Über" and e.inherits("QQuickAbstractButton"))
+            ex, ey, ew, eh = _szene(etikett)
+            ux, uy, _uw, uh = _szene(ueber)
+            assert ex + ew <= ux and abs((ey + eh / 2) - (uy + uh / 2)) <= 0.5
+        messages = h.messages()
+    finally:
+        h.close()
+    assert not messages, "QML-Meldungen:\n" + "\n".join(messages)
 
 
 def test_shortcuts_open_tools(app) -> None:

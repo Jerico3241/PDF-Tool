@@ -28,8 +28,8 @@ def _message(title: str, text: str, error: bool = True) -> None:
         import ctypes
 
         ctypes.windll.user32.MessageBoxW(0, text[-2000:], title, 0x10 if error else 0x40)
-    except Exception:
-        pass
+    except (ImportError, AttributeError, OSError, TypeError, ValueError):
+        pass  # kein Hinweisfenster möglich (z. B. außerhalb von Windows) – der Text steht in fehler.log
 
 
 def _log_path() -> Path:

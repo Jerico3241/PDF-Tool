@@ -5,11 +5,18 @@ Entscheidungen fallen anhand dieser Werte – nie anhand angezeigter (deutscher)
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
 from .semver import Version
+
+# Die beiden Tags, die als Update in Frage kommen: ``vX.Y.Z`` und ``vX.Y.Z-beta.N`` (N ab 1) –
+# genau so, ohne weitere Kennungen (``-rc.1``, ``-dev``, ``+build.5`` …), mit »v«, nur ASCII-Ziffern.
+_CORE_TAG = r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+_STABLE_TAG = re.compile(_CORE_TAG)
+_BETA_TAG = re.compile(_CORE_TAG + r"-beta\.[1-9][0-9]*")
 
 
 class Channel(str, Enum):
@@ -87,3 +94,19 @@ class Release:
     def is_beta(self) -> bool:
         """Vorabversion – nach SemVer-Kennung oder laut GitHub-Markierung."""
         return self.version.is_prerelease or self.prerelease
+
+    @property
+    def channel(self) -> Channel | None:
+        """Kanal, für den das Release gedacht ist – aus Tag und Markierung auf GitHub:
+
+        * ``vX.Y.Z``, nicht als Vorabversion markiert → Stable,
+        * ``vX.Y.Z-beta.N``, als Vorabversion markiert → Beta,
+        * alles andere → ``None`` (nie angeboten): andere Kennungen (``-rc.1``, ``-alpha.1``,
+          ``-dev``, ``+build.5`` …) auch ohne Markierung, ein Beta-Tag ohne Markierung, ein
+          Stable-Tag mit Markierung.
+        """
+        if _STABLE_TAG.fullmatch(self.tag):
+            return None if self.prerelease else Channel.STABLE
+        if _BETA_TAG.fullmatch(self.tag):
+            return Channel.BETA if self.prerelease else None
+        return None

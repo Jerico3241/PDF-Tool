@@ -6,8 +6,11 @@ ein anderes Repository mit demselben Namen wird nie gelesen). Pro Prüfung genau
 Ein Release kommt als Update nur in Frage, wenn
 
 * es veröffentlicht ist – Entwürfe (``draft``) nie, auch nicht im Beta-Kanal,
-* es zum Kanal passt: Stable nur Releases ohne Vorabkennung, die auf GitHub nicht als
-  Vorabversion markiert sind; Beta zusätzlich Beta-Vorabversionen (``vX.Y.Z-beta.N``),
+* sein Tag eine der beiden Formen hat und zur Markierung auf GitHub passt (``Release.channel``):
+  ``vX.Y.Z`` nur, wenn es nicht als Vorabversion markiert ist (beide Kanäle);
+  ``vX.Y.Z-beta.N`` nur im Beta-Kanal und nur, wenn es als Vorabversion markiert ist. Andere
+  Kennungen (``-rc.1``, ``-alpha.1``, ``-dev``, ``+build.5`` …) nie – auch nicht, wenn sie
+  versehentlich nicht als Vorabversion markiert sind,
 * es vollständig ist: Setup ``PDF-Tool-Setup-<Version>.exe`` und Prüfsummendatei
   ``PDF-Tool-Setup-<Version>.exe.sha256`` – genau diese Namen, hochgeladen, Download-Adresse
   des Releases selbst,
@@ -170,9 +173,10 @@ def eligible(release: Release, channel: Channel) -> bool:
     """Passt das Release zum Kanal? (Vollständigkeit und Version prüft ``choose``.)"""
     if release.draft:
         return False
-    if not release.is_beta:
+    kind = release.channel
+    if kind is Channel.STABLE:
         return True  # stabile Releases sehen beide Kanäle
-    return channel is Channel.BETA and release.version.stage == "beta"
+    return kind is Channel.BETA and channel is Channel.BETA
 
 
 def choose(releases: Iterable[Release], installed: Version, channel: Channel) -> Release | None:

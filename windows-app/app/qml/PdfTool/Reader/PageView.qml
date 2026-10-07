@@ -247,12 +247,15 @@ Item {
     readonly property var blocksHere: doc && doc.blocksPage === page && tool === "editText" ? doc.blocks : []
     readonly property var imagesHere: doc && doc.imagesPage === page && tool === "image" ? doc.images : []
     readonly property var fieldsHere: doc && page >= 0 && tool === "form" ? (doc.fieldPages[key] || []) : []
+    // Formular gestalten: Widgets dieser Seite und das gewählte (mit seiner aktuellen Lage)
+    readonly property var designHere: doc && page >= 0 && tool === "formDesign" ? (doc.designPages[key] || []) : []
+    readonly property var fieldChosen: doc && tool === "formDesign" && doc.fieldSelection.page === page ? doc.fieldSelection : null
     readonly property var selected: doc ? doc.selectedObject : ({})
     readonly property bool selectedHere: selected.page === page && selected.kind !== undefined
 
     // --- Objekt bearbeiten: Objekte dieser Seite, Auswahl, Treffer -----------------------------------------
     readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (doc.objectPages[key] || null) : null
-    readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images) : []
+    readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images, objectsHere.paths || []) : []
     // Räumlicher Index: Objekte je waagerechtem Band von 24 pt (Anzeige-Punkte, einmal je Seitenstand) –
     // beim Bewegen der Maus wird nur das Band unter dem Zeiger geprüft, nicht jedes Objekt der Seite
     readonly property real objectBand: 24
@@ -312,8 +315,9 @@ Item {
         }
         return item.text.length
     }
+    function isText(item) { return item !== null && item !== undefined && (item.kind === "text" || item.kind === "word") }
     function editObject(item, u) {
-        if (!item || item.kind === "image" || !host) return
+        if (!isText(item) || !host) return
         host.openEditor({ kind: "object", page: page, rect: item.view, text: item.text, object: item, caret: u === undefined ? item.text.length : caretAt(item, u) })
     }
     function editParagraph(item) {
@@ -334,19 +338,39 @@ Item {
     Repeater {
         model: root.tool === "select" ? root.annotationsHere : []
         Rectangle {
+            id: annotationBox
             required property var modelData
             readonly property bool chosen: root.selectedHere && root.selected.kind === "annotation" && root.selected.key === modelData.key
             readonly property bool moving: chosen && pointer.action === "moveAnnotation"
-            x: (modelData.view[0] + (moving ? pointer.du : 0)) * root.s - 2
-            y: (modelData.view[1] + (moving ? pointer.dv : 0)) * root.s - 2
-            width: (modelData.view[2] - modelData.view[0]) * root.s + 4
-            height: (modelData.view[3] - modelData.view[1]) * root.s + 4
+            readonly property bool resizing: chosen && pointer.action === "resizeAnnotation" && pointer.preview !== null
+            readonly property var r: resizing ? pointer.preview : modelData.view
+            objectName: "readerAnnotationBox"
+            x: (r[0] + (moving ? pointer.du : 0)) * root.s - 2
+            y: (r[1] + (moving ? pointer.dv : 0)) * root.s - 2
+            width: (r[2] - r[0]) * root.s + 4
+            height: (r[3] - r[1]) * root.s + 4
             color: "transparent"
             radius: 2
             border.width: chosen ? 2 : 1
             border.color: Theme.accent
             opacity: chosen ? 1 : (pointer.hoverKey === modelData.key ? 0.8 : 0)
             Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
+            // Anfasser an den Ecken: Größe ändern (Kommentare aus PDF Tool; Umschalt: Seitenverhältnis halten)
+            Repeater {
+                model: annotationBox.chosen && annotationBox.modelData.resizable ? 4 : 0
+                Rectangle {
+                    required property int index
+                    objectName: "readerAnnotationHandle"
+                    width: Metrics.readerHandle
+                    height: Metrics.readerHandle
+                    radius: 2
+                    x: (index % 2 === 0 ? 2 : annotationBox.width - 2) - width / 2
+                    y: (index < 2 ? 2 : annotationBox.height - 2) - height / 2
+                    color: Theme.surface
+                    border.width: 2
+                    border.color: Theme.accent
+                }
+            }
         }
     }
 
@@ -442,7 +466,7 @@ Item {
             id: chosenBox
             required property var modelData
             readonly property bool moving: pointer.action === "moveObjects"
-            readonly property bool resizing: modelData.kind === "image" && pointer.action === "resizeImage" && pointer.preview !== null
+            readonly property bool resizing: (modelData.kind === "image" || modelData.kind === "path") && pointer.action === "resizeImage" && pointer.preview !== null
             readonly property var r: resizing ? pointer.preview : modelData.view
             objectName: "readerObjectSelection"
             x: (r[0] + (moving ? pointer.du : 0)) * root.s - 3
@@ -483,7 +507,7 @@ Item {
             }
             // Anfasser an den Ecken (Bilder: Größe ändern; Seitenverhältnis bleibt, Umschalt: frei)
             Repeater {
-                model: chosenBox.modelData.kind === "image" && chosenBox.modelData.editable && root.objectSelected.length === 1 ? 4 : 0
+                model: (chosenBox.modelData.kind === "image" || chosenBox.modelData.kind === "path") && chosenBox.modelData.editable && root.objectSelected.length === 1 ? 4 : 0
                 Rectangle {
                     required property int index
                     width: Metrics.readerHandle
@@ -524,6 +548,76 @@ Item {
         }
     }
 
+    // --- Formular gestalten: jedes Feld mit Rahmen und Namen, das gewählte mit Anfassern -----------------------
+    Repeater {
+        model: root.designHere
+        Item {
+            id: designBox
+            required property var modelData
+            readonly property bool chosen: root.fieldChosen !== null && root.fieldChosen.key === modelData.key
+            readonly property bool hovered: pointer.hoverKey === modelData.key
+            readonly property bool moving: chosen && pointer.action === "moveField"
+            readonly property bool resizing: chosen && pointer.action === "resizeField" && pointer.preview !== null
+            readonly property var r: resizing ? pointer.preview : (chosen ? root.fieldChosen.view : modelData.view)
+            objectName: "readerDesignField"
+            x: (r[0] + (moving ? pointer.du : 0)) * root.s
+            y: (r[1] + (moving ? pointer.dv : 0)) * root.s
+            width: Math.max(4, (r[2] - r[0]) * root.s)
+            height: Math.max(4, (r[3] - r[1]) * root.s)
+            z: chosen ? 9 : 8
+            Accessible.role: Accessible.Button
+            Accessible.name: modelData.name
+            Rectangle {
+                anchors.fill: parent
+                radius: designBox.modelData.kind === "radio" ? Math.min(width, height) / 2 : 2
+                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, designBox.chosen ? 0.16 : (designBox.hovered ? 0.12 : 0.05))
+                border.width: designBox.chosen ? 2 : 1
+                border.color: designBox.modelData.readOnly ? Theme.warning : Theme.accent
+                Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+            }
+            // Name über dem Feld – so sieht man, welches Feld wo liegt (bei vielen Feldern nur beim Zeigen)
+            Rectangle {
+                objectName: "readerDesignName"
+                visible: designBox.chosen || designBox.hovered || root.designHere.length <= 30
+                y: -height - 1
+                width: Math.min(nameText.implicitWidth + 8, Math.max(designBox.width, 140))
+                height: nameText.implicitHeight + 2
+                radius: 2
+                color: designBox.chosen ? Theme.accent : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.78)
+                PText {
+                    id: nameText
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 4
+                    width: parent.width - 8
+                    elide: Text.ElideRight
+                    textStyle: "caption"
+                    color: Theme.textOnAccent
+                    // Optionen einer Gruppe liegen oft dicht beieinander: sonst nur ihr (kurzer) Exportwert
+                    text: designBox.modelData.kind !== "radio" ? designBox.modelData.name : (designBox.chosen || designBox.hovered ? designBox.modelData.name + " · " + designBox.modelData.export : designBox.modelData.export)
+                }
+            }
+            // Anfasser an den Ecken: Größe ändern (frei; Umschalt: Seitenverhältnis halten)
+            Repeater {
+                model: designBox.chosen ? 4 : 0
+                Rectangle {
+                    required property int index
+                    objectName: "readerDesignHandle"
+                    width: Metrics.readerHandle
+                    height: Metrics.readerHandle
+                    radius: 2
+                    x: (index % 2 === 0 ? 0 : designBox.width) - width / 2
+                    y: (index < 2 ? 0 : designBox.height) - height / 2
+                    color: Theme.surface
+                    border.width: 2
+                    border.color: Theme.accent
+                    opacity: 0
+                    Component.onCompleted: opacity = 1
+                    Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
+                }
+            }
+        }
+    }
+
     // --- Zeichnen: Freihand, Formen, Rahmen ------------------------------------------------------------------
     Shape {
         id: liveStroke
@@ -548,12 +642,13 @@ Item {
     readonly property real drawWidth: Math.max(1, (doc ? doc.strokeWidth : 2) * s)
     Shape {
         anchors.fill: parent
-        visible: pointer.action === "placeImage" || (pointer.action === "shape" && (root.tool === "rect" || root.tool === "textbox"))
+        visible: pointer.action === "placeImage" || pointer.action === "placeField" || (pointer.action === "shape" && (root.tool === "rect" || root.tool === "textbox"))
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
-            strokeColor: pointer.action === "placeImage" || root.tool === "textbox" ? Theme.accent : root.drawColor
-            strokeWidth: pointer.action === "placeImage" || root.tool === "textbox" ? 1 : root.drawWidth
-            strokeStyle: pointer.action === "placeImage" || root.tool === "textbox" ? ShapePath.DashLine : ShapePath.SolidLine
+            readonly property bool dashed: pointer.action === "placeImage" || pointer.action === "placeField" || root.tool === "textbox"
+            strokeColor: dashed ? Theme.accent : root.drawColor
+            strokeWidth: dashed ? 1 : root.drawWidth
+            strokeStyle: dashed ? ShapePath.DashLine : ShapePath.SolidLine
             dashPattern: [4, 3]
             fillColor: "transparent"
             PathRectangle { x: root.dragX0; y: root.dragY0; width: root.dragX1 - root.dragX0; height: root.dragY1 - root.dragY0 }
@@ -598,19 +693,26 @@ Item {
         anchors.fill: parent
         enabled: root.page >= 0 && root.tool !== "form"
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects"
+        hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects" || root.tool === "formDesign"
         cursorShape: {
             switch (root.tool) {
-            case "objects": return hoverCorner ? Qt.SizeFDiagCursor : (hoverItem ? (hoverItem.native === false && hoverItem.kind !== "image" ? Qt.PointingHandCursor : Qt.SizeAllCursor) : Qt.ArrowCursor)
-            case "select": return hoverKey !== "" ? Qt.SizeAllCursor : Qt.IBeamCursor
+            case "objects":
+                if (hoverCorner) return Qt.SizeFDiagCursor
+                if (!hoverItem) return Qt.ArrowCursor
+                if (root.isText(hoverItem)) return hoverItem.native === false ? Qt.PointingHandCursor : Qt.SizeAllCursor
+                return hoverItem.editable ? Qt.SizeAllCursor : Qt.ArrowCursor
+            case "select": return hoverCorner ? Qt.SizeFDiagCursor : (hoverKey !== "" ? Qt.SizeAllCursor : Qt.IBeamCursor)
             case "highlight": case "underline": case "strikeout": return Qt.IBeamCursor
             case "editText": return hoverKey !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
             case "image": return hoverKey !== "" ? Qt.SizeAllCursor : Qt.CrossCursor
+            case "formDesign":
+                if (root.doc && root.doc.formKind !== "") return Qt.CrossCursor
+                return hoverCorner ? Qt.SizeFDiagCursor : (hoverKey !== "" ? Qt.SizeAllCursor : Qt.ArrowCursor)
             default: return Qt.CrossCursor
             }
         }
 
-        property string action: ""      // text, moveAnnotation, moveImage, resizeImage, stroke, shape, placeImage, moveObjects, marquee
+        property string action: ""      // text, moveAnnotation, moveImage, resizeImage, stroke, shape, placeImage, moveObjects, marquee, moveField, resizeField, placeField
         property string hoverKey: ""
         property var hoverItem: null    // Objekt unter dem Zeiger (Objekt bearbeiten)
         property bool hoverCorner: false
@@ -645,6 +747,14 @@ Item {
         onDoubleClicked: (mouse) => {
             var p = point(mouse)
             if (root.tool === "select" && root.doc) root.doc.selectWord(root.page, p.u, p.v)
+            if (root.tool === "formDesign" && root.doc && root.doc.formKind === "") {
+                action = ""
+                var field = root.smallestAt(root.designHere, p.u, p.v, 1)
+                if (field) {
+                    var d = root.doc
+                    Qt.callLater(function() { d.editFieldProperties(field.key) })  // Dialog erst nach dem Mausereignis
+                }
+            }
             if (root.tool === "objects" && root.doc) {
                 // Doppelklick: genau dieses Segment (bzw. ein zuvor gewähltes Wort) bearbeiten – nicht den Absatz.
                 // Hat erst der erste Klick des Doppelklicks ins Wort gewechselt, gilt wieder das Segment.
@@ -667,6 +777,7 @@ Item {
         function updateHover(p) {
             var hit = null
             if (root.tool === "select") {
+                hoverCorner = root.selectedCorner(p) >= 0
                 hit = root.smallestAt(root.annotationsHere, p.u, p.v, 2)
                 hoverKey = hit ? hit.key : ""
             } else if (root.tool === "editText") {
@@ -680,6 +791,10 @@ Item {
                 hit = hoverCorner ? null : root.objectAt(p.u, p.v)
                 hoverItem = hit
                 hoverKey = hit ? hit.id : ""
+            } else if (root.tool === "formDesign") {
+                hoverCorner = root.selectedCorner(p) >= 0
+                hit = hoverCorner || (root.doc && root.doc.formKind !== "") ? null : root.smallestAt(root.designHere, p.u, p.v, 1)
+                hoverKey = hit ? hit.key : ""
             }
         }
     }
@@ -704,11 +819,29 @@ Item {
                     } else if (!isChosen(target.id)) {
                         doc.selectObject(page, target.id, false)
                     }
-                    var menu = target.kind === "image" ? imageObjectMenu : textObjectMenu
-                    menu.u = p.u
-                    menu.popup(pointer, mouse.x, mouse.y)
+                    objectMenu.u = p.u
+                    objectMenu.popup(pointer, mouse.x, mouse.y)
                     return
                 }
+                // Freie Stelle: Einfügen (auch genau hier), alles auswählen
+                doc.clearObjectSelection()
+                objectPageMenu.u = p.u
+                objectPageMenu.v = p.v
+                objectPageMenu.popup(pointer, mouse.x, mouse.y)
+                return
+            }
+            if (tool === "formDesign") {
+                // Rechtsklick auf ein Feld: seine Befehle; auf freie Fläche: ein Feld genau hier anlegen
+                var field = doc.formKind === "" ? smallestAt(designHere, p.u, p.v, 1) : null
+                if (field) {
+                    doc.selectField(field.key)
+                    fieldMenu.popup(pointer, mouse.x, mouse.y)
+                } else {
+                    doc.selectField("")
+                    fieldPageMenu.at = page + "," + p.u + "," + p.v
+                    fieldPageMenu.popup(pointer, mouse.x, mouse.y)
+                }
+                return
             }
             contextMenu.u = p.u
             contextMenu.v = p.v
@@ -717,6 +850,13 @@ Item {
         }
         switch (tool) {
         case "select": {
+            var grip = selectedCorner(p)
+            if (grip >= 0) {
+                pointer.corner = grip
+                pointer.target = selectedAnnotation()
+                pointer.action = "resizeAnnotation"
+                return
+            }
             var annotation = smallestAt(annotationsHere, p.u, p.v, 2)
             if (annotation) {
                 doc.selectedObject = { kind: "annotation", page: page, key: annotation.key, view: annotation.view }
@@ -758,8 +898,8 @@ Item {
                 pointer.action = "marquee"
                 return
             }
-            if (mouse.modifiers & Qt.ControlModifier) {
-                doc.selectObject(page, hit.id, true)  // Strg+Klick: hinzufügen bzw. entfernen
+            if (mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) {
+                doc.selectObject(page, hit.id, true)  // Strg- bzw. Umschalt+Klick: hinzufügen bzw. entfernen
                 return
             }
             var single = objectSelected.length === 1 ? objectSelected[0] : null
@@ -773,6 +913,25 @@ Item {
                 doc.selectObject(page, hit.id, false)
             }
             pointer.action = "moveObjects"
+            return
+        }
+        case "formDesign": {
+            if (doc.formKind !== "") { pointer.action = "placeField"; return }
+            var grip = selectedCorner(p)
+            if (grip >= 0) {
+                pointer.corner = grip
+                pointer.target = selectedField()
+                pointer.action = "resizeField"
+                return
+            }
+            var field = smallestAt(designHere, p.u, p.v, 1)
+            if (field) {
+                if (fieldChosen === null || fieldChosen.key !== field.key) doc.selectField(field.key)
+                pointer.target = field
+                pointer.action = "moveField"
+            } else {
+                doc.selectField("")
+            }
             return
         }
         case "addText":
@@ -812,16 +971,28 @@ Item {
         }
     }
     function selectedImage() {
+        // Im Objektmodus: genau ein Bild oder Vektorobjekt (beide mit Anfassern an den Ecken)
         if (tool === "objects")
-            return objectSelected.length === 1 && objectSelected[0].kind === "image" ? objectSelected[0] : null
+            return objectSelected.length === 1 && (objectSelected[0].kind === "image" || objectSelected[0].kind === "path") ? objectSelected[0] : null
         if (!(selectedHere && selected.kind === "image")) return null
         for (var i = 0; i < imagesHere.length; ++i)
             if (imagesHere[i].index === selected.index) return imagesHere[i]
         return null
     }
+    // Gewählter Kommentar (Werkzeug »Auswählen«), dessen Größe sich ändern lässt
+    function selectedAnnotation() {
+        if (tool !== "select" || !(selectedHere && selected.kind === "annotation")) return null
+        for (var i = 0; i < annotationsHere.length; ++i)
+            if (annotationsHere[i].key === selected.key) return annotationsHere[i].resizable ? annotationsHere[i] : null
+        return null
+    }
+    // Gewähltes Formularfeld (Formular gestalten) – Anfasser an allen Ecken
+    function selectedField() {
+        return tool === "formDesign" ? fieldChosen : null
+    }
     function selectedCorner(p) {
-        var image = selectedImage()
-        if (!image || !image.editable) return -1
+        var image = tool === "select" ? selectedAnnotation() : (tool === "formDesign" ? selectedField() : selectedImage())
+        if (!image || (tool !== "select" && tool !== "formDesign" && !image.editable)) return -1
         var r = image.view, pad = Metrics.readerHandle / s
         var corners = [[r[0], r[1]], [r[2], r[1]], [r[0], r[3]], [r[2], r[3]]]
         for (var i = 0; i < 4; ++i)
@@ -842,13 +1013,16 @@ Item {
             pointer.preview = [r[0] + pointer.du, r[1] + pointer.dv, r[2] + pointer.du, r[3] + pointer.dv]
             break
         }
-        case "resizeImage": {
+        case "resizeImage": case "resizeAnnotation": case "resizeField": {
             var box = pointer.target.view.slice()
             var c = pointer.corner
             var fx = c % 2 === 0 ? 0 : 2, fy = c < 2 ? 1 : 3           // gezogene Ecke
             var ox = c % 2 === 0 ? 2 : 0, oy = c < 2 ? 3 : 1           // feste Ecke gegenüber
             var w = Math.max(4, Math.abs(p.u - box[ox])), h = Math.max(4, Math.abs(p.v - box[oy]))
-            if (!(mouse.modifiers & Qt.ShiftModifier)) {
+            // Bilder behalten ihr Seitenverhältnis (Umschalt: frei), Vektorobjekte umgekehrt
+            var free = (mouse.modifiers & Qt.ShiftModifier) !== 0
+            if (pointer.target.kind === "path" || pointer.action === "resizeAnnotation" || pointer.action === "resizeField") free = !free
+            if (!free) {
                 var ratio = (box[2] - box[0]) / Math.max(0.01, box[3] - box[1])
                 if (w / h > ratio) h = w / ratio
                 else w = h * ratio
@@ -883,12 +1057,16 @@ Item {
         case "moveAnnotation":
             if (moved) doc.moveAnnotation(selected.key, pointer.du, pointer.dv)
             break
+        case "resizeAnnotation":
+            if (pointer.preview) doc.resizeAnnotation(pointer.target.key, pointer.preview)
+            break
         case "moveImage":
             if (moved) doc.moveImage(page, pointer.target.index, pointer.du, pointer.dv)
             break
         case "resizeImage":
             if (pointer.preview) {
-                if (tool === "objects") doc.resizeObjectImage(page, pointer.target.index, pointer.preview)
+                if (tool === "objects" && pointer.target.kind === "path") doc.resizeObjects(pointer.preview)
+                else if (tool === "objects") doc.resizeObjectImage(page, pointer.target.index, pointer.preview)
                 else doc.resizeImage(page, pointer.target.index, pointer.preview)
             }
             break
@@ -926,45 +1104,86 @@ Item {
         case "placeImage":
             if (big) doc.insertImage(page, rect)
             break
+        case "moveField":
+            if (moved) doc.moveField(pointer.target.key, pointer.du, pointer.dv)
+            break
+        case "resizeField":
+            if (pointer.preview) doc.resizeField(pointer.target.key, pointer.preview)
+            break
+        case "placeField":
+            doc.createField(page, big ? rect : [p.u, p.v, p.u, p.v])
+            break
         }
         pointer.preview = null
         pointer.strokePath = []
         pointer.stroke = []
     }
 
-    // Kontextmenüs im Objektmodus (Text, Bild) – keine dauerhafte Leiste
+    // Kontextmenüs im Objektmodus – keine dauerhafte Leiste; angeboten wird, was zur Auswahl passt (Text,
+    // Bild, Vektorobjekt oder mehrere)
     PMenu {
-        id: textObjectMenu
+        id: objectMenu
         objectName: "readerObjectMenu"
         property real u: 0
         readonly property var chosen: root.objectSelected
         readonly property var first: chosen.length ? chosen[0] : null
+        readonly property bool oneText: chosen.length === 1 && root.isText(first)
+        readonly property bool oneImage: chosen.length === 1 && first !== null && first.kind === "image"
+        readonly property bool anyText: chosen.some(function(item) { return root.isText(item) })
+        // Text lässt sich immer ändern (sonst als Überlagerung); Bilder und Vektorobjekte nur, wenn sicher möglich
+        readonly property bool changeable: chosen.length > 0 && chosen.every(function(item) { return root.isText(item) || item.editable === true })
         PMenuItem {
             text: "Bearbeiten"
             iconName: "edit"
-            enabled: textObjectMenu.chosen.length === 1
+            visible: objectMenu.oneText
             onTriggered: {
-                var item = textObjectMenu.first, u = textObjectMenu.u
-                textObjectMenu.afterClose = function() { root.editObject(item, u) }
+                var item = objectMenu.first, u = objectMenu.u
+                objectMenu.afterClose = function() { root.editObject(item, u) }
             }
         }
-        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; enabled: textObjectMenu.chosen.length === 1; onTriggered: root.editParagraph(textObjectMenu.first) }
+        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; visible: objectMenu.oneText; onTriggered: root.editParagraph(objectMenu.first) }
+        PMenuItem { text: "Ersetzen …"; iconName: "image"; visible: objectMenu.oneImage; enabled: objectMenu.changeable; onTriggered: root.doc.replaceImage(root.page, objectMenu.first.index) }
         PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyObjects() }
-        PMenuItem { text: "Ausschneiden"; iconName: "document_dismiss"; onTriggered: root.doc.cutObjects() }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: textObjectMenu.chosen.length === 1; onTriggered: root.doc.duplicateObject() }
-        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: "Ausschneiden"; iconName: "cut"; enabled: objectMenu.changeable; onTriggered: root.doc.cutObjects() }
+        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; visible: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: objectMenu.changeable; onTriggered: root.doc.duplicateObject() }
+        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: objectMenu.changeable; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(90) }
+        PMenuItem { text: "Drehen (90° gegen den Uhrzeigersinn)"; iconName: "arrow_rotate_counterclockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(-90) }
+        PMenuItem { text: "In den Vordergrund"; iconName: "position_to_front"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(true) }
+        PMenuItem { text: "In den Hintergrund"; iconName: "position_to_back"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(false) }
         PMenuItem { text: "Eigenschaften"; iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
     }
     PMenu {
-        id: imageObjectMenu
-        objectName: "readerImageObjectMenu"
+        id: objectPageMenu
+        objectName: "readerObjectPageMenu"
         property real u: 0
-        readonly property var first: root.objectSelected.length ? root.objectSelected[0] : null
-        readonly property bool editable: first !== null && first.kind === "image" && first.editable === true
-        PMenuItem { text: "Ersetzen …"; iconName: "image"; enabled: imageObjectMenu.editable; onTriggered: root.doc.replaceImage(root.page, imageObjectMenu.first.index) }
-        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: imageObjectMenu.editable; onTriggered: root.doc.rotateImage(root.page, imageObjectMenu.first.index, true) }
-        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: imageObjectMenu.editable; onTriggered: root.doc.deleteObjects() }
-        PMenuItem { text: "Eigenschaften"; iconName: "image"; onTriggered: Reader.showRightPanel("properties") }
+        property real v: 0
+        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: "Hier einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
+        PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
+    }
+
+    // Formular gestalten: Befehle des gewählten Feldes und »… hier anlegen« auf freier Fläche
+    PMenu {
+        id: fieldMenu
+        objectName: "readerFieldMenu"
+        readonly property var chosen: root.doc ? root.doc.fieldSelection : ({})
+        readonly property bool copyable: chosen.kind !== "signature" && chosen.kind !== "button"
+        PMenuItem { text: "Eigenschaften …"; iconName: "text_box_settings"; onTriggered: { var d = root.doc; fieldMenu.afterClose = function() { d.editFieldProperties("") } } }
+        PMenuItem { text: "Option hinzufügen"; iconName: "radio_button"; visible: fieldMenu.chosen.kind === "radio"; onTriggered: root.doc.addFieldOption("") }
+        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; visible: fieldMenu.copyable; onTriggered: root.doc.duplicateField("") }
+        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.doc.deleteField("") }
+    }
+    PMenu {
+        id: fieldPageMenu
+        objectName: "readerFieldPageMenu"
+        property string at: ""
+        PMenuItem { text: "Textfeld hier"; iconName: "textbox"; onTriggered: root.doc.createFieldAt("text", fieldPageMenu.at) }
+        PMenuItem { text: "Kontrollkästchen hier"; iconName: "checkbox_checked"; onTriggered: root.doc.createFieldAt("checkbox", fieldPageMenu.at) }
+        PMenuItem { text: "Optionsfeld hier"; iconName: "radio_button"; onTriggered: root.doc.createFieldAt("radio", fieldPageMenu.at) }
+        PMenuItem { text: "Dropdown hier"; iconName: "chevron_down"; onTriggered: root.doc.createFieldAt("combo", fieldPageMenu.at) }
+        PMenuItem { text: "Liste hier"; iconName: "list"; onTriggered: root.doc.createFieldAt("list", fieldPageMenu.at) }
     }
 
     // Kontextmenü der Seite

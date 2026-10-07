@@ -7,6 +7,8 @@ Greift, wenn qpdf und PDFium eine Datei nicht (vollständig) öffnen können:
   direkt in den Bytes (defensiv, speichersparend über ``mmap``)
 * ``rebuild`` – neue Querverweistabelle, Trailer, ``startxref`` und ``%%EOF``; bei Bedarf
   ein neuer Seitenbaum mit übernommenen geerbten Seiteneigenschaften
+* ``streams`` – beschädigte Flate-Datenströme teilweise retten: Inhaltsströme bis zum letzten
+  vollständigen Befehl, Bilder nur, wenn das sicher geht
 
 Jeder Kandidat wird anschließend mit qpdf normalisiert und wie jede Ausgabe hart geprüft.
 Verschlüsselte Dateien werden nie ohne gültiges Passwort und vollständige

@@ -1,10 +1,12 @@
 """Inhaltsströme lesen und gezielt ändern (pikepdf).
 
 ``PageContent`` liest alle Inhaltsströme einer Seite als eine Folge von Anweisungen und verfolgt
-dabei Grafik- und Textzustand (CTM, Textmatrix, Schrift, Abstände). Für jeden Textoperator
-(``Tj``, ``TJ``, ``'``, ``"``) entsteht ein ``ShowOp``. PDFium erzeugt für jeden dieser Operatoren
-genau ein Textobjekt in derselben Reihenfolge – ``textedit`` prüft das Seite für Seite (Anzahl
-und Text); nur dann sind native Änderungen erlaubt.
+dabei Grafik- und Textzustand (CTM, Textmatrix, Schrift, Abstände, Farben, Linien, ExtGState). Für
+jeden Textoperator (``Tj``, ``TJ``, ``'``, ``"``) entsteht ein ``ShowOp``. PDFium erzeugt für jeden
+dieser Operatoren genau ein Textobjekt in derselben Reihenfolge – ``textedit`` prüft das Seite für
+Seite (Anzahl und Text); nur dann sind native Änderungen erlaubt. Ebenso entsteht für jeden
+zeichnenden Pfadoperator (``S``, ``f``, ``B`` …) ein ``PathOp`` – PDFium legt dafür je ein
+Pfadobjekt an (``vectors`` prüft die Anzahl).
 
 Änderungen ersetzen **nur** die Operanden der betroffenen Operatoren bzw. fügen Anweisungen ein.
 Alles andere – markierter Inhalt, Inline-Bilder, Formen, unbekannte Operatoren – bleibt erhalten.
@@ -55,6 +57,20 @@ class TextState:
 
 
 @dataclass
+class Graphics:
+    """Grafikzustand außerhalb der Textmatrix – als Anweisungen, die ihn wiederherstellen (für Kopien)."""
+
+    fill: tuple = ()  # Farbraum und Füllfarbe (``cs``/``scn`` bzw. ``rg``/``g``/``k``)
+    stroke: tuple = ()  # Farbraum und Strichfarbe
+    lines: tuple = ()  # w, J, j, M, d, ri, i – jeweils die letzte Anweisung
+    states: tuple = ()  # ``gs``-Aufrufe seit dem Seitenanfang bzw. dem passenden ``q``
+    alpha: tuple[float, float] = (1.0, 1.0)  # Deckkraft Strich (CA) und Fläche (ca)
+
+    def replay(self) -> list:
+        return [*self.fill, *self.stroke, *self.lines, *self.states]
+
+
+@dataclass
 class ShowOp:
     index: int  # Position in ``PageContent.instructions``
     operator: str
@@ -65,6 +81,7 @@ class ShowOp:
     ctm: Matrix
     bt: int  # laufende Nummer des BT-Blocks
     advance: float = 0.0  # Breite im Textraum (gemäß Schriftbreiten)
+    graphics: Graphics | None = None
 
 
 @dataclass
@@ -75,6 +92,25 @@ class ImageOp:
     name: str  # Ressourcenname (z. B. ``/Im0``) – leer bei Inline-Bildern
     ctm: Matrix  # CTM beim Zeichnen (bildet das Einheitsquadrat bzw. den Formularraum ab)
     kind: str  # "image", "inline" oder "form"
+    graphics: Graphics | None = None
+
+
+@dataclass
+class PathOp:
+    """Gezeichneter Pfad auf der obersten Ebene: Aufbau (``m``, ``l``, ``c``, ``re`` …) bis zum
+    zeichnenden Operator (``S``, ``f``, ``B`` …) – ohne ``n`` (nur Zuschneiden)."""
+
+    start: int  # erste Anweisung des Pfadaufbaus
+    index: int  # zeichnender Operator
+    operator: str
+    ctm: Matrix
+    clip: bool  # enthält ``W``/``W*`` (zeichnet und schneidet zu – nicht verschiebbar)
+    graphics: Graphics
+
+
+PATH_BUILD = {"m", "l", "c", "v", "y", "h", "re"}
+PATH_PAINT = {"S", "s", "f", "F", "f*", "B", "B*", "b", "b*"}
+LINE_STATE = ("w", "J", "j", "M", "d", "ri", "i")
 
 
 def _num(value) -> float:
@@ -96,6 +132,7 @@ class PageContent:
         self.codecs: dict[str, FontCodec] = {}
         self.shows: list[ShowOp] = []
         self.images: list[ImageOp] = []
+        self.paths: list[PathOp] = []
         self._interpret()
 
     def codec(self, font: str) -> FontCodec | None:
@@ -106,29 +143,57 @@ class PageContent:
 
     # Lesen ---------------------------------------------------------------------------------------------
     def _interpret(self) -> None:
-        stack: list[tuple[Matrix, TextState]] = []
+        stack: list[tuple[Matrix, TextState, Graphics]] = []
         ctm = IDENTITY
         state = TextState()
+        graphics = Graphics()
         tm = tlm = IDENTITY
         bt = -1
+        path_start: int | None = None
+        clip = False
+        ext = self._ext_states()
         for index, ins in enumerate(self.instructions):
             if isinstance(ins, pikepdf.ContentStreamInlineImage):
-                self.images.append(ImageOp(index, "", ctm, "inline"))
+                self.images.append(ImageOp(index, "", ctm, "inline", graphics))
                 continue
             op = str(ins.operator)
             ops = list(ins.operands)
+            if op in PATH_BUILD:
+                if path_start is None:
+                    path_start, clip = index, False
+            elif op in ("W", "W*"):
+                clip = True
+            elif op in PATH_PAINT:
+                self.paths.append(PathOp(index if path_start is None else path_start, index, op, ctm, clip, graphics))
+                path_start = None
+            elif op == "n":
+                path_start = None
+            elif op in ("cs", "sc", "scn", "g", "rg", "k"):
+                graphics = Graphics(_color(graphics.fill, ins, op in ("g", "rg", "k", "cs")), graphics.stroke, graphics.lines, graphics.states, graphics.alpha)
+            elif op in ("CS", "SC", "SCN", "G", "RG", "K"):
+                graphics = Graphics(graphics.fill, _color(graphics.stroke, ins, op in ("G", "RG", "K", "CS")), graphics.lines, graphics.states, graphics.alpha)
+            elif op in LINE_STATE:
+                lines = tuple(item for item in graphics.lines if str(item.operator) != op) + (ins,)
+                graphics = Graphics(graphics.fill, graphics.stroke, lines, graphics.states, graphics.alpha)
+            elif op == "gs" and ops:
+                stroke_alpha, fill_alpha = graphics.alpha
+                params = ext.get(str(ops[0]))
+                if isinstance(params, pikepdf.Dictionary):
+                    stroke_alpha = _num(params.get("/CA", stroke_alpha))
+                    fill_alpha = _num(params.get("/ca", fill_alpha))
+                graphics = Graphics(graphics.fill, graphics.stroke, graphics.lines, graphics.states + (ins,), (stroke_alpha, fill_alpha))
             if op == "Do" and ops:
                 xobject = self.xobjects.get(str(ops[0]))
                 subtype = xobject.get("/Subtype") if isinstance(xobject, pikepdf.Stream) else None
                 if subtype == pikepdf.Name.Image:
-                    self.images.append(ImageOp(index, str(ops[0]), ctm, "image"))
+                    self.images.append(ImageOp(index, str(ops[0]), ctm, "image", graphics))
                 elif subtype == pikepdf.Name.Form:
-                    self.images.append(ImageOp(index, str(ops[0]), ctm, "form"))
+                    self.images.append(ImageOp(index, str(ops[0]), ctm, "form", graphics))
             elif op == "q":
-                stack.append((ctm, TextState(**state.__dict__)))
+                stack.append((ctm, TextState(**state.__dict__), graphics))
             elif op == "Q":
                 if stack:
-                    ctm, state = stack.pop()
+                    ctm, state, graphics = stack.pop()
             elif op == "cm" and len(ops) == 6:
                 ctm = mul(tuple(_num(v) for v in ops), ctm)  # type: ignore[arg-type]
             elif op == "BT":
@@ -166,7 +231,7 @@ class PageContent:
                     tlm = mul((1.0, 0.0, 0.0, 1.0, 0.0, -state.leading), tlm)
                     tm = tlm
                 raw, adjust = _strings(op, ops)
-                show = ShowOp(index, op, raw, TextState(**state.__dict__), tm, tlm, ctm, bt)
+                show = ShowOp(index, op, raw, TextState(**state.__dict__), tm, tlm, ctm, bt, graphics=graphics)
                 codec = self.codec(state.font)
                 if codec is not None and codec.editable:
                     show.advance = codec.text_width(raw, state.size, state.char_spacing, state.word_spacing, state.hscale) - adjust / 1000.0 * state.size * state.hscale
@@ -174,6 +239,16 @@ class PageContent:
                 tm = mul((1.0, 0.0, 0.0, 1.0, show.advance, 0.0), tm)
             elif op == "ET":
                 pass
+
+    def _ext_states(self) -> dict[str, pikepdf.Object]:
+        """ExtGState-Ressourcen der Seite (für die Deckkraft ``/CA`` und ``/ca``)."""
+        from .document import inherited
+
+        resources = inherited(self.page, "/Resources")
+        states = resources.get("/ExtGState") if isinstance(resources, pikepdf.Dictionary) else None
+        if not isinstance(states, pikepdf.Dictionary):
+            return {}
+        return {str(name): value for name, value in states.items() if isinstance(value, pikepdf.Dictionary)}
 
     def text_of(self, show: ShowOp) -> str:
         codec = self.codec(show.state.font)
@@ -313,6 +388,15 @@ def prune_fonts(pdf: pikepdf.Pdf, page: pikepdf.Object, prefix: str = "/PTF") ->
         fonts = commands.own_resources(page, pdf, "/Font").Font
         for key in unused:
             del fonts[key]
+
+
+def _color(current: tuple, ins, resets_space: bool) -> tuple:
+    """Farbanweisungen nach ``ins``: ein Farbraumwechsel (``cs``) oder eine Gerätefarbe (``rg``…)
+    ersetzt alles, eine Farbe im aktuellen Farbraum (``sc``/``scn``) behält den Farbraum."""
+    if resets_space:
+        return (ins,)
+    space = tuple(item for item in current if str(item.operator) in ("cs", "CS"))
+    return space + (ins,)
 
 
 def _strings(op: str, operands) -> tuple[bytes, float]:

@@ -133,8 +133,8 @@ def message(text: str) -> None:
 
             ctypes.windll.user32.MessageBoxW(0, text, TITLE, 0x10 | 0x10000)  # Fehler, im Vordergrund
             return
-        except Exception:  # noqa: BLE001 - ohne Oberfläche bleibt nur stderr
-            pass
+        except (ImportError, AttributeError, OSError, TypeError, ValueError):
+            pass  # kein Hinweisfenster möglich (ohne Oberfläche): es bleibt nur stderr
     print(text, file=sys.stderr)
 
 

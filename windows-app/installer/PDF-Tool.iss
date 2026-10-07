@@ -150,6 +150,8 @@ Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:Sho
 Type: filesandordirs; Name: "{app}\runtime"
 Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\assets"
+; Texterkennung (Tesseract): DLLs einer älteren Tesseract-Version bleiben so nicht liegen
+Type: filesandordirs; Name: "{app}\ocr"
 ; Reste des selbst geschriebenen Installers bis 2.0.5 (bei Installation im selben Ordner)
 Type: files; Name: "{app}\Uebersichten-Ersteller.exe"
 Type: files; Name: "{app}\Uebersichten-Ersteller.exe.alt"
@@ -176,6 +178,8 @@ Type: filesandordirs; Name: "{localappdata}\Vertragsübersicht"
 Type: filesandordirs; Name: "{localappdata}\VertragDesk"
 
 [Files]
+; Das ganze Paket aus build.py – darunter LICENSE (GPL-3.0) und THIRD_PARTY_LICENSES.md im Programmordner.
+; Bewusst keine Lizenzseite (LicenseFile) im Assistenten: Die GPL verlangt keine Zustimmung.
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -205,6 +209,7 @@ Filename: "{app}\runtime\pythonw.exe"; Parameters: "-s -OO ""{app}\app\start.py"
 Type: filesandordirs; Name: "{app}\runtime"
 Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\assets"
+Type: filesandordirs; Name: "{app}\ocr"
 Type: files; Name: "{app}\fehler.log"
 Type: files; Name: "{app}\start.log"
 Type: dirifempty; Name: "{app}"

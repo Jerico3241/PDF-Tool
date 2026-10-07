@@ -131,6 +131,7 @@ def test_progress_phases_follow_the_engine_stages() -> None:
     assert batch.phase_of("analyze", "streams") is Phase.ANALYSIS
     assert batch.phase_of("repair", "hash") is Phase.ANALYSIS
     assert batch.phase_of("repair", "rewrite") is Phase.REPAIR and batch.phase_of("repair", "raster") is Phase.REPAIR
+    assert batch.phase_of("repair", "trim") is Phase.REPAIR and batch.phase_of("repair", "streams_rescue") is Phase.REPAIR
     assert batch.phase_of("repair", "validate") is Phase.VALIDATION
     assert batch.phase_of("repair", "finish") is Phase.DONE
 
@@ -269,3 +270,76 @@ def test_run_summary(zustaende, nicht_gestartet, erwartet) -> None:
     from tools.pdf_repair import presentation
 
     assert presentation.run_summary(zustaende, nicht_gestartet) == erwartet
+
+
+# --- Stapel mit echten Dateien ------------------------------------------------------------------------------------
+
+
+def test_batch_with_mixed_results(tmp_path: Path) -> None:
+    """Echte, unterschiedlich beschädigte PDFs wie bei »Alle reparieren«: jede Datei für sich (Analyse,
+    Reparatur, Übernahme), gemischte Ergebnisse – repariert, teilweise wiederhergestellt, nicht
+    reparierbar, fehlgeschlagen. Originale bleiben bitgleich, keine Ausgabe ersetzt eine vorhandene Datei."""
+    import hashlib
+
+    import pdfsamples as samples
+    from tools.pdf_repair import engine, presentation, process
+
+    folder = tmp_path / "Eingang"
+    dateien = {
+        "xref": samples.xref_offset(folder / "Rechnung.pdf"),
+        "vorspann": samples.with_prefix(folder / "Anhang.pdf", samples.MAIL_HEADER),
+        "strom": samples.flate_truncated(folder / "Strom.pdf"),
+        "zufall": samples.garbage(folder / "Zufall.pdf"),
+        "verschwindet": samples.trailer_removed(folder / "Weg.pdf"),
+    }
+    (folder / "Rechnung_repariert.pdf").write_bytes(b"vorhanden")
+
+    def sha(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    vorher = {path: sha(path) for path in folder.iterdir()}
+    liste = RepairBatch()
+    items = dict(zip(dateien, liste.add(dateien.values()).added))
+    for item in liste.items:
+        item.analysis = engine.analyze(item.path)
+        item.state = batch.analysis_state(item.analysis)
+    assert items["zufall"].state is ItemState.UNREADABLE and not items["zufall"].can_repair()
+    durchlauf = liste.to_repair()
+    assert items["zufall"] not in durchlauf and len(durchlauf) == 4
+    liste.reserve(durchlauf, lambda item: item.path.parent, True, batch.DEFAULT_SUFFIX)
+    weg = items["verschwindet"].path
+    weg.unlink()  # nach der Analyse verschwunden: nur ihre Reparatur scheitert
+    for nummer, item in enumerate(durchlauf):
+        arbeit = tmp_path / f"arbeit{nummer}"
+        arbeit.mkdir()
+        result = engine.repair(item.path, arbeit, None, item.repair_mode(), item.analysis.sha256)
+        gespeichert = False
+        if result.usable:
+            ziel = item.planned.parent
+            item.output = process.deliver(Path(result.output_path), item.path, ziel, item.planned_base, item.planned_number, liste.reserved_names(ziel, except_item=item))
+            gespeichert = True
+        item.result, item.state = result, batch.result_state(result, gespeichert)
+        item.reserved = False
+    zustaende = {key: item.state for key, item in items.items()}
+    assert zustaende == {
+        "xref": ItemState.REPAIRED,
+        "vorspann": ItemState.REPAIRED,
+        "strom": ItemState.PARTIALLY_RECOVERED,
+        "zufall": ItemState.UNREADABLE,
+        "verschwindet": ItemState.FAILED,
+    }
+    assert items["verschwindet"].output is None and "nicht mehr lesbar" in items["verschwindet"].result.error
+    assert items["xref"].output.name == "Rechnung_repariert (1).pdf"  # die vorhandene Datei bleibt
+    assert items["vorspann"].result.data_removed == len(samples.MAIL_HEADER)
+    assert items["strom"].result.streams_rescued == 1 and items["strom"].result.incomplete_pages == [2]
+    assert presentation.item_state_text(items["strom"]) == ("Teilweise wiederhergestellt", "caution")
+    assert presentation.run_summary([item.state for item in durchlauf]) == (
+        "warning",
+        "Reparatur abgeschlossen",
+        ["2 erfolgreich repariert", "1 teilweise wiederhergestellt", "1 fehlgeschlagen"],
+    )
+    # Originale und vorhandene Dateien unverändert (die verschwundene ausgenommen)
+    assert {path: sha(path) for path in vorher if path != weg} == {path: wert for path, wert in vorher.items() if path != weg}
+    assert (folder / "Rechnung_repariert.pdf").read_bytes() == b"vorhanden"
+    neu = sorted(path.name for path in folder.iterdir() if path not in vorher)
+    assert neu == ["Anhang_repariert.pdf", "Rechnung_repariert (1).pdf", "Strom_repariert.pdf"]

@@ -11,7 +11,9 @@ Ablauf:
  5. Laufzeit verschlanken (ohne tkinter/Tcl/Tk; von PySide6 nur die benötigten Module,
     Plugins und QML-Module – siehe qtruntime.py) und vorkompilieren
  6. App und Assets kopieren; die QML-Oberfläche als Qt-Ressource bündeln (app/qml_rc.py,
-    siehe qmlres.py) – lose QML-Dateien kommen nicht ins Setup
+    siehe qmlres.py) – lose QML-Dateien kommen nicht ins Setup; Texterkennung (Tesseract) nach
+    ocr\\ übernehmen – nur tesseract.exe und die DLLs, die es laut Importtabellen lädt, dazu die
+    Sprachdaten (``prepare_ocr``)
  7. Assistentenbilder aus assets/icon.ico erzeugen
  8. Inno Setup (ISCC.exe) aufrufen
  9. Setup prüfen, SHA-256 schreiben, optional signieren; Release-Dateien prüfen
@@ -25,7 +27,9 @@ Voraussetzungen (Windows):
     runtime-requirements.txt; liefert rcc für die QML-Ressourcen) – dieselbe Hauptversion
     wie die mitgelieferte Laufzeit, damit vorkompilierte .pyc-Dateien passen
   * Inno Setup 6.6 oder neuer (https://jrsoftware.org/isdl.php)
-  * Internetzugang (python.org, PyPI)
+  * 7-Zip (7z.exe) zum Entpacken des Tesseract-Installers – auf den Windows-Rechnern von GitHub
+    vorinstalliert; sonst Umgebungsvariable SEVENZIP auf 7z.exe setzen
+  * Internetzugang (python.org, PyPI, GitHub)
 
 ISCC.exe wird automatisch gesucht (PATH, Umgebungsvariable ISCC,
 "C:\\Program Files (x86)\\Inno Setup 6", "C:\\Program Files\\Inno Setup 6",
@@ -73,6 +77,39 @@ PYTHON_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSION}/{PYTHON_ZIP}"
 PYTHON_SHA256 = "6479223746cdfb79d25865110d6f524ac98de081324e119af1dc3ae36bddc7a5"
 REQUIREMENTS = ROOT / "runtime-requirements.txt"
 
+# Texterkennung (OCR): Tesseract für Windows (64 Bit), gebaut von der UB Mannheim und im Release 5.5.3 von
+# tesseract-ocr veröffentlicht (NSIS-Installer, signiert). Entpackt mit 7-Zip; ins Setup kommen nur
+# tesseract.exe und die DLLs, die es laut Importtabellen braucht (``qtruntime.dependency_closure``) – keine
+# Trainingswerkzeuge, kein ICU/Pango/Cairo, keine NSIS-Plugins.
+TESSERACT_VERSION = "5.5.3.20260724"
+TESSERACT_SETUP = f"tesseract-ocr-w64-setup-{TESSERACT_VERSION}.exe"
+TESSERACT_URL = f"https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/{TESSERACT_SETUP}"
+TESSERACT_SHA256 = "bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4"
+# Die DLLs, die tesseract.exe direkt oder indirekt lädt (geprüft mit ``objdump -p`` und
+# ``qtruntime.pe_imports``). Weicht die berechnete Liste ab, bricht der Build ab: Liste und
+# THIRD_PARTY_LICENSES.md gehören dann gemeinsam angepasst.
+TESSERACT_DLLS = (
+    "libLerc.dll", "libarchive-13.dll", "libb2-1.dll", "libbrotlicommon.dll", "libbrotlidec.dll",
+    "libbz2-1.dll", "libcurl-4.dll", "libdeflate.dll", "libexpat-1.dll", "libgcc_s_seh-1.dll",
+    "libgif-7.dll", "libiconv-2.dll", "libidn2-0.dll", "libintl-8.dll", "libjbig-0.dll", "libjpeg-8.dll",
+    "libleptonica-6.dll", "liblz4.dll", "liblzma-5.dll", "libopenjp2-7.dll", "libpng16-16.dll",
+    "libpsl-5.dll", "libsharpyuv-0.dll", "libssh2-1.dll", "libstdc++-6.dll", "libtesseract-5.dll",
+    "libtiff-6.dll", "libunistring-5.dll", "libwebp-7.dll", "libwebpmux-3.dll", "libwinpthread-1.dll",
+    "libzstd.dll", "zlib1.dll",
+)
+# Sprachdaten: tessdata_fast (Integer-LSTM, Apache-2.0) – Deutsch 1,5 MB und Englisch 4,1 MB statt
+# 8,6/15,4 MB (tessdata_best) bzw. 15,4/23,5 MB (tessdata). tessdata_best ist laut Projekt bei schwierigen
+# Vorlagen genauer, aber größer und langsamer; für gedruckte Dokumente reicht tessdata_fast. Dieselben
+# Dateien (gleiche SHA-256) liefert z. B. Ubuntu 24.04 aus. osd: Lageerkennung (quer gescannte Seiten).
+TESSDATA_COMMIT = "87416418657359cb625c412a48b6e1d6d41c29bd"  # tesseract-ocr/tessdata_fast, main
+TESSDATA_URL = f"https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/{TESSDATA_COMMIT}/{{name}}"
+TESSDATA = {
+    "deu.traineddata": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+    "eng.traineddata": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "osd.traineddata": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff",
+}
+OCR = PAYLOAD / "ocr"  # passt zu tools/pdf_editor/ocr.py (BUNDLED_DIR)
+
 # Was die App zur Laufzeit nicht braucht – seit 2.7.0 auch kein tkinter/Tcl/Tk mehr (Qt-Oberfläche)
 RUNTIME_REMOVE = [
     "include", "libs", "Scripts", "Doc", "Tools", "__install__.json",
@@ -97,6 +134,7 @@ REQUIRED_PAYLOAD = [
     "VERSION",
     "README.txt",
     "THIRD_PARTY_LICENSES.md",
+    "LICENSE",
     "runtime/pythonw.exe",
     "runtime/python313.dll",
     "runtime/Lib/site-packages/pandas/__init__.py",
@@ -196,8 +234,15 @@ REQUIRED_PAYLOAD = [
     "app/tools/pdf_repair/recovery/lenient.py",
     "app/tools/pdf_repair/recovery/scanner.py",
     "app/tools/pdf_repair/recovery/rebuild.py",
+    "app/tools/pdf_editor/ocr.py",
     "assets/icon.ico",
     "assets/hott_logo_final.png",
+    "ocr/tesseract.exe",
+    "ocr/LICENSE.txt",
+    "ocr/tessdata/pdf.ttf",
+    "ocr/tessdata/deu.traineddata",
+    "ocr/tessdata/eng.traineddata",
+    "ocr/tessdata/osd.traineddata",
 ]
 # Native Bibliotheken der PDF-Engines (Dateinamen enthalten eine Prüfsumme)
 REQUIRED_NATIVE = [
@@ -354,6 +399,64 @@ def compile_tree(python: list[str], path: Path, mode: str) -> None:
     subprocess.check_call(cmd)
 
 
+# --- Texterkennung (Tesseract) ------------------------------------------------------------
+
+
+def find_7zip() -> str:
+    env = os.environ.get("SEVENZIP")
+    candidates: list[str] = [env] if env else []
+    candidates += [found for found in (shutil.which("7z"), shutil.which("7zz")) if found]
+    for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramW6432"), os.environ.get("ProgramFiles(x86)")):
+        if base:
+            candidates.append(os.path.join(base, "7-Zip", "7z.exe"))
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    fail(
+        "7-Zip (7z.exe) wurde nicht gefunden – es entpackt den Tesseract-Installer.\n"
+        "Bitte 7-Zip installieren (https://www.7-zip.org) oder die Umgebungsvariable SEVENZIP auf 7z.exe setzen."
+    )
+    return ""
+
+
+def unpacked_file(folder: Path, name: str) -> Path:
+    """Genau eine Datei dieses Namens im entpackten Installer (NSIS-Plugins zählen nicht)."""
+    found = [path for path in folder.rglob(name) if path.is_file() and "$PLUGINSDIR" not in path.parts]
+    if len(found) != 1:
+        fail(f"Im Tesseract-Installer {'fehlt' if not found else 'mehrfach'}: {name}")
+    return found[0]
+
+
+def prepare_ocr(target: Path) -> None:
+    """Tesseract nach ``target`` (``ocr\\``): tesseract.exe, die DLLs aus seinen Importtabellen, die Lizenz
+    (Apache-2.0, gilt auch für die Sprachdaten) und tessdata mit pdf.ttf (Schrift der Textebene) und den
+    Sprachdaten. Original-Dateien, unverändert; alles mit SHA-256 geprüft."""
+    setup = download(TESSERACT_URL, CACHE / TESSERACT_SETUP, TESSERACT_SHA256)
+    unpacked = BUILD / "tesseract"
+    remove(unpacked)
+    log(f"Entpacke Tesseract {TESSERACT_VERSION} (7-Zip) …")
+    subprocess.check_call([find_7zip(), "x", "-y", "-bso0", "-bsp0", f"-o{unpacked}", str(setup)])
+    executable = unpacked_file(unpacked, "tesseract.exe")
+    needed = qtruntime.dependency_closure([executable], [executable.parent])
+    names = {path.name for path in needed}
+    if names != set(TESSERACT_DLLS):
+        fail(
+            "Die DLLs von Tesseract weichen von TESSERACT_DLLS ab – Liste und THIRD_PARTY_LICENSES.md anpassen. "
+            f"Neu: {', '.join(sorted(names - set(TESSERACT_DLLS))) or '-'}; entfallen: {', '.join(sorted(set(TESSERACT_DLLS) - names)) or '-'}"
+        )
+    (target / "tessdata").mkdir(parents=True)
+    shutil.copy2(executable, target / executable.name)
+    for path in sorted(needed):
+        shutil.copy2(path, target / path.name)
+    shutil.copy2(unpacked_file(unpacked, "LICENSE"), target / "LICENSE.txt")
+    shutil.copy2(unpacked_file(unpacked, "pdf.ttf"), target / "tessdata" / "pdf.ttf")
+    for name, digest in TESSDATA.items():
+        shutil.copy2(download(TESSDATA_URL.format(name=name), CACHE / f"tessdata-{TESSDATA_COMMIT[:12]}" / name, digest), target / "tessdata" / name)
+    size = sum(path.stat().st_size for path in target.rglob("*") if path.is_file())
+    log(f"Texterkennung: tesseract.exe, {len(needed)} DLLs, Sprachdaten {', '.join(TESSDATA)} ({size / 1e6:.1f} MB)")
+    remove(unpacked)
+
+
 def prepare_payload(version: str, compile_pyc: bool) -> None:
     runtime = PAYLOAD / "runtime"
     runtime.mkdir(parents=True)
@@ -380,7 +483,9 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copytree(ASSETS, PAYLOAD / "assets")
     shutil.copy2(ROOT / "README.txt", PAYLOAD / "README.txt")
     shutil.copy2(ROOT.parent / "THIRD_PARTY_LICENSES.md", PAYLOAD / "THIRD_PARTY_LICENSES.md")
+    shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von PDF Tool, ohne Zustimmungsseite im Setup
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
+    prepare_ocr(OCR)
 
     if compile_pyc:
         python = python_for_runtime()
@@ -398,6 +503,9 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     forbidden = [rel for rel in FORBIDDEN_PAYLOAD if (PAYLOAD / rel).exists()]
     if forbidden:
         fail("Im Paket darf nicht liegen: " + ", ".join(forbidden))
+    problems = release_check.check_ocr(PAYLOAD)
+    if problems:
+        fail("Texterkennung im Paket unvollständig: " + "; ".join(problems))
 
 
 # --- Assistentenbilder -------------------------------------------------------------

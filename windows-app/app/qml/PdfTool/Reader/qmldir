@@ -20,6 +20,8 @@ RightPanel 1.0 RightPanel.qml
 ThumbnailPanel 1.0 ThumbnailPanel.qml
 OutlinePanel 1.0 OutlinePanel.qml
 SearchPanel 1.0 SearchPanel.qml
+AttachmentsPanel 1.0 AttachmentsPanel.qml
 CommentsPanel 1.0 CommentsPanel.qml
 OrganizeView 1.0 OrganizeView.qml
 ObjectPanel 1.0 ObjectPanel.qml
+OcrProgress 1.0 OcrProgress.qml

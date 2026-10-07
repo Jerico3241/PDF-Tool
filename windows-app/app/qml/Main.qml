@@ -8,13 +8,14 @@ import PdfTool.Reader
 
 // Hauptfenster von PDF Tool. Das Fenster bleibt verborgen, bis Python Lage und Titelleiste
 // gesetzt hat; es erscheint mit dem ersten vollständig gezeichneten Bild.
+// Titel: »PDF Tool«, bei einer Beta mit Versionsnummer (»PDF Tool 2.8.0 Beta«).
 ApplicationWindow {
     id: window
     objectName: "mainWindow"
     width: 1140
     height: 800
     visible: false
-    title: App.appName
+    title: App.windowTitle
     color: Theme.background
     font: Typography.body
 

@@ -1,10 +1,15 @@
 name: Update-Test
+run-name: "Update-Test ${{ inputs.von || 'automatisch' }} → ${{ inputs.ziel }} (${{ inputs.kanal }})"
 
 # Update auf eine veröffentlichte Version aus Sicht der Anwender – NUR manuell, nach dem
 # Veröffentlichen einer Beta oder einer stabilen Version (nie bei Commits, Pull Requests oder
-# Releases), z. B. 2.7.2 → 2.8.0-beta.1 (Kanal „Beta“), 2.7.2 → 2.8.0 (Kanal „Stable“) und
-# 2.8.0-beta.1 → 2.8.0 (Kanal „Beta“):
+# Releases), z. B. 3.0.0-beta.2 → 3.1.0-beta.1 (Kanal „Beta“), 2.7.2 → 2.8.0 (Kanal „Stable“) und
+# 2.8.0-beta.1 → 2.8.0 (Kanal „Beta“). Ein Job, eine Vorversion – keine Matrix:
 #
+# 0. Vorversion: »von« oder – leer – automatisch die unmittelbar vorherige veröffentlichte Version
+#    nach SemVer (windows-app/releases.py previous): im Kanal Beta die höchste Version unter dem
+#    Ziel, stabil oder Beta (3.0.0-beta.2 → 3.1.0-beta.1, 2.8.0-beta.1 → 2.8.0), im Kanal Stable
+#    die höchste stabile (2.7.2 → 2.8.0); Entwürfe zählen nie
 # 1. frischer Windows-Rechner: veröffentlichtes Setup der installierten Version laden (nie neu
 #    bauen, Prüfsumme geprüft), still installieren, Benutzerdaten mit dem gewählten Update-Kanal
 #    anlegen (eine Version mit Vorlagen 2.0 startet dabei einmal und übernimmt die Vorlagen selbst)
@@ -17,15 +22,20 @@ name: Update-Test
 #    erhalten, Vorlagen genau einmal übernommen, heruntergeladenes Setup aufgeräumt
 #
 # Ablauf und Prüfungen im Einzelnen: windows-app/tests/smoke_update.py
+#
+# Laufname: Vorversion, Ziel und Kanal – z. B. »Update-Test 3.0.0-beta.2 → 3.1.0-beta.1 (beta)«, bei
+# leerem »von« »Update-Test automatisch → 3.1.0-beta.1 (beta)«. Daran erkennen »Release« und
+# »Release-Prüfung« die getestete Beta einer stabilen Version (windows-app/releases.py) – das Format
+# nicht ändern.
 
 on:
   workflow_dispatch:
     inputs:
       von:
-        description: "Installierte Version (X.Y.Z oder X.Y.Z-beta.N), muss veröffentlicht sein, z. B. 2.7.2"
+        description: "Installierte Version (X.Y.Z oder X.Y.Z-beta.N), muss veröffentlicht sein – leer: automatisch die unmittelbar vorherige veröffentlichte Version (im Kanal Beta auch eine Beta)"
         type: string
-        required: true
-        default: "2.7.2"
+        required: false
+        default: ""
       ziel:
         description: "Erwartete neue Version (X.Y.Z oder X.Y.Z-beta.N), muss veröffentlicht sein"
         type: string
@@ -43,11 +53,11 @@ permissions:
 
 jobs:
   update:
-    name: "Update ${{ inputs.von }} → ${{ inputs.ziel }} (Kanal ${{ inputs.kanal }})"
+    name: "Update ${{ inputs.von || 'automatisch' }} → ${{ inputs.ziel }} (Kanal ${{ inputs.kanal }})"
     runs-on: windows-latest
     timeout-minutes: 40
     env:
-      VON: ${{ inputs.von }}
+      VON_EINGABE: ${{ inputs.von }} # leer: automatisch; die Vorversion steht danach in VON
       ZIEL: ${{ inputs.ziel }}
       KANAL: ${{ inputs.kanal }}
     steps:
@@ -59,14 +69,38 @@ jobs:
         shell: pwsh
         run: |
           $version = '^\d+\.\d+\.\d+(-beta\.[1-9]\d*)?$'
-          if ($env:VON -notmatch $version) { throw "Installierte Version muss X.Y.Z oder X.Y.Z-beta.N sein: $env:VON" }
+          if ($env:VON_EINGABE -and $env:VON_EINGABE -notmatch $version) { throw "Installierte Version muss X.Y.Z oder X.Y.Z-beta.N sein (oder leer): $env:VON_EINGABE" }
           if ($env:ZIEL -notmatch $version) { throw "Erwartete Version muss X.Y.Z oder X.Y.Z-beta.N sein: $env:ZIEL" }
           if ($env:KANAL -cne "stable" -and $env:KANAL -cne "beta") { throw "Kanal muss stable oder beta sein: $env:KANAL" }
           if ($env:KANAL -ceq "stable" -and $env:ZIEL -match '-beta\.') { throw "Der Kanal Stable bietet nie eine Beta an: $env:ZIEL" }
           if (Test-Path (Join-Path $env:LOCALAPPDATA "PDF-Tool")) { throw "PDF Tool ist auf diesem Rechner schon installiert" }
           if (Test-Path (Join-Path $env:APPDATA "PDF-Tool")) { throw "Es gibt schon Benutzerdaten von PDF Tool" }
 
-      - name: "Setup von PDF Tool ${{ inputs.von }} laden und prüfen (veröffentlichtes Release)"
+      # Python für releases.py (Vorversion automatisch bestimmen)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+          architecture: x64
+
+      - name: "Vorversion bestimmen (leer: unmittelbar vorherige veröffentlichte Version nach SemVer, Kanal ${{ inputs.kanal }})"
+        id: vorversion
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $von = $env:VON_EINGABE
+          if (-not $von) {
+            $von = python windows-app/releases.py previous --ziel $env:ZIEL --kanal $env:KANAL --repo "${{ github.repository }}"
+            if ($LASTEXITCODE -ne 0 -or -not $von) { throw "Keine veröffentlichte Vorversion vor $env:ZIEL im Kanal $env:KANAL gefunden" }
+            $von = "$von".Trim()
+            Write-Host "Vorversion automatisch (releases.py): PDF Tool $von"
+          }
+          if ($von -notmatch '^\d+\.\d+\.\d+(-beta\.[1-9]\d*)?$') { throw "Ungültige Vorversion: $von" }
+          Write-Host "Update-Test: PDF Tool $von → PDF Tool $env:ZIEL (Kanal $env:KANAL)"
+          "VON=$von" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "von=$von" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: "Setup von PDF Tool ${{ steps.vorversion.outputs.von }} laden und prüfen (veröffentlichtes Release)"
         timeout-minutes: 5
         shell: pwsh
         env:
@@ -81,7 +115,7 @@ jobs:
           if ($actual -ne $expected) { throw "Prüfsumme des Setups von PDF Tool $env:VON stimmt nicht: $actual" }
           "PREVIOUS_SETUP=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: "PDF Tool ${{ inputs.von }} installieren, Benutzerdaten mit Kanal ${{ inputs.kanal }} anlegen"
+      - name: "PDF Tool ${{ steps.vorversion.outputs.von }} installieren, Benutzerdaten mit Kanal ${{ inputs.kanal }} anlegen"
         timeout-minutes: 10
         shell: pwsh
         run: |
@@ -92,7 +126,7 @@ jobs:
           & "$app\runtime\python.exe" -s windows-app/tests/smoke_update.py --phase vorbereiten --kanal $env:KANAL --app "$app\app"
           if ($LASTEXITCODE -ne 0) { throw "Benutzerdaten konnten nicht angelegt werden" }
 
-      - name: "Updater von PDF Tool ${{ inputs.von }}: Stable ohne Vorabversion; Kanal ${{ inputs.kanal }} findet, lädt, prüft und gibt ${{ inputs.ziel }} frei"
+      - name: "Updater von PDF Tool ${{ steps.vorversion.outputs.von }}: Stable ohne Vorabversion; Kanal ${{ inputs.kanal }} findet, lädt, prüft und gibt ${{ inputs.ziel }} frei"
         timeout-minutes: 20
         shell: pwsh
         run: |

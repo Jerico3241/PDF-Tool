@@ -11,10 +11,13 @@
   wird die Datei exklusiv unter einem freien Namen gespeichert – eine vorhandene
   Datei, insbesondere das Original, wird nie überschrieben (Namen und Nummerierung:
   ``batch``).
+* Protokollzeilen des Bereichs »repair« aus dem Arbeitsprozess (nur technische Angaben)
+  reicht die Pipe an die App weiter; sie schreibt sie in ihr Protokoll.
 """
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
 import shutil
@@ -40,6 +43,27 @@ MEMORY_TEXT = (
 )
 
 
+def _log() -> logging.Logger:
+    """Protokoll des Bereichs »repair« – nur technische Angaben, nie Inhalte, Passwörter, Datei- oder Ordnernamen."""
+    from diagnostics.applog import get
+
+    return get("repair")
+
+
+class _ToApp(logging.Handler):
+    """Im Arbeitsprozess: Protokollzeilen über die Pipe an die App weiterreichen (nur der Text)."""
+
+    def __init__(self, conn) -> None:
+        super().__init__(logging.INFO)
+        self.conn = conn
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self.conn.send(("log", record.levelno, record.getMessage()[:500]))
+        except (OSError, ValueError):
+            self.handleError(record)  # Verbindung zur App getrennt: Standardbehandlung von logging
+
+
 def _lower_priority() -> None:
     """Der Arbeitsprozess soll die Oberfläche nicht ausbremsen."""
     try:
@@ -50,8 +74,8 @@ def _lower_priority() -> None:
             kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00004000)  # BELOW_NORMAL_PRIORITY_CLASS
         else:
             os.nice(5)
-    except Exception:
-        pass
+    except (OSError, AttributeError) as exc:
+        _log().info("Arbeitsprozess: Priorität nicht gesenkt (%s)", type(exc).__name__)
 
 
 def memory_limit(total: int) -> int:
@@ -136,6 +160,10 @@ def _error_text(exc: BaseException, request: dict) -> str:
 
 def _worker(conn, kind: str, request: dict) -> None:
     """Einstiegspunkt des Arbeitsprozesses (muss auf Modulebene liegen – »spawn«)."""
+    logger = _log()
+    forward = _ToApp(conn)
+    logger.addHandler(forward)
+    logger.setLevel(logging.INFO)
     _lower_priority()
     _limit_memory()
     try:
@@ -162,13 +190,16 @@ def _worker(conn, kind: str, request: dict) -> None:
     except BaseException as exc:  # Meldung zurückgeben statt still zu sterben
         try:
             conn.send(("error", _error_text(exc, request)))
-        except Exception:
-            pass
+        except (OSError, ValueError) as lost:
+            # Die App wartet nicht mehr (abgebrochen oder beendet): nur noch im eigenen Protokoll
+            logger.removeHandler(forward)
+            logger.warning("Arbeitsprozess: Fehler %s nicht an die App übermittelt (%s)", type(exc).__name__, type(lost).__name__)
     finally:
+        logger.removeHandler(forward)
         try:
             conn.close()
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("Arbeitsprozess: Pipe nicht geschlossen (%s)", type(exc).__name__)
 
 
 class Job:
@@ -196,30 +227,30 @@ class Job:
         self.started = time.monotonic()
         self._reaper: threading.Thread | None = None
 
-    def events(self) -> list[tuple]:
-        found: list[tuple] = []
-        if self.done:
-            return found
+    def _receive(self, found: list[tuple]) -> None:
+        """Wartende Nachrichten abholen – Protokollzeilen gehen gleich ins Protokoll der App."""
         try:
             while self._receiver.poll():
                 event = self._receiver.recv()
+                if event[0] == "log":
+                    _log().log(event[1], "Arbeitsprozess (%s): %s", self.kind, event[2])
+                    continue
                 found.append(event)
                 if event[0] in ("result", "error"):
                     self.done = True
                     break
-        except (EOFError, OSError):
-            pass
+        except (EOFError, OSError) as exc:
+            # Pipe zu: Der Prozess hat sich beendet – das Ende meldet ``events`` (Ergebnis oder Absturz)
+            _log().debug("Arbeitsprozess (%s): Pipe geschlossen (%s)", self.kind, type(exc).__name__)
+
+    def events(self) -> list[tuple]:
+        found: list[tuple] = []
+        if self.done:
+            return found
+        self._receive(found)
         if not self.done and not self._process.is_alive():
             # Letzte Nachrichten abholen, dann Absturz melden
-            try:
-                while self._receiver.poll():
-                    event = self._receiver.recv()
-                    found.append(event)
-                    if event[0] in ("result", "error"):
-                        self.done = True
-                        break
-            except (EOFError, OSError):
-                pass
+            self._receive(found)
             if not self.done:
                 self.done = True
                 found.append(("crash", self._process.exitcode))
@@ -260,8 +291,8 @@ class Job:
     def _finish_process(self) -> None:
         try:
             self._receiver.close()
-        except Exception:
-            pass
+        except OSError as exc:
+            _log().debug("Arbeitsprozess (%s): Pipe nicht geschlossen (%s)", self.kind, type(exc).__name__)
         if self._process.is_alive():
             # Das Ergebnis ist da, der Arbeitsprozess beendet sich gerade – mit geladenen PDF-Bibliotheken
             # dauert das unter Windows bis zu einer Sekunde. Die Oberfläche wartet nicht darauf:

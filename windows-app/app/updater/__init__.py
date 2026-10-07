@@ -6,8 +6,9 @@ QML) zeigt nur Zustand, Texte und Fortschritt; alle Entscheidungen fallen hier:
 
 * ``semver`` – Versionen nach Semantic Versioning 2.0.0, nie als Text verglichen
 * ``models`` – Kanal (Stable/Beta), Zustand, Fehlerarten, Release und Assets
-* ``github`` – Releases einlesen, Kanal filtern (keine Entwürfe, Stable nie Vorabversionen),
-  Assets nach fester Namenskonvention wählen, neuestes Update bestimmen (nie ein Downgrade)
+* ``github`` – Releases einlesen, Kanal filtern (keine Entwürfe; nur ``vX.Y.Z`` ohne und
+  ``vX.Y.Z-beta.N`` mit Vorabversions-Markierung, Beta nur im Beta-Kanal), Assets nach fester
+  Namenskonvention wählen, neuestes Update bestimmen (nie ein Downgrade)
 * ``policy`` – erlaubte Adressen: nur HTTPS, nur GitHub; Weiterleitungen nur dorthin
 * ``verifier`` – Prüfsummendatei lesen, SHA-256 berechnen und vergleichen
 * ``state`` – Zustandsautomat (IDLE … READY, INSTALLING, CANCELLED, ERROR)

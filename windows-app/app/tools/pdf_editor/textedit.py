@@ -211,6 +211,8 @@ class TextStyle:
     bold: bool | None = None
     italic: bool | None = None
     align: str | None = None  # left, center, right
+    underline: bool | None = None  # Linie unter dem Text (als Vektorlinie in der Textfarbe)
+    strike: bool | None = None  # Linie durch den Text
 
 
 # --- Analyse -------------------------------------------------------------------------------------------------
@@ -475,7 +477,7 @@ def edit_block(document: EditorDocument, history: History, block: Block, new_tex
         raise UnsupportedEdit("Der Textblock ist nicht mehr aktuell. Bitte erneut auswählen.")
     style = style or TextStyle()
     new_text = _normalize_input(new_text)
-    changes_format = any(value is not None for value in (style.family, style.size, style.color, style.bold, style.italic)) or (style.align is not None and style.align != block.align)
+    changes_format = any(value is not None for value in (style.family, style.size, style.color, style.bold, style.italic)) or (style.align is not None and style.align != block.align) or bool(style.underline) or bool(style.strike)
     attempts = []
     if forced_mode in (None, NATIVE) and block.editable_natively and block.uniform and not changes_format:
         attempts.append(NATIVE)
@@ -735,6 +737,7 @@ def _rebuild(document: EditorDocument, block: Block, new_text: str, style: TextS
         rect, fill = cover
         out.append(f"{_rgb(fill)} rg {fmt(rect[0])} {fmt(rect[1])} {fmt(rect[2] - rect[0])} {fmt(rect[3] - rect[1])} re f")
     corners = []
+    decorations: list[str] = []
     if lines:
         header = f"BT {font.key} {fmt(size)} Tf {_rgb(color)} rg"
         extra = spacing.header()
@@ -746,13 +749,36 @@ def _rebuild(document: EditorDocument, block: Block, new_text: str, style: TextS
             y = origin[1] + dx * u[1] + step * i * down[1]
             out.append(f"{fmt(u[0])} {fmt(u[1])} {fmt(-u[1])} {fmt(u[0])} {fmt(x)} {fmt(y)} Tm <{font.encode(text).hex()}> Tj")
             corners += _line_corners((x, y), u, measured, size)
+            decorations += _decorations((x, y), u, measured, size, color, style)
         out.append("ET")
+        out += decorations
     if out:
         append_content(pdf, obj, "\n".join(out).encode("latin-1"))
     bounds = block.bounds if cover is None else union(block.bounds, cover[0])
     for point in corners:
         bounds = union(bounds, (point[0], point[1], point[0], point[1]))
     return EditOutcome(mode, bounds, font.label, font.notes + notes, max(1, len(lines)))
+
+
+UNDERLINE_OFFSET = -0.12  # unter der Grundlinie (× Schriftgröße)
+STRIKE_OFFSET = 0.28  # etwa Mitte der Kleinbuchstaben
+DECORATION_WIDTH = 0.06  # Linienstärke (× Schriftgröße)
+
+
+def _decorations(origin: tuple[float, float], u: tuple[float, float], width: float, size: float, color: tuple[int, int, int], style: TextStyle) -> list[str]:
+    """Unterstreichen bzw. Durchstreichen einer Zeile als eigene Linie in der Textfarbe (mitgedreht)."""
+    if width <= 0:
+        return []
+    up = (-u[1], u[0])
+    result = []
+    for wanted, offset in ((style.underline, UNDERLINE_OFFSET), (style.strike, STRIKE_OFFSET)):
+        if not wanted:
+            continue
+        x0 = origin[0] + offset * size * up[0]
+        y0 = origin[1] + offset * size * up[1]
+        x1, y1 = x0 + width * u[0], y0 + width * u[1]
+        result.append(f"q {_rgb(color)} RG {fmt(max(0.4, size * DECORATION_WIDTH))} w 0 J {fmt(x0)} {fmt(y0)} m {fmt(x1)} {fmt(y1)} l S Q")
+    return result
 
 
 def _spacing_width(text: str, spacing: _Spacing) -> float:
@@ -976,6 +1002,7 @@ def add_text(document: EditorDocument, history: History, page: int, x: float, y:
         step = size * 1.2
         out = [f"BT {font.key} {fmt(size)} Tf {_rgb(color)} rg"]
         corners = [(x, y)]
+        decorations: list[str] = []
         for i, line in enumerate(lines):
             measured = font.measure(line, size)
             dx = {"center": (box_width - measured) / 2, "right": box_width - measured}.get(style.align or "left", 0.0)
@@ -984,7 +1011,9 @@ def add_text(document: EditorDocument, history: History, page: int, x: float, y:
             py = y + dx * u[1] + dy * down[1]
             out.append(f"{fmt(u[0])} {fmt(u[1])} {fmt(-u[1])} {fmt(u[0])} {fmt(px)} {fmt(py)} Tm <{font.encode(line).hex()}> Tj")
             corners += _line_corners((px, py), u, measured, size)
+            decorations += _decorations((px, py), u, measured, size, color, style)
         out.append("ET")
+        out += decorations
         append_content(document.pdf, obj, "\n".join(out).encode("latin-1"))
         rec.info["mode"] = NATIVE
     bounds = None

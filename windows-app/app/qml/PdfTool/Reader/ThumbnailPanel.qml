@@ -10,7 +10,8 @@ import PdfTool.Controls
 // ist markiert und bleibt im Blick. Ein fertiges Bild blendet kurz über das weiße Blatt ein (keine
 // Bewegung); zeigt eine wiederverwendete Zeile eine andere Seite oder ein anderes Dokument, ist das alte
 // Bild sofort weg (PageImage).
-// Die Markierung der aktuellen Seite wechselt weich (Rahmenfarbe, Fläche, Strich links).
+// Die Markierung der aktuellen Seite wechselt weich (Rahmenfarbe, Fläche, Strich links). Rechtsklick öffnet die
+// Befehle der Seite (drehen, kopieren, einfügen, extrahieren, drucken, löschen …).
 ListView {
     id: list
     objectName: "readerThumbnails"
@@ -24,7 +25,9 @@ ListView {
     spacing: 4
     topMargin: 8
     bottomMargin: 8
-    cacheBuffer: 400
+    // Ohne Vorrat außerhalb des Sichtbereichs: dessen Zeilen entstünden asynchron und würden beim schnellen
+    // Wechsel der Seitenleiste mitten im Aufbau verworfen; sichtbare Zeilen werden wiederverwendet (reuseItems)
+    cacheBuffer: 0
     boundsBehavior: Flickable.StopAtBounds
     activeFocusOnTab: true
     currentIndex: doc ? doc.currentPage : -1
@@ -85,5 +88,31 @@ ListView {
         }
         HoverHandler { id: tap }
         TapHandler { onTapped: if (list.doc) list.doc.goTo(row.index) }
+        // Rechtsklick: Befehle für diese Seite (wie in »Seiten organisieren«)
+        TapHandler {
+            acceptedButtons: Qt.RightButton
+            onTapped: (point) => {
+                if (!list.doc) return
+                pageMenu.page = row.index
+                pageMenu.popup(row, point.position.x, point.position.y)
+            }
+        }
+    }
+
+    PMenu {
+        id: pageMenu
+        objectName: "readerThumbnailMenu"
+        property int page: 0
+        readonly property var pages: [page]
+        PMenuItem { text: "Anzeigen"; iconName: "eye"; onTriggered: list.doc.goTo(pageMenu.page) }
+        PMenuItem { text: "Nach rechts drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: list.doc.rotatePages(pageMenu.pages, 90) }
+        PMenuItem { text: "Nach links drehen"; iconName: "arrow_rotate_counterclockwise"; onTriggered: list.doc.rotatePages(pageMenu.pages, -90) }
+        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; onTriggered: list.doc.duplicatePages(pageMenu.pages) }
+        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: list.doc.copyPages(pageMenu.pages) }
+        PMenuItem { text: "Einfügen danach"; iconName: "clipboard_paste"; visible: Reader.pageClip > 0; onTriggered: list.doc.pastePages(pageMenu.page + 1) }
+        PMenuItem { text: "Leere Seite danach einfügen"; iconName: "document_add"; onTriggered: list.doc.insertBlankPage(pageMenu.page + 1) }
+        PMenuItem { text: "Als neue PDF speichern …"; iconName: "arrow_export"; onTriggered: list.doc.extractPages(pageMenu.pages) }
+        PMenuItem { text: "Drucken …"; iconName: "print"; onTriggered: list.doc.printPages(pageMenu.pages) }
+        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: list.doc.deletePages(pageMenu.pages) }
     }
 }
