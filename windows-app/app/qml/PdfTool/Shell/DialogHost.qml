@@ -151,6 +151,15 @@ T.Popup {
                             case "reader_properties": return readerPropertiesContent
                             case "ocr": return ocrContent
                             case "form_field": return fieldPropertiesContent
+                            case "checklist": return checklistContent
+                            case "protect": return protectContent
+                            case "optimize": return optimizeContent
+                            case "header_footer": return headerFooterContent
+                            case "watermark": return watermarkContent
+                            case "redact_search": return redactSearchContent
+                            case "signature": return signatureContent
+                            case "link": return linkContent
+                            case "crop": return cropContent
                             default: return null
                             }
                         }
@@ -219,4 +228,13 @@ T.Popup {
     Component { id: readerPropertiesContent; ReaderPropertiesContent {} }
     Component { id: ocrContent; OcrContent {} }
     Component { id: fieldPropertiesContent; FieldPropertiesContent {} }
+    Component { id: checklistContent; ChecklistContent {} }
+    Component { id: protectContent; ProtectContent {} }
+    Component { id: optimizeContent; OptimizeContent {} }
+    Component { id: headerFooterContent; HeaderFooterContent {} }
+    Component { id: watermarkContent; WatermarkContent {} }
+    Component { id: redactSearchContent; RedactSearchContent {} }
+    Component { id: signatureContent; SignatureContent {} }
+    Component { id: linkContent; LinkContent {} }
+    Component { id: cropContent; CropContent {} }
 }

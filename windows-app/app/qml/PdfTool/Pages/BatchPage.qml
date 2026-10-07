@@ -586,6 +586,7 @@ Item {
             PButton { iconName: "edit"; text: "Einzeln bearbeiten"; tip: "Eintrag in »Übersicht erstellen« übernehmen"; onClicked: Batch.editSingle() }
             PButton { visible: Batch.hasOutput; iconName: "open"; text: "PDF öffnen"; onClicked: Batch.openPdf() }
             PButton { visible: Batch.hasOutput; iconName: "folder_open"; text: "Ordner öffnen"; onClicked: Batch.openFolder() }
+            PButton { objectName: "batchMailPdf"; visible: Batch.hasOutput; iconName: "mail"; text: "Per E-Mail senden"; tip: "Neue E-Mail mit dieser PDF als Anhang – an den Rechnungsempfänger des Eintrags, falls bekannt"; onClicked: Batch.mailPdf() }
             PButton { iconName: "delete"; text: "Aus Stapel entfernen"; tip: "Eintrag aus dem Stapel nehmen – die Datei bleibt"; onClicked: Batch.removeCurrent() }
         }
     }

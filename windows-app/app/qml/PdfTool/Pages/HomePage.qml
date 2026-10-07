@@ -8,7 +8,8 @@ import PdfTool.Controls
 // Startseite (⌂ in der Tab-Leiste) nach dem Vorbild von Adobe Acrobat: oben die Werkzeuge in einer Karte und
 // daneben die Ablagefläche zum Öffnen, darunter »Zuletzt verwendet« (Name, Ordner, wann geöffnet, Größe).
 // Die Gruppe steht mittig und ist höchstens ``Metrics.homeMaxWidth`` breit; bei schmalem Fenster stehen
-// Werkzeuge und Ablagefläche untereinander, die Werkzeuge in einer Spalte.
+// Werkzeuge und Ablagefläche untereinander, die Werkzeuge in einer Spalte. In der Karte der Werkzeuge stehen
+// darunter die Schnellwerkzeuge (PDF wählen, das Werkzeug startet im Reader) – vier, zwei oder eine Spalte.
 PPage {
     id: page
     objectName: "homePage"
@@ -42,8 +43,22 @@ PPage {
         property string title: ""
         property string description: ""
         property string shortcut: ""
-        // Breite, die Symbol und Fußzeile mindestens brauchen (Titel und Beschreibung brechen um)
-        readonly property int minimumWidth: 3 * Metrics.s12 + 40 + Math.ceil(footer.implicitWidth)
+        // Breite, die Symbol und Fußzeile mindestens brauchen – und das längste Wort von Name und Beschreibung: Beide
+        // brechen zwischen Wörtern um, nie mitten in einem Wort (sonst stehen die Werkzeuge untereinander)
+        readonly property int minimumWidth: {
+            titleMetrics.font  // neu messen, wenn sich die Schrift ändert
+            descriptionMetrics.font
+            var widest = 0
+            var words = title.split(" ")
+            for (var i = 0; i < words.length; ++i)
+                widest = Math.max(widest, titleMetrics.advanceWidth(words[i]))
+            words = description.split(" ")
+            for (var j = 0; j < words.length; ++j)
+                widest = Math.max(widest, descriptionMetrics.advanceWidth(words[j]))
+            return 3 * Metrics.s12 + 40 + Math.max(Math.ceil(footer.implicitWidth), Math.ceil(widest) + 2)
+        }
+        FontMetrics { id: titleMetrics; font: Typography.bodyStrong }
+        FontMetrics { id: descriptionMetrics; font: Typography.caption }
         implicitHeight: Math.ceil(toolColumn.implicitHeight) + 2 * Metrics.s12
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
@@ -94,6 +109,63 @@ PPage {
                 }
             }
         }
+    }
+
+    // Ein Schnellwerkzeug: Symbol und Name (bricht bei Bedarf in eine zweite Zeile um), die Beschreibung im Tooltip.
+    // Ein Klick wählt eine PDF; sie öffnet sich im Reader, und das Werkzeug startet. Zeigen hinterlegt die Fläche, das
+    // Symbol wächst leicht (nur »Vollständig«).
+    component QuickTool: T.AbstractButton {
+        id: quick
+        property string iconName: ""
+        property string title: ""
+        property string description: ""
+        // Breite, die Symbol und das längste Wort des Namens mindestens brauchen
+        readonly property int minimumWidth: {
+            quickMetrics.font  // neu messen, wenn sich die Schrift ändert
+            var widest = 0
+            var words = title.split(" ")
+            for (var i = 0; i < words.length; ++i)
+                widest = Math.max(widest, quickMetrics.advanceWidth(words[i]))
+            return Metrics.s12 + 32 + 2 * Metrics.s8 + Math.ceil(widest) + 2
+        }
+        implicitHeight: Math.max(32, Math.ceil(quickLabel.implicitHeight)) + 2 * Metrics.s8
+        hoverEnabled: true
+        focusPolicy: Qt.StrongFocus
+        Accessible.role: Accessible.Button
+        Accessible.name: title
+        Accessible.description: description
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        background: PListItem { hovered: quick.hovered; pressed: quick.pressed; focused: quick.visualFocus; radius: Metrics.radiusCard }
+        contentItem: Item {}
+        FontMetrics { id: quickMetrics; font: Typography.body }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Metrics.s12  // Symbole auf einer Linie mit denen der Werkzeuge darüber
+            anchors.rightMargin: Metrics.s8
+            spacing: Metrics.s8
+            Rectangle {
+                objectName: "quickToolIcon"
+                Layout.preferredWidth: 32
+                Layout.preferredHeight: 32
+                Layout.alignment: Qt.AlignVCenter
+                radius: Metrics.radiusControl + 2
+                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.18 : 0.10)
+                scale: quick.hovered && Motion.moves ? 1.08 : 1
+                Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+                PIcon { anchors.centerIn: parent; name: quick.iconName; size: Metrics.iconSizeMedium; color: Theme.accentText }
+            }
+            PText {
+                id: quickLabel
+                objectName: "quickToolTitle"
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                text: quick.title
+                wrap: true
+                maximumLineCount: 2
+            }
+        }
+        PToolTip { text: quick.description; visible: quick.hovered && quick.description !== "" }
     }
 
     GridLayout {
@@ -153,6 +225,68 @@ PPage {
                             onClicked: App.openTool(modelData.key)
                             onMinimumWidthChanged: toolGrid.measure()
                             Component.onCompleted: toolGrid.measure()
+                        }
+                    }
+                }
+            }
+
+            // Schnellwerkzeuge: PDF wählen – sie öffnet sich im Reader, und das Werkzeug startet sofort
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: Metrics.s12
+                Layout.bottomMargin: Metrics.s12
+                implicitHeight: 1
+                color: Theme.divider
+            }
+            RowLayout {
+                objectName: "homeQuickHeader"
+                Layout.fillWidth: true
+                Layout.bottomMargin: Metrics.s8
+                spacing: Metrics.s8
+                PText { text: "Schnellwerkzeuge"; textStyle: "bodyStrong"; Accessible.role: Accessible.Heading }
+                PText {
+                    Layout.fillWidth: true
+                    text: "PDF wählen – sie öffnet sich im Reader, das Werkzeug startet sofort."
+                    textStyle: "caption"
+                    tone: "secondary"
+                }
+            }
+            // Gleich breite Felder auf ganzen Pixeln: vier Spalten, sonst zwei bzw. eine – nie schmaler, als Symbol und das
+            // längste Wort eines Namens brauchen. Die Hülle bekommt die ganze Breite der Karte (wie bei den Werkzeugen).
+            Item {
+                Layout.fillWidth: true
+                implicitHeight: quickGrid.implicitHeight
+                GridLayout {
+                    id: quickGrid
+                    objectName: "homeQuickGrid"
+                    readonly property int available: Math.floor(parent.width)
+                    readonly property int tileWidth: Math.max(0, Math.floor((available - (columns - 1) * columnSpacing) / columns))
+                    property int tileMinimum: 0
+                    function measure() {
+                        var most = 0
+                        for (var i = 0; i < children.length; ++i)
+                            if (children[i].minimumWidth !== undefined)
+                                most = Math.max(most, children[i].minimumWidth)
+                        tileMinimum = most
+                    }
+                    width: available
+                    height: implicitHeight
+                    columns: available >= 4 * tileMinimum + 3 * columnSpacing ? 4 : (available >= 2 * tileMinimum + columnSpacing ? 2 : 1)
+                    columnSpacing: Metrics.s8
+                    rowSpacing: Metrics.s4
+                    Repeater {
+                        model: Reader.quickTools
+                        QuickTool {
+                            required property var modelData
+                            objectName: "quickTool_" + modelData.action
+                            Layout.preferredWidth: quickGrid.tileWidth
+                            Layout.fillHeight: true
+                            iconName: modelData.icon
+                            title: modelData.title
+                            description: modelData.description
+                            onClicked: Reader.quickTool(modelData.action)
+                            onMinimumWidthChanged: quickGrid.measure()
+                            Component.onCompleted: quickGrid.measure()
                         }
                     }
                 }

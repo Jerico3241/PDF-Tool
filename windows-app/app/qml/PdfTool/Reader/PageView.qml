@@ -22,7 +22,8 @@ Item {
     readonly property real s: host ? host.zoomScale : 1
     readonly property string tool: doc ? doc.tool : "select"
     readonly property string key: String(page)
-    readonly property string base: doc && page >= 0 ? "image://pdfpage/" + doc.docId + "/" + page + "/" : ""
+    // Nachtmodus: eigene Bildadressen (»~n« am Dokument), damit Tag- und Nachtbilder getrennt zwischengespeichert werden
+    readonly property string base: doc && page >= 0 ? "image://pdfpage/" + doc.docId + (Reader.imageTag || "") + "/" + page + "/" : ""
     readonly property int revision: doc ? doc.revision : 0
     readonly property int wantedWidth: Math.max(8, Math.round(width * (host ? host.ratio : 1)))
     readonly property bool capped: host !== null && width * host.ratio * height * host.ratio > Reader.maxPagePixels
@@ -252,6 +253,17 @@ Item {
     readonly property var fieldChosen: doc && tool === "formDesign" && doc.fieldSelection.page === page ? doc.fieldSelection : null
     readonly property var selected: doc ? doc.selectedObject : ({})
     readonly property bool selectedHere: selected.page === page && selected.kind !== undefined
+    // Links dieser Seite (Anklicken mit »Auswählen«, Bearbeiten mit dem Link-Werkzeug) und vorgemerkte Schwärzungen
+    readonly property var linksHere: doc && page >= 0 ? (doc.linkPages[key] || []) : []
+    readonly property var marksHere: doc && page >= 0 ? (doc.redactMarks[key] || []) : []
+    function linkAt(u, v) { return smallestAt(linksHere, u, v, 0) }
+    function linkLabel(link) {
+        if (!link) return ""
+        if (link.target >= 0) return "Seite " + (link.target + 1)
+        var text = link.uri.indexOf("mailto:") === 0 ? "E-Mail an " + link.uri.substring(7) : link.uri
+        if (link.uri !== "") return text.length > 80 ? text.substring(0, 77) + "…" : text
+        return "Ziel außerhalb des Dokuments"
+    }
 
     // --- Objekt bearbeiten: Objekte dieser Seite, Auswahl, Treffer -----------------------------------------
     readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (doc.objectPages[key] || null) : null
@@ -371,6 +383,75 @@ Item {
                     border.color: Theme.accent
                 }
             }
+        }
+    }
+
+    // --- Schwärzen: vorgemerkte Bereiche (rot umrandet) – bis »Schwärzen anwenden« wird nichts entfernt ------------
+    Repeater {
+        model: root.marksHere
+        Rectangle {
+            required property var modelData
+            objectName: "readerRedactMark"
+            readonly property bool hovered: pointer.hoverKey === modelData.id
+            x: modelData.view[0] * root.s - 1
+            y: modelData.view[1] * root.s - 1
+            width: (modelData.view[2] - modelData.view[0]) * root.s + 2
+            height: (modelData.view[3] - modelData.view[1]) * root.s + 2
+            z: 7
+            color: Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, hovered ? 0.24 : 0.14)
+            border.width: hovered ? 2 : 1.5
+            border.color: Theme.error
+            opacity: 0
+            Component.onCompleted: opacity = 1
+            Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
+            Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+        }
+    }
+
+    // --- Links: Rahmen im Link-Werkzeug; beim Auswählen nur der Link unter dem Zeiger mit seinem Ziel ------------------
+    Repeater {
+        model: root.tool === "link" ? root.linksHere : []
+        Rectangle {
+            required property var modelData
+            objectName: "readerLinkBox"
+            readonly property bool hovered: pointer.hoverKey === modelData.key
+            x: modelData.view[0] * root.s
+            y: modelData.view[1] * root.s
+            width: Math.max(4, (modelData.view[2] - modelData.view[0]) * root.s)
+            height: Math.max(4, (modelData.view[3] - modelData.view[1]) * root.s)
+            z: 7
+            radius: 2
+            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, hovered ? 0.16 : 0.06)
+            border.width: hovered ? 2 : 1
+            border.color: Theme.accent
+            Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+        }
+    }
+    Rectangle {
+        id: linkTip
+        objectName: "readerLinkTip"
+        readonly property var link: (root.tool === "select" || root.tool === "link") && pointer.action === "" ? pointer.hoverLink : null
+        property var shown: null
+        onLinkChanged: if (link) shown = link
+        visible: opacity > 0
+        opacity: link ? 1 : 0
+        Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
+        x: shown ? Math.max(0, Math.min(root.width - width, shown.view[0] * root.s)) : 0
+        y: shown ? (shown.view[1] * root.s - height - 4 >= 0 ? shown.view[1] * root.s - height - 4 : shown.view[3] * root.s + 4) : 0
+        z: 12
+        width: Math.min(360, tipText.implicitWidth + 16)
+        height: tipText.implicitHeight + 8
+        radius: Metrics.radiusControl
+        color: Theme.flyout
+        border.color: Theme.flyoutStroke
+        PText {
+            id: tipText
+            anchors.verticalCenter: parent.verticalCenter
+            x: 8
+            width: parent.width - 16
+            elide: Text.ElideMiddle
+            textStyle: "caption"
+            text: (linkTip.shown && linkTip.shown.target < 0 && linkTip.shown.uri !== "" ? "↗ " : "→ ") + root.linkLabel(linkTip.shown)
         }
     }
 
@@ -642,10 +723,10 @@ Item {
     readonly property real drawWidth: Math.max(1, (doc ? doc.strokeWidth : 2) * s)
     Shape {
         anchors.fill: parent
-        visible: pointer.action === "placeImage" || pointer.action === "placeField" || (pointer.action === "shape" && (root.tool === "rect" || root.tool === "textbox"))
+        visible: pointer.action === "placeImage" || pointer.action === "placeField" || pointer.action === "linkArea" || pointer.action === "place" || (pointer.action === "shape" && (root.tool === "rect" || root.tool === "textbox"))
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
-            readonly property bool dashed: pointer.action === "placeImage" || pointer.action === "placeField" || root.tool === "textbox"
+            readonly property bool dashed: pointer.action === "placeImage" || pointer.action === "placeField" || pointer.action === "linkArea" || pointer.action === "place" || root.tool === "textbox"
             strokeColor: dashed ? Theme.accent : root.drawColor
             strokeWidth: dashed ? 1 : root.drawWidth
             strokeStyle: dashed ? ShapePath.DashLine : ShapePath.SolidLine
@@ -653,6 +734,18 @@ Item {
             fillColor: "transparent"
             PathRectangle { x: root.dragX0; y: root.dragY0; width: root.dragX1 - root.dragX0; height: root.dragY1 - root.dragY0 }
         }
+    }
+    Rectangle {
+        objectName: "readerRedactDraft"
+        visible: pointer.action === "redactArea"
+        x: root.dragX0
+        y: root.dragY0
+        width: root.dragX1 - root.dragX0
+        height: root.dragY1 - root.dragY0
+        z: 7
+        color: Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.14)
+        border.width: 1.5
+        border.color: Theme.error
     }
     Shape {
         anchors.fill: parent
@@ -694,7 +787,7 @@ Item {
         // »Formular ausfüllen«: die Felder selbst; »Verschieben«: die Ansicht (DocumentView) nimmt die Maus
         enabled: root.page >= 0 && root.tool !== "form" && root.tool !== "hand"
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects" || root.tool === "formDesign"
+        hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects" || root.tool === "formDesign" || root.tool === "link" || root.tool === "redact"
         cursorShape: {
             switch (root.tool) {
             case "objects":
@@ -702,7 +795,9 @@ Item {
                 if (!hoverItem) return Qt.ArrowCursor
                 if (root.isText(hoverItem)) return hoverItem.native === false ? Qt.PointingHandCursor : Qt.SizeAllCursor
                 return hoverItem.editable ? Qt.SizeAllCursor : Qt.ArrowCursor
-            case "select": return hoverCorner ? Qt.SizeFDiagCursor : (hoverKey !== "" ? Qt.SizeAllCursor : Qt.IBeamCursor)
+            case "select": return hoverCorner ? Qt.SizeFDiagCursor : (hoverKey !== "" ? Qt.SizeAllCursor : (hoverLink ? Qt.PointingHandCursor : Qt.IBeamCursor))
+            case "link": return hoverKey !== "" ? Qt.PointingHandCursor : Qt.CrossCursor
+            case "redact": return root.doc && root.doc.redactMode === "text" ? Qt.IBeamCursor : Qt.CrossCursor
             case "highlight": case "underline": case "strikeout": return Qt.IBeamCursor
             case "editText": return hoverKey !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
             case "image": return hoverKey !== "" ? Qt.SizeAllCursor : Qt.CrossCursor
@@ -713,7 +808,9 @@ Item {
             }
         }
 
-        property string action: ""      // text, moveAnnotation, moveImage, resizeImage, stroke, shape, placeImage, moveObjects, marquee, moveField, resizeField, placeField
+        property string action: ""      // text, moveAnnotation, moveImage, resizeImage, stroke, shape, placeImage, moveObjects, marquee, moveField, resizeField, placeField, redactArea, linkArea, editLink, place
+        property var hoverLink: null    // Link unter dem Zeiger (Auswählen, Link-Werkzeug)
+        property var pressedLink: null  // Link unter dem Klick (Auswählen: ohne Ziehen folgen)
         property string hoverKey: ""
         property var hoverItem: null    // Objekt unter dem Zeiger (Objekt bearbeiten)
         property bool hoverCorner: false
@@ -742,7 +839,7 @@ Item {
             if (!pressed) { updateHover(p); return }
             root.dragTo(p, mouse)
         }
-        onExited: { hoverKey = ""; hoverItem = null; hoverCorner = false }
+        onExited: { hoverKey = ""; hoverItem = null; hoverCorner = false; hoverLink = null }
         onPressed: (mouse) => root.press(point(mouse), mouse)
         onReleased: (mouse) => root.release(point(mouse), mouse)
         onDoubleClicked: (mouse) => {
@@ -777,10 +874,19 @@ Item {
 
         function updateHover(p) {
             var hit = null
+            hoverLink = null
             if (root.tool === "select") {
                 hoverCorner = root.selectedCorner(p) >= 0
                 hit = root.smallestAt(root.annotationsHere, p.u, p.v, 2)
                 hoverKey = hit ? hit.key : ""
+                hoverLink = hit || hoverCorner ? null : root.linkAt(p.u, p.v)
+            } else if (root.tool === "link") {
+                hit = root.linkAt(p.u, p.v)
+                hoverKey = hit ? hit.key : ""
+                hoverLink = hit
+            } else if (root.tool === "redact") {
+                hit = root.smallestAt(root.marksHere, p.u, p.v, 0)
+                hoverKey = hit ? hit.id : ""
             } else if (root.tool === "editText") {
                 hit = root.smallestAt(root.blocksHere, p.u, p.v, 2)
                 hoverKey = hit ? hit.id : ""
@@ -844,8 +950,23 @@ Item {
                 }
                 return
             }
+            if (tool === "redact") {
+                var mark = smallestAt(marksHere, p.u, p.v, 0)
+                if (mark) {
+                    markMenu.mark = mark
+                    markMenu.popup(pointer, mouse.x, mouse.y)
+                    return
+                }
+            }
+            var linked = tool === "link" || tool === "select" ? linkAt(p.u, p.v) : null
+            if (linked && tool === "link") {
+                linkMenu.link = linked
+                linkMenu.popup(pointer, mouse.x, mouse.y)
+                return
+            }
             contextMenu.u = p.u
             contextMenu.v = p.v
+            contextMenu.link = linked
             contextMenu.popup(pointer, mouse.x, mouse.y)
             return
         }
@@ -865,11 +986,30 @@ Item {
                 return
             }
             doc.selectedObject = ({})
+            pointer.pressedLink = linkAt(p.u, p.v)
             doc.loadText(page)
             doc.clearSelection()
             pointer.action = "text"
             return
         }
+        case "redact":
+            if (doc.redactMode === "text") {
+                doc.loadText(page)
+                doc.clearSelection()
+                pointer.action = "text"
+            } else {
+                pointer.action = "redactArea"
+            }
+            return
+        case "link": {
+            var existing = linkAt(p.u, p.v)
+            pointer.target = existing
+            pointer.action = existing ? "editLink" : "linkArea"
+            return
+        }
+        case "stamp": case "signature":
+            pointer.action = "place"
+            return
         case "highlight": case "underline": case "strikeout":
             doc.loadText(page)
             doc.clearSelection()
@@ -1022,7 +1162,7 @@ Item {
             var w = Math.max(4, Math.abs(p.u - box[ox])), h = Math.max(4, Math.abs(p.v - box[oy]))
             // Bilder behalten ihr Seitenverhältnis (Umschalt: frei), Vektorobjekte umgekehrt
             var free = (mouse.modifiers & Qt.ShiftModifier) !== 0
-            if (pointer.target.kind === "path" || pointer.action === "resizeAnnotation" || pointer.action === "resizeField") free = !free
+            if (pointer.target.kind === "path" || (pointer.action === "resizeAnnotation" && pointer.target.subtype !== "/Stamp") || pointer.action === "resizeField") free = !free
             if (!free) {
                 var ratio = (box[2] - box[0]) / Math.max(0.01, box[3] - box[1])
                 if (w / h > ratio) h = w / ratio
@@ -1053,7 +1193,27 @@ Item {
         var big = rect[2] - rect[0] >= 4 || rect[3] - rect[1] >= 4
         switch (action) {
         case "text":
-            if (tool !== "select" && doc.selectionPage === page) doc.markSelection(tool)
+            if (tool === "redact") {
+                if (doc.selectionPage === page) doc.redactSelection()
+            } else if (tool !== "select" && doc.selectionPage === page) {
+                doc.markSelection(tool)
+            } else if (tool === "select" && !moved && pointer.pressedLink) {
+                doc.clearSelection()
+                doc.followLink(page, pointer.pressedLink.key)
+            }
+            break
+        case "redactArea":
+            if (big) doc.addRedactArea(page, rect)
+            break
+        case "linkArea":
+            if (big) doc.addLinkAt(page, rect)
+            break
+        case "editLink":
+            if (!moved && pointer.target) doc.editLink(page, pointer.target.key)
+            break
+        case "place":
+            if (tool === "stamp") doc.placeStamp(page, big ? rect : [p.u, p.v, p.u, p.v])
+            else if (tool === "signature") doc.placeSignature(page, big ? rect : [p.u, p.v, p.u, p.v])
             break
         case "moveAnnotation":
             if (moved) doc.moveAnnotation(selected.key, pointer.du, pointer.dv)
@@ -1118,6 +1278,7 @@ Item {
         pointer.preview = null
         pointer.strokePath = []
         pointer.stroke = []
+        pointer.pressedLink = null
     }
 
     // Kontextmenüs im Objektmodus – keine dauerhafte Leiste; angeboten wird, was zur Auswahl passt (Text,
@@ -1187,12 +1348,38 @@ Item {
         PMenuItem { text: "Liste hier"; iconName: "list"; onTriggered: root.doc.createFieldAt("list", fieldPageMenu.at) }
     }
 
+    // Schwärzen: eine vorgemerkte Stelle
+    PMenu {
+        id: markMenu
+        objectName: "readerRedactMarkMenu"
+        property var mark: null
+        PMenuItem { text: "Markierung entfernen"; iconName: "dismiss"; onTriggered: if (markMenu.mark) root.doc.removeRedactMark(root.page, markMenu.mark.id) }
+        PMenuItem { text: "Alle Markierungen verwerfen"; iconName: "dismiss_circle"; onTriggered: root.doc.clearRedactMarks() }
+        PMenuItem { text: "Schwärzen anwenden …"; iconName: "eye_off"; onTriggered: { var d = root.doc; markMenu.afterClose = function() { d.applyRedaction() } } }
+    }
+    // Link-Werkzeug: ein vorhandener Link
+    PMenu {
+        id: linkMenu
+        objectName: "readerLinkMenu"
+        property var link: null
+        PMenuItem { text: "Link bearbeiten …"; iconName: "link_edit"; onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.editLink(page, l.key) } } }
+        PMenuItem { text: "Ziel öffnen"; iconName: "open"; enabled: linkMenu.link !== null && (linkMenu.link.target >= 0 || linkMenu.link.uri !== ""); onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.followLink(page, l.key) } } }
+        PMenuItem { text: "Link entfernen"; iconName: "delete"; onTriggered: root.doc.removeLink(root.page, linkMenu.link.key) }
+    }
+
     // Kontextmenü der Seite
     PMenu {
         id: contextMenu
         objectName: "readerContextMenu"
         property real u: 0
         property real v: 0
+        property var link: null
+        PMenuItem {
+            text: contextMenu.link ? "Link öffnen: " + root.linkLabel(contextMenu.link) : ""
+            iconName: "open"
+            visible: contextMenu.link !== null
+            onTriggered: { var d = root.doc, l = contextMenu.link, page = root.page; contextMenu.afterClose = function() { d.followLink(page, l.key) } }
+        }
         readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage === root.page
         PMenuItem { text: "Kopieren"; iconName: "copy"; enabled: contextMenu.hasSelection; onTriggered: root.doc.copySelection() }
         PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAll(root.page) }

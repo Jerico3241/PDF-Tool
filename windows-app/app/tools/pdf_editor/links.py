@@ -38,11 +38,16 @@ class LinkInfo:
     ours: bool
 
 
-def list_links(document: EditorDocument, page: int) -> list[LinkInfo]:
+def page_numbers(document: EditorDocument) -> dict:
+    """Objektnummer der Seite → Seitenindex (einmal je Stand für alle Seiten)."""
+    return {p.obj.objgen: i for i, p in enumerate(document.pdf.pages)}
+
+
+def list_links(document: EditorDocument, page: int, pages: dict | None = None) -> list[LinkInfo]:
     pdf = document.pdf
     if not 0 <= page < document.page_count:
         return []
-    pages = {p.obj.objgen: i for i, p in enumerate(pdf.pages)}
+    pages = pages if pages is not None else page_numbers(document)
     annots = pdf.pages[page].obj.get("/Annots")
     result = []
     if not isinstance(annots, Array):

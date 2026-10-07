@@ -88,17 +88,33 @@ def _szene(item) -> tuple[float, float, float, float]:
     return (p.x(), p.y(), item.width(), item.height())
 
 
-def _teil(karte, name: str) -> tuple[float, float, float, float]:
-    """Lage eines Teils relativ zu seinem Werkzeug (Symbol, Titel, »Öffnen«, Tastenkürzel …)."""
+def _kind(karte, name: str):
     stapel = [karte]
     while stapel:
         aktuell = stapel.pop()
         if aktuell.objectName() == name:
-            x, y, w, h = _szene(aktuell)
-            kx, ky, _kw, _kh = _szene(karte)
-            return (x - kx, y - ky, w, h)
+            return aktuell
         stapel.extend(aktuell.childItems())
     raise AssertionError(name)
+
+
+def _teil(karte, name: str) -> tuple[float, float, float, float]:
+    """Lage eines Teils relativ zu seinem Werkzeug (Symbol, Titel, »Öffnen«, Tastenkürzel …)."""
+    x, y, w, h = _szene(_kind(karte, name))
+    kx, ky, _kw, _kh = _szene(karte)
+    return (x - kx, y - ky, w, h)
+
+
+def _ganze_woerter(werkzeug) -> None:
+    """Name und Beschreibung brechen nur zwischen Wörtern um: Jedes Wort passt in die Breite seines Textes (sonst
+    stehen die Werkzeuge untereinander)."""
+    from PySide6.QtGui import QFontMetricsF
+
+    for name in ("toolTitle", "toolDescription"):
+        text = _kind(werkzeug, name)
+        metrik = QFontMetricsF(text.property("font"))
+        breitestes = max(metrik.horizontalAdvance(wort) for wort in text.property("text").split())
+        assert breitestes <= text.width(), (name, text.property("text"), breitestes, text.width())
 
 
 WERKZEUGE = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
@@ -110,8 +126,8 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
     Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
     breit, Ränder mindestens 36 px; Titel, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis an derselben
     linken Kante. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
-    untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte; nebeneinander gleich
-    hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
+    untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte, kein Wort mitten im Wort
+    umbrochen; nebeneinander gleich hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
     oben, karte, ablage, zuletzt, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homeRecent", "homePrivacy"))
     flaeche = oben.parentItem()
     while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
@@ -136,6 +152,8 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
     lagen = [_szene(w) for w in werkzeuge]
     for lage in lagen:
         assert lage[2] == lagen[0][2] and all(float(wert).is_integer() for wert in lage), lage
+    for werkzeug in werkzeuge:
+        _ganze_woerter(werkzeug)
     spalten = len({lage[0] for lage in lagen})
     if spalten > 1:
         assert len({lage[1] for lage in lagen}) == 1 and len({lage[3] for lage in lagen}) == 1  # eine Zeile, gleich hoch

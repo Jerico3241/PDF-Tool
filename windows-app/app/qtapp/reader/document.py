@@ -30,8 +30,12 @@ ZOOM_MIN, ZOOM_MAX = 10.0, 800.0
 PAGE_GAP = 12  # Abstand der Seiten (geräteunabhängige Pixel)
 VIEW_MARGIN = 16
 VIEW_MODES = ("continuous", "single", "two", "continuousTwo")
-TOOLS = ("select", "hand", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form", "formDesign")
+TOOLS = ("select", "hand", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form", "formDesign", "redact", "stamp", "signature", "link")
+ACTIONS = ("optimize", "redact", "redactSearch", "protect", "watermark", "headerFooter", "clean", "flatten", "sign", "stamp", "crop")  # Schnellwerkzeuge der Startseite
+SIGNATURE_FILE = "unterschriften.json"  # gespeicherte Unterschriften (nur lokal, nur auf Wunsch)
+MM = 72 / 25.4
 RECOVERY_DELAY_MS = 4000
+LINKS_DELAY_MS = 250  # nach einer Änderung: Links gesammelt neu lesen
 SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
 NUDGE_DELAY_MS = 350  # Pfeiltasten: so lange sammeln, dann ein Schritt (eine Änderung, ein Rückgängig)
 SCAN_CHECK_PAGES = 10  # nach dem Öffnen: so viele Seiten auf Scans ohne Text prüfen
@@ -117,6 +121,18 @@ class DocumentController(Observable):
     fontSizeChanged, fontSize = prop(float, "fontSize", 12.0)
     hasOutlineChanged, hasOutline = prop(bool, "hasOutline", False)
     attachmentCountChanged, attachmentCount = prop(int, "attachmentCount", 0)
+    # Schwärzen: markierte Bereiche je Seite (noch nicht angewendet) und wie markiert wird (Bereich oder Text)
+    redactMarksChanged, redactMarks = prop(dict, "redactMarks", {})  # Seite (Text) → [{id, page, view}]
+    redactCountChanged, redactCount = prop(int, "redactCount", 0)
+    redactModeChanged, redactMode = prop(str, "redactMode", "area")
+    # Links je Seite (Anzeige-Punkte): Ziel Seite (target ≥ 0) oder Webadresse (uri)
+    linkPagesChanged, linkPages = prop(dict, "linkPages", {})
+    # Stempel (Vorgabe oder eigener Text, zweite Zeile) und Unterschriften (gespeicherte und die aktuelle)
+    stampPresetChanged, stampPreset = prop(str, "stampPreset", "genehmigt")
+    stampTextChanged, stampText = prop(str, "stampText", "")
+    stampSubtitleChanged, stampSubtitle = prop(str, "stampSubtitle", "{datum}")
+    signaturesChanged, signatures = prop(list, "signatures", [])  # [{id, label, preview, aspect, stored}]
+    signatureChoiceChanged, signatureChoice = prop(str, "signatureChoice", "")
 
     # Aufträge an die Ansicht als Properties (QML reagiert mit eigenen Handlern, ohne »Connections«)
     revealTargetChanged, revealTarget = prop(dict, "revealTarget", {})  # {page, u, v, serial}: Stelle in den Blick holen
@@ -156,6 +172,10 @@ class DocumentController(Observable):
         self._field_nudge = [0.0, 0.0]  # dasselbe für ein Formularfeld (Formular gestalten)
         self._select_field = ""  # nach dem Neuladen auswählen (neu angelegtes oder dupliziertes Feld)
         self._failure_details = ""  # Traceback des zuletzt fehlgeschlagenen Auftrags (Protokoll)
+        self._mark_serial = 0  # Kennungen der Schwärzungsbereiche
+        self._links_requested = False  # Links (für Anklicken und das Link-Werkzeug) schon angefragt
+        self._links_revision = -1  # Stand, zu dem die Links zuletzt angefragt wurden
+        self._select_annotation = ""  # nach dem Neuladen der Kommentare auswählen (gerade gesetzter Stempel)
         self._closing = False
         self.state: dict = {}
         self.observe("currentPage", self._page_shown)
@@ -179,7 +199,13 @@ class DocumentController(Observable):
     def _attachments_model(self) -> KeyedListModel:
         return self._attachment_list
 
+    def _stamp_presets(self) -> list:
+        from tools.pdf_editor import stamps
+
+        return [{"key": key, "label": text, "color": "#%02X%02X%02X" % color} for key, (text, color, _name) in stamps.PRESETS.items()]
+
     _constant = Signal()
+    stampPresets = Property(list, _stamp_presets, notify=_constant)  # [{key, label, color}]
     pageGap = Property(int, _gap, notify=_constant)
     docId = Property(str, _ident, notify=_constant)
     outline = Property(QObject, _outline_model, notify=_constant)  # Lesezeichen (sichtbare Einträge)
@@ -218,6 +244,11 @@ class DocumentController(Observable):
                 self.searchCount = 0
                 self.searchIndex = -1
                 self.searchSummary = "Das Dokument wurde geändert – bitte erneut suchen."
+        changed = state["revision"] != self._links_revision
+        self._links_revision = state["revision"]
+        if changed or not self._links_requested:
+            self._links_requested = True
+            self.app.timers.later(f"reader:links:{self.ident}", LINKS_DELAY_MS, self.loadLinks)
         self.dirty = state["dirty"]
         if self.currentPage >= self.pageCount:
             self.currentPage = max(0, self.pageCount - 1)
@@ -446,6 +477,10 @@ class DocumentController(Observable):
             self.loadImages(self.currentPage)
         if tool == "form":
             self.loadFields()
+        if tool == "signature":
+            self._load_signatures(ask=True)
+        if tool == "link":
+            self.loadLinks()
 
     # Text: Zeichentabelle, Auswahl, Kopieren ---------------------------------------------------------------------
     @Slot(int)
@@ -1408,6 +1443,10 @@ class DocumentController(Observable):
                 listed += [{**reply, "depth": 1} for reply in replies.pop(item["key"], [])]
             listed += [{**reply, "depth": 1} for group in replies.values() for reply in group]  # Kommentar fehlt
             self.annotationList.set_items([{key: item[key] for key in ANNOTATION_ROLES} for item in listed])
+            wanted, self._select_annotation = self._select_annotation, ""
+            chosen = next((item for item in items if item["key"] == wanted), None) if wanted else None
+            if chosen is not None and self.tool == "select":
+                self.selectedObject = {"kind": "annotation", "page": chosen["page"], "key": chosen["key"], "view": chosen["view"]}
 
         self.run(lambda session: session.annotations(None), done, refresh=False, priority=VIEW, key="annotations")
 
@@ -1732,6 +1771,9 @@ class DocumentController(Observable):
 
         def finished(result) -> None:
             self.edited(title)
+            if self.redactCount:  # Lage der Seiten geändert: vorgemerkte Bereiche passen nicht mehr
+                self._set_marks({})
+                self.app.notify("reader", "info", "Die Seiten haben sich geändert – noch nicht angewendete Schwärzungsbereiche wurden verworfen.", title="Schwärzen", auto_hide=8000)
             if isinstance(result, list) and result and all(isinstance(note, str) for note in result):
                 self.app.notify("reader", "info", " ".join(result), title=title, auto_hide=10000)
             if done is not None:
@@ -1931,6 +1973,702 @@ class DocumentController(Observable):
 
         self.run(lambda session: session.properties(), done, refresh=False, busy="")
 
+    # Schnellwerkzeuge der Startseite ---------------------------------------------------------------------------------
+    @Slot(str)
+    def runAction(self, name: str) -> None:  # noqa: N802
+        """Werkzeug oder Dialog eines Schnellwerkzeugs (gleich nach dem Öffnen aufgerufen)."""
+        handlers = {
+            "optimize": self.optimizeDocument, "redact": lambda: self.setTool("redact"), "redactSearch": self.searchRedact,
+            "protect": self.protectDocument, "watermark": self.watermarkDocument, "headerFooter": self.headerFooterDocument,
+            "clean": self.cleanDocument, "flatten": self.flattenDocument, "sign": lambda: self.setTool("signature"),
+            "stamp": lambda: self.setTool("stamp"), "crop": lambda: self.cropPages([]),
+        }
+        handler = handlers.get(name)
+        if handler is not None:
+            handler()
+
+    # Kennwortschutz und Berechtigungen ---------------------------------------------------------------------------------
+    @Slot()
+    def protectDocument(self) -> None:  # noqa: N802
+        """Dialog »Kennwortschutz«: Kennwort zum Öffnen und/oder Einschränkungen festlegen, ändern oder entfernen.
+        Gilt ab dem nächsten Speichern (AES-256); Kennwörter bleiben im Arbeitsspeicher und werden nie protokolliert."""
+
+        def show(info: dict) -> None:
+            if not info.get("changeable"):
+                self._unlock(then=self.protectDocument)
+                return
+            if not self.edit_allowed("edit"):
+                return
+            answer, data = self.app.dialogs.ask("protect", "Kennwortschutz", "", primary="Übernehmen", close="Abbrechen", data={**info, "name": self.name}, width=600)
+            if answer != "primary":
+                return
+            values = {} if (data or {}).get("mode") == "remove" else dict(data or {})
+
+            def done(title: str) -> None:
+                self.edited(title)
+                message = "Der Schutz gilt ab dem nächsten Speichern." if values else "Beim nächsten Speichern entsteht eine Datei ohne Kennwortschutz."
+                self.app.notify("reader", "success", message, title=title, auto_hide=10000, actions=[("Jetzt speichern", self.saveDocument)])
+
+            self.run(lambda session: session.set_protection(values), done, busy="")
+
+        self.run(lambda session: session.protection(), show, refresh=False, priority=VIEW)
+
+    @Slot()
+    def unlockPermissions(self) -> None:  # noqa: N802
+        self._unlock()
+
+    def _unlock(self, then: Callable[[], None] | None = None) -> None:
+        """Berechtigungskennwort eingeben: Stimmt es, sind die Einschränkungen dieses PDFs aufgehoben (nur hier,
+        die Datei bleibt, wie sie ist). Nichts wird geraten oder umgangen."""
+        answer, data = self.app.dialogs.ask(
+            "password", "Einschränkungen aufheben",
+            "Dieses PDF schränkt Änderungen ein. Mit dem Berechtigungskennwort lassen sie sich für die Bearbeitung hier aufheben.",
+            primary="Aufheben", close="Abbrechen", data={"label": "Berechtigungskennwort"},
+        )
+        if answer != "primary":
+            return
+        secret = str((data or {}).get("value") or "")
+
+        def done(ok: bool) -> None:
+            if not ok:
+                self.app.notify("reader", "warning", "Das Kennwort stimmt nicht – die Einschränkungen bleiben.", title="Einschränkungen")
+                return
+            self.opening_notice()
+            self.app.notify("reader", "success", "Dieses Dokument lässt sich jetzt uneingeschränkt bearbeiten.", title="Einschränkungen aufgehoben", auto_hide=8000)
+            if then is not None:
+                then()
+
+        self.run(lambda session: session.unlock(secret), done, busy="Kennwort wird geprüft …")
+
+    # Bereinigen, Reduzieren, Verkleinern ----------------------------------------------------------------------------
+    @Slot()
+    def cleanDocument(self) -> None:  # noqa: N802
+        """Vor dem Weitergeben: Daten entfernen, die man auf den Seiten nicht sieht (vorher gezählt)."""
+        if not self.edit_allowed("edit"):
+            return
+
+        def show(found: dict) -> None:
+            items = [
+                {"key": "metadata", "label": "Metadaten", "detail": "Titel, Autor, Programm, Datumsangaben und XMP-Daten", "count": found.get("metadata", 0), "checked": True},
+                {"key": "javascript", "label": "Skripte und Aktionen", "detail": "JavaScript, Programme starten, Formulare senden, Daten laden", "count": found.get("javascript", 0), "checked": True},
+                {"key": "attachments", "label": "Dateianhänge", "detail": "eingebettete Dateien und Dateianhang-Kommentare", "count": found.get("attachments", 0), "checked": True},
+                {"key": "hidden", "label": "Versteckte Daten", "detail": "Vorschaubilder, Bearbeitungsdaten anderer Programme, unsichtbare Kommentare", "count": found.get("hidden", 0), "checked": True},
+                {"key": "comments", "label": "Kommentare und Markierungen", "detail": "alle Kommentare – auch sichtbare", "count": found.get("comments", 0), "checked": False},
+            ]
+            if not any(item["count"] for item in items):
+                self.app.notify("reader", "success", "Keine Metadaten, Skripte, Anhänge, Kommentare oder versteckten Daten gefunden.", title="Nichts zu bereinigen", auto_hide=8000)
+                return
+            answer, data = self.app.dialogs.ask(
+                "checklist", "Dokument bereinigen",
+                "Entfernt Daten, die man auf den Seiten nicht sieht. Rückgängig (Strg+Z) ist möglich, solange das Dokument offen ist.",
+                primary="Bereinigen", close="Abbrechen", data={"items": items}, width=580,
+            )
+            if answer != "primary":
+                return
+            options = {item["key"]: bool((data or {}).get(item["key"])) and item["count"] > 0 for item in items}
+            if not any(options.values()):
+                return
+
+            def done(removed: dict) -> None:
+                labels = {"metadata": "Metadaten", "javascript": "Skripte und Aktionen", "attachments": "Anhänge", "comments": "Kommentare", "hidden": "versteckte Daten"}
+                parts = [f"{labels[key]} ({count})" for key, count in removed.items() if count]
+                self.edited("Dokument bereinigt")
+                self.app.notify("reader", "success", ("Entfernt: " + ", ".join(parts) + "." if parts else "Es war nichts zu entfernen.") + " Gespeichert wird beim nächsten Speichern.", title="Dokument bereinigt", auto_hide=10000, actions=[("Jetzt speichern", self.saveDocument)])
+                self.loadAnnotations()
+                self.loadAttachments()
+                self.loadFields()
+
+            self.run(lambda session: session.cleanup(options), done, busy="Dokument wird bereinigt …")
+
+        self.run(lambda session: session.cleanup_findings(), show, refresh=False, busy="Dokument wird geprüft …")
+
+    @Slot()
+    def flattenDocument(self) -> None:  # noqa: N802
+        """Formularfelder und Kommentare fest in die Seiten übernehmen."""
+        if not self.edit_allowed("edit"):
+            return
+
+        def show(counts: dict) -> None:
+            fields_count, comments_count = int(counts.get("fields", 0)), int(counts.get("comments", 0))
+            if not fields_count and not comments_count:
+                self.app.notify("reader", "info", "Dieses Dokument hat keine Formularfelder oder Kommentare.", title="Nichts zu reduzieren", auto_hide=8000)
+                return
+            items = [
+                {"key": "fields", "label": "Formularfelder", "detail": "Eingaben werden fester Text", "count": fields_count, "checked": True},
+                {"key": "comments", "label": "Kommentare, Stempel und Unterschriften", "detail": "werden Teil der Seite", "count": comments_count, "checked": True},
+            ]
+            answer, data = self.app.dialogs.ask(
+                "checklist", "Reduzieren",
+                "Formularfelder und Kommentare werden fester Bestandteil der Seiten: Sie sehen gleich aus, lassen sich aber nicht mehr ändern oder entfernen.",
+                primary="Reduzieren", close="Abbrechen", data={"items": items}, width=560,
+            )
+            if answer != "primary":
+                return
+            fields = bool((data or {}).get("fields")) and fields_count > 0
+            comments = bool((data or {}).get("comments")) and comments_count > 0
+            if not (fields or comments):
+                return
+
+            def done(result: dict) -> None:
+                parts = []
+                if result.get("fields"):
+                    parts.append(f"{result['fields']} Formularfelder")
+                if result.get("comments"):
+                    parts.append(f"{result['comments']} Kommentare")
+                note = f" {result['skipped']} ohne eigenes Erscheinungsbild blieben unverändert." if result.get("skipped") else ""
+                self.edited("Reduziert")
+                self.app.notify("reader", "success", ("Fest übernommen: " + " und ".join(parts) + "." if parts else "Es wurde nichts übernommen.") + note, title="Reduziert", auto_hide=10000)
+                self.loadAnnotations()
+                self.loadFields()
+
+            self.run(lambda session: session.flatten(fields, comments), done, busy="Wird reduziert …")
+
+        self.run(lambda session: session.flatten_counts(), show, refresh=False, priority=VIEW)
+
+    @Slot()
+    def optimizeDocument(self) -> None:  # noqa: N802
+        """Verkleinerte Kopie speichern – das Original bleibt unverändert."""
+
+        def show(size: int) -> None:
+            answer, data = self.app.dialogs.ask("optimize", "PDF verkleinern", "", primary="Weiter", close="Abbrechen", data={"size": _size_label(size), "name": self.name}, width=560)
+            if answer != "primary":
+                return
+            level = str((data or {}).get("level") or "mittel")
+            target = self.reader.pick_save_pdf(f"{self._stem()}_verkleinert.pdf", "Verkleinerte Kopie speichern")
+            if not target:
+                return
+
+            def done(result: dict) -> None:
+                before, after = _size_label(result["before"]), _size_label(result["after"])
+                if result["after"] >= result["before"]:
+                    message = f"Dieses PDF lässt sich nicht weiter verkleinern ({before}); die Kopie entspricht dem aktuellen Stand."
+                else:
+                    images = f", {result['images']} {'Bild' if result['images'] == 1 else 'Bilder'} neu berechnet" if result["images"] else ""
+                    message = f"Von {before} auf {after} verkleinert (−{result['percent']} %){images}."
+                path = result["path"]
+                self.app.notify("reader", "success", message, title="Verkleinerte Kopie gespeichert", auto_hide=12000, actions=[("Öffnen", lambda: self.reader.open_paths([path])), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+
+            self.run(lambda session: session.optimize_copy(target, level), done, refresh=False, busy="PDF wird verkleinert …")
+
+        self.run(lambda session: session.size_now(), show, refresh=False, busy="Größe wird ermittelt …")
+
+    # Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen ----------------------------------------------------------------
+    @Slot()
+    def headerFooterDocument(self) -> None:  # noqa: N802
+        self._page_marks("Header")
+
+    @Slot()
+    def watermarkDocument(self) -> None:  # noqa: N802
+        self._page_marks("Watermark")
+
+    def _page_marks(self, kind: str) -> None:
+        if not self.edit_allowed("edit"):
+            return
+        header = kind == "Header"
+
+        def show(present: dict) -> None:
+            existing = int(present.get(kind, 0))
+            answer, data = self.app.dialogs.ask(
+                "header_footer" if header else "watermark", "Kopf- und Fußzeile, Seitenzahlen" if header else "Wasserzeichen", "",
+                primary="Hinzufügen", close="Abbrechen", data={"pageCount": self.pageCount, "existing": existing, "name": self._stem()}, width=700 if header else 620,
+            )
+            if answer != "primary":
+                return
+            spec = dict(data or {})
+            replace = existing > 0 and bool(spec.get("replace", True))
+
+            def done(result: dict) -> None:
+                title = ("Kopf- und Fußzeile" if header else "Wasserzeichen") + " hinzugefügt"
+                if not result.get("pages"):
+                    self.app.notify("reader", "info", "Es wurde nichts hinzugefügt – bitte einen Text eingeben.", title="Nichts hinzugefügt", auto_hide=8000)
+                    return
+                note = f" Nicht darstellbare Zeichen wurden durch »?« ersetzt: {' '.join(result['replaced'])}" if result.get("replaced") else ""
+                self.edited(title)
+                self.app.notify("reader", "warning" if note else "success", f"{result['pages']} {'Seite' if result['pages'] == 1 else 'Seiten'}.{note}", title=title, auto_hide=10000)
+
+            self.run(lambda session: session.page_marks(kind, spec, replace), done, busy="Wird hinzugefügt …")
+
+        self.run(lambda session: session.marks_present(), show, refresh=False, priority=VIEW)
+
+    @Slot()
+    def removePageMarks(self) -> None:  # noqa: N802
+        """Kopf-/Fußzeilen und Wasserzeichen entfernen, die PDF Tool hinzugefügt hat (andere bleiben)."""
+        if not self.edit_allowed("edit"):
+            return
+
+        def show(present: dict) -> None:
+            items = [
+                {"key": "Header", "label": "Kopf- und Fußzeilen, Seitenzahlen", "detail": "von PDF Tool hinzugefügt", "count": int(present.get("Header", 0)), "checked": True, "unit": "Seiten"},
+                {"key": "Watermark", "label": "Wasserzeichen", "detail": "von PDF Tool hinzugefügt", "count": int(present.get("Watermark", 0)), "checked": True, "unit": "Seiten"},
+            ]
+            if not any(item["count"] for item in items):
+                self.app.notify("reader", "info", "Dieses Dokument hat keine Kopf-/Fußzeilen oder Wasserzeichen von PDF Tool.", title="Nichts zu entfernen", auto_hide=8000)
+                return
+            answer, data = self.app.dialogs.ask("checklist", "Kopf-/Fußzeile und Wasserzeichen entfernen", "", primary="Entfernen", close="Abbrechen", data={"items": items}, width=540)
+            if answer != "primary":
+                return
+            kinds = [item["key"] for item in items if item["count"] and (data or {}).get(item["key"])]
+            if kinds:
+                self.run(lambda session: session.remove_marks(kinds), lambda count: self.edited(f"Von {count} {'Seite' if count == 1 else 'Seiten'} entfernt"), busy="")
+
+        self.run(lambda session: session.marks_present(), show, refresh=False, priority=VIEW)
+
+    # Schwärzen -------------------------------------------------------------------------------------------------------
+    def _set_marks(self, marks: dict) -> None:
+        self.redactMarks = marks
+        self.redactCount = sum(len(items) for items in marks.values())
+
+    def _add_marks(self, page: int, rects: list) -> int:
+        marks = {key: list(items) for key, items in self.redactMarks.items()}
+        added = 0
+        for rect in rects:
+            box = [float(v) for v in rect]
+            if len(box) != 4 or box[2] - box[0] < 1 or box[3] - box[1] < 1:
+                continue
+            self._mark_serial += 1
+            marks.setdefault(str(page), []).append({"id": f"m{self._mark_serial}", "page": page, "view": [round(v, 2) for v in box]})
+            added += 1
+        if added:
+            self._set_marks(marks)
+        return added
+
+    @Slot(str)
+    def setRedactMode(self, mode: str) -> None:  # noqa: N802
+        if mode in ("area", "text"):
+            self.redactMode = mode
+
+    @Slot(int, "QVariantList")
+    def addRedactArea(self, page: int, rect) -> None:  # noqa: N802
+        """Bereich zum Schwärzen vormerken (Anzeige-Punkte) – angewendet wird erst mit »Schwärzen anwenden«."""
+        if 0 <= page < self.pageCount:
+            self._add_marks(page, [list(rect)])
+
+    @Slot()
+    def redactSelection(self) -> None:  # noqa: N802
+        """Ausgewählten Text zum Schwärzen vormerken (je Zeile ein Bereich)."""
+        if self._selection is None:
+            return
+        page, start, end = self._selection
+        self.run(lambda session: session.selection_rects(page, start, end - start + 1), lambda rects: (self._add_marks(page, rects), self.clear_selection()), refresh=False, priority=VIEW)
+
+    @Slot(int, str)
+    def removeRedactMark(self, page: int, ident: str) -> None:  # noqa: N802
+        marks = {key: [item for item in items if item["id"] != ident] for key, items in self.redactMarks.items()}
+        self._set_marks({key: items for key, items in marks.items() if items})
+
+    @Slot()
+    def clearRedactMarks(self) -> None:  # noqa: N802
+        self._set_marks({})
+
+    @Slot()
+    def searchRedact(self) -> None:  # noqa: N802
+        """Suchen und schwärzen: Muster (IBAN, E-Mail, Telefon, Datum) und eigene Begriffe vormerken."""
+        answer, data = self.app.dialogs.ask("redact_search", "Suchen und schwärzen", "", primary="Markieren", close="Abbrechen", data={"current": self.currentPage, "pageCount": self.pageCount}, width=580)
+        if answer != "primary":
+            return
+        kinds = [str(kind) for kind in (data or {}).get("kinds") or []]
+        terms = [line.strip() for line in str((data or {}).get("terms") or "").splitlines() if line.strip()]
+        match_case = bool((data or {}).get("matchCase"))
+        scope = [self.currentPage] if (data or {}).get("scope") == "current" else None
+        if not kinds and not terms:
+            return
+
+        def done(found: list) -> None:
+            if not found:
+                self.app.notify("reader", "info", "Nichts gefunden – es wurde nichts markiert.", title="Suchen und schwärzen", auto_hide=8000)
+                return
+            counts = Counter(item["label"] or "Begriff" for item in found)
+            for item in found:
+                self._add_marks(item["page"], item["rects"])
+            if self.tool != "redact":
+                self.setTool("redact")
+            self.goTo(found[0]["page"])
+            summary = ", ".join(f"{label} {count}" for label, count in counts.most_common())
+            self.app.notify("reader", "info", f"{len(found)} Fundstellen markiert ({summary}). Bitte prüfen – eine Markierung entfernt der Rechtsklick. Dann »Schwärzen anwenden«.", title="Suchen und schwärzen", actions=[("Schwärzen anwenden", self.applyRedaction)])
+
+        self.run(lambda session: session.redact_find(kinds, terms, match_case, scope), done, refresh=False, busy="Dokument wird durchsucht …")
+
+    @Slot()
+    def applyRedaction(self) -> None:  # noqa: N802
+        if not self.redactCount:
+            self.app.notify("reader", "info", "Es ist noch nichts markiert. Bereiche aufziehen oder Text auswählen – oder »Suchen …«.", title="Schwärzen", auto_hide=8000)
+            return
+        if not self.edit_allowed("edit"):
+            return
+        pages = sorted({int(key) for key in self.redactMarks})
+        count = self.redactCount
+        where = f"{count} {'Bereich' if count == 1 else 'Bereiche'} auf {len(pages)} {'Seite' if len(pages) == 1 else 'Seiten'}"
+        if not self.app.dialogs.confirm(
+            "Markierte Inhalte endgültig schwärzen?",
+            f"{where}: Text, Bildpunkte, Grafiken, Kommentare und Formularfelder darin werden aus dem Dokument entfernt – nicht nur abgedeckt. "
+            "Rückgängig (Strg+Z) geht, solange das Dokument offen ist; nach dem Speichern sind die Inhalte endgültig entfernt.",
+            "Schwärzen",
+        ):
+            return
+        marks = [{"page": item["page"], "rect": item["view"]} for items in self.redactMarks.values() for item in items]
+
+        def done(result: dict) -> None:
+            self._set_marks({})
+            parts = [f"{result['chars']} Zeichen"] if result.get("chars") else []
+            parts += [f"{result[key]} {label}" for key, label in (("images", "Bilder"), ("paths", "Grafiken"), ("annotations", "Kommentare/Felder")) if result.get(key)]
+            rasterized = f" Seite {', '.join(str(page) for page in result['rasterized'])} wurde als Bild geschwärzt (dort ist kein Text mehr auswählbar)." if result.get("rasterized") else ""
+            self.edited("Geschwärzt")
+            self.app.notify(
+                "reader", "success",
+                (f"Entfernt: {', '.join(parts)}." if parts else "Im markierten Bereich war nichts zu entfernen.") + rasterized + " Tipp: Mit »Dokument bereinigen« auch Metadaten und Anhänge entfernen.",
+                title="Geschwärzt", actions=[("Dokument bereinigen …", self.cleanDocument), ("Speichern", self.saveDocument)],
+            )
+            self.loadAnnotations()
+            self.loadFields()
+            self.loadLinks()
+
+        self.run(lambda session: session.redact_apply(marks), done, busy="Wird geschwärzt und geprüft …")
+
+    # Stempel und Unterschrift -------------------------------------------------------------------------------------------
+    @Slot(str)
+    def setStampPreset(self, key: str) -> None:  # noqa: N802
+        """Stempel wählen: eine Vorgabe oder »custom« (fragt nach dem Text)."""
+        from tools.pdf_editor import stamps
+
+        if key == "custom":
+            answer, data = self.app.dialogs.ask("text_input", "Eigener Stempel", "Text des Stempels – höchstens 60 Zeichen.", primary="Übernehmen", close="Abbrechen", data={"label": "Text", "value": self.stampText, "placeholder": "z. B. GEBUCHT"})
+            if answer != "primary":
+                return
+            text = " ".join(str((data or {}).get("value") or "").split())[: stamps.MAX_TEXT]
+            if not text:
+                return
+            self.stampText = text
+        elif key not in stamps.PRESETS:
+            return
+        self.stampPreset = key
+
+    @Slot(str)
+    def setStampSubtitle(self, value: str) -> None:  # noqa: N802
+        """Zweite Zeile: »« (ohne), »{datum}«, »{datum} {zeit}« oder »custom« (fragt nach dem Text)."""
+        if value == "custom":
+            answer, data = self.app.dialogs.ask("text_input", "Zweite Zeile des Stempels", "Zum Beispiel ein Name oder Zeichen. {datum} und {zeit} werden beim Setzen ersetzt.", primary="Übernehmen", close="Abbrechen", data={"label": "Text", "value": self.stampSubtitle, "placeholder": "z. B. {datum} – M. Muster"})
+            if answer != "primary":
+                return
+            value = " ".join(str((data or {}).get("value") or "").split())[:80]
+        self.stampSubtitle = value
+
+    @Slot(int, "QVariantList")
+    def placeStamp(self, page: int, rect) -> None:  # noqa: N802
+        """Stempel setzen: aufgezogener Rahmen oder – bei einem Klick – natürliche Größe um diese Stelle."""
+        if not 0 <= page < self.pageCount or not self.edit_allowed("annotate"):
+            return
+        custom = self.stampPreset == "custom"
+        if custom and not self.stampText:
+            self.setStampPreset("custom")
+            if not self.stampText:
+                return
+        spec = {"preset": "" if custom else self.stampPreset, "text": self.stampText, "subtitle": self.stampSubtitle, "color": self.toolColor}
+        box = [float(v) for v in rect]
+        self.run(lambda session: session.add_stamp(page, box, spec), lambda key: self._placed(key, "Stempel gesetzt"), busy="")
+
+    def _signature_store(self):
+        from storage import data_root
+        from tools.pdf_editor import stamps
+
+        return stamps.SignatureStore(data_root() / SIGNATURE_FILE)
+
+    @Slot()
+    def loadSignatures(self) -> None:  # noqa: N802
+        self._load_signatures(ask=False)
+
+    def _load_signatures(self, ask: bool) -> None:
+        """Gespeicherte Unterschriften (und die nur für diese Sitzung) mit Vorschau laden; ``ask``: ohne
+        Unterschrift gleich eine anlegen lassen."""
+        store = self._signature_store()
+        current = _SESSION_SIGNATURE[0]
+
+        def work(_session) -> list[dict]:
+            items = [{"id": item.ident, "label": item.label, "preview": signature_preview(item.signature), "aspect": round(item.signature.aspect, 3), "stored": True} for item in store.load()]
+            if current is not None:
+                items.append({"id": SESSION_SIGNATURE, "label": "Nur für diese Sitzung", "preview": signature_preview(current), "aspect": round(current.aspect, 3), "stored": False})
+            return items
+
+        def done(items: list) -> None:
+            self.signatures = items
+            if self.signatureChoice not in [item["id"] for item in items]:
+                self.signatureChoice = items[0]["id"] if items else ""
+            if ask and not items and self.tool == "signature":
+                self.newSignature()
+
+        self.run(work, done, refresh=False, priority=VIEW, key="signatures")
+
+    @Slot()
+    def newSignature(self) -> None:  # noqa: N802
+        """Dialog »Unterschrift erstellen«: zeichnen oder ein Bild einlesen; auf Wunsch nur lokal speichern."""
+        from tools.pdf_editor import stamps
+        from tools.pdf_editor.errors import UnsupportedEdit as Refused
+
+        stored = sum(1 for item in self.signatures if item.get("stored"))
+        answer, data = self.app.dialogs.ask("signature", "Unterschrift erstellen", "", primary="Übernehmen", close="Abbrechen", data={"stored": stored, "limit": stamps.MAX_STORED}, width=640)
+        if answer != "primary":
+            if self.tool == "signature" and not self.signatures:
+                self.setTool("select")
+            return
+        data = data or {}
+        try:
+            if data.get("mode") == "image":
+                signature = stamps.Signature.from_dict(data.get("image") or {})
+            else:
+                signature = stamps.signature_from_strokes(data.get("strokes") or [], color=_hex_rgb(data.get("color")) or stamps.INK, pen=float(data.get("pen") or 2.6))
+            if data.get("save"):
+                choice = self._signature_store().add(signature, str(data.get("label") or "")).ident
+            else:
+                _SESSION_SIGNATURE[0] = signature
+                choice = SESSION_SIGNATURE
+        except (Refused, OSError) as exc:
+            self.report(exc)
+            return
+        self.signatureChoice = choice
+        if self.tool != "signature":
+            self.setTool("signature")
+        else:
+            self._load_signatures(ask=False)
+        self.app.set_status("Unterschrift bereit – in die Seite klicken oder einen Rahmen aufziehen.", "success")
+
+    @Slot(result="QVariant")
+    def pickSignatureImage(self):  # noqa: N802
+        """Bild für eine Unterschrift wählen (aus dem Dialog): Vorschau und Daten – oder ``{error}``."""
+        from tools.pdf_editor import stamps
+        from tools.pdf_editor.errors import UnsupportedEdit as Refused
+
+        path = self.reader.pick_image()
+        if not path:
+            return {}
+        try:
+            signature = stamps.signature_from_image(path)
+        except Refused as exc:
+            return {"error": str(exc)}
+        return {"preview": signature_preview(signature), "data": signature.to_dict(), "aspect": round(signature.aspect, 3)}
+
+    @Slot(str)
+    def chooseSignature(self, ident: str) -> None:  # noqa: N802
+        if any(item["id"] == ident for item in self.signatures):
+            self.signatureChoice = ident
+
+    @Slot(str)
+    def deleteSignature(self, ident: str) -> None:  # noqa: N802
+        item = next((entry for entry in self.signatures if entry["id"] == ident), None)
+        if item is None:
+            return
+        if not self.app.dialogs.confirm("Unterschrift löschen?", "Die Unterschrift wird von diesem PC entfernt. Bereits gesetzte Unterschriften in Dokumenten bleiben, wie sie sind.", "Löschen"):
+            return
+        if ident == SESSION_SIGNATURE:
+            _SESSION_SIGNATURE[0] = None
+        else:
+            try:
+                self._signature_store().remove(ident)
+            except OSError as exc:
+                self.report(exc)
+                return
+        self._load_signatures(ask=False)
+
+    @Slot(int, "QVariantList")
+    def placeSignature(self, page: int, rect) -> None:  # noqa: N802
+        if not 0 <= page < self.pageCount or not self.edit_allowed("annotate"):
+            return
+        signature = self._chosen_signature()
+        if signature is None:
+            self.newSignature()
+            return
+        data = signature.to_dict()
+        box = [float(v) for v in rect]
+        self.run(lambda session: session.add_signature(page, box, data), lambda key: self._placed(key, "Unterschrift gesetzt"), busy="")
+
+    def _placed(self, key: str, title: str) -> None:
+        """Nach dem Setzen: »Auswählen« mit dem neuen Stempel bzw. der Unterschrift ausgewählt (gleich verschieben
+        und in der Größe ändern)."""
+        self.edited(title)
+        self._select_annotation = key
+        self.setTool("select")
+        self.loadAnnotations()
+
+    def _chosen_signature(self):
+        ident = self.signatureChoice
+        if ident == SESSION_SIGNATURE:
+            return _SESSION_SIGNATURE[0]
+        stored = self._signature_store().get(ident) if ident else None
+        return stored.signature if stored is not None else None
+
+    # Links ---------------------------------------------------------------------------------------------------------------
+    @Slot()
+    def loadLinks(self) -> None:  # noqa: N802
+        self._links_requested = True
+
+        def done(items: list) -> None:
+            by_page: dict[str, list] = {}
+            for item in items:
+                by_page.setdefault(str(item["page"]), []).append(item)
+            self.linkPages = by_page
+
+        self.run(lambda session: session.links(), done, refresh=False, priority=BACKGROUND, key="links")
+
+    def _link(self, page: int, key: str) -> dict | None:
+        return next((item for item in self.linkPages.get(str(page), []) if item["key"] == key), None)
+
+    @Slot(int, str)
+    def followLink(self, page: int, key: str) -> None:  # noqa: N802
+        """Link anklicken: Seite anzeigen; eine Webadresse erst nach Rückfrage öffnen. Andere Aktionen nie."""
+        link = self._link(page, key)
+        if link is None:
+            return
+        if link["target"] >= 0:
+            self.goTo(link["target"])
+            return
+        uri = link["uri"]
+        if not uri:
+            self.app.notify("reader", "info", "Dieser Link führt aus dem Dokument hinaus oder startet eine Aktion – PDF Tool führt so etwas nicht aus.", title="Link nicht geöffnet", auto_hide=8000)
+            return
+        mail = uri.lower().startswith("mailto:")
+        if not self.app.dialogs.confirm("E-Mail schreiben?" if mail else "Webadresse öffnen?", (f"Der Link öffnet eine neue E-Mail an {uri[7:]}." if mail else f"Der Link führt zu {uri}") + " Öffnen Sie nur Adressen aus Quellen, denen Sie vertrauen.", "Öffnen", danger=False):
+            return
+        from .. import files
+
+        files.open_url(uri)
+
+    def _ask_link(self, current: dict, title: str) -> tuple[int, str] | None:
+        answer, data = self.app.dialogs.ask("link", title, "", primary="Übernehmen", close="Abbrechen", data={**current, "pageCount": self.pageCount}, width=520)
+        if answer != "primary":
+            return None
+        data = data or {}
+        if data.get("kind") == "web":
+            uri = str(data.get("uri") or "").strip()
+            return (-1, uri) if uri else None
+        try:
+            number = int(str(data.get("page") or "").strip())
+        except ValueError:
+            self.app.notify("reader", "warning", "Bitte eine Seitenzahl eingeben.", title=title)
+            return None
+        return max(0, min(self.pageCount - 1, number - 1)), ""
+
+    @Slot(int, "QVariantList")
+    def addLinkAt(self, page: int, rect) -> None:  # noqa: N802
+        """Link im aufgezogenen Bereich: zu einer Seite dieses Dokuments oder zu einer Webadresse."""
+        box = [float(v) for v in rect]
+        if not 0 <= page < self.pageCount or box[2] - box[0] < 4 or box[3] - box[1] < 4 or not self.edit_allowed("annotate"):
+            return
+        values = self._ask_link({"kind": "page", "page": min(self.pageCount, self.currentPage + 2), "uri": ""}, "Link hinzufügen")
+        if values is None:
+            return
+        target, uri = values
+        self.run(lambda session: session.add_link(page, box, target, uri), lambda _key: (self.edited("Link hinzugefügt"), self.loadLinks()), busy="")
+
+    @Slot(int, str)
+    def editLink(self, page: int, key: str) -> None:  # noqa: N802
+        link = self._link(page, key)
+        if link is None or not self.edit_allowed("annotate"):
+            return
+        current = {"kind": "web" if link["uri"] or link["target"] < 0 else "page", "page": link["target"] + 1 if link["target"] >= 0 else self.currentPage + 1, "uri": link["uri"]}
+        values = self._ask_link(current, "Link bearbeiten")
+        if values is None:
+            return
+        target, uri = values
+        self.run(lambda session: session.update_link(key, target, uri), lambda _r: (self.edited("Link geändert"), self.loadLinks()), busy="")
+
+    @Slot(int, str)
+    def removeLink(self, page: int, key: str) -> None:  # noqa: N802
+        if self._link(page, key) is None or not self.edit_allowed("annotate"):
+            return
+        self.run(lambda session: session.delete_link(key), lambda _r: (self.edited("Link entfernt"), self.loadLinks()), busy="")
+
+    # Lesezeichen bearbeiten -----------------------------------------------------------------------------------------------
+    def _outline_entry(self, key: str) -> dict | None:
+        return next((entry for entry in self._outline_entries if entry["key"] == key), None)
+
+    def _outline_op(self, func, title: str) -> None:
+        if not self.edit_allowed("edit"):
+            return
+        self.run(func, lambda _r: (self.edited(title), self.load_outline()), busy="")
+
+    @Slot(str, bool)
+    def addBookmark(self, after: str, child: bool) -> None:  # noqa: N802
+        """Lesezeichen zur aktuellen Seite – hinter ``after`` (Schlüssel; leer: ans Ende) bzw. als Unterpunkt."""
+        if not self.edit_allowed("edit"):
+            return
+        page = self.currentPage
+        answer, data = self.app.dialogs.ask("text_input", "Lesezeichen hinzufügen", f"Das Lesezeichen führt zu Seite {page + 1}.", primary="Hinzufügen", close="Abbrechen", data={"label": "Titel", "value": "", "placeholder": f"Seite {page + 1}"})
+        if answer != "primary":
+            return
+        title = str((data or {}).get("value") or "").strip()
+        index = int(after) if after.isdigit() else -1
+        self.reader.showLeftPanel("outline")
+        self._outline_op(lambda session: session.add_bookmark(title, page, index, child), "Lesezeichen hinzugefügt")
+
+    @Slot(str)
+    def renameBookmark(self, key: str) -> None:  # noqa: N802
+        entry = self._outline_entry(key)
+        if entry is None:
+            return
+        answer, data = self.app.dialogs.ask("text_input", "Lesezeichen umbenennen", "", primary="Umbenennen", close="Abbrechen", data={"label": "Titel", "value": entry["title"], "placeholder": entry["title"]})
+        title = str((data or {}).get("value") or "").strip()
+        if answer == "primary" and title and title != entry["title"]:
+            self._outline_op(lambda session: session.rename_bookmark(int(key), title), "Lesezeichen umbenannt")
+
+    @Slot(str)
+    def bookmarkCurrentPage(self, key: str) -> None:  # noqa: N802
+        """Ziel des Lesezeichens auf die angezeigte Seite setzen."""
+        if self._outline_entry(key) is not None:
+            page = self.currentPage
+            self._outline_op(lambda session: session.set_bookmark_page(int(key), page), f"Lesezeichen führt zu Seite {page + 1}")
+
+    @Slot(str, str)
+    def moveBookmark(self, key: str, direction: str) -> None:  # noqa: N802
+        if self._outline_entry(key) is not None and direction in ("up", "down", "in", "out"):
+            self._outline_op(lambda session: session.move_bookmark(int(key), direction), "Lesezeichen verschoben")
+
+    @Slot(str)
+    def deleteBookmark(self, key: str) -> None:  # noqa: N802
+        entry = self._outline_entry(key)
+        if entry is None:
+            return
+        if entry["hasChildren"] and not self.app.dialogs.confirm(f"»{entry['title']}« samt Unterpunkten löschen?", "Das Lesezeichen und alle Lesezeichen darunter werden entfernt. Rückgängig (Strg+Z) holt sie zurück.", "Löschen"):
+            return
+        self._outline_op(lambda session: session.delete_bookmark(int(key)), "Lesezeichen gelöscht")
+
+    # Seiten zuschneiden --------------------------------------------------------------------------------------------------
+    @Slot("QVariantList")
+    def cropPages(self, indexes) -> None:  # noqa: N802
+        """Dialog »Seiten zuschneiden«: Ränder in Millimetern (oder an den Inhalt angepasst) für alle,
+        die aktuelle, die ausgewählten oder angegebene Seiten; auch »Zuschnitt zurücksetzen«."""
+        from tools.pdf_editor import pages as page_ops
+
+        chosen = sorted({int(i) for i in indexes or [] if 0 <= int(i) < self.pageCount})
+        probe = chosen[0] if chosen else self.currentPage
+
+        def show(auto: list) -> None:
+            answer, data = self.app.dialogs.ask(
+                "crop", "Seiten zuschneiden", "", primary="Übernehmen", close="Abbrechen",
+                data={"auto": [round(value / MM, 1) for value in auto], "selected": len(chosen), "current": self.currentPage, "pageCount": self.pageCount}, width=580,
+            )
+            if answer != "primary":
+                return
+            data = data or {}
+            scope = data.get("scope")
+            try:
+                if scope == "selected" and chosen:
+                    targets = chosen
+                elif scope == "current":
+                    targets = [self.currentPage]
+                elif scope == "range":
+                    targets = page_ops.parse_pages(str(data.get("range") or ""), self.pageCount)
+                else:
+                    targets = list(range(self.pageCount))
+            except ValueError as exc:
+                self.app.notify("reader", "warning", str(exc), title="Seiten zuschneiden")
+                return
+            if data.get("reset"):
+                self._page_op(lambda session: session.reset_crop(targets), "Zuschnitt zurückgesetzt")
+                return
+            margins = [max(0.0, float(value or 0)) * MM for value in (data.get("margins") or [0, 0, 0, 0])[:4]]
+            if len(margins) == 4 and any(margins):
+                self._page_op(lambda session: session.crop(targets, margins), "Seiten zugeschnitten" if len(targets) > 1 else "Seite zugeschnitten")
+
+        self.run(lambda session: session.content_margins(probe), show, refresh=False, busy="Ränder werden erkannt …")
+
     # Rückgängig, Speichern ------------------------------------------------------------------------------------------
     @Slot()
     def undo(self) -> None:
@@ -1951,8 +2689,11 @@ class DocumentController(Observable):
             self.loadFields()
         elif self.tool == "formDesign":
             self.loadDesign()
+        if self.tool == "signature":
+            self._load_signatures(ask=False)
         self.loadAnnotations()
         self.loadAttachments()
+        self.load_outline()
 
     def save(self, target: str | None = None, *, force: bool = False, then: Callable[[bool], None] | None = None) -> None:
         """Speichern (``target`` = Speichern unter). ``then(erfolgreich)`` danach.
@@ -2114,7 +2855,7 @@ class DocumentController(Observable):
         self.cancel_search()
         if self._ocr_cancel is not None:
             self._ocr_cancel.set()  # beendet einen laufenden Tesseract-Prozess
-        for timer in ("recovery", "nudge", "saved"):
+        for timer in ("recovery", "nudge", "saved", "links"):
             self.app.timers.cancel(f"reader:{timer}:{self.ident}")
         for task in self._pending.values():
             task.cancel()
@@ -2158,6 +2899,51 @@ def field_changes(item: dict, data: dict) -> dict:
     if kind in ("checkbox", "radio"):
         wanted["export"], current["export"] = str(data.get("export", item["export"])).strip(), item["export"]
     return {name: value for name, value in wanted.items() if value != current[name]}
+
+
+SESSION_SIGNATURE = "sitzung"  # Kennung der nicht gespeicherten Unterschrift
+_SESSION_SIGNATURE: list = [None]  # nur im Arbeitsspeicher, bis PDF Tool beendet wird (für alle Tabs)
+
+
+def signature_preview(signature, height: int = 96) -> str:
+    """Vorschau einer Unterschrift als PNG (data-URL, durchsichtiger Hintergrund) – geglättet gezeichnet."""
+    import base64
+    import io
+
+    from PIL import Image, ImageDraw
+
+    scale = height / max(0.01, signature.height)
+    width = max(8, min(900, round(signature.width * scale)))
+    if signature.mask:
+        with Image.open(io.BytesIO(signature.mask)) as loaded:
+            mask = loaded.convert("L").resize((width, height), Image.LANCZOS)
+    else:
+        factor = 3
+        big = Image.new("L", (width * factor, height * factor), 0)
+        draw = ImageDraw.Draw(big)
+        pen = max(1, round(signature.pen * height * factor))
+        for stroke in signature.strokes:
+            points = [(x * scale * factor, y * scale * factor) for x, y in stroke]
+            if len(points) > 1:
+                draw.line(points, fill=255, width=pen, joint="curve")
+            for x, y in (points[0], points[-1]):
+                draw.ellipse([x - pen / 2, y - pen / 2, x + pen / 2, y + pen / 2], fill=255)
+        mask = big.resize((width, height), Image.LANCZOS)
+    image = Image.new("RGBA", (width, height), (*signature.color, 0))
+    image.putalpha(mask)
+    out = io.BytesIO()
+    image.save(out, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def _hex_rgb(value) -> tuple[int, int, int] | None:
+    text = str(value or "").lstrip("#")
+    if len(text) == 8:  # #AARRGGBB aus QML
+        text = text[2:]
+    try:
+        return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)) if len(text) == 6 else None
+    except ValueError:
+        return None
 
 
 def _size_label(size: int) -> str:

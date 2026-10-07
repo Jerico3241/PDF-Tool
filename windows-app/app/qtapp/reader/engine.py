@@ -10,6 +10,8 @@
   etwa wenn eine Seite aus dem Bild scrollt, bevor sie gerendert ist.
 * Ergebnisse kommen über ein Qt-Signal im GUI-Thread an; Seitenbilder gehen direkt an QML
   (``image://pdfpage/…``, asynchron) und landen in einem begrenzten Zwischenspeicher.
+* Nachtmodus: Die Kennung des Dokuments trägt dann ``~n`` (``image://pdfpage/d1~n/…``) – das Bild wird
+  umgekehrt und abgemildert (``night_image``). Nur die Anzeige: Drucken und Export rendern ohne diesen Weg.
 """
 
 from __future__ import annotations
@@ -22,12 +24,15 @@ from collections import OrderedDict
 from typing import Any, Callable
 
 from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtQuick import QQuickAsyncImageProvider, QQuickImageResponse, QQuickTextureFactory
 
 EDIT, VIEW, THUMB, BACKGROUND = 0, 1, 2, 3
 THUMB_WIDTH = 120  # Breite der Miniaturen (Pixel)
 CACHE_BYTES = 320 * 1024 * 1024  # Seitenbilder im Speicher (zuletzt benutzte bleiben)
+NIGHT_TAG = "~n"  # Kennung + »~n«: Seitenbild im Nachtmodus
+NIGHT_PAPER = "#1E1E1E"  # Papier im Nachtmodus (dunkelgrau statt Schwarz)
+NIGHT_INK = "#E0E0E0"  # Schrift im Nachtmodus (hellgrau statt Weiß)
 
 
 class Task:
@@ -179,7 +184,9 @@ class Engine(QObject):
 
 # --- Seitenbilder ----------------------------------------------------------------------------------------------
 class RenderCache:
-    """Gerenderte Seiten als ``QImage`` – begrenzt auf ``limit`` Bytes, zuletzt benutzte bleiben."""
+    """Gerenderte Seiten als ``QImage`` – begrenzt auf ``limit`` Bytes, zuletzt benutzte bleiben.
+
+    Schlüssel: ``(Dokument, Seite, Breite, Fassung, Art, Ausschnitt, Nachtmodus)`` – das Dokument steht vorn."""
 
     def __init__(self, limit: int = CACHE_BYTES) -> None:
         self.limit = limit
@@ -218,12 +225,12 @@ class RenderCache:
             for key in [key for key in self._items if key[0] == document]:
                 self._bytes -= self._items.pop(key).sizeInBytes()
 
-    def nearest(self, document: str, page: int, revision: int, kind: str) -> QImage | None:
+    def nearest(self, document: str, page: int, revision: int, kind: str, night: bool = False) -> QImage | None:
         """Irgendein vorhandenes Bild dieser Seite (andere Größe) – als Platzhalter beim Zoomen."""
         with self._lock:
             best = None
             for key, image in self._items.items():
-                if key[0] == document and key[1] == page and key[3] == revision and key[4] == kind:
+                if key[0] == document and key[1] == page and key[3] == revision and key[4] == kind and (len(key) > 6 and bool(key[6])) == night:
                     if best is None or image.width() > best.width():
                         best = image
             return best
@@ -240,6 +247,24 @@ def raster_to_qimage(raster) -> QImage:
     """PDFium-Raster (BGRx) → eigenständiges ``QImage`` (auch außerhalb des GUI-Threads erlaubt)."""
     image = QImage(raster.data, raster.width, raster.height, raster.stride, QImage.Format.Format_RGB32)
     return image.copy()
+
+
+def night_image(image: QImage) -> QImage:
+    """Seitenbild für den Nachtmodus (im Arbeitsthread erlaubt): Farben umkehren, danach Papier dunkelgrau
+    (``NIGHT_PAPER``) statt Schwarz und Schrift hellgrau (``NIGHT_INK``) statt Weiß – angenehmer zu lesen.
+    Ändert ``image`` selbst und gibt es zurück."""
+    if image.isNull():
+        return image
+    image.invertPixels()
+    painter = QPainter(image)
+    try:
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Lighten)
+        painter.fillRect(image.rect(), QColor(NIGHT_PAPER))
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Darken)
+        painter.fillRect(image.rect(), QColor(NIGHT_INK))
+    finally:
+        painter.end()
+    return image
 
 
 class PageResponse(QQuickImageResponse):
@@ -269,7 +294,8 @@ class PageImageProvider(QQuickAsyncImageProvider):
     """``image://pdfpage/<dokument>/<seite>/<breite_px>/<stand>[/thumb]`` – ganze Seite bzw.
     Miniatur – und ``…/<stand>/region/<x0>/<y0>/<x1>/<y1>``: ein Ausschnitt (Anzeige-Punkte × 10)
     im Maßstab der Seitenbreite ``breite_px`` (scharfe Darstellung bei hohem Zoom). Bilder kommen
-    aus dem Zwischenspeicher oder vom Arbeitsthread (abbrechbar, wenn QML sie nicht mehr braucht)."""
+    aus dem Zwischenspeicher oder vom Arbeitsthread (abbrechbar, wenn QML sie nicht mehr braucht).
+    Endet ``<dokument>`` auf ``~n`` (``NIGHT_TAG``), ist es das Bild für den Nachtmodus."""
 
     def __init__(self, render: Callable[..., Task | None], cache: RenderCache) -> None:
         super().__init__()
@@ -281,19 +307,22 @@ class PageImageProvider(QQuickAsyncImageProvider):
         try:
             parts = ident.split("/")
             document, page, width, revision = parts[0], int(parts[1]), int(parts[2]), int(parts[3])
+            night = document.endswith(NIGHT_TAG)
+            if night:
+                document = document[: -len(NIGHT_TAG)]
             kind = parts[4] if len(parts) > 4 else "page"
             region = tuple(int(value) for value in parts[5:9]) if kind == "region" else ()
-            if kind not in ("page", "thumb", "region") or (kind == "region" and (len(region) != 4 or region[2] <= region[0] or region[3] <= region[1])):
+            if not document or kind not in ("page", "thumb", "region") or (kind == "region" and (len(region) != 4 or region[2] <= region[0] or region[3] <= region[1])):
                 raise ValueError(kind)
         except (IndexError, ValueError):
             QTimer.singleShot(0, lambda: response.deliver(None, "Ungültige Bildadresse"))
             return response
-        cached = self._cache.get((document, page, width, revision, kind, region))
+        cached = self._cache.get((document, page, width, revision, kind, region, night))
         if cached is not None:
             # Erst nach der Rückkehr melden – sonst verpasst QML das Signal
             QTimer.singleShot(0, lambda: response.deliver(cached))
             return response
-        response.task = self._render(document, page, width, revision, kind, region, response.deliver)
+        response.task = self._render(document, page, width, revision, kind, region, response.deliver, night)
         if response.task is None:
             QTimer.singleShot(0, lambda: response.deliver(None, "Dokument nicht geöffnet"))
         return response

@@ -11,6 +11,10 @@ Vorlagen 2.0 (ab 2.8): Die »Darstellung« ist die Arbeitskopie. Eine geladene V
 Oberfläche »Vorlage geändert« (``templateModified``) mit »Vorlage aktualisieren«, »Als neue
 Vorlage speichern« und »Änderungen verwerfen«. Das Regelwerk der Übersicht (``ruleSetId``)
 gehört zur Darstellung; eine Vorlage kann es festlegen.
+
+»Per E-Mail senden« (ab 3.2): Die zuletzt erstellte PDF (``lastPdf``) öffnet sich als Anhang einer neuen
+Nachricht im E-Mail-Programm (``qtapp.mail``), vorausgefüllt mit dem Rechnungsempfänger wie in der PDF –
+eingetragen, sonst die einzige Adresse der Excel. Gesendet wird nur im E-Mail-Programm.
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ from tools.contract_overview.overview import (
 from tools.contract_overview.preview import RENDER_LOCK
 from tools.contract_overview.templates.models import ENTRY_RULE_SET
 
-from .. import files
+from .. import files, mail
 from ..base import Observable, Var, prop
 from ..models import KeyedListModel
 from .richtext import RichTextDocument
@@ -141,6 +145,9 @@ class ContractOverviewController(Observable):
     errorsChanged, errors = prop(dict, "errors", {})
     dropHighlightChanged, dropHighlight = prop(bool, "dropHighlight", False)
     recentChoiceChanged, recentChoice = prop(str, "recentChoice", "")
+    # Zuletzt erstellte PDF dieser Übersicht (»Per E-Mail senden«) und der Tooltip dazu (nennt den Empfänger)
+    lastPdfChanged, lastPdf = prop(str, "lastPdf", "")
+    lastPdfMailTipChanged, lastPdfMailTip = prop(str, "lastPdfMailTip", "")
 
     focusRequested = Signal(str)  # Feldname (kd, firma, mail, breite, vorlage, regelSuch, regelZyk)
 
@@ -195,6 +202,7 @@ class ContractOverviewController(Observable):
         self._initial_check = False
         self._undo_footer_rich: RichText | None = None
         self.pdf_runs = 0
+        self._last_recipient = ""  # Rechnungsempfänger der zuletzt erstellten PDF (E-Mail-Adresse oder leer)
 
     # Einrichtung -------------------------------------------------------------------------------
     def start(self) -> None:
@@ -1190,6 +1198,8 @@ class ContractOverviewController(Observable):
             return
         auftrag = self.pdf_fields(kd, empfaenger, breite)
         auftrag["zielordner"] = Path(self.target_folder())
+        # Empfänger für »Per E-Mail senden« – wie in der PDF: eingetragen, sonst die einzige Adresse der Excel
+        recipient = empfaenger or (self._excel_mails[0] if len(self._excel_mails) == 1 else "")
         # Der Vertragsstand gehört zur Kundenakte, die beim Start aktiv war.
         customer = self.tool.customers.active_customer()
         customer_id, customer_label = (customer.id, customer.label) if customer is not None else (None, "")
@@ -1198,6 +1208,7 @@ class ContractOverviewController(Observable):
         self.app.persist()
         self.busy = True
         self.hide_notice("pdf_info")
+        self.hide_notice("pdf_mail_info")
         self.set_status("PDF wird erstellt …", "busy")
         worker = self.app.worker
 
@@ -1212,7 +1223,7 @@ class ContractOverviewController(Observable):
 
         def done(result) -> None:
             path, records = result
-            self._done(path)
+            self._done(path, recipient)
             self.tool.history_after_export(customer_id, customer_label, records, str(auftrag["excel"]), Path(path))
 
         worker.run(work, done, self._fail)
@@ -1239,11 +1250,15 @@ class ContractOverviewController(Observable):
             regelwerk=self.rule_set_dict(),
         )
 
-    def _done(self, path: Path) -> None:
+    def _done(self, path: Path, recipient: str = "") -> None:
         self.busy = False
         self.pdf_runs += 1
         path = Path(path)
         self._remember_pdf(path)
+        self._last_recipient = recipient.strip() if mail.valid_address(recipient) else ""
+        self.lastPdfMailTip = (f"Neue E-Mail an {self._last_recipient} mit der erstellten PDF als Anhang – Sie senden sie in Ihrem E-Mail-Programm"
+                               if self._last_recipient else "Neue E-Mail mit der erstellten PDF als Anhang – Sie senden sie in Ihrem E-Mail-Programm")
+        self.lastPdf = str(path)
         self.tool.customers.after_pdf(path)
         self.app.persist()
         self.notify(
@@ -1262,6 +1277,19 @@ class ContractOverviewController(Observable):
         self.set_status(f"PDF gespeichert: {path}", "success")
         if self.pdfOeffnen:
             self.app.open_file(path, "pdf_info")
+
+    @Slot()
+    def sendPdfByMail(self) -> None:  # noqa: N802
+        """Zuletzt erstellte PDF per E-Mail senden: Das E-Mail-Programm zeigt eine neue Nachricht mit der PDF als
+        Anhang, der Rechnungsempfänger ist eingetragen (falls bekannt) – gesendet wird dort, nie von PDF Tool."""
+        path = self.lastPdf
+        if not path:
+            return
+        if not Path(path).is_file():
+            self.lastPdf = ""
+            self.notify("pdf_mail_info", "warning", f"Die Datei »{Path(path).name}« gibt es nicht mehr.", title="Senden nicht möglich")
+            return
+        mail.send_and_report(self.app, path, "pdf_mail_info", to=self._last_recipient)
 
     @Slot()
     def newOverview(self) -> None:  # noqa: N802
@@ -1283,6 +1311,8 @@ class ContractOverviewController(Observable):
         self._undo_overview = previous if any(value.strip() for value in previous) or customer or default else None
         self._undo_layout = layout if default else None
         self.hide_notice("pdf_info")
+        self.hide_notice("pdf_mail_info")
+        self.lastPdf = ""  # die erstellte PDF gehörte zur vorigen Übersicht
         actions = (("Rückgängig", self._undo_new_overview),) if self._undo_overview else ()
         text = "Bereit für eine neue Übersicht: Kundendaten und Excel-Datei wurden zurückgesetzt."
         if default:
