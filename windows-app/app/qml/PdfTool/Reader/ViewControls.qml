@@ -84,8 +84,8 @@ Rectangle {
             onClicked: zoomMenu.popup(zoomButton, 0, -zoomMenu.implicitHeight - 4)
         }
         PIconButton { objectName: "readerZoomIn"; iconName: "zoom_in"; tip: "Vergrößern (Strg++)"; onClicked: root.zoom(function() { root.doc.zoomIn() }) }
-        PIconButton { objectName: "readerFitWidth"; iconName: "arrow_autofit_width"; tip: "Seitenbreite"; checkable: true; checked: root.doc !== null && root.doc.fit === "width"; onClicked: root.zoom(function() { root.doc.fitWidth() }) }
-        PIconButton { objectName: "readerFitPage"; iconName: "page_fit"; tip: "Ganze Seite (Strg+0)"; checkable: true; checked: root.doc !== null && root.doc.fit === "page"; onClicked: root.zoom(function() { root.doc.fitPage() }) }
+        PIconButton { objectName: "readerFitWidth"; iconName: "arrow_autofit_width"; tip: "Seitenbreite"; toggle: true; checked: root.doc !== null && root.doc.fit === "width"; onClicked: root.zoom(function() { root.doc.fitWidth() }) }
+        PIconButton { objectName: "readerFitPage"; iconName: "page_fit"; tip: "Ganze Seite (Strg+0)"; toggle: true; checked: root.doc !== null && root.doc.fit === "page"; onClicked: root.zoom(function() { root.doc.fitPage() }) }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 4; Layout.rightMargin: 4; color: Theme.divider }
         PIconButton {
             objectName: "readerFullScreen"

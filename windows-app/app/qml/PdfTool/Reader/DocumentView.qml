@@ -440,18 +440,39 @@ Flickable {
     }
     // Mausrad (fortlaufende Ansichten): gleiche Strecke je Raste, schnelle Rasten addieren sich (PWheelScroll)
     PWheelScroll { flickable: view; enabled: !view.paged }
+    // Umschalt + Mausrad: waagerecht verschieben (hoher Zoom, breite Seiten)
+    WheelHandler {
+        objectName: "readerWheelSideways"
+        acceptedModifiers: Qt.ShiftModifier
+        target: null
+        onWheel: (event) => {
+            var delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
+            if (delta !== 0 && view.contentWidth > view.width + 1)
+                view.contentX = view.clampX(view.contentX - delta / 120 * view.wheelStep)
+        }
+    }
+    // Dokument mit der Maus bewegen: mittlere Maustaste immer; linke Maustaste mit dem Werkzeug
+    // »Verschieben« überall, sonst auf der freien Fläche neben den Seiten. Auf einer Seite gilt das
+    // gewählte Werkzeug (Text markieren, Objekte ziehen …) – der Griff wird ihr nie weggenommen.
+    readonly property bool movable: contentWidth > width + 1 || contentHeight > height + 1
     DragHandler {
         id: pan
-        acceptedButtons: Qt.MiddleButton
+        objectName: "readerPan"
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         target: null
+        grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType | PointerHandler.ApprovesTakeOverByAnything
         property real startX: 0
         property real startY: 0
-        onActiveChanged: if (active) { startX = view.contentX; startY = view.contentY }
+        onActiveChanged: if (active) { startX = view.contentX; startY = view.contentY; view.forceActiveFocus() }
         onTranslationChanged: {
             view.contentX = view.clampX(startX - translation.x)
             view.contentY = view.clampY(startY - translation.y)
         }
         cursorShape: Qt.ClosedHandCursor
+    }
+    // Offene Hand, wo sich das Dokument ziehen lässt (über den Seiten zeigt das Werkzeug seinen Zeiger)
+    HoverHandler {
+        cursorShape: view.doc && (view.doc.tool === "hand" || view.movable) ? Qt.OpenHandCursor : Qt.ArrowCursor
     }
 
     Keys.onPressed: (event) => {

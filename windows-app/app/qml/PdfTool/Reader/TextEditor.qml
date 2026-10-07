@@ -41,6 +41,9 @@ Item {
     property bool familyTouched: false  // die Schrift wird nur geschickt, wenn sie gewählt wurde
 
     visible: open
+    // Öffnen: kurz einblenden (wie Menüs und Hinweise); ein Wechsel zum nächsten Textblock bleibt ruhig
+    onOpenChanged: if (open && Motion.enabled) appear.restart()
+    NumberAnimation { id: appear; target: root; property: "opacity"; from: 0; to: 1; duration: Motion.fade; easing.type: Motion.decelerate }
     // An der Stelle in der Seite – die Leiste bleibt aber ganz im sichtbaren Bereich (breite Leiste, Text am
     // rechten Rand)
     readonly property real wantedX: pageArea.x + (request ? request.rect[0] * s : 0) - 4
@@ -196,7 +199,7 @@ Item {
                     visible: root.styled
                     iconName: "text_bold"
                     tip: "Fett"
-                    checkable: true
+                    toggle: true
                     checked: root.bold
                     onClicked: { root.bold = !root.bold; root.styleTouched = true }
                 }
@@ -204,7 +207,7 @@ Item {
                     visible: root.styled
                     iconName: "text_italic"
                     tip: "Kursiv"
-                    checkable: true
+                    toggle: true
                     checked: root.italic
                     onClicked: { root.italic = !root.italic; root.styleTouched = true }
                 }
@@ -213,7 +216,7 @@ Item {
                     visible: root.styled
                     iconName: "text_underline"
                     tip: "Unterstreichen (zeichnet eine Linie in der Textfarbe)"
-                    checkable: true
+                    toggle: true
                     checked: root.underline
                     onClicked: { root.underline = !root.underline; root.styleTouched = true }
                 }
@@ -222,7 +225,7 @@ Item {
                     visible: root.styled
                     iconName: "text_strikethrough"
                     tip: "Durchstreichen (zeichnet eine Linie in der Textfarbe)"
-                    checkable: true
+                    toggle: true
                     checked: root.strike
                     onClicked: { root.strike = !root.strike; root.styleTouched = true }
                 }
@@ -234,7 +237,7 @@ Item {
                         objectName: "readerEditorAlign_" + modelData.value
                         iconName: modelData.icon
                         tip: modelData.tip
-                        checkable: true
+                        toggle: true
                         checked: root.align === modelData.value
                         onClicked: { root.align = modelData.value; root.styleTouched = true }
                     }

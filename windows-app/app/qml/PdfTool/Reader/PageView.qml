@@ -691,7 +691,8 @@ Item {
     MouseArea {
         id: pointer
         anchors.fill: parent
-        enabled: root.page >= 0 && root.tool !== "form"
+        // »Formular ausfüllen«: die Felder selbst; »Verschieben«: die Ansicht (DocumentView) nimmt die Maus
+        enabled: root.page >= 0 && root.tool !== "form" && root.tool !== "hand"
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects" || root.tool === "formDesign"
         cursorShape: {

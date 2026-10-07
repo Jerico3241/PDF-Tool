@@ -55,6 +55,7 @@ FocusScope {
         selection = next
     }
     function chosen() { return hasSelection ? selectedPages : (doc ? [doc.currentPage] : []) }
+    function pagesText(count) { return count === 1 ? "1 Seite" : count + " Seiten" }
     // Einfügen aus der Zwischenablage: hinter die letzte gewählte Seite, sonst ans Ende
     function pasteAfter() {
         if (!doc) return
@@ -208,14 +209,19 @@ FocusScope {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        // Befehle: brechen bei schmalem Fenster in eine zweite Zeile um – die Leiste wächst mit, die
+        // Seiten darunter rücken nach (nichts liegt über der ersten Seitenreihe)
         Rectangle {
+            objectName: "readerOrganizeBar"
             Layout.fillWidth: true
-            Layout.preferredHeight: Metrics.controlHeight + 16
+            Layout.preferredHeight: commands.implicitHeight + 16
             color: Theme.layer
             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
             Flow {
-                anchors.fill: parent
-                anchors.margins: 8
+                id: commands
+                x: 8
+                y: 8
+                width: parent.width - 16
                 spacing: 4
                 PIconButton { iconName: "arrow_rotate_counterclockwise"; tip: "Nach links drehen"; onClicked: root.doc.rotatePages(root.chosen(), -90) }
                 PIconButton { objectName: "readerOrganizeRotate"; iconName: "arrow_rotate_clockwise"; tip: "Nach rechts drehen"; onClicked: root.doc.rotatePages(root.chosen(), 90) }
@@ -232,9 +238,11 @@ FocusScope {
                 PIconButton { objectName: "readerOrganizePrint"; iconName: "print"; tip: "Gewählte Seiten drucken"; onClicked: root.doc.printPages(root.chosen()) }
                 PButton { objectName: "readerOrganizeOcr"; iconName: "document_search"; text: "Text erkennen …"; tip: "Gescannte Seiten durchsuchbar machen (OCR)"; enabled: !root.doc.ocrRunning; onClicked: root.doc.recognizeText(root.hasSelection ? root.selectedPages : []) }
                 PText {
+                    objectName: "readerOrganizeCount"
                     height: Metrics.controlHeight
                     leftPadding: 8
-                    text: root.hasSelection ? root.selectedPages.length + " von " + root.doc.pageCount + " Seiten gewählt" : (root.doc ? root.doc.pageCount + " Seiten – klicken zum Auswählen, ziehen zum Verschieben" : "")
+                    text: root.hasSelection ? root.selectedPages.length + " von " + root.pagesText(root.doc.pageCount) + " gewählt" : (root.doc ? root.pagesText(root.doc.pageCount) + " – klicken zum Auswählen, ziehen zum Verschieben" : "")
+                    verticalAlignment: Text.AlignVCenter
                     tone: "secondary"
                     textStyle: "caption"
                 }

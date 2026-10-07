@@ -7,17 +7,18 @@ Bedient wird wie in ``test_qt_reader`` über Maus, Tastatur und die Controller. 
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pikepdf
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QWindow
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QGuiApplication, QWheelEvent, QWindow
 from PySide6.QtTest import QTest
 
 import editorsamples as samples
 from conftest import pump, wait_until
-from test_qt_reader import click, key, open_pdf, page_point, reader, settle, window_point
+from test_qt_reader import LEFT, click, key, open_pdf, page_point, reader, settle, window_point
 
 NO_MOD = Qt.KeyboardModifier.NoModifier
 CTRL = Qt.KeyboardModifier.ControlModifier
@@ -272,3 +273,127 @@ def test_print_ranges_selection_and_copies() -> None:
     assert copies([0, 1], Driver(2, True, True)) == [0, 1]  # der Treiber druckt die Kopien
     assert copies([0, 1], Driver(2, False, True)) == [0, 1, 0, 1]
     assert copies([0, 1], Driver(2, False, False)) == [0, 0, 1, 1]
+
+
+# --- Werkzeuge abwählen, Dokument mit der Maus bewegen (3.1.0-beta.3) ------------------------------------------
+def mouse_drag(h, button, start: QPoint, end: QPoint, steps: int = 10) -> None:
+    QTest.mousePress(h.window, button, NO_MOD, start)
+    for step in range(1, steps + 1):
+        QTest.mouseMove(h.window, QPoint(start.x() + (end.x() - start.x()) * step // steps, start.y() + (end.y() - start.y()) * step // steps))
+        pump(0.01)
+    QTest.mouseRelease(h.window, button, NO_MOD, end)
+    pump(0.15)
+
+
+def wheel(h, item, steps: int, modifiers=NO_MOD) -> None:
+    point = window_point(item, item.width() / 2, item.height() / 2)
+    event = QWheelEvent(QPointF(point), QPointF(h.window.mapToGlobal(point)), QPoint(0, 0), QPoint(0, 120 * steps), Qt.MouseButton.NoButton, modifiers, Qt.ScrollPhase.NoScrollPhase, False)
+    event.setTimestamp(int(time.monotonic() * 1000))
+    QGuiApplication.sendEvent(h.window, event)
+    pump(0.4)
+
+
+def test_clicking_the_chosen_tool_returns_to_select(reader_app, tmp_path: Path) -> None:
+    """Ein gewähltes Werkzeug lässt sich abwählen: zurück zu »Auswählen«. Die Schaltflächen zeigen immer das
+    Werkzeug des Dokuments – bis 3.1.0-beta.2 schaltete sich die Schaltfläche nur selbst um, das Werkzeug blieb."""
+    h = reader_app
+    doc = open_pdf(h, samples.standard_text(tmp_path / "Werkzeuge.pdf"))
+    select, objects, hand = h.item("readerToolSelect"), h.item("readerToolObjects"), h.item("readerToolHand")
+    click(h, center(objects))
+    assert doc.tool == "objects" and objects.property("checked") and not select.property("checked")
+    click(h, center(objects))  # abwählen
+    assert doc.tool == "select" and select.property("checked") and not objects.property("checked")
+    click(h, center(select))  # »Auswählen« bleibt gewählt
+    assert doc.tool == "select" and select.property("checked")
+    click(h, center(hand))
+    assert doc.tool == "hand" and hand.property("checked") and not select.property("checked")
+    click(h, center(hand))
+    assert doc.tool == "select" and not hand.property("checked")
+    # Wechsel ohne die Leiste (Menü, Esc, Controller): die Schaltflächen folgen – auch nach dem Abwählen
+    doc.setTool("objects")
+    pump(0.1)
+    assert objects.property("checked") and not select.property("checked")
+    view = h.item("readerView")
+    view.forceActiveFocus()
+    key(h, Qt.Key.Key_Escape)
+    assert doc.tool == "select" and select.property("checked") and not objects.property("checked")
+    # »Seiten organisieren«: Zustand nur aus dem Reader
+    organize = h.item("readerOrganize")
+    click(h, center(organize))
+    assert reader(h).organize and organize.property("checked")
+    reader(h).setOrganize(False)
+    pump(0.3)
+    assert not organize.property("checked")
+
+
+def test_form_field_kind_can_be_deselected(reader_app, tmp_path: Path) -> None:
+    h = reader_app
+    doc = open_pdf(h, samples.standard_text(tmp_path / "Formular.pdf"))
+    doc.setTool("formDesign")
+    settle(h)
+    pump(0.3)
+    text_kind, pick = h.item("readerFormKind_text"), h.item("readerFormKind_select")
+    click(h, center(text_kind))
+    assert doc.formKind == "text" and text_kind.property("checked") and not pick.property("checked")
+    click(h, center(text_kind))  # erneut: zurück zum Auswählen der Felder
+    assert doc.formKind == "" and pick.property("checked") and not text_kind.property("checked")
+
+
+def test_document_moves_with_the_mouse(reader_app, tmp_path: Path) -> None:
+    """Herausgezoomt und vergrößert: Mit »Verschieben« zieht die linke Maustaste das Dokument überall, sonst auf
+    der freien Fläche neben den Seiten (auf der Seite markiert »Auswählen« weiter Text); die mittlere Taste zieht
+    immer, Umschalt + Mausrad verschiebt waagerecht."""
+    h = reader_app
+    doc = open_pdf(h, samples.big(tmp_path / "Lang.pdf", pages=8))
+    view = h.item("readerView")
+    doc.setZoom(50)
+    settle(h)
+    pump(0.3)
+    y = lambda: view.property("contentY")  # noqa: E731
+    middle = window_point(view, view.width() / 2, view.height() / 2)
+    # »Auswählen« auf der Seite: Text markieren, nichts bewegen
+    start = y()
+    mouse_drag(h, LEFT, middle, QPoint(middle.x(), middle.y() - 120))
+    assert y() == start and doc.selectionPage >= 0
+    # freie Fläche neben der Seite: bewegt das Dokument 1:1
+    side = window_point(view, 12, view.height() / 2)
+    mouse_drag(h, LEFT, side, QPoint(side.x(), side.y() - 120))
+    assert abs(y() - (start + 120)) <= 2
+    # mittlere Maustaste – auch auf der Seite
+    before = y()
+    mouse_drag(h, Qt.MouseButton.MiddleButton, middle, QPoint(middle.x(), middle.y() - 80))
+    assert abs(y() - (before + 80)) <= 2
+    # Werkzeug »Verschieben«: linke Maustaste auf der Seite
+    click(h, center(h.item("readerToolHand")))
+    before = y()
+    mouse_drag(h, LEFT, middle, QPoint(middle.x(), middle.y() - 100))
+    assert doc.tool == "hand" and abs(y() - (before + 100)) <= 2
+    # vergrößert: Umschalt + Mausrad waagerecht
+    doc.setZoom(200)
+    settle(h)
+    pump(0.3)
+    assert view.property("contentWidth") > view.width()
+    left = view.property("contentX")
+    wheel(h, view, -2, Qt.KeyboardModifier.ShiftModifier)
+    assert view.property("contentX") > left + 50
+
+
+def test_organize_bar_grows_instead_of_covering_pages(reader_app, tmp_path: Path) -> None:
+    """»Seiten organisieren« im schmalen Fenster: die Befehle brechen um, die Leiste wächst mit – die erste
+    Seitenreihe liegt darunter (bis 3.1.0-beta.2 lag »Text erkennen …« über der ersten Seite)."""
+    h = reader_app
+    open_pdf(h, samples.standard_text(tmp_path / "Eine Seite.pdf"))
+    h.window.resize(900, 700)
+    reader(h).showLeftPanel("thumbs")
+    reader(h).setOrganize(True)
+    settle(h)
+    pump(0.6)
+    bar, grid, ocr = h.item("readerOrganizeBar"), h.item("readerOrganizeGrid"), h.item("readerOrganizeOcr")
+    assert bar.height() > 60  # zwei Zeilen
+    ocr_bottom = ocr.mapToScene(QPointF(0, ocr.height())).y()
+    assert ocr_bottom <= bar.mapToScene(QPointF(0, bar.height())).y()
+    assert grid.mapToScene(QPointF(0, 0)).y() >= bar.mapToScene(QPointF(0, bar.height())).y() - 1
+    assert h.item("readerOrganizeCount").property("text").startswith("1 Seite –")
+    reader(h).setOrganize(False)
+    h.window.resize(1180, 860)
+    pump(0.3)
