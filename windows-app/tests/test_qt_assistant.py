@@ -407,8 +407,9 @@ def test_too_little_space_is_reported_before_downloading(app_ki, ki, monkeypatch
     assert notice.shown and notice.title == "Nicht genug Speicherplatz"
 
 
-def test_removing_the_model_frees_the_space(app_ki, ki) -> None:
-    """»Modell entfernen …« löscht nach Rückfrage Modell und Reste; der Assistent ist danach nicht mehr bereit."""
+def test_removing_the_model_frees_the_space(app_ki, ki, tmp_path: Path) -> None:
+    """»Modell entfernen …« löscht nach Rückfrage Modell und Reste – erst nachdem der KI-Prozess beendet ist (Windows
+    sperrt eine geladene Datei); der Assistent ist danach nicht mehr bereit."""
     h = app_ki
     assistant = a(h)
     install(ki.compact)
@@ -416,11 +417,20 @@ def test_removing_the_model_frees_the_space(app_ki, ki) -> None:
     assistant.setEnabled(True)
     assistant.download("kompakt")  # schon eingerichtet: nur auswählen
     assert assistant.state == "ready" and assistant.modelKey == "kompakt"
+    h.navigate("reader", 0.3)
+    open_pdf(h, contract_pdf(tmp_path / "vertrag.pdf"))
+    assistant.ask(QUESTION)
+    wait_answer(h)
+    process = assistant._server._process
+    assert process.poll() is None
     h.navigate("settings")
     switch(h, h.item("assistantRemove"))
-    assert not store.root().exists()
+    assert wait_until(lambda: not store.root().exists(), 15)
+    pump(0.2)
+    assert process.poll() is not None and assistant._server is None
     assert assistant.state == "setup" and assistant.modelKey == "" and assistant.partial == ""
     assert h.item("assistantSetup").isVisible() and not h.item("assistantRemove").isVisible()
+    assert "Sprachmodell entfernt" in h.app.statusText
 
 
 # --- Fragen im Reader -----------------------------------------------------------------------------------------------

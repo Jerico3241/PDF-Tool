@@ -74,7 +74,7 @@ def mark_verified(model: Model) -> Path:
     """Geprüften Download übernehmen: ``.part`` → Modelldatei, Vermerk der Prüfsumme daneben."""
     target = path(model)
     os.replace(partial(model), target)
-    _marker(model).write_text(model.sha256 + "\n", encoding="ascii")
+    _marker(model).write_bytes((model.sha256 + "\n").encode("ascii"))  # gleich auf jedem System (kein CRLF)
     return target
 
 

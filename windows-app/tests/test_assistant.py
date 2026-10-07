@@ -77,15 +77,16 @@ def test_a_model_counts_as_installed_only_with_size_and_verified_checksum() -> N
     assert store.installed(model) and store.used_bytes() == 0  # ``used_bytes`` zählt nur Modelle des Katalogs
     # Vermerk fehlt oder passt nicht, Datei hat eine andere Größe: nicht eingerichtet
     marker = store.models_dir() / (model.file + store.VERIFIED_SUFFIX)
-    marker.write_text("0" * 64, encoding="ascii")
+    assert marker.read_bytes() == (model.sha256 + "\n").encode("ascii")
+    marker.write_bytes(b"0" * 64)
     assert not store.installed(model)
-    marker.write_text(model.sha256 + "\n", encoding="ascii")
+    marker.write_bytes((model.sha256 + "\r\n").encode("ascii"))  # auch mit Windows-Zeilenende
     assert store.installed(model)
     target.write_bytes(content + b"x")
     assert not store.installed(model)
     # Entfernen: Datei, Vermerk und leere Ordner
     freed = store.remove(model)
-    assert freed == len(content) + 1 + len(model.sha256) + 1
+    assert freed == len(content) + 1 + len(model.sha256) + 2
     assert not store.models_dir().exists() and not store.root().exists()
 
 

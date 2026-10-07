@@ -269,7 +269,9 @@ class AssistantController(Observable):
         self._download_failed(model, _Cancelled())
 
     def _downloaded(self, model: catalog.Model) -> None:
-        """Download fertig: SHA-256 im Hintergrund prüfen, erst dann ist das Modell eingerichtet."""
+        """Download fertig: SHA-256 im Hintergrund prüfen, erst dann ist das Modell eingerichtet. Ein anderes Modell
+        wird danach gelöscht (Platz sparen) – vorher endet der KI-Prozess, der es geladen haben kann (Windows sperrt
+        eine geladene Datei)."""
         self._transfer = None
         self._download_model = None
         self.state = "verify"
@@ -278,21 +280,27 @@ class AssistantController(Observable):
         from updater.verifier import file_sha256
 
         def check() -> bool:
-            return file_sha256(store.partial(model)) == model.sha256
+            if file_sha256(store.partial(model)) != model.sha256:
+                store.remove(model)
+                return False
+            self._end_server()
+            store.mark_verified(model)
+            for other in catalog.MODELS:
+                if other.key != model.key:
+                    store.remove(other)  # auch Reste unterbrochener Downloads
+            return True
 
         def done(ok: bool) -> None:
             self.progressText = ""
             self.progress = 0.0
             if not ok:
-                store.remove(model)
                 self._select(None)
-                self.state = "setup"
+                self.state = "off"
+                self._refresh_state()
                 self.statusText = "Die geladene Datei war beschädigt und wurde gelöscht. Bitte erneut laden."
                 self.app.notify("assistant", "error", self.statusText, title="Prüfsumme stimmt nicht", actions=(("Erneut laden", lambda: self.download(model.key)),))
                 self._log().warning("KI-Modell: Prüfsumme stimmt nicht – Datei verworfen")
                 return
-            store.mark_verified(model)
-            self._remove_others(model)
             self._select(model)
             self.state = "off"  # damit _refresh_state neu bewertet
             self._refresh_state()
@@ -300,40 +308,60 @@ class AssistantController(Observable):
             self.app.notify("assistant", "success", f"Das Modell »{model.name}« ist eingerichtet. Fragen stellen Sie im Reader in der Seitenleiste »KI-Assistent«.", title="KI-Assistent bereit", auto_hide=8000)
 
         def failed(exc: BaseException, _details: str) -> None:
-            self.state = "setup"
             self.progressText = ""
-            self.statusText = "Die geladene Datei konnte nicht geprüft werden."
+            self.progress = 0.0
+            self._select(self._model() if self._model() is not None and store.installed(self._model()) else None)
+            self.state = "off"
+            self._refresh_state()
+            if self.state != "ready":
+                self.statusText = "Die geladene Datei konnte nicht geprüft oder übernommen werden (Speicherplatz, Zugriffsrechte)."
             self._log().warning("KI-Modell: Prüfung fehlgeschlagen (%s)", type(exc).__name__)
 
         self.app.worker.run(check, done, failed)
 
-    def _remove_others(self, keep: catalog.Model) -> None:
-        """Nach dem Wechsel des Modells: das andere (und Reste unterbrochener Downloads) löschen – Platz sparen."""
-        for model in catalog.MODELS:
-            if model.key != keep.key:
-                store.remove(model)
-
     @Slot()
     def removeModel(self) -> None:  # noqa: N802
         """Modell (und unterbrochene Downloads) löschen – nach Rückfrage. Der Assistent bleibt eingeschaltet, kann aber
-        erst nach erneutem Einrichten antworten."""
+        erst nach erneutem Einrichten antworten. Gelöscht wird im Hintergrund, nachdem der KI-Prozess beendet ist."""
         models = [model for model in catalog.MODELS if store.installed(model) or store.partial_size(model)]
-        if not models:
+        if not models or self.state == "verify":
             return
         size = sum(model.size if store.installed(model) else store.partial_size(model) for model in models)
         if not self.app.dialogs.confirm("Sprachmodell entfernen?", f"Das Sprachmodell wird von diesem PC gelöscht – {_gb(size)} werden frei. Zum erneuten Einrichten muss es wieder geladen werden.", "Entfernen"):
             return
         self.stop()
-        self._stop_server()
         if self._transfer is not None:
             transfer, self._transfer = self._transfer, None
+            self._download_model = None
             transfer.cancel()
-        freed = sum(store.remove(model) for model in catalog.MODELS)
-        self._select(None)
-        self.state = "off"
-        self._refresh_state()
-        self.app.persist()
-        self.app.set_status(f"Sprachmodell entfernt – {_gb(freed)} frei.", "success")
+
+        def work() -> int:
+            self._end_server()
+            return sum(store.remove(model) for model in catalog.MODELS)
+
+        def done(freed: int) -> None:
+            self._select(None)
+            self.state = "off"
+            self._refresh_state()
+            self.app.persist()
+            left = [model for model in catalog.MODELS if store.path(model).exists() or store.partial(model).exists()]
+            if left:
+                self.app.notify("assistant", "warning", "Das Sprachmodell ließ sich nicht vollständig löschen – vielleicht ist die Datei gerade geöffnet. Bitte später erneut versuchen.", title="Nicht vollständig entfernt")
+            else:
+                self.app.set_status(f"Sprachmodell entfernt – {_gb(freed)} frei.", "success")
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self._log().warning("KI-Modell: Entfernen fehlgeschlagen (%s)", type(exc).__name__)
+            done(0)
+
+        self.app.worker.run(work, done, failed)
+
+    def _end_server(self) -> None:
+        """KI-Prozess beenden und warten, bis er weg ist (Arbeitsthread) – danach lässt sich das Modell löschen."""
+        with self._server_lock:
+            server, self._server = self._server, None
+        if server is not None:
+            server.stop()
 
     # Fragen und Zusammenfassen ----------------------------------------------------------------------------------
     def _document(self):
