@@ -85,8 +85,11 @@ class EditorDocument:
         self.password = password
         self.stamp = stamp
         self.report = report
-        self.revision = 0
-        self.saved_revision = 0
+        self.revision = 0  # zählt jede Änderung am pikepdf-Stand (Darstellung, Zwischenspeicher)
+        # Standnummer des Inhalts (``commands``) und die zuletzt gespeicherte: gleich = unverändert –
+        # auch wenn Rückgängig zum gespeicherten Stand zurückführt
+        self.state = 0
+        self.saved_state = 0
         self._data = data  # Originalbytes – Quelle der Darstellung bis zur ersten Änderung
         self._view = None
         self._view_bytes: bytes | None = None
@@ -161,7 +164,7 @@ class EditorDocument:
     # Zustand ---------------------------------------------------------------------------------
     @property
     def dirty(self) -> bool:
-        return self.revision != self.saved_revision
+        return self.state != self.saved_state
 
     @property
     def read_only(self) -> bool:
@@ -191,7 +194,7 @@ class EditorDocument:
         self.path = path
         self.name = path.name
         self.stamp = stamp
-        self.saved_revision = self.revision
+        self.saved_state = self.state
 
     # Geometrie --------------------------------------------------------------------------------
     def geometry(self, index: int) -> PageGeometry:

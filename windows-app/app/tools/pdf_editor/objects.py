@@ -439,12 +439,15 @@ class _NotNative(Exception):
 
 @dataclass
 class _Action:
-    kind: str  # "text", "delete", "move", "size", "color", "spacing"
+    kind: str  # "text", "delete", "move", "size", "color", "spacing", "transform", "alpha"
     data: bytes | None = None  # neuer Text (kodiert) – nur für den ersten Teil eines Segments
     shift: tuple[float, float] = (0.0, 0.0)  # Verschiebung (Benutzerraum des Operators)
     size: float = 0.0
     color: tuple[int, int, int] = (0, 0, 0)
     spacing: float = 0.0
+    matrix: tuple = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)  # transform: Umformung im Seitenraum (z. B. Drehung)
+    state: str = ""  # alpha: ExtGState für den Teil
+    restores: dict = field(default_factory=dict)  # alpha: Deckkraft davor (CA, ca) → ExtGState (für alles Folgende)
 
 
 def _check_revision(document: EditorDocument, objects: PageObjects) -> None:
@@ -779,6 +782,19 @@ def _rewrite(content: PageContent, show: ShowOp, targets: list[tuple[int, int, _
             out.append(_op("rg", r, g, b))
             out.append(_tj(piece))
             out += _fill_state(content, show.index)
+        elif action.kind == "transform":
+            # Textmatrix des Teils so, dass er im Seitenraum mit ``matrix`` umgeformt erscheint:
+            # Tm' × CTM = Tm × CTM × M  →  Tm' = Tm × CTM × M × CTM⁻¹; danach Lage wie im Original
+            start = mul((1.0, 0.0, 0.0, 1.0, position, 0.0), show.tm)
+            tm = mul(mul(mul(start, show.ctm), tuple(action.matrix)), invert(show.ctm))
+            out.append(_op("Tm", *[round(v, 5) for v in tm]))
+            out.append(_tj(piece))
+            out += _restore_position(show, position + advance)
+        elif action.kind == "alpha":
+            previous = show.graphics.alpha if show.graphics is not None else (1.0, 1.0)
+            out.append(_op("gs", pikepdf.Name(action.state)))
+            out.append(_tj(piece))
+            out.append(_op("gs", pikepdf.Name(action.restores[previous])))
         position += advance
     return out
 
@@ -932,9 +948,9 @@ def _cover(document: EditorDocument, objects: PageObjects, targets) -> ObjectOut
     return ObjectOutcome(OVERLAY, area)
 
 
-def _font_for(document: EditorDocument, objects: PageObjects, segment: Segment, first: int, text: str):
+def _font_for(document: EditorDocument, objects: PageObjects, segment: Segment, first: int, text: str, wanted=None):
     glyph = objects.glyphs[first]
-    style = textedit.style_of(segment.font)
+    style = wanted or textedit.style_of(segment.font)
     try:
         font = textedit.new_font(document, segment.page, style, text)
     except textedit._Rejected as rejected:  # noqa: SLF001
@@ -1065,7 +1081,8 @@ def _copy(content: PageContent, objects: PageObjects, first: int, last: int, off
         tm = mul((1.0, 0.0, 0.0, 1.0, position, 0.0), show.tm)
         out.append(_op("q"))
         out.append(_op("cm", *[round(v, 5) for v in show.ctm]))
-        out += _fill_state(content, show.index)
+        # Farben, Linien und ExtGState (Deckkraft) wie beim Original; ohne Angabe gilt Schwarz
+        out += list(show.graphics.replay()) if show.graphics is not None else _fill_state(content, show.index)
         out.append(_op("BT"))
         out += [_op("Tf", pikepdf.Name(state.font), state.size), _op("Tc", state.char_spacing), _op("Tw", state.word_spacing), _op("Tz", round(state.hscale * 100, 4)), _op("Ts", state.rise), _op("Tr", state.render)]
         out.append(_op("Tm", *[round(v, 5) for v in (tm[0], tm[1], tm[2], tm[3], tm[4] + ux, tm[5] + uy)]))
@@ -1143,6 +1160,130 @@ def move_each(document: EditorDocument, history: History, objects: PageObjects, 
     return outcome
 
 
+# --- Schrift, Deckkraft, Drehung ------------------------------------------------------------------------------
+def refont(document: EditorDocument, history: History, objects: PageObjects, idents: list[str], *, family: str | None = None, bold: bool | None = None, italic: bool | None = None) -> ObjectOutcome:
+    """Schriftart bzw. Fett/Kursiv der Auswahl ändern: der Text wird in der gewünschten Schrift neu gesetzt
+    (Original entfernt, gleiche Grundlinie, Größe und Farbe) – ehrlich als »neu gesetzt« gemeldet."""
+    _check_revision(document, objects)
+    targets = [objects.target(ident) for ident in idents]
+    if not targets:
+        raise UnsupportedEdit("Es ist nichts ausgewählt.")
+    for segment, _first, _last in targets:
+        if not segment.native:
+            raise UnsupportedEdit("Die Schrift dieses Textes lässt sich nicht ändern: " + segment.native_reason)
+    page = targets[0][0].page
+    before, before_text = _snapshot(document, page)
+    area = None
+    notes: list[str] = []
+    try:
+        with commands.record(document, history, "Schrift ändern", pages=(page,)) as rec:
+            rec.page(page)
+            fonts = []
+            for segment, first, last in targets:
+                base = textedit.style_of(segment.font)
+                wanted = fonts_style(family or base.family, base.bold if bold is None else bold, base.italic if italic is None else italic)
+                text = objects.text_of(first, last)
+                fonts.append((segment, first, last, text, _font_for(document, objects, segment, first, text, wanted)))
+            obj = document.pdf.pages[page].obj
+            content = PageContent(document.pdf, obj, page_fonts(obj))
+            changes = [(first, last, _Action("delete")) for _segment, first, last in targets]
+            if len(targets) == 1:
+                segment, first, last, text, font = fonts[0]
+                font_obj, size = font[0], font[1]
+                shift = _reflow(objects, segment, first, last, font_obj.measure(text, size) - _width(content, objects, first, last))
+                if shift is not None:
+                    changes.append((last + 1, segment.last, _Action("move", shift=shift)))
+                    rest = objects.bounds_of(last + 1, segment.last)
+                    area = union(rest, (rest[0] + shift[0], rest[1] + shift[1], rest[2] + shift[0], rest[3] + shift[1]))
+            _apply(document, objects, changes)
+            for segment, first, last, text, (font_obj, size, color, origin, angle) in fonts:
+                _append_text(document, page, font_obj, size, color, origin, angle, text)
+                area = union(area, _extend(objects.bounds_of(first, last), angle, font_obj.measure(text, size) * 1.05))
+                notes += [note for note in font_obj.notes if note not in notes]
+            outcome = ObjectOutcome(RECONSTRUCTED, area, notes)
+            rec.info["mode"] = RECONSTRUCTED
+            _verify(document, page, before, before_text, inflate(area, 2.0), outcome, None, None, wide=True)
+            rec.fresh = True
+    except _NotNative as reason:
+        raise UnsupportedEdit("Die Schrift lässt sich hier nicht sicher ändern. " + str(reason)) from reason
+    return outcome
+
+
+def fonts_style(family: str, bold: bool, italic: bool):
+    from .fonts import Style
+
+    return Style(family, bool(bold), bool(italic))
+
+
+def set_opacity(document: EditorDocument, history: History, objects: PageObjects, idents: list[str], opacity: float) -> ObjectOutcome:
+    """Deckkraft der Auswahl (0–1) – nativ: eigene ExtGState-Ressource für die Zeichen, danach gilt wieder
+    die Deckkraft davor."""
+    from . import vectors
+
+    _check_revision(document, objects)
+    if not 0.0 <= float(opacity) <= 1.0:
+        raise UnsupportedEdit("Die Deckkraft muss zwischen 0 und 100 % liegen.")
+    targets = [objects.target(ident) for ident in idents]
+    if not targets:
+        raise UnsupportedEdit("Es ist nichts ausgewählt.")
+    for segment, _first, _last in targets:
+        if not segment.native:
+            raise UnsupportedEdit("Die Deckkraft dieses Textes lässt sich nicht ändern: " + segment.native_reason)
+    page = targets[0][0].page
+    before, before_text = _snapshot(document, page)
+    area = None
+    for _segment, first, last in targets:
+        area = union(area, objects.bounds_of(first, last))
+    try:
+        with commands.record(document, history, "Deckkraft ändern", pages=(page,)) as rec:
+            obj = rec.page(page)
+            content = PageContent(document.pdf, obj, page_fonts(obj))
+            previous = {show.graphics.alpha if show.graphics is not None else (1.0, 1.0) for show in content.shows}
+            state = vectors.alpha_state(document.pdf, obj, opacity)
+            restores = {alpha: vectors.alpha_state(document.pdf, obj, alpha[1], alpha[0]) for alpha in previous}
+            _apply(document, objects, [(first, last, _Action("alpha", state=state, restores=restores)) for _segment, first, last in targets])
+            outcome = ObjectOutcome(NATIVE, area)
+            rec.info["mode"] = NATIVE
+            _verify(document, page, before, before_text, area, outcome, None, None)
+            rec.fresh = True
+    except _NotNative as reason:
+        raise UnsupportedEdit("Die Deckkraft lässt sich hier nicht sicher ändern. " + str(reason)) from reason
+    return outcome
+
+
+def transform_text(document: EditorDocument, history: History, objects: PageObjects, idents: list[str], matrix, *, title: str = "Drehen") -> ObjectOutcome:
+    """Auswahl im Seitenraum umformen (z. B. drehen) – nativ über die Textmatrix der Teile."""
+    from .content import apply as apply_matrix
+
+    _check_revision(document, objects)
+    targets = [objects.target(ident) for ident in idents]
+    if not targets:
+        raise UnsupportedEdit("Es ist nichts ausgewählt.")
+    for segment, _first, _last in targets:
+        if not segment.native:
+            raise UnsupportedEdit("Dieser Text lässt sich nicht drehen: " + segment.native_reason)
+    page = targets[0][0].page
+    before, before_text = _snapshot(document, page)
+    area = None
+    for _segment, first, last in targets:
+        box = objects.bounds_of(first, last)
+        area = union(area, box)
+        for x, y in ((box[0], box[1]), (box[2], box[1]), (box[0], box[3]), (box[2], box[3])):
+            tx, ty = apply_matrix(tuple(matrix), x, y)
+            area = union(area, (tx, ty, tx, ty))
+    try:
+        with commands.record(document, history, title, pages=(page,)) as rec:
+            rec.page(page)
+            _apply(document, objects, [(first, last, _Action("transform", matrix=tuple(matrix))) for _segment, first, last in targets])
+            outcome = ObjectOutcome(NATIVE, area)
+            rec.info["mode"] = NATIVE
+            _verify(document, page, before, before_text, inflate(area, 2.0), outcome, None, None, wide=True)
+            rec.fresh = True
+    except _NotNative as reason:
+        raise UnsupportedEdit("Das lässt sich hier nicht sicher drehen. " + str(reason)) from reason
+    return outcome
+
+
 # --- Für die Oberfläche --------------------------------------------------------------------------------------
 def describe(document: EditorDocument, objects: PageObjects) -> dict:
     """Objekte einer Seite in Anzeige-Punkten (Ursprung oben links, Drehung der Seite berücksichtigt) –
@@ -1173,7 +1314,9 @@ def describe(document: EditorDocument, objects: PageObjects) -> dict:
             "font": segment.font.split("+", 1)[-1],
             "size": segment.size,
             "color": "#%02X%02X%02X" % tuple(segment.color),
-            "angle": round((segment.angle + geo.rotation) % 360, 1),
+            # Drehung in der Anzeige im Uhrzeigersinn: /Rotate dreht die Seite im Uhrzeigersinn, Textwinkel im
+            # Seitenraum zählen gegen ihn (aufrechter Text = 0°, auch auf gedrehten Seiten)
+            "angle": round((geo.rotation - segment.angle) % 360, 1),
             "spacing": round(spacing, 3),
             "x": round(u, 2),
             "y": round(v, 2),
@@ -1183,6 +1326,23 @@ def describe(document: EditorDocument, objects: PageObjects) -> dict:
         })
     pictures = []
     for item in image_module.list_images(document, objects.page):
-        pictures.append({"id": f"{objects.page}-i{item.index}", "kind": "image", "index": item.index, "view": [round(value, 2) for value in geo.rect_to_view(item.bounds)], "pixels": list(item.pixels), "editable": item.editable, "reason": item.reason})
+        pictures.append({"id": f"{objects.page}-i{item.index}", "kind": "image", "index": item.index, "view": [round(value, 2) for value in geo.rect_to_view(item.bounds)], "pixels": list(item.pixels), "editable": item.editable, "reason": item.reason, "native": item.editable})
+    from . import vectors
+
+    shapes = []
+    for item in vectors.list_paths(document, objects.page):
+        shapes.append({
+            "id": f"{objects.page}-v{item.index}",
+            "kind": "path",
+            "index": item.index,
+            "view": [round(value, 2) for value in geo.rect_to_view(item.bounds)],
+            "stroke": "#%02X%02X%02X" % item.stroke if item.stroke else "",
+            "fill": "#%02X%02X%02X" % item.fill if item.fill else "",
+            "width": item.width,
+            "opacity": item.opacity,
+            "editable": item.editable,
+            "native": item.editable,
+            "reason": item.reason,
+        })
     message = NO_TEXT if not segments else ""
-    return {"page": objects.page, "revision": objects.revision, "segments": segments, "images": pictures, "message": message}
+    return {"page": objects.page, "revision": objects.revision, "segments": segments, "images": pictures, "paths": shapes, "message": message}

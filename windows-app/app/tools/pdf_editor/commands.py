@@ -14,10 +14,15 @@ Damit das trägt, gelten für alle Änderungen zwei Regeln:
 
 Was nach einem Rückgängig niemand mehr erreicht, schreibt qpdf beim Speichern nicht mit – der
 Verlauf bläht die Datei nicht auf.
+
+Mehrere Änderungen einer Bedienung (z. B. Text und Bilder gemeinsam verschieben) fasst ``group()`` zu
+**einem** Schritt zusammen. Jeder Schritt trägt eine Standnummer: Ist nach Rückgängig/Wiederholen
+wieder der gespeicherte Stand erreicht, gilt das Dokument als unverändert (``EditorDocument.dirty``).
 """
 
 from __future__ import annotations
 
+import itertools
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Iterator
@@ -28,6 +33,7 @@ from .document import EditorDocument
 
 PAGE_KEYS = ("/Contents", "/Resources", "/Annots", "/Rotate", "/MediaBox", "/CropBox", "/Group", "/UserUnit")
 HISTORY_LIMIT = 100
+_states = itertools.count(1)  # Standnummern (eindeutig im Prozess)
 
 
 @dataclass
@@ -92,14 +98,57 @@ class Command:
     pages: tuple[int, ...] = ()  # betroffene Seiten (Index nach der Änderung) – zum Neuzeichnen
     structure: bool = False  # Seitenzahl oder -reihenfolge geändert
     info: dict = field(default_factory=dict)  # z. B. Bearbeitungsmodus eines Textes
+    state: int = 0  # Standnummer nach der Änderung
+    previous: int = 0  # Standnummer davor
 
     def undo(self, document: EditorDocument) -> None:
         self.before.restore(document.pdf)
+        document.state = self.previous
         document.touch()
 
     def redo(self, document: EditorDocument) -> None:
         self.after.restore(document.pdf)
+        document.state = self.state
         document.touch()
+
+
+@dataclass
+class CommandGroup:
+    """Mehrere Änderungen als ein Schritt (Rückgängig in umgekehrter Reihenfolge)."""
+
+    title: str
+    commands: list[Command]
+
+    @property
+    def pages(self) -> tuple[int, ...]:
+        return tuple(sorted({page for command in self.commands for page in command.pages}))
+
+    @property
+    def structure(self) -> bool:
+        return any(command.structure for command in self.commands)
+
+    @property
+    def info(self) -> dict:
+        merged: dict = {}
+        for command in self.commands:
+            merged.update(command.info)
+        return merged
+
+    @property
+    def state(self) -> int:
+        return self.commands[-1].state
+
+    @property
+    def previous(self) -> int:
+        return self.commands[0].previous
+
+    def undo(self, document: EditorDocument) -> None:
+        for command in reversed(self.commands):
+            command.undo(document)
+
+    def redo(self, document: EditorDocument) -> None:
+        for command in self.commands:
+            command.redo(document)
 
 
 class Recorder:
@@ -137,8 +186,9 @@ class History:
 
     def __init__(self, limit: int = HISTORY_LIMIT) -> None:
         self.limit = limit
-        self._done: list[Command] = []
-        self._undone: list[Command] = []
+        self._done: list[Command | CommandGroup] = []
+        self._undone: list[Command | CommandGroup] = []
+        self._group: list[Command] | None = None  # offene Gruppe (``group()``)
 
     @property
     def can_undo(self) -> bool:
@@ -156,12 +206,20 @@ class History:
     def redo_title(self) -> str:
         return self._undone[-1].title if self._undone else ""
 
-    def push(self, command: Command) -> None:
+    @property
+    def last(self) -> Command | CommandGroup | None:
+        """Der zuletzt ausgeführte Schritt (für Meldungen, etwa wie eine Änderung erfolgt ist)."""
+        return self._done[-1] if self._done else None
+
+    def push(self, command: Command | CommandGroup) -> None:
+        if self._group is not None and isinstance(command, Command):
+            self._group.append(command)
+            return
         self._done.append(command)
         self._undone.clear()
         del self._done[: max(0, len(self._done) - self.limit)]
 
-    def undo(self, document: EditorDocument) -> Command | None:
+    def undo(self, document: EditorDocument) -> Command | CommandGroup | None:
         if not self._done:
             return None
         command = self._done.pop()
@@ -169,7 +227,7 @@ class History:
         self._undone.append(command)
         return command
 
-    def redo(self, document: EditorDocument) -> Command | None:
+    def redo(self, document: EditorDocument) -> Command | CommandGroup | None:
         if not self._undone:
             return None
         command = self._undone.pop()
@@ -180,6 +238,30 @@ class History:
     def clear(self) -> None:
         self._done.clear()
         self._undone.clear()
+
+
+@contextmanager
+def group(document: EditorDocument, history: History, title: str) -> Iterator[None]:
+    """``with group(doc, history, "Verschieben"): …`` – alle Änderungen darin werden ein Schritt.
+
+    Wirft der Block, werden die schon ausgeführten Änderungen der Gruppe zurückgenommen (alles oder
+    nichts). Verschachtelte Gruppen gehen in der äußeren auf."""
+    if history._group is not None:  # noqa: SLF001 - verschachtelt: Teil der äußeren Gruppe
+        yield
+        return
+    history._group = []  # noqa: SLF001
+    try:
+        yield
+    except BaseException:
+        done, history._group = history._group, None  # noqa: SLF001
+        for command in reversed(done):
+            command.undo(document)
+        raise
+    done, history._group = history._group, None  # noqa: SLF001
+    if len(done) == 1:
+        history.push(done[0])
+    elif done:
+        history.push(CommandGroup(title, done))
 
 
 @contextmanager
@@ -199,6 +281,8 @@ def record(document: EditorDocument, history: History, title: str, *, pages: tup
         document.touch()
         raise
     command = Command(title, recorder.before(), recorder._snapshot(), pages=tuple(pages), structure=recorder.structure, info=dict(recorder.info))
+    command.previous, command.state = document.state, next(_states)
+    document.state = command.state
     history.push(command)
     if not recorder.fresh:
         document.touch()

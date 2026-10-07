@@ -152,14 +152,19 @@ def transform(document: EditorDocument, history: History, page: int, index: int,
     """Bild mit ``matrix`` (Seitenkoordinaten, PDF-Konvention: Punkt × Matrix) umformen."""
     document.ensure_editable()
     content, op = _op(document, page, index)
+    with commands.record(document, history, title, pages=(page,)) as rec:
+        rec.page(page)
+        transform_in(content, op, matrix)
+        content.commit()
+
+
+def transform_in(content: PageContent, op: ImageOp, matrix: Matrix) -> None:
+    """Wie ``transform``, nur im Inhalt (ohne Verlauf und ohne ``commit``) – für gemeinsame Änderungen."""
     try:
         inner = mul(mul(op.ctm, matrix), invert(op.ctm))  # vor dem Zeichnen: CTM' = inner × CTM = CTM × matrix
     except ValueError as exc:
         raise UnsupportedEdit("Das Bild hat keine Fläche und lässt sich nicht umformen.") from exc
-    with commands.record(document, history, title, pages=(page,)) as rec:
-        rec.page(page)
-        _apply_inner(content, op, inner)
-        content.commit()
+    _apply_inner(content, op, inner)
 
 
 def _apply_inner(content: PageContent, op: ImageOp, inner: Matrix) -> None:
@@ -167,12 +172,62 @@ def _apply_inner(content: PageContent, op: ImageOp, inner: Matrix) -> None:
     sonst eine neue um den Aufruf legen (die Verschachtelung wächst nicht bei jeder Änderung)."""
     ins = content.instructions
     i = op.index
-    wrapped = i >= 2 and i + 1 < len(ins) and _is(ins[i - 2], "q") and _is(ins[i - 1], "cm") and len(ins[i - 1].operands) == 6 and _is(ins[i + 1], "Q")
-    if wrapped:
+    q = wrapper(ins, i)
+    if q is not None and _is(ins[i - 1], "cm") and len(ins[i - 1].operands) == 6:
         old = tuple(float(v) for v in ins[i - 1].operands)
         ins[i - 1] = _cm(mul(inner, old))
         return
+    if q is not None:
+        ins.insert(i, _cm(inner))
+        op.index += 1
+        return
     ins[i : i + 1] = [pikepdf.ContentStreamInstruction([], Operator("q")), _cm(inner), ins[i], pikepdf.ContentStreamInstruction([], Operator("Q"))]
+    op.index += 2
+
+
+def wrapper(ins: list, i: int) -> int | None:
+    """Position von ``q``, wenn das Bild an ``i`` allein in einer Klammer ``q [gs …] [cm] <Bild> Q`` steht."""
+    j = i - 1
+    while j >= 0 and not _is(ins[j], "q") and _operator(ins[j]) in ("cm", "gs"):
+        j -= 1
+    if j >= 0 and _is(ins[j], "q") and i + 1 < len(ins) and _is(ins[i + 1], "Q"):
+        return j
+    return None
+
+
+def alpha_in(content: PageContent, op: ImageOp, state: str) -> None:
+    """Deckkraft (ExtGState ``state``) nur für dieses Bild – eine frühere eigene ersetzt."""
+    ins = content.instructions
+    if wrapper(ins, op.index) is None:
+        ins[op.index : op.index + 1] = [pikepdf.ContentStreamInstruction([], Operator("q")), ins[op.index], pikepdf.ContentStreamInstruction([], Operator("Q"))]
+        op.index += 1
+    q = wrapper(ins, op.index)
+    for j in range(q + 1, op.index):
+        if _is(ins[j], "gs") and str(ins[j].operands[0]).startswith("/PTGS"):
+            ins[j] = pikepdf.ContentStreamInstruction([Name(state)], Operator("gs"))
+            return
+    ins.insert(q + 1, pikepdf.ContentStreamInstruction([Name(state)], Operator("gs")))
+    op.index += 1
+
+
+def delete_in(content: PageContent, op: ImageOp) -> None:
+    """Bild aus dem Inhalt nehmen (samt eigener Klammer) – ohne Verlauf und ohne ``commit``."""
+    ins = content.instructions
+    q = wrapper(ins, op.index)
+    if q is not None:
+        del ins[q : op.index + 2]
+    else:
+        del ins[op.index]
+
+
+def snippet(content: PageContent, op: ImageOp) -> list:
+    """Anweisungen, die das Bild mit seinem Zustand noch einmal zeichnen (für Kopien)."""
+    graphics = op.graphics.replay() if op.graphics is not None else []
+    return [pikepdf.ContentStreamInstruction([], Operator("q")), _cm(op.ctm), *graphics, content.instructions[op.index], pikepdf.ContentStreamInstruction([], Operator("Q"))]
+
+
+def _operator(ins) -> str:
+    return "" if isinstance(ins, pikepdf.ContentStreamInlineImage) else str(ins.operator)
 
 
 def _is(ins, operator: str) -> bool:
@@ -221,20 +276,15 @@ def rotate_by(document: EditorDocument, history: History, page: int, index: int,
 def delete(document: EditorDocument, history: History, page: int, index: int) -> None:
     document.ensure_editable()
     content, op = _op(document, page, index)
-    ins = content.instructions
-    i = op.index
     with commands.record(document, history, "Bild löschen", pages=(page,)) as rec:
         obj = rec.page(page)
-        if i >= 2 and i + 1 < len(ins) and _is(ins[i - 2], "q") and _is(ins[i - 1], "cm") and _is(ins[i + 1], "Q"):
-            del ins[i - 2 : i + 2]
-        else:
-            del ins[i]
+        delete_in(content, op)
         content.commit()
         if op.name:
-            _drop_unused_xobject(document.pdf, obj, op.name)
+            drop_unused_xobject(document.pdf, obj, op.name)
 
 
-def _drop_unused_xobject(pdf: pikepdf.Pdf, page: pikepdf.Object, name: str) -> None:
+def drop_unused_xobject(pdf: pikepdf.Pdf, page: pikepdf.Object, name: str) -> None:
     """XObject aus den Ressourcen der Seite nehmen, wenn kein ``Do`` der Seite es mehr nutzt."""
     for ins in pikepdf.parse_content_stream(page):
         if _is(ins, "Do") and ins.operands and str(ins.operands[0]) == name:
@@ -284,7 +334,7 @@ def replace(document: EditorDocument, history: History, page: int, index: int, p
             ins[i : i + 1] = [pikepdf.ContentStreamInstruction([], Operator("q")), _cm(placement), ins[i], pikepdf.ContentStreamInstruction([], Operator("Q"))]
         content.commit()
         if op.name:
-            _drop_unused_xobject(pdf, obj, op.name)
+            drop_unused_xobject(pdf, obj, op.name)
 
 
 # --- Einfügen, Ebene --------------------------------------------------------------------------------------------
@@ -319,15 +369,16 @@ def arrange(document: EditorDocument, history: History, page: int, index: int, f
         raise UnsupportedEdit("Die Ebene lässt sich nur für eingefügte Bilder ändern.")
     ins = content.instructions
     i = op.index
-    if not (i >= 2 and i + 1 < len(ins) and _is(ins[i - 2], "q") and _is(ins[i - 1], "cm") and _is(ins[i + 1], "Q")):
+    q = wrapper(ins, i)
+    if q is None:
         raise UnsupportedEdit("Die Ebene dieses Bildes lässt sich nicht ändern.")
-    group = ins[i - 2 : i + 2]
+    group = ins[q : i + 2]
     with commands.record(document, history, "In den Vordergrund" if front else "In den Hintergrund", pages=(page,)) as rec:
         obj = rec.page(page)
-        del ins[i - 2 : i + 2]
+        del ins[q : i + 2]
         if front:
             content.commit()
-            append_content(document.pdf, obj, pikepdf.unparse_content_stream(group[1:3]))
+            append_content(document.pdf, obj, pikepdf.unparse_content_stream(group[1:-1]))
         else:
             ins[0:0] = group
             content.commit()

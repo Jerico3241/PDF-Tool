@@ -355,6 +355,17 @@ def encrypted(path: Path, user: str = "geheim", owner: str = "besitzer", allow_e
     return path
 
 
+def copy_protected(path: Path) -> Path:
+    """Ohne Kennwort lesbar und bearbeitbar, aber Kopieren (Inhalte herauslösen) ist nicht erlaubt."""
+    tmp = mixed_objects(path.with_name(path.stem + "-offen.pdf"))
+    pdf = pikepdf.open(tmp)
+    allow = pikepdf.Permissions(extract=False, accessibility=True)
+    pdf.save(path, encryption=pikepdf.Encryption(user="", owner="besitzer", R=6, allow=allow))
+    pdf.close()
+    tmp.unlink()
+    return path
+
+
 def signed(path: Path) -> Path:
     """Signaturfeld mit Wert (nur Struktur, keine echte Kryptografie) – zum Erkennen und Warnen."""
     standard_text(path)
@@ -527,3 +538,136 @@ def object_rotated(path: Path) -> Path:
     src.close()
     source.unlink()
     return path
+
+
+def mixed_objects(path: Path, rotate: int = 0) -> Path:
+    """Text, ein Bild und Vektorobjekte (Rahmen, Kreisfläche, Linie, Hintergrund) auf einer Seite."""
+    from PIL import Image
+
+    photo = Image.new("RGB", (40, 20), (30, 160, 60))
+    pdf = pikepdf.new()
+    image = pdf.make_stream(photo.tobytes(), Type=Name.XObject, Subtype=Name.Image, Width=40, Height=20, ColorSpace=Name.DeviceRGB, BitsPerComponent=8)
+    content = (
+        b"0.96 0.96 0.96 rg 0 0 595 842 re f\n"  # Hintergrund (kein Objekt)
+        b"BT /F1 14 Tf 72 760 Td (Hottgenroth Software AG) Tj ET\n"
+        b"BT /F1 11 Tf 72 700 Td (Rechnung Nr. 4711) Tj ET\n"
+        b"q 0.9 0.1 0.1 RG 2 w 300 600 120 60 re S Q\n"  # Rahmen
+        b"q 0.1 0.3 0.9 rg 470 580 m 470 602 487 620 510 620 c 532 620 550 602 550 580 c 550 557 532 540 510 540 c 487 540 470 557 470 580 c f Q\n"  # Kreisfläche
+        b"0 0 0 RG 1.5 w 72 520 m 520 520 l S\n"  # Linie (ohne Klammer)
+        b"q 120 0 0 60 72 560 cm /Im1 Do Q\n"
+    )
+    page = _page_with(pdf, content, xobjects={"/Im1": image})
+    if rotate:
+        page.Rotate = rotate
+    pdf.save(path)
+    return path
+
+
+# --- Texterkennung (OCR): gescannte Seiten ---------------------------------------------------------------------
+SCAN_DPI = 300
+SCAN_LINES = (
+    "Hottgenroth Software AG",
+    "Rechnung Nr. 4711",
+    "Müller Straße 12, 50829 Köln",
+    "Vielen Dank für die gute Zusammenarbeit und den Auftrag.",
+)
+SCAN_LEFT, SCAN_TOP, SCAN_SIZE, SCAN_LEADING = 72.0, 90.0, 13.0, 26.0  # Anzeige-Punkte (Ursprung oben links)
+SCAN_MARGIN_WORD = "Randvermerk"  # steht beim Zuschnitt (CropBox) nur außerhalb des sichtbaren Bereichs
+
+
+def _scan_font():
+    from PIL import ImageFont
+
+    return ImageFont.truetype(str(vera_path()), round(SCAN_SIZE * SCAN_DPI / 72))
+
+
+def scan_word_box(word: str, line: int = 0) -> tuple[float, float, float, float]:
+    """Wo ``word`` in Zeile ``line`` des erzeugten Scans zu sehen ist: Anzeige-Punkte (x0, y0, x1, y1)."""
+    font = _scan_font()
+    text = SCAN_LINES[line]
+    start = text.index(word)
+    scale = SCAN_DPI / 72
+    x = SCAN_LEFT * scale + font.getlength(text[:start])
+    y = (SCAN_TOP + line * SCAN_LEADING) * scale
+    left, top, right, bottom = font.getbbox(word)
+    return ((x + left) / scale, (y + top) / scale, (x + right) / scale, (y + bottom) / scale)
+
+
+def scan_image(width: float, height: float, lines: tuple[str, ...] = SCAN_LINES):
+    """»Gescannte« Seite (Graustufen, 300 dpi) im Format ``width`` × ``height`` Punkte: Text in Bitstream Vera
+    auf leicht grauem Papier – nur Pixel, kein PDF-Text."""
+    from PIL import Image, ImageDraw
+
+    scale = SCAN_DPI / 72
+    image = Image.new("L", (round(width * scale), round(height * scale)), 246)
+    draw = ImageDraw.Draw(image)
+    font = _scan_font()
+    for number, line in enumerate(lines):
+        draw.text((SCAN_LEFT * scale, (SCAN_TOP + number * SCAN_LEADING) * scale), line, fill=24, font=font)
+    return image
+
+
+def _gray_image(pdf: pikepdf.Pdf, image) -> pikepdf.Stream:
+    import zlib
+
+    stream = pdf.make_stream(b"")
+    stream.write(zlib.compress(image.tobytes(), 6), filter=Name.FlateDecode, type_check=False)
+    stream.Type = Name.XObject
+    stream.Subtype = Name.Image
+    stream.Width, stream.Height = image.size
+    stream.ColorSpace = Name.DeviceGray
+    stream.BitsPerComponent = 8
+    return stream
+
+
+def _scan_page(pdf: pikepdf.Pdf, media: tuple[float, float], rotate: int = 0, crop: list[float] | None = None) -> pikepdf.Object:
+    """Seite, die nur aus einem Scan besteht: Das Bild füllt den sichtbaren Bereich so, dass die Anzeige
+    (``/Rotate``, CropBox) es aufrecht zeigt. Mit CropBox liegt darunter ein seitengroßes Bild mit einem
+    Randvermerk, den der Zuschnitt verdeckt."""
+    from PIL import ImageDraw
+
+    from tools.pdf_editor.geometry import PageGeometry
+
+    page = pdf.add_blank_page(page_size=media)
+    geo = PageGeometry(tuple(float(v) for v in (crop or (0, 0, media[0], media[1]))), rotate)
+    origin, right, top = geo.to_page(0, geo.height), geo.to_page(geo.width, geo.height), geo.to_page(0, 0)
+    matrix = (right[0] - origin[0], right[1] - origin[1], top[0] - origin[0], top[1] - origin[1], origin[0], origin[1])
+    xobjects = {"/Im1": _gray_image(pdf, scan_image(geo.width, geo.height))}
+    content = b""
+    if crop:
+        margin = scan_image(media[0], media[1], lines=())
+        ImageDraw.Draw(margin).text((12 * SCAN_DPI / 72, 12 * SCAN_DPI / 72), SCAN_MARGIN_WORD, fill=24, font=_scan_font())
+        xobjects["/Im0"] = _gray_image(pdf, margin)
+        content += f"q {media[0]} 0 0 {media[1]} 0 0 cm /Im0 Do Q\n".encode("ascii")
+        page.CropBox = Array(crop)
+    content += ("q " + " ".join(f"{value:.4f}" for value in matrix) + " cm /Im1 Do Q\n").encode("ascii")
+    page.Resources = Dictionary(XObject=Dictionary(xobjects))
+    page.Contents = pdf.make_stream(content)
+    if rotate:
+        page.Rotate = rotate
+    return page
+
+
+def scanned(path: Path, *, rotate: int = 0, crop: list[float] | None = None, text_page: bool = False) -> Path:
+    """Gescanntes PDF ohne Text (A4, 300 dpi). ``rotate``: Seite mit ``/Rotate`` – der Scan liegt im
+    Seitenraum gedreht, die Anzeige zeigt ihn aufrecht; ``crop``: CropBox mit Versatz; ``text_page``:
+    gemischtes Dokument – zuerst eine Seite mit echtem PDF-Text, dann die Scanseite."""
+    pdf = pikepdf.new()
+    if text_page:
+        _page_with(pdf, b"BT /F1 14 Tf 72 760 Td (Angebot Nr. 815 fuer Muster GmbH) Tj ET\nBT /F1 11 Tf 72 730 Td (Bitte pruefen Sie die beigefuegten Unterlagen.) Tj ET\n")
+    _scan_page(pdf, (A4[1], A4[0]) if rotate in (90, 270) else A4, rotate, crop)
+    pdf.save(path)
+    return path
+
+
+def text_only_pdf(width: float, height: float, words: list[tuple[str, float, float, float]], mode: int = 3) -> bytes:
+    """Text-only-PDF einer Seite wie von Tesseract (``textonly_pdf``): unsichtbarer Text (``3 Tr``) auf einer
+    Seite ``width`` × ``height`` Punkte. ``words``: (Text, x, Grundlinie y, Größe), Ursprung unten links – so
+    lassen sich Textebenen auch ohne Tesseract prüfen. ``mode=0``: sichtbar (für die Prüfung der Darstellung)."""
+    pdf = pikepdf.new()
+    parts = [f"BT {mode} Tr /F1 {size} Tf 1 0 0 1 {x:.2f} {y:.2f} Tm ({text}) Tj ET" for text, x, y, size in words]
+    _page_with(pdf, ("\n".join(parts) + "\n").encode("cp1252"))
+    pdf.pages[0].MediaBox = Array([0, 0, width, height])
+    buffer = io.BytesIO()
+    pdf.save(buffer)
+    return buffer.getvalue()
