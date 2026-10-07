@@ -18,7 +18,7 @@ import editorsamples as samples
 from conftest import pump, wait_until
 from test_qt_reader import click, open_pdf, reader, settle, window_point
 
-LEFT_WIDTH, RIGHT_WIDTH, RAIL = 256, 280, 44  # Metrics.readerLeftPanelWidth / readerRightPanelWidth / readerRailWidth
+LEFT_WIDTH, RIGHT_WIDTH, RAIL = 300, 280, 44  # Metrics.readerLeftPanelWidth / readerRightPanelWidth / readerRailWidth
 
 
 @pytest.fixture

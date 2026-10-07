@@ -1118,3 +1118,114 @@ def test_m_save_as_writes_a_new_file_and_switches_to_it(reader_app, tmp_path: Pa
     assert "4712" in page_text(copy)
     with pikepdf.open(copy) as saved:
         assert len(saved.pages) == 2
+
+
+# --- Einstellungen »PDF Reader«: Ansicht neu geöffneter Dokumente -----------------------------------------------
+def view_of(h, doc) -> tuple:
+    return (doc.fit, doc.zoom, doc.viewMode, reader(h).leftPanel)
+
+
+def test_open_settings_default_keeps_todays_behaviour(reader_app, tmp_path: Path, config_file: Path) -> None:
+    """Standard »Zuletzt verwendet« (Zoom und Seitenleiste): ein neues Dokument öffnet genau wie ohne
+    die Einstellungen; die neuen Schlüssel stehen mit ihrem Standard in den Einstellungen."""
+    import json
+
+    h = reader_app
+    s, r = h.settings, reader(h)
+    assert (s.readerZoom, s.readerPanel) == ("last", "last")
+    zuletzt = {"fit": "", "zoom": 150.0, "mode": "single"}
+    assert s.reader_start_view(zuletzt) == zuletzt and s.reader_start_panel("outline") == "outline" and s.reader_start_panel("") == ""
+    first = open_pdf(h, samples.standard_text(tmp_path / "erstes.pdf", pages=2))
+
+    def open_after_last_view(name: str):
+        first.setViewMode("single")  # zuletzt verwendet: eine Seite, ganze Seite, Lesezeichen
+        first.fitPage()
+        r.showLeftPanel("outline")
+        pump(0.2)
+        return view_of(h, open_pdf(h, samples.standard_text(tmp_path / name, pages=2)))
+
+    with_settings = open_after_last_view("mit.pdf")
+    h.app.settings = None  # wie vor den Einstellungen: nur die zuletzt verwendete Ansicht
+    try:
+        without_settings = open_after_last_view("ohne.pdf")
+    finally:
+        h.app.settings = s
+    assert with_settings == without_settings and with_settings[3] == "outline"
+    h.app.persist()
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert data["reader_zoom_beim_oeffnen"] == "last" and data["reader_leiste_beim_oeffnen"] == "last"
+
+
+@pytest.mark.parametrize("choice,fit", [("width", "width"), ("page", "page"), ("100", "")])
+def test_open_settings_zoom_applies_to_new_documents(reader_app, tmp_path: Path, choice: str, fit: str) -> None:
+    h = reader_app
+    first = open_pdf(h, samples.standard_text(tmp_path / "erstes.pdf", pages=2))
+    first.setZoom(150)  # zuletzt verwendet: freier Zoom
+    pump(0.2)
+    h.settings.setReaderZoom(choice)
+    assert h.app.statusText.startswith("Standardzoom beim Öffnen: ")
+    doc = open_pdf(h, samples.standard_text(tmp_path / "neu.pdf", pages=2))
+    assert doc.fit == fit and first.fit == "" and abs(first.zoom - 150) < 0.01  # das offene Dokument bleibt, wie es ist
+    if choice == "100":
+        assert doc.zoom == 100
+    else:
+        zoom = doc.zoom
+        assert abs(zoom - 150) > 1  # nicht der zuletzt verwendete Zoom …
+        (doc.fitWidth if choice == "width" else doc.fitPage)()
+        pump(0.2)
+        assert abs(doc.zoom - zoom) < 0.01  # … sondern Seitenbreite bzw. ganze Seite
+    # Ein weiteres Dokument öffnet wieder mit der Vorgabe – auch nach anderer Ansicht dazwischen
+    doc.setZoom(230)
+    pump(0.2)
+    again = open_pdf(h, samples.standard_text(tmp_path / "noch.pdf", pages=1))
+    assert again.fit == fit and (choice != "100" or again.zoom == 100)
+
+
+@pytest.mark.parametrize("choice,panel", [("thumbs", "thumbs"), ("outline", "outline"), ("none", "")])
+def test_open_settings_left_panel_applies_to_new_documents(reader_app, tmp_path: Path, choice: str, panel: str) -> None:
+    h = reader_app
+    r = reader(h)
+    r.leftPanel = "search"  # zuletzt verwendet: eine andere Seitenleiste
+    h.settings.setReaderPanel(choice)
+    open_pdf(h, samples.structured(tmp_path / "neu.pdf"))
+    pump(0.5)
+    assert r.leftPanel == panel
+    assert h.item("readerLeftPanel").property("panel") == panel
+    assert h.item("readerLeftRail").property("collapsed") is (panel == "")
+    # beim Lesen umgeschaltet: gilt für dieses Dokument, das nächste öffnet wieder mit der Vorgabe
+    r.showLeftPanel("search")
+    open_pdf(h, samples.standard_text(tmp_path / "weiter.pdf"))
+    assert r.leftPanel == panel
+
+
+def test_open_settings_in_the_settings_page_persist(reader_app, config_file: Path) -> None:
+    """Einstellungen → »PDF Reader«: zwei Auswahllisten, mit der Tastatur bedienbar, gespeichert
+    und nach einem Neustart wieder da. »Animationen« bleibt in ihrer Karte."""
+    import json
+
+    from conftest import neustart
+
+    h = reader_app
+    h.navigate("settings", 0.3)
+    assert [entry["label"] for entry in h.settings.readerZooms] == ["Zuletzt verwendet", "Seitenbreite", "Ganze Seite", "100 %"]
+    assert [entry["label"] for entry in h.settings.readerPanels] == ["Zuletzt verwendet", "Seiten", "Lesezeichen", "Keine"]
+    zoom, panel = h.item("readerZoomCombo"), h.item("readerPanelCombo")
+    assert zoom.property("currentText") == panel.property("currentText") == "Zuletzt verwendet"
+    assert h.item("readerZoomCard").property("title") == "Standardzoom beim Öffnen"
+    assert h.item("readerPanelCard").property("title") == "Seitenleiste beim Öffnen"
+    assert h.item("profileCombo") is not None  # Animationen: unverändert in ihrer Karte
+    zoom.forceActiveFocus()
+    key(h, Qt.Key.Key_Down)
+    key(h, Qt.Key.Key_Down)
+    panel.forceActiveFocus()
+    for _ in range(3):
+        key(h, Qt.Key.Key_Down)
+    pump(0.3)
+    assert (h.settings.readerZoom, h.settings.readerPanel) == ("page", "none")
+    assert zoom.property("currentText") == "Ganze Seite" and panel.property("currentText") == "Keine"
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert data["reader_zoom_beim_oeffnen"] == "page" and data["reader_leiste_beim_oeffnen"] == "none"
+    h = neustart(h)
+    assert (h.settings.readerZoom, h.settings.readerPanel) == ("page", "none")
+    h.navigate("settings", 0.3)
+    assert h.item("readerZoomCombo").property("currentText") == "Ganze Seite"
