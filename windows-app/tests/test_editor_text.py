@@ -572,3 +572,49 @@ def test_saved_bytes_reopen_in_pikepdf_and_pdfium(tmp_path: Path) -> None:
         assert "Lieferschein Ω-1" in page_text(again)
     finally:
         again.close()
+
+
+# --- 3.1: Unterstreichen, Durchstreichen ----------------------------------------------------------------------------
+def dark_rows(doc: EditorDocument, box, page: int = 0) -> list[int]:
+    """Zeilen (Pixel bei 4 Pixel je Punkt) im Bereich ``box`` (Seitenkoordinaten), in denen fast die ganze
+    Breite dunkel ist – so zeigt sich eine durchgehende Linie, Buchstaben nicht."""
+    geo = doc.geometry(page)
+    image = render.to_pil(render.render_page(doc, page, int(geo.width * 4))).convert("L")
+    u0, v0, u1, v1 = geo.rect_to_view(box)
+    rows = []
+    for y in range(int(v0 * 4), int(v1 * 4) + 1):
+        dark = sum(1 for x in range(int(u0 * 4), int(u1 * 4)) if image.getpixel((x, y)) < 128)
+        if dark >= 0.9 * (int(u1 * 4) - int(u0 * 4)):
+            rows.append(y)
+    return rows
+
+
+def test_added_text_can_be_underlined_and_struck_through(tmp_path: Path) -> None:
+    """Unterstreichen und Durchstreichen zeichnen je Zeile eine Linie in der Textfarbe – unter der Grundlinie
+    bzw. durch die Mitte; der Text bleibt lesbar, Rückgängig entfernt beides."""
+    doc = open_doc(samples.standard_text(tmp_path / "s.pdf"))
+    history = commands.History()
+    plain = textedit.add_text(doc, history, 0, 100, 600, "Wichtiger Hinweis", style=TextStyle(size=20))
+    history.undo(doc)
+    outcome = textedit.add_text(doc, history, 0, 100, 600, "Wichtiger Hinweis", style=TextStyle(size=20, underline=True, strike=True))
+    assert "Wichtiger Hinweis" in page_text(doc)
+    data = snapshot(doc)
+    assert data.count(b" l S Q") >= 2
+    box = outcome.bounds
+    assert box == pytest.approx(plain.bounds, abs=0.5)  # gleicher Platz wie ohne Linien
+    rows = dark_rows(doc, (box[0] + 2, box[1] - 2, box[2] - 2, box[3]))
+    assert len(rows) >= 2  # zwei durchgehende Linien
+    baseline_v = doc.geometry(0).to_view(100, 600 - 20 * 0.8)[1] * 4  # Grundlinie in Pixeln
+    assert any(row > baseline_v for row in rows) and any(row < baseline_v for row in rows)
+    history.undo(doc)
+    assert "Wichtiger Hinweis" not in page_text(doc)
+
+
+def test_existing_block_underlined_is_set_new_honestly(tmp_path: Path) -> None:
+    doc = open_doc(samples.standard_text(tmp_path / "s.pdf"))
+    history = commands.History()
+    block = blocks(doc)[0]
+    outcome = textedit.edit_block(doc, history, block, block.text, style=TextStyle(underline=True))
+    assert outcome.mode == RECONSTRUCTED
+    assert textlayer.text(doc, 0).count(block.text.split("\n")[0]) >= 1
+    assert snapshot(doc).count(b" l S Q") >= 1
