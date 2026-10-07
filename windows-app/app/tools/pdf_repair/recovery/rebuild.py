@@ -164,6 +164,10 @@ def open_raw(path: str | Path):
     return pikepdf.open(path, attempt_recovery=True, inherit_page_attributes=False)
 
 
+def _pages(count: int) -> str:
+    return "1 Seite" if count == 1 else f"{count} Seiten"
+
+
 def _is_dict(obj) -> bool:
     import pikepdf
 
@@ -358,9 +362,9 @@ def rebuild_tree(pdf, scan: RawScan, technical: list[str]) -> TreeResult | None:
         for page in missing_box:
             page.MediaBox = pikepdf.Array(box)
         result.notes.append(
-            f"Bei {len(missing_box)} Seite(n) fehlte die Seitengröße – übernommen von den übrigen Seiten."
+            f"Bei {_pages(len(missing_box))} fehlte die Seitengröße – übernommen von den übrigen Seiten."
             if boxes
-            else f"Bei {len(missing_box)} Seite(n) fehlte die Seitengröße – A4 angenommen."
+            else f"Bei {_pages(len(missing_box))} fehlte die Seitengröße – A4 angenommen."
         )
         result.doubtful = result.doubtful or not boxes
     # Fehlende Ressourcen: nur übernehmen, wenn es genau einen eindeutigen Kandidaten gibt
@@ -379,7 +383,7 @@ def rebuild_tree(pdf, scan: RawScan, technical: list[str]) -> TreeResult | None:
                 page.Resources = candidates[0]
             inherited["Resources"] += len(without)
         else:
-            result.notes.append(f"Bei {len(without)} Seite(n) fehlen Schriften und Bilder (Ressourcen) – Inhalte können unvollständig sein.")
+            result.notes.append(f"Bei {_pages(len(without))} fehlen Schriften und Bilder (Ressourcen) – Inhalte können unvollständig sein.")
             result.doubtful = True
 
     node = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Pages, Kids=pikepdf.Array(pages), Count=len(pages)))

@@ -136,4 +136,4 @@ def _paint(printer, doc, pages: list[int], QRectF, preview: bool = False, fixed=
         if painter.isActive():
             painter.end()
     if not preview:
-        doc.app.set_status(f"An den Drucker gesendet: {len(pages)} Seite(n).", "success")
+        doc.app.set_status(f"An den Drucker gesendet: {len(pages)} {'Seite' if len(pages) == 1 else 'Seiten'}.", "success")

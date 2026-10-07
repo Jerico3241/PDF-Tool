@@ -588,9 +588,9 @@ def test_empty_state(ui_app) -> None:
     assert h.customers.total == 0 and not h.customers.listShown
     assert typ(page, "PListPage").property("count") == 0  # keine Karte mit Zeilen
     sichtbar = texte(page)
-    assert "Noch keine Kunden gespeichert." in sichtbar
+    assert "Noch keine Kunden gespeichert" in sichtbar
     assert any(t.startswith("PDF Tool kann bekannte Rechnungsempfänger später automatisch wiedererkennen.") for t in sichtbar)
-    bereich = element(page, text="Noch keine Kunden gespeichert.").parentItem()
+    bereich = element(page, text="Noch keine Kunden gespeichert").parentItem()
     buttons = [item for item in elemente(bereich) if qml_type(item) == "PButton"]
     assert [b.property("text") for b in buttons] == ["Zur Vertragsübersicht"]
     klick(buttons[0])

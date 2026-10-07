@@ -1268,7 +1268,7 @@ class DocumentController(Observable):
             pages_text = "1 Seite" if summary["pages"] == 1 else f"{summary['pages']} Seiten"
             message = f"{pages_text} durchsuchbar gemacht – {summary['words']} Wörter, Sicherheit im Mittel {round(summary['confidence'])} %."
             if summary["skipped"]:
-                message += f" {summary['skipped']} Seite(n) übersprungen (bereits mit Text)."
+                message += f" {summary['skipped']} {'Seite' if summary['skipped'] == 1 else 'Seiten'} übersprungen (bereits mit Text)."
             message += " Das Aussehen der Seiten ist unverändert; Rückgängig nimmt die Erkennung zurück."
             self.edited("Text erkannt")
             self.app.notify("reader", "success", message, title="Text erkannt", auto_hide=12000)
@@ -1302,7 +1302,7 @@ class DocumentController(Observable):
         def done(count: int) -> None:
             if count:
                 self.edited("Erkannten Text entfernt")
-                self.app.notify("reader", "success", f"Erkannter Text von {count} Seite(n) entfernt.", title="Erkannten Text entfernen", auto_hide=8000)
+                self.app.notify("reader", "success", f"Erkannter Text von {count} {'Seite' if count == 1 else 'Seiten'} entfernt.", title="Erkannten Text entfernen", auto_hide=8000)
             else:
                 self.app.notify("reader", "info", "Auf diesen Seiten gibt es keinen von PDF Tool erkannten Text.", title="Erkannten Text entfernen", auto_hide=8000)
 
@@ -1870,7 +1870,7 @@ class DocumentController(Observable):
         chosen = sorted({int(i) for i in indexes}) or [self.currentPage]
         target = self.reader.pick_save_pdf(f"{self._stem()}_Auszug.pdf", "Seiten als neue PDF speichern")
         if target:
-            self.run(lambda session: session.extract(chosen, target), lambda path: self.app.notify("reader", "success", f"{len(chosen)} Seite(n) gespeichert: {path}", title="Neue PDF erstellt", auto_hide=8000), refresh=False, busy="Seiten werden gespeichert …")
+            self.run(lambda session: session.extract(chosen, target), lambda path: self.app.notify("reader", "success", f"{len(chosen)} {'Seite' if len(chosen) == 1 else 'Seiten'} gespeichert: {path}", title="Neue PDF erstellt", auto_hide=8000), refresh=False, busy="Seiten werden gespeichert …")
 
     @Slot(str)
     def splitDocument(self, spec: str) -> None:  # noqa: N802
@@ -1917,7 +1917,7 @@ class DocumentController(Observable):
         if not folder:
             return
         stem = self._stem()
-        self.run(lambda session: session.export_images(chosen, folder, stem, fmt, dpi), lambda written: self.app.notify("reader", "success", f"{len(written)} Bild(er) gespeichert in {folder}", title="Exportiert", auto_hide=8000), refresh=False, busy="Seiten werden exportiert …")
+        self.run(lambda session: session.export_images(chosen, folder, stem, fmt, dpi), lambda written: self.app.notify("reader", "success", f"{len(written)} {'Bild' if len(written) == 1 else 'Bilder'} gespeichert in {folder}", title="Exportiert", auto_hide=8000), refresh=False, busy="Seiten werden exportiert …")
 
     @Slot()
     def showProperties(self) -> None:  # noqa: N802
