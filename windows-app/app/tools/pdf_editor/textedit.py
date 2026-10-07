@@ -40,7 +40,7 @@ from . import commands, render, textlayer
 from .commands import History
 from .content import PageContent, ShowOp, append_content, fmt, mul, page_fonts, prune_fonts
 from .document import EditorDocument
-from .errors import UnsupportedEdit
+from .errors import Overflow, UnsupportedEdit  # noqa: F401 - Overflow: auch textedit.Overflow
 from .fonts import CannotEncode, Style, embed_truetype, find_system_font, standard_font, standard_substitute, standard_width, style_of
 from .geometry import Rect, inflate, normalize, union
 
@@ -189,16 +189,6 @@ class EditOutcome:
     @property
     def label(self) -> str:
         return MODE_LABELS[self.mode]
-
-
-class Overflow(Exception):
-    """Der neue Text passt nicht in den Block – die Oberfläche fragt, wie weiter
-    (``overflow="grow"``: weitere Zeilen, ``"shrink"``: kleinere Schrift)."""
-
-    def __init__(self, needed: int, available: int) -> None:
-        super().__init__(f"Der Text braucht {needed} Zeilen, der Platz reicht für {available}.")
-        self.needed = needed
-        self.available = available
 
 
 @dataclass

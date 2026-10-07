@@ -59,10 +59,10 @@ from .errors import (
     ExternalChange,
     SaveFailed,
 )
+from .recovery import BACKUP_MAX_AGE, cleanup_backups  # noqa: F401 - Aufräumen beim Start (ohne pikepdf)
 
 RENDER_CHECK_PAGES = 200  # bis zu so vielen Seiten werden alle geprüft, darüber eine Auswahl
 BACKUPS_PER_FILE = 3
-BACKUP_MAX_AGE = 7 * 24 * 3600
 REPLACE_ATTEMPTS = 10  # etwa 1 s: Virenscanner und Suche halten eine neue Datei manchmal kurz offen
 UNCHANGED = "Die Originaldatei ist unverändert."
 READ_ONLY_TEXT = "Die Datei ist schreibgeschützt. Verwenden Sie »Speichern unter«, um eine bearbeitete Kopie zu erstellen."
@@ -361,24 +361,6 @@ def _reopen_check(target: Path, digest: str, password: str | None, pages: int, b
     finally:
         reopened.close()
     return stamp
-
-
-def cleanup_backups(backup_dir: Path, now: float | None = None) -> int:
-    """Sicherungen älter als ``BACKUP_MAX_AGE`` entfernen (beim Start)."""
-    now = time.time() if now is None else now
-    removed = 0
-    try:
-        entries = list(backup_dir.glob("*.pdf"))
-    except OSError:
-        return 0
-    for entry in entries:
-        try:
-            if now - entry.stat().st_mtime > BACKUP_MAX_AGE:
-                entry.unlink()
-                removed += 1
-        except OSError:
-            continue
-    return removed
 
 
 # Hilfen ---------------------------------------------------------------------------------------

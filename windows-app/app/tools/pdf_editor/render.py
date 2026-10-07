@@ -18,8 +18,8 @@ from pdfium_lock import PDFIUM_LOCK
 
 from .document import EditorDocument
 from .geometry import Rect
+from .limits import MAX_PIXELS
 
-MAX_PIXELS = 16_000_000  # ≈ 64 MB je Bild; z. B. A4 bis ≈ 400 % bei 96 dpi
 MIN_SIDE = 8
 
 

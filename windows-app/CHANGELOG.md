@@ -2,6 +2,41 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.1.0-beta.2
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Nur Leistung – keine neuen Funktionen;
+Messwerte in den [Release Notes](release-notes/3.1.0-beta.2.md).
+
+## Schneller
+
+- Start: Die Startseite steht im ersten Bild (bisher erschien das Fenster mit leerer Fläche, die
+  Startseite folgte einige Bilder später). Die PDF-Bibliotheken (pikepdf, PDFium) und die Module des
+  Editors lädt PDF Tool erst nach dem Start im Arbeitsthread, wenn alle Seiten fertig sind.
+- PDF per Doppelklick bzw. „Öffnen mit“: Start direkt im Reader statt über die Startseite; die
+  PDF-Bibliotheken laden bereits, während das Fenster entsteht.
+- Reader: Die Seite ist sofort da – ihr Dokumentbereich (Tabs, Leisten, Ansicht, Seitenleisten)
+  entsteht im Hintergrund, wird vorher ein PDF geöffnet, sofort.
+- PDF reparieren: Ein Arbeitsprozess erledigt mehrere Dateien nacheinander (höchstens 25; nach einem
+  Fehler, einem Absturz oder „Abbrechen“ übernimmt ein frischer). Er startet in einem Hilfsthread –
+  die Oberfläche wartet nie auf den Prozessstart (unter Windows bis zu einer halben Sekunde je Datei) –,
+  beim Öffnen der Seite wird einer im Voraus vorbereitet; Meldungen werden alle 30 statt 80 ms
+  abgeholt.
+
+## Behoben
+
+- Seitenbilder, die beim Schließen eines PDFs gerade entstanden, blieben im Zwischenspeicher.
+- Miniaturen: Nach einem Tabwechsel wurden kurz Bilder für Seiten angefragt, die es im neuen Dokument
+  nicht gibt („Seite nicht vorhanden“ im Protokoll).
+
+## Entwicklung
+
+- `tests/bench_app.py`: Messung der App mit Oberfläche (Start, Start mit PDF, Öffnen, Tab- und
+  Seitenwechsel, Zoom, Suche, Speichern, „PDF reparieren“ mit vielen Dateien, Arbeitsspeicher), auch
+  für einen anderen Stand (`--app`).
+- Oberflächentests warten auf die geladenen Seiten über `App.pagesLoaded` statt den Elementbaum
+  alle 10 ms zu durchsuchen (das hielt den GIL und verlangsamte das Laden): Der Start der App je
+  Test dauert lokal rund 2 statt 13–19 Sekunden.
+
 # PDF Tool 3.1.0-beta.1
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Bringt Formulare gestalten, die lokale

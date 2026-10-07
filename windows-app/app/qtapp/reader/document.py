@@ -18,8 +18,7 @@ from typing import Any, Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from tools.pdf_editor.errors import EditorError, ExternalChange, PasswordRequired, ReadOnlyDocument, SaveFailed, UnsupportedEdit
-from tools.pdf_editor.textedit import Overflow
+from tools.pdf_editor.errors import EditorError, ExternalChange, Overflow, PasswordRequired, ReadOnlyDocument, SaveFailed, UnsupportedEdit
 
 from ..base import Observable, prop
 from ..models import KeyedListModel

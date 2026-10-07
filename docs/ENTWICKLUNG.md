@@ -103,7 +103,11 @@ Der PDF Reader & Editor (seit 3.0.0) hat Kerntests mit künstlichen PDFs (`tests
 `test_editor_core.py`, `test_editor_text.py`, `test_editor_pages.py`, `test_editor_images.py`,
 `test_editor_annotations.py`, `test_editor_forms.py`, `test_editor_properties.py`; die Oberfläche prüft
 `test_qt_reader.py` mit Maus und Tastatur. Messwerte für 1 bis 1000 Seiten liefert
-`python windows-app/tests/bench_editor.py` (Ergebnisse in [PDF-EDITOR.md](PDF-EDITOR.md)).
+`python windows-app/tests/bench_editor.py` (Ergebnisse in [PDF-EDITOR.md](PDF-EDITOR.md)). Die App mit
+Oberfläche misst `python windows-app/tests/bench_app.py` (Start, Start mit einer PDF, Öffnen, Tab- und
+Seitenwechsel, Zoom, Suche, Speichern, »PDF reparieren« mit vielen Dateien, Arbeitsspeicher); mit
+`--app <Ordner>` misst dasselbe Werkzeug einen anderen Stand, etwa die Vorversion. Ergebnisse gehören nicht
+ins Repository – sie gelten nur für den Rechner, auf dem gemessen wurde.
 
 Die Oberflächentests (`test_qt_*.py`) starten die App wie beim echten Start – Controller, QML und
 Fenster (`tests/qtutil.py`) – und schlagen fehl, sobald die QML-Engine eine Warnung meldet

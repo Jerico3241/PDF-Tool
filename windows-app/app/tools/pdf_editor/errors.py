@@ -36,6 +36,16 @@ class UnsupportedEdit(EditorError):
     """Diese Bearbeitung ist für das gewählte Objekt nicht sicher möglich."""
 
 
+class Overflow(Exception):
+    """Der neue Text passt nicht in den Block – die Oberfläche fragt, wie weiter
+    (``overflow="grow"``: weitere Zeilen, ``"shrink"``: kleinere Schrift)."""
+
+    def __init__(self, needed: int, available: int) -> None:
+        super().__init__(f"Der Text braucht {needed} Zeilen, der Platz reicht für {available}.")
+        self.needed = needed
+        self.available = available
+
+
 # Arten von Speicherfehlern (``SaveFailed.kind``) – für Protokoll, Tests und die Oberfläche
 SERIALIZE_FAILED = "SERIALIZE_FAILED"  # der bearbeitete Stand ließ sich nicht als PDF schreiben
 VALIDATION_FAILED = "VALIDATION_FAILED"  # Prüfung vor dem Schreiben: Inhalte fehlten, nicht darstellbar …

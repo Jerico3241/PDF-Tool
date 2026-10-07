@@ -3,7 +3,8 @@ import PdfTool.Backend
 import PdfTool.Style
 
 // Seitenwechsel: Seite A blendet kurz aus, die fertige Zielseite wird umgeschaltet und blendet
-// ein (zusammen ~180 ms, »Aus«: sofort). Seiten bleiben nach dem ersten Laden bestehen; nach dem
+// ein (zusammen ~180 ms, »Aus«: sofort). Die erste Seite entsteht beim Laden der Oberfläche und steht
+// ohne Einblenden im ersten Bild. Seiten bleiben nach dem ersten Laden bestehen; nach dem
 // Start werden alle verfügbaren Seiten nacheinander im Hintergrund geladen, damit ein Wechsel
 // nie auf den Aufbau warten muss. Nicht sichtbare Seiten werden nicht gezeichnet.
 Item {
@@ -62,7 +63,8 @@ Item {
         slot.visible = true
         // Tastaturfokus nur mitnehmen, wenn er auf der verlassenen Seite lag (sonst bleibt er z. B. in der Navigation)
         if (hadFocus) slot.forceActiveFocus()
-        if (!Motion.enabled) { slot.opacity = 1; shift.y = 0; return }
+        // Ohne Animation: »Aus« – und die erste Seite beim Start (sie steht fertig im ersten Bild)
+        if (!Motion.enabled || !App.ready) { slot.opacity = 1; shift.y = 0; return }
         slot.opacity = 0
         shift.y = Motion.pageShift
         inAnim.targetSlot = slot
@@ -78,6 +80,14 @@ Item {
             }
         }
         preloading = false
+        if (!App.pagesLoaded && allLoaded()) App.markPagesLoaded()
+    }
+    function allLoaded() {
+        for (var i = 0; i < slots.count; ++i) {
+            var slot = slots.itemAt(i)
+            if (slot && slot.wanted && slot.status === Loader.Loading) return false
+        }
+        return true
     }
     Connections {
         target: App
@@ -120,6 +130,8 @@ Item {
                 if (key === host.targetKey) host.update()
                 host.preloadNext()
             }
+            // Die Seite, mit der die App startet, gleich beim Laden der Oberfläche aufbauen (synchron, s. o.)
+            Component.onCompleted: if (key === host.targetKey) host.update()
         }
     }
 }

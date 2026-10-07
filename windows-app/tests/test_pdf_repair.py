@@ -383,6 +383,14 @@ def test_output_names_never_overwrite(tmp_path: Path) -> None:
     assert (tmp_path / "vertrag_repariert (2).pdf").read_bytes() == b"fremd"
 
 
+@pytest.fixture(autouse=True)
+def fresh_workers():
+    """Jeder Test beginnt ohne wartende Arbeitsprozesse (sie werden sonst über Tests hinweg wiederverwendet)."""
+    process.stop_workers()
+    yield
+    process.stop_workers()
+
+
 def test_job_runs_in_separate_process(tmp_path: Path) -> None:
     pdf = samples.xref_garbage(tmp_path / "kaputt.pdf")
     job = process.Job("analyze", {"path": str(pdf)})
@@ -459,9 +467,117 @@ def test_result_does_not_wait_for_the_worker_to_exit(tmp_path: Path) -> None:
 
 def test_job_reports_crash(tmp_path: Path) -> None:
     job = process.Job("analyze", {"path": str(samples.healthy(tmp_path / "a.pdf"))})
+    job._starter.join(30)  # der Prozess startet im Hilfsthread
     job._process.kill()
     events = job.wait(30)
     assert events[-1][0] == "crash"
+
+
+@pytest.fixture
+def slow_spawn(monkeypatch):
+    """Prozessstart wie unter Windows auf einem ausgelasteten Rechner: eine halbe Sekunde."""
+    import multiprocessing.context
+
+    original = multiprocessing.context.SpawnProcess.start
+
+    def start(self) -> None:
+        time.sleep(0.5)
+        original(self)
+
+    monkeypatch.setattr(multiprocessing.context.SpawnProcess, "start", start)
+
+
+def test_job_start_does_not_block_the_caller(tmp_path: Path, slow_spawn) -> None:
+    pdf = samples.healthy(tmp_path / "a.pdf")
+    start = time.perf_counter()
+    job = process.Job("analyze", {"path": str(pdf)})
+    assert time.perf_counter() - start < 0.3  # die Oberfläche wartet nicht auf den Prozessstart
+    assert job.starting() and job.events() == [] and not job.done  # kein Absturz, solange er startet
+    events = job.wait(120)
+    assert events[-1][0] == "result" and events[-1][1].condition is Condition.HEALTHY
+
+
+def test_job_cancel_while_starting(tmp_path: Path, slow_spawn) -> None:
+    job = process.Job("repair", {"path": str(samples.large(tmp_path / "gross.pdf", pages=50)), "mode": RepairMode.RASTER.value})
+    work = job.work_dir
+    start = time.perf_counter()
+    job.cancel()
+    assert time.perf_counter() - start < 0.3 and job.done and job.cancelled and job.events() == []
+    job._starter.join(30)
+    deadline = time.time() + 10
+    while (work.exists() or job._process.is_alive()) and time.time() < deadline:
+        time.sleep(0.02)
+    assert not job._process.is_alive() and not work.exists()  # gleich nach dem Start beendet, Arbeitsordner weg
+
+
+def test_worker_is_reused_for_the_next_job(tmp_path: Path) -> None:
+    """Ein Arbeitsprozess erledigt mehrere Aufträge – der Prozessstart mit den PDF-Bibliotheken fällt nur einmal an."""
+    first = process.Job("analyze", {"path": str(samples.healthy(tmp_path / "a.pdf"))})
+    assert first.wait(120)[-1][0] == "result"
+    pid = first._process.pid
+    second = process.Job("repair", {"path": str(samples.xref_garbage(samples.healthy(tmp_path / "b.pdf")))})
+    events = second.wait(120)
+    assert events[-1][0] == "result" and second._process.pid == pid
+    assert Path(events[-1][1].output_path).is_file()
+    second.cleanup()  # die Ausgabe hält der Prozess nicht mehr offen
+    assert not Path(events[-1][1].output_path).exists()
+
+
+def test_worker_is_not_reused_after_an_error_or_cancel(tmp_path: Path) -> None:
+    failed = process.Job("unbekannt", {"path": str(tmp_path / "a.pdf")})  # Fehler im Arbeitsprozess
+    assert failed.wait(120)[-1] == ("error", "Die Datei konnte nicht verarbeitet werden (ValueError: Unbekannte Aufgabe: unbekannt).")
+    after_error = process.Job("analyze", {"path": str(samples.healthy(tmp_path / "a.pdf"))})
+    assert after_error.wait(120)[-1][0] == "result" and after_error._process.pid != failed._process.pid
+    cancelled = process.Job("repair", {"path": str(samples.large(tmp_path / "gross.pdf", pages=50)), "mode": RepairMode.RASTER.value})
+    cancelled._starter.join(30)
+    assert cancelled._process.pid == after_error._process.pid  # der wartende Prozess übernimmt
+    cancelled.cancel()
+    assert not cancelled._process.is_alive()
+    after_cancel = process.Job("analyze", {"path": str(samples.healthy(tmp_path / "c.pdf"))})
+    assert after_cancel.wait(120)[-1][0] == "result" and after_cancel._process.pid != cancelled._process.pid
+
+
+def test_worker_is_replaced_after_many_jobs_or_when_it_ended(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(process, "WORKER_JOBS", 2)
+    pdf = str(samples.healthy(tmp_path / "a.pdf"))
+    pids = []
+    for _ in range(3):
+        job = process.Job("analyze", {"path": pdf})
+        assert job.wait(120)[-1][0] == "result"
+        pids.append(job._process.pid)
+    assert pids[0] == pids[1] != pids[2]  # nach zwei Aufträgen ein frischer Prozess
+    # Ein wartender Prozess, der inzwischen beendet ist, wird nicht vergeben – kein »Absturz« für die nächste Datei
+    job._process.kill()
+    job._process.join(10)
+    job = process.Job("analyze", {"path": pdf})
+    events = job.wait(120)
+    assert events[-1][0] == "result" and job._process.pid != pids[2]
+
+
+def test_prepare_worker_starts_one_in_the_background(tmp_path: Path) -> None:
+    process.prepare_worker()
+    deadline = time.time() + 60
+    while not process._POOL._idle and time.time() < deadline:
+        time.sleep(0.05)
+    assert len(process._POOL._idle) == 1
+    pid = process._POOL._idle[0].process.pid
+    job = process.Job("analyze", {"path": str(samples.healthy(tmp_path / "a.pdf"))})
+    assert job.wait(120)[-1][0] == "result" and job._process.pid == pid
+
+
+def test_job_reports_a_failed_start(tmp_path: Path, monkeypatch) -> None:
+    import multiprocessing.context
+
+    def start(self) -> None:
+        raise OSError("keine Ressourcen")
+
+    monkeypatch.setattr(multiprocessing.context.SpawnProcess, "start", start)
+    job = process.Job("repair", {"path": str(samples.healthy(tmp_path / "a.pdf"))})
+    events = job.wait(30)
+    assert events == [("error", "Der Vorgang konnte nicht gestartet werden (OSError).")] and job.done
+    work = job.work_dir
+    job.cleanup()
+    assert work is not None and not work.exists()
 
 
 class _Keep(logging.Handler):

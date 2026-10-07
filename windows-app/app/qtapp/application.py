@@ -320,6 +320,10 @@ def main(argv: list[str] | None = None) -> int:
         if instance.forward(paths):
             return 0
     runtime = Runtime(cfg)
+    if paths:
+        # PDF per Doppelklick bzw. »Öffnen mit«: gleich im Reader beginnen – er ist im ersten Bild fertig,
+        # ohne Umweg über die Startseite (sie lädt danach im Hintergrund wie die übrigen Seiten)
+        runtime.app.navigate("reader")
 
     def report(kind, value, tb) -> None:
         # Unerwartete Fehler in Rückmeldungen: in fehler.log und in der Statuszeile, die App läuft weiter

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.1.0-beta.1 (Beta zum Testen)
+Version 3.1.0-beta.2 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -27,7 +27,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.1.0-beta.1.exe
+PDF-Tool-Setup-3.1.0-beta.2.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -37,10 +37,23 @@ Python-Installation, qpdf, Ghostscript, Tesseract oder andere
 Zusatzprogramme sind nicht nötig.
 
 
-Neu in Version 3.1 (Beta 1) – Formulare, Texterkennung, Objekte, Seiten
-------------------------------------------------------------------------
+Neu in Version 3.1 (Beta 2) – schneller; Formulare, Texterkennung, Objekte
+--------------------------------------------------------------------------
 Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
 (Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.1.0 Beta“.
+Neu in Beta 2 – schneller, ohne neue Funktionen:
+- Start: Die Startseite steht im ersten Bild; die PDF-Bibliotheken lädt
+  PDF Tool erst nach dem Start im Hintergrund.
+- PDF per Doppelklick bzw. „Öffnen mit“: PDF Tool startet direkt im Reader
+  statt über die Startseite.
+- Der Reader ist sofort da, auch gleich nach dem Start; sein Dokumentbereich
+  entsteht im Hintergrund.
+- PDF reparieren: Ein Arbeitsprozess erledigt mehrere Dateien nacheinander –
+  viele PDFs werden mehrfach so schnell analysiert und repariert; die
+  Oberfläche wartet nie auf den Start eines Arbeitsprozesses.
+- Arbeitsspeicher: Seitenbilder geschlossener PDFs bleiben nicht im
+  Zwischenspeicher.
+Seit Beta 1:
 - Formulare gestalten: Textfelder, Kontrollkästchen, Optionsfelder,
   Dropdowns und Listen anlegen (Rahmen aufziehen oder klicken), verschieben,
   in der Größe ändern, duplizieren, löschen und ihre Eigenschaften ändern
@@ -320,13 +333,17 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 3.0.0-beta.2 auf 3.1.0-beta.1 (Kanal „Beta“): Das Setup
+Update von PDF Tool 3.1.0-beta.1 auf 3.1.0-beta.2 (Kanal „Beta“): Das Setup
+ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
+unverändert.
+
+Update von PDF Tool 3.0.0-beta.2 auf 3.1.0-beta.2 (Kanal „Beta“): Das Setup
 ersetzt nur die Programmdateien und legt die Texterkennung im Unterordner
 „ocr“ an. Alle Einstellungen und Daten bleiben unverändert; der gewählte
 Kanal „Beta“ erscheint als eingeschalteter Schalter „Beta-Versionen
 erhalten“.
 
-Update von PDF Tool 2.8 auf 3.1.0-beta.1 (Kanal „Beta“): Das Setup ersetzt
+Update von PDF Tool 2.8 auf 3.1.0-beta.2 (Kanal „Beta“): Das Setup ersetzt
 nur die Programmdateien und trägt PDF Tool unter „Öffnen mit“ für
 PDF-Dateien ein (die Standard-App für PDF bleibt unverändert). Alle
 Einstellungen und Daten bleiben unverändert. Der Kanal „Stable“ erhält diese

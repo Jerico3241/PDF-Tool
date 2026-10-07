@@ -334,11 +334,12 @@ Seitenzahl und Zoomstufe haben eine feste Breite, der Zustand („Vorschau wird 
   `QAbstractListModel`s mit gezielten Änderungen (`insertRows`/`removeRows`/`moveRows`/`dataChanged`)
   statt Neuaufbau.
 - **Hintergrundarbeit:** Excel-Prüfung, PDF, Vorschau und Stapel laufen in Threads, „PDF reparieren“
-  in einem eigenen Prozess; Ergebnisse kommen über Qt-Signale in den GUI-Thread – Hintergrund-Threads
+  in eigenen Arbeitsprozessen; Ergebnisse kommen über Qt-Signale in den GUI-Thread – Hintergrund-Threads
   berühren nie QML.
 - **Start:** Konfiguration → Qt-Anwendung → Design → Controller → QML-Engine → verborgenes Fenster
-  (DWM-Cloaking) → Startseite; das Fenster erscheint mit dem ersten fertig gezeichneten Bild, weitere
-  Seiten laden danach im Hintergrund. Die QML-Oberfläche kommt im Setup aus einer eingebauten
+  (DWM-Cloaking) → Startseite (bei „Öffnen mit“ der Reader); das Fenster erscheint mit dem ersten fertig
+  gezeichneten Bild, in dem diese Seite schon steht. Weitere Seiten laden danach im Hintergrund, danach
+  die PDF-Bibliotheken (pikepdf, PDFium) – beim Start mit einer PDF gleich zu Beginn. Die QML-Oberfläche kommt im Setup aus einer eingebauten
   Qt-Ressource (`qrc:/qml`, unabhängig vom Arbeitsverzeichnis).
 - **Animationen:** Profil „Vollständig“, „Reduziert“ oder „Aus“ (Einstellungen → Verhalten →
   Animationen); ist in
@@ -407,7 +408,10 @@ Details für Mitwirkende: [`windows-app/ARCHITECTURE.md`](../windows-app/ARCHITE
   „Alle reparieren“ verwendet ihn nie.
 - **Arbeitsprozess:** Analyse und Reparatur laufen in einem eigenen Prozess mit niedriger Priorität.
   Die Oberfläche bleibt bedienbar, „Abbrechen“ beendet den Prozess wirklich und entfernt alle
-  Zwischendateien. Schutz vor Ressourcenbomben: Der Arbeitsspeicher des Arbeitsprozesses ist
+  Zwischendateien. Ein Arbeitsprozess erledigt mehrere Dateien nacheinander (höchstens 25, danach
+  folgt ein frischer; nach einem Fehler, einem Absturz oder „Abbrechen“ immer ein frischer), der Start
+  mit den PDF-Bibliotheken fällt so nicht je Datei an. Beim Öffnen der Seite wird einer im Hintergrund
+  vorbereitet; ohne Auftrag endet er nach einer Minute. Gestartet wird er nie im Thread der Oberfläche. Schutz vor Ressourcenbomben: Der Arbeitsspeicher des Arbeitsprozesses ist
   begrenzt (Windows-Job-Objekt), Bildgröße und Zahl der untersuchten Objekte je Seite haben
   Obergrenzen; stürzt eine Engine an einer manipulierten Datei ab, endet nur der Arbeitsprozess.
   Technische Meldungen des Arbeitsprozesses (Bereich `repair`, ohne Inhalte, Passwörter, Datei-

@@ -146,6 +146,7 @@ NEUERUNGEN = (
     "Objekt bearbeiten: auch Linien und Grafiken, gemischte Auswahl, Drehen, Ausrichten, Ebenen und Deckkraft; Ausschneiden, Kopieren und Einfügen – auch zwischen Tabs und aus anderen Programmen.",
     "Seiten kopieren und in einem anderen Tab einfügen, Rahmenauswahl, nur ausgewählte Seiten aus einer PDF einfügen; Text unterstrichen oder durchgestrichen; Kommentare nachträglich formatieren und beantworten.",
     "Reader: Vollbild (F11), Anhänge, Seitenleisten je Tab, »Gehe zu Seite« (Strg+G), freie Zoomeingabe und gewählte Seiten drucken.",
+    "Neu in Beta 2 – schneller: Die Startseite steht im ersten Bild, PDFs per Doppelklick öffnen direkt im Reader, »PDF reparieren« arbeitet viele Dateien mehrfach so schnell ab.",
     "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 
