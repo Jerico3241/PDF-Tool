@@ -419,6 +419,54 @@ def test_pane_toggle_lays_out_the_page_once(app) -> None:
         assert widths[0] == 1100 - (240 if expanded else 48) - 1
 
 
+def test_compact_navigation_has_no_gap_and_the_marker_stays_on_its_entry(app) -> None:
+    """Eingeklappt wird die Überschrift »Tools« zur schmalen Trennlinie – bis 3.1.0-beta.2 blieb sie 32 px
+    hoch, zwischen »Start« und den Tools lagen 40 px statt 4 px. Beim Ein- und Ausklappen bleibt die
+    Markierung in jedem Bild auf ihrem Eintrag; bei einem Wechsel gleitet sie und endet genau dort."""
+    from PySide6.QtCore import QPointF
+
+    app.window.resize(1280, 800)
+    app.settings.setProfile("full")
+    app.app.setNavCompact(False)
+    app.navigate("repair", 0.5)
+    shell, pane, indicator = app.item("shell"), app.item("navigationPane"), app.item("navIndicator")
+    entries, stack = {}, [pane]
+    while stack:
+        item = stack.pop()
+        stack.extend(item.childItems())
+        if item.property("key") and item.property("label") is not None:
+            entries[item.property("key")] = item
+
+    def top(item) -> float:
+        return item.mapToScene(QPointF(0, 0)).y()
+
+    def gap() -> float:  # zwischen »Start« und dem ersten Tool
+        return top(entries["reader"]) - (top(entries["home"]) + entries["home"].height())
+
+    def offset(key: str) -> float:  # Markierung gegenüber der Mitte ihres Eintrags
+        return abs(top(indicator) + indicator.height() / 2 - top(entries[key]) - entries[key].height() / 2)
+
+    assert shell.property("paneExpanded") is True and gap() == 40  # ausgeklappt: Platz für »Tools«
+    worst = 0.0
+    shell.togglePane()  # einklappen, animiert
+    for _ in range(40):
+        pump(0.01)
+        worst = max(worst, offset("repair"))
+    assert pane.width() == 48 and worst < 0.5
+    assert gap() == 17  # 8 px, Trennlinie, 8 px
+    line = [item for item in app.items("navSeparator") if item.isVisible()]
+    assert len(line) == 1 and top(line[0]) - (top(entries["home"]) + entries["home"].height()) == 8
+    assert top(entries["reader"]) - (top(line[0]) + 1) == 8
+    app.app.navigate("home")  # Wechsel: gleitet vom alten Eintrag …
+    assert offset("home") > 20 if app.theme.effectiveProfile == "full" else offset("home") < 0.5
+    pump(0.5)
+    assert offset("home") < 0.5  # … und endet genau am neuen
+    shell.togglePane()  # ausklappen: wieder Platz für die Überschrift
+    pump(0.5)
+    assert shell.property("paneExpanded") is True and gap() == 40 and offset("home") < 0.5
+    assert not app.messages()
+
+
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)

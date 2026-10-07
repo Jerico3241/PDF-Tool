@@ -34,6 +34,7 @@ QtObject {
     // Navigation und Seiten
     readonly property int navItemHeight: 36
     readonly property int navHeaderHeight: 32
+    readonly property int navSeparatorHeight: 9  // eingeklappt: Überschrift als Linie, je 8 px Abstand
     readonly property int paneExpanded: 240
     readonly property int paneCompact: 48
     readonly property int pageMaxWidth: 1180
