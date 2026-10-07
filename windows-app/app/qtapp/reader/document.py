@@ -176,6 +176,7 @@ class DocumentController(Observable):
         self._links_requested = False  # Links (für Anklicken und das Link-Werkzeug) schon angefragt
         self._links_revision = -1  # Stand, zu dem die Links zuletzt angefragt wurden
         self._select_annotation = ""  # nach dem Neuladen der Kommentare auswählen (gerade gesetzter Stempel)
+        self._assistant_texts: tuple[int, list[str]] | None = None  # (Stand, Seitentexte) für den KI-Assistenten
         self._closing = False
         self.state: dict = {}
         self.observe("currentPage", self._page_shown)
@@ -1420,6 +1421,21 @@ class DocumentController(Observable):
             new_h = width / ratio
             v0, v1 = v0 + (height - new_h) / 2, v0 + (height + new_h) / 2
         self.run(lambda session: session.insert_image(page, path, [u0, v0, u1, v1]), lambda _index: (self.edited("Bild eingefügt"), self.loadImages(page)), busy="Bild wird eingefügt …")
+
+    # KI-Assistent --------------------------------------------------------------------------------------------------
+    def assistant_texts(self, done: Callable[[list[str]], None], failed: Callable[[BaseException], None]) -> None:
+        """Text aller Seiten für den KI-Assistenten – im Arbeitsthread, je Dokumentstand nur einmal gelesen."""
+        cached = self._assistant_texts
+        if cached is not None and cached[0] == self.revision:
+            done(cached[1])
+            return
+        revision = self.revision
+
+        def finish(texts: list[str]) -> None:
+            self._assistant_texts = (revision, texts)
+            done(texts)
+
+        self.run(lambda session: session.page_texts(), finish, refresh=False, priority=BACKGROUND, failed=failed)
 
     # Kommentare ---------------------------------------------------------------------------------------------------
     @Slot()

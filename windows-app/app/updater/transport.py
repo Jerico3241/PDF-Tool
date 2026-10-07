@@ -13,6 +13,10 @@ Jeder Abruf
 * begrenzt die Datenmenge (``max_bytes``) und prüft die erwartete Größe,
 * lässt sich jederzeit abbrechen; ein abgebrochener Download hinterlässt keine Datei,
 * meldet Fortschritt gedrosselt (höchstens etwa zehnmal pro Sekunde).
+
+Große Dateien (Sprachmodelle des KI-Assistenten) lassen sich fortsetzen: ``offset`` hängt an die vorhandenen Bytes an
+(``Range``), ``keep_partial`` behält die Datei nach Abbruch, Zeitüberschreitung oder Verbindungsverlust. Liefert der
+Server die Datei trotzdem von vorn, beginnt der Download neu. Der Updater selbst nutzt beides nicht.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from .policy import UrlPolicy
 CONNECT_TIMEOUT_MS = 20_000  # bis die Antwort beginnt
 READ_TIMEOUT_MS = 30_000  # ohne neue Daten
 PROGRESS_INTERVAL = 0.1  # Sekunden zwischen zwei Fortschrittsmeldungen
+KEEP_PARTIAL_ON = frozenset({"cancelled", "offline", "timeout"})  # danach lässt sich ein Download fortsetzen
 
 _OFFLINE = {
     QNetworkReply.NetworkError.ConnectionRefusedError,
@@ -90,6 +95,8 @@ class Transfer(QObject):
         target: Path | None = None,
         expected_size: int | None = None,
         on_progress: Callable[[int, int], None] | None = None,
+        offset: int = 0,
+        keep_partial: bool = False,
     ) -> None:
         super().__init__(client)
         self.client = client
@@ -97,7 +104,9 @@ class Transfer(QObject):
         self.max_bytes = int(max_bytes)
         self.target = target
         self.expected_size = expected_size
-        self.received = 0
+        self.offset = max(0, int(offset)) if target is not None else 0  # schon vorhandene Bytes (Fortsetzen)
+        self.keep_partial = bool(keep_partial)
+        self.received = self.offset
         self.redirects = 0
         self.finished = False
         self.cancelled = False
@@ -116,10 +125,13 @@ class Transfer(QObject):
         request.setHeader(QNetworkRequest.KnownHeaders.UserAgentHeader, client.user_agent)
         for name, value in headers.items():
             request.setRawHeader(name.encode("ascii"), value.encode("ascii"))
+        if self.offset:
+            request.setRawHeader(b"Range", f"bytes={self.offset}-".encode("ascii"))
+        self._checked = False  # Antwortkopf geprüft (Größe, Fortsetzen)
         if target is not None:
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                self._file = open(target, "wb")
+                self._file = open(target, "ab" if self.offset else "wb")
             except OSError as exc:
                 self._failure = TransferError("io", f"Datei kann nicht angelegt werden: {exc}")
         self._connect_timer = QTimer(self)
@@ -151,7 +163,7 @@ class Transfer(QObject):
         self._connect_timer.stop()
         if self.reply is not None and self.reply.isRunning():
             self.reply.abort()  # löst ``finished`` aus (wird dort übergangen)
-        self._close(remove=True)
+        self._close(remove=not (self.keep_partial and error.kind in KEEP_PARTIAL_ON))
         self.finished = True
         if self.reply is not None:
             self.reply.deleteLater()
@@ -197,17 +209,40 @@ class Transfer(QObject):
             return  # Weiterleitung – die eigentliche Antwort kommt noch
         self._started = True
         self._connect_timer.stop()
-        if status >= 400:
-            return  # Auswertung in ``_finished``
+        if status >= 400 or self._checked:
+            return  # Fehler: Auswertung in ``_finished``
+        self._checked = True
+        if self.offset and not self._continue(status):
+            return
         length = self.reply.header(QNetworkRequest.KnownHeaders.ContentLengthHeader) if self.reply is not None else None
         try:
             length = int(length) if length is not None else None
         except (TypeError, ValueError):
             length = None
-        if length is not None and length > self.max_bytes:
-            self._fail(TransferError("too_large", f"Antwort zu groß ({length} Bytes)"))
-        elif length is not None and self.expected_size is not None and length != self.expected_size:
-            self._fail(TransferError("size", f"Unerwartete Größe ({length} statt {self.expected_size} Bytes)"))
+        total = None if length is None else self.offset + length
+        if total is not None and total > self.max_bytes:
+            self._fail(TransferError("too_large", f"Antwort zu groß ({total} Bytes)"))
+        elif total is not None and self.expected_size is not None and total != self.expected_size:
+            self._fail(TransferError("size", f"Unerwartete Größe ({total} statt {self.expected_size} Bytes)"))
+
+    def _continue(self, status: int) -> bool:
+        """Fortsetzen: Antwort 206 ab genau ``offset`` – sonst (200) beginnt der Download von vorn."""
+        if status == 206:
+            content_range = bytes(self.reply.rawHeader("Content-Range").data() or b"").decode("ascii", "replace")
+            if content_range.startswith(f"bytes {self.offset}-"):
+                return True
+            self._fail(TransferError("size", "Fortsetzen nicht möglich"))  # Teildatei wird entfernt
+            return False
+        if self._file is not None:
+            try:
+                self._file.seek(0)
+                self._file.truncate()
+            except OSError as exc:
+                self._fail(TransferError("io", f"Datei kann nicht geschrieben werden: {exc}"))
+                return False
+        self.offset = 0
+        self.received = 0
+        return True
 
     @_guarded
     def _read(self) -> None:
@@ -217,6 +252,10 @@ class Transfer(QObject):
         if status is not None and (status >= 400 or 300 <= status < 400):
             self.reply.readAll()  # Fehlerseite bzw. Weiterleitung: Inhalt verwerfen
             return
+        if not self._checked and status is not None:
+            self._meta()  # Antwortkopf zuerst prüfen (Fortsetzen: erst danach anhängen)
+            if self.finished:
+                return
         self._started = True
         self._connect_timer.stop()
         data = bytes(self.reply.readAll().data())
@@ -246,7 +285,8 @@ class Transfer(QObject):
         if not complete and now - self._last_progress < PROGRESS_INTERVAL:
             return
         self._last_progress = now
-        self._on_progress(int(received), int(total if total > 0 else (self.expected_size or 0)))
+        total = self.offset + total if total > 0 else (self.expected_size or 0)
+        self._on_progress(int(self.offset + received), int(total))
 
     @_guarded
     def _finished(self) -> None:
@@ -371,8 +411,11 @@ class HttpClient(QObject):
         on_progress: Callable[[int, int], None] | None = None,
         expected_size: int | None = None,
         headers: dict[str, str] | None = None,
+        offset: int = 0,
+        keep_partial: bool = False,
     ) -> Transfer | None:
-        """Datei nach ``target`` laden; bei Fehler oder Abbruch wird ``target`` entfernt."""
+        """Datei nach ``target`` laden; bei Fehler oder Abbruch wird ``target`` entfernt (mit ``keep_partial`` bleibt sie
+        nach Abbruch, Zeitüberschreitung oder Verbindungsverlust – ``offset`` setzt dort fort)."""
         return self._start(
             url,
             on_error,
@@ -382,6 +425,8 @@ class HttpClient(QObject):
             target=Path(target),
             expected_size=expected_size,
             on_progress=on_progress,
+            offset=offset,
+            keep_partial=keep_partial,
         )
 
     def _forget(self, transfer: Transfer) -> None:

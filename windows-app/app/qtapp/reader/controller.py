@@ -55,7 +55,7 @@ QUICK_TOOLS = (
     ("merge", "Zusammenführen", "Weitere PDFs an ein Dokument anhängen", "merge"),
 )
 LEFT_PANELS = ("thumbs", "outline", "search", "attachments", "")
-RIGHT_PANELS = ("comments", "properties", "")
+RIGHT_PANELS = ("comments", "properties", "assistant", "")
 CLIP_FORMAT = "application/x-pdftool-objects"  # Kennung kopierter Objekte in der Zwischenablage des Systems
 _OCR_PROBE: dict = {"done": False, "engine": None}  # Texterkennung: einmal je Programmlauf gesucht
 MAX_WIDTH = 12000  # Pixel – breitere Seitenbilder gibt es nicht (der Ausschnitt bleibt scharf)
@@ -86,7 +86,7 @@ class ReaderController(Observable):
     dropHighlightChanged, dropHighlight = prop(bool, "dropHighlight", False)
     # Seitenleisten und »Seiten organisieren« des aktuellen Tabs – jeder Tab merkt sich seine eigenen
     leftPanelChanged, leftPanel = prop(str, "leftPanel", "thumbs")  # thumbs, outline, search, attachments oder ""
-    rightPanelChanged, rightPanel = prop(str, "rightPanel", "")  # comments, properties oder ""
+    rightPanelChanged, rightPanel = prop(str, "rightPanel", "")  # comments, properties, assistant oder ""
     organizeChanged, organize = prop(bool, "organize", False)  # Ansicht »Seiten organisieren«
     openingChanged, opening = prop(int, "opening", 0)  # Dateien, die gerade geöffnet werden
     fullScreenChanged, fullScreen = prop(bool, "fullScreen", False)  # Vollbild (nur das Dokument)
@@ -663,10 +663,20 @@ class ReaderController(Observable):
 
     @Slot(str)
     def showRightPanel(self, panel: str) -> None:  # noqa: N802
-        """Rechte Seitenleiste zeigen (ohne Umschalten): ``comments`` oder ``properties``."""
+        """Rechte Seitenleiste zeigen (ohne Umschalten): ``comments``, ``properties`` oder ``assistant``."""
         if panel in RIGHT_PANELS and panel:
             self.rightPanel = panel
             self._remember_panels()
+
+    def close_right_panel(self, panel: str) -> None:
+        """Eine rechte Seitenleiste in allen Tabs schließen (KI-Assistent ausgeschaltet) – auch in Tabs im Hintergrund."""
+        if self.rightPanel == panel:
+            self.rightPanel = ""
+        for controller in self._docs.values():
+            panels = controller.panels or {}
+            if panels.get("right") == panel:
+                controller.panels = {**panels, "right": ""}
+        self._remember_panels()
 
     @Slot(bool)
     def setOrganize(self, value: bool) -> None:  # noqa: N802

@@ -4,9 +4,10 @@ name: Windows-Setup
 # für den aktuellen Stand eines Zweigs:
 #   1. Tests – Kernlogik, Vorlagen, Regelwerk, Sicherung/Wiederherstellung, Diagnose,
 #      Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.2), PDF reparieren, Updater
-#      (lokaler Testserver, nie Live-GitHub), PDF Editor; die Qt-Oberflächentests laufen gleichzeitig
-#      in sechs eigenen Jobs (je ein eigener Rechner); Texterkennung mit echtem Tesseract prüft der
-#      Runtime-Smoke-Test am gebündelten Tesseract des Setups (Schritt 5)
+#      (lokaler Testserver, nie Live-GitHub), PDF Editor, KI-Assistent (Attrappe des KI-Prozesses); die
+#      Qt-Oberflächentests laufen gleichzeitig in sieben eigenen Jobs (je ein eigener Rechner);
+#      Texterkennung mit echtem Tesseract und den KI-Prozess (llama-server mit winzigem Testmodell) prüft
+#      der Runtime-Smoke-Test am Setup (Schritt 5)
 #   2. Setup bauen (prüft Setup, Prüfsumme, Version und Release Notes)
 #   3. Clean-Install-Test der neuen Version
 #   4. Upgrade-Test: unmittelbar vorherige veröffentlichte Version → neue Version (nach SemVer
@@ -73,8 +74,8 @@ jobs:
             dateien: reader reader_layout reader_v31 pages_v31 forms_v31
           - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
             dateien: objects objects_v31 edit_v31 reader_motion ocr
-          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite
-            dateien: protect comfort
+          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent
+            dateien: protect comfort assistant
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -159,8 +160,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
-      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern, Per E-Mail senden)
-        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py windows-app/tests/test_mail.py -q -p no:cacheprovider
+      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern, Per E-Mail senden, KI-Assistent mit Attrappe des KI-Prozesses)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py windows-app/tests/test_mail.py windows-app/tests/test_assistant.py -q -p no:cacheprovider
 
       - name: 1. Tests (Vorlagen 2.0, Regelwerk 2.0 samt PDF-Pipeline, Sicherung und Wiederherstellung, Diagnose und Support-Paket)
         run: python -m pytest windows-app/tests/test_templates.py windows-app/tests/test_rules.py windows-app/tests/test_rules_pipeline.py windows-app/tests/test_backup.py windows-app/tests/test_diagnostics.py -v -p no:cacheprovider
@@ -266,7 +267,7 @@ jobs:
           Write-Host "Upgrade test: PDF Tool ${{ steps.versions.outputs.previous }} → PDF Tool ${{ steps.versions.outputs.current }}"
           ./windows-app/tests/smoke_installer.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
 
-      - name: 5. Runtime-Smoke-Test (eingebettete Laufzeit – Module, PDF, Kundenakte, Vorschau, Stapel, Vergleich, Reparatur)
+      - name: 5. Runtime-Smoke-Test (eingebettete Laufzeit – Module, PDF, Kundenakte, Vorschau, Stapel, Vergleich, Reparatur, Texterkennung, KI-Prozess)
         timeout-minutes: 10
         shell: pwsh
         run: |

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0-beta.1 (Beta zum Testen)
+Version 3.2.0-beta.2 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -11,7 +11,9 @@ Werkzeuge für PDF-Dateien:
   Formulare ausfüllen und gestalten, Texterkennung (OCR) für gescannte
   Seiten, Stempel und Unterschrift; vor dem Weitergeben schwärzen,
   bereinigen, mit Kennwort schützen, verkleinern, Seitenzahlen und
-  Wasserzeichen – mit Rückgängig und sicherem Speichern.
+  Wasserzeichen – mit Rückgängig und sicherem Speichern. Optional mit
+  KI-Assistent: Fragen zum PDF und Zusammenfassungen mit Seitenangaben,
+  vollständig auf diesem PC.
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
   vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
@@ -29,14 +31,35 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0-beta.1.exe
+PDF-Tool-Setup-3.2.0-beta.2.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
 qpdf, pypdfium2 mit PDFium, pypdf, fontTools) und die Texterkennung
-Tesseract mit deutschen und englischen Sprachdaten. Eine eigene
-Python-Installation, qpdf, Ghostscript, Tesseract oder andere
-Zusatzprogramme sind nicht nötig.
+Tesseract mit deutschen und englischen Sprachdaten sowie die Laufzeit des
+optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
+qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
+Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
+nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 3.2 (Beta 2) – KI-Assistent (optional)
+-----------------------------------------------------
+Standardmäßig aus: Solange Sie ihn nicht einschalten, lädt PDF Tool nichts
+und belegt weder Speicherplatz noch Arbeitsspeicher dafür.
+- Einschalten unter Einstellungen → KI-Assistent und ein Sprachmodell
+  wählen: „Genau“ (Qwen3.5 4B, 2,6 GB, braucht beim Antworten rund 5 GB
+  Arbeitsspeicher) oder „Kompakt“ (Qwen3.5 2B, 1,2 GB, rund 2 GB, etwa
+  doppelt so schnell, etwas ungenauer). Geladen wird erst nach
+  „Herunterladen“ – von Hugging Face über HTTPS, mit Prüfung der
+  Prüfsumme; der Download lässt sich anhalten und fortsetzen.
+- Im Reader: Seitenleiste „KI-Assistent“ (rechts). Fragen eintippen oder
+  „Dokument zusammenfassen“ – die Antworten nennen die Seiten, ein Klick
+  darauf springt dorthin. Antworten können Fehler enthalten; bitte auf den
+  genannten Seiten prüfen.
+- Dokumente, Fragen und Antworten verlassen den PC nicht und werden nicht
+  gespeichert. „Modell entfernen …“ löscht das Modell wieder; auch die
+  Deinstallation entfernt es.
 
 
 Neu in Version 3.2 (Beta 1) – Schützen und Weitergeben
@@ -334,6 +357,10 @@ PDF Editor:       %LOCALAPPDATA%\PDF-Tool-Editor
                   (ungespeicherte Änderungen für den Fall eines Absturzes,
                   Sicherungskopien vor dem Überschreiben einer PDF – je
                   Datei höchstens 3, nach 7 Tagen entfernt)
+KI-Assistent:     %LOCALAPPDATA%\PDF-Tool-KI
+                  (nur, wenn Sie ein Sprachmodell laden – nicht in
+                  Sicherungen oder Support-Paketen; „Modell entfernen …“
+                  und die Deinstallation löschen es)
 
 Die App erscheint im Startmenü unter „PDF Tool“ und unter
 Einstellungen → Apps → Installierte Apps.
@@ -359,10 +386,12 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 3.1.0 auf 3.2.0-beta.1 (Kanal „Beta“): Das Setup
-ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
-unverändert. Ohne „Beta-Versionen erhalten“ (Kanal „Stable“) wird diese
-Beta nicht angeboten.
+Update von PDF Tool 3.2.0-beta.1 oder 3.1.0 auf 3.2.0-beta.2 (Kanal
+„Beta“): Das Setup ersetzt nur die Programmdateien und legt die Laufzeit
+des KI-Assistenten im Unterordner „ai“ an. Alle Einstellungen und Daten
+bleiben unverändert; der KI-Assistent ist aus, bis Sie ihn einschalten.
+Ohne „Beta-Versionen erhalten“ (Kanal „Stable“) wird diese Beta nicht
+angeboten.
 
 Update von PDF Tool 2.8 auf 3.1.0: Das Setup ersetzt nur die
 Programmdateien, legt die Texterkennung im Unterordner „ocr“ an und trägt

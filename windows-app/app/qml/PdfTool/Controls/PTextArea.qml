@@ -12,7 +12,19 @@ Rectangle {
     property int maxLines: 10
     property bool invalid: false
     property string label: ""
+    // Eingabetaste schickt ab (z. B. eine Frage an den KI-Assistenten), Umschalt+Eingabetaste beginnt eine neue Zeile
+    property bool submitOnEnter: false
     signal edited()
+    signal submitted()
+
+    function handleReturn(event) {
+        if (submitOnEnter && !(event.modifiers & Qt.ShiftModifier) && area.preeditText === "") {
+            submitted()
+            event.accepted = true
+        } else {
+            event.accepted = false
+        }
+    }
 
     readonly property real lineHeight: fontMetrics.height
     implicitWidth: 320
@@ -63,6 +75,8 @@ Rectangle {
             Accessible.name: root.label !== "" ? root.label : root.placeholderText
             onCursorRectangleChanged: flick.ensureVisible(cursorRectangle)
             onTextChanged: if (activeFocus) root.edited()
+            Keys.onReturnPressed: (event) => root.handleReturn(event)
+            Keys.onEnterPressed: (event) => root.handleReturn(event)
             Keys.onTabPressed: (event) => { area.nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason); event.accepted = true }
             Keys.onBacktabPressed: (event) => { area.nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason); event.accepted = true }
             Text {

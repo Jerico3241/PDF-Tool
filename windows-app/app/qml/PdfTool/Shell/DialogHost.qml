@@ -160,6 +160,7 @@ T.Popup {
                             case "signature": return signatureContent
                             case "link": return linkContent
                             case "crop": return cropContent
+                            case "assistant_setup": return assistantSetupContent
                             default: return null
                             }
                         }
@@ -184,6 +185,7 @@ T.Popup {
                     Item { Layout.fillWidth: true; visible: buttonsShown < 2 }
                     PButton {
                         id: primaryButton
+                        objectName: "dialogPrimaryButton"
                         visible: (popup.request.primary || "") !== ""
                         text: popup.request.primary || ""
                         kind: popup.request.danger ? "danger" : "accent"
@@ -237,4 +239,5 @@ T.Popup {
     Component { id: signatureContent; SignatureContent {} }
     Component { id: linkContent; LinkContent {} }
     Component { id: cropContent; CropContent {} }
+    Component { id: assistantSetupContent; AssistantSetupContent {} }
 }

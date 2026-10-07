@@ -51,15 +51,21 @@ def scene_x(item) -> float:
     return item.mapToScene(QPointF(0, 0)).x()
 
 
-def trace(read, duration: float = 0.6) -> list:
+def trace(read, duration: float = 0.6, until=None, limit: float = 5.0) -> list:
     """Werte während einer Animation sammeln (in jedem Durchlauf der Ereignisschleife) – unabhängig davon,
-    wie schnell der Rechner ist: Zwischenwerte gibt es genau dann, wenn sich etwas bewegt bzw. blendet."""
+    wie schnell der Rechner ist: Zwischenwerte gibt es genau dann, wenn sich etwas bewegt bzw. blendet.
+
+    Mit ``until`` geht es nach ``duration`` weiter, bis dieser Endwert erreicht ist (höchstens ``limit`` Sekunden):
+    Mit Render-Thread rückt Qt Animationen je Bild um einen festen Schritt vor – auf einem ausgelasteten Rechner
+    (CI unter Windows) dauert eine Blende dann länger, als ihre Dauer in Millisekunden sagt."""
     values = [read()]
-    end = time.monotonic() + duration
-    while time.monotonic() < end:
+    start = time.monotonic()
+    while True:
+        elapsed = time.monotonic() - start
+        if elapsed >= duration and (until is None or values[-1] == until or elapsed >= limit):
+            return values
         pump(0.004)
         values.append(read())
-    return values
 
 
 def between(values, low: float, high: float, margin: float = 0.5) -> bool:
@@ -219,9 +225,9 @@ def test_form_field_focus_ring_fades_in_and_out(motion_app, tmp_path: Path) -> N
     ring = [item for item in h.items("readerFieldFocus") if item.parentItem().parentItem().objectName() == "readerField_name"][0]
     assert ring.property("opacity") == 0
     QTest.mouseClick(h.window, LEFT, NO_MOD, page_point(h, 0, (name["view"][0] + name["view"][2]) / 2, (name["view"][1] + name["view"][3]) / 2))
-    shown = trace(lambda: ring.property("opacity"), 0.3)
+    shown = trace(lambda: ring.property("opacity"), 0.3, until=1)
     QTest.keyClick(h.window, Qt.Key.Key_Escape)  # Eingabe beendet: die Tastatur geht zurück an die Seite
-    hidden = trace(lambda: ring.property("opacity"), 0.3)
+    hidden = trace(lambda: ring.property("opacity"), 0.3, until=0)
     assert between(shown + hidden, 0, 1, 0.01) == (profile(h) != "off")  # blendet weich, außer bei »Aus«
     assert shown[-1] == 1 and hidden[-1] == 0
     assert h.item("readerView").hasActiveFocus()

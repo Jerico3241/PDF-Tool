@@ -23,3 +23,4 @@ RedactSearchContent 1.0 RedactSearchContent.qml
 SignatureContent 1.0 SignatureContent.qml
 LinkContent 1.0 LinkContent.qml
 CropContent 1.0 CropContent.qml
+AssistantSetupContent 1.0 AssistantSetupContent.qml

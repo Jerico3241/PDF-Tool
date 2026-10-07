@@ -49,6 +49,10 @@ und `app/tools/` (ohne Oberflächencode):
   gesetzt, Überlagerung – mit Prüfung), Bilder, Seiten, Anmerkungen, Formulare, Metadaten, Export,
   Rückgängig (`commands.py`), sicheres Speichern (`save.py`), Sitzungssicherung (`recovery.py`).
   Details: [`docs/PDF-EDITOR.md`](../docs/PDF-EDITOR.md).
+- `assistant/` (seit 3.2, optional) – KI-Assistent ohne Oberfläche: Modellkatalog mit Quelle, Revision und
+  SHA-256 (`catalog.py`), Ablage in `%LOCALAPPDATA%\PDF-Tool-KI` (`store.py`), Abschnitte, BM25-Suche und
+  Seitenangaben (`text.py`), Anweisungen an das Modell (`prompts.py`), der lokale KI-Prozess llama-server
+  (`runtime.py`: 127.0.0.1, zufälliger Schlüssel, Job-Objekt) und gestreamte Anfragen (`client.py`).
 - `tools/registry.py` – welche Werkzeuge es gibt und welche Seiten zu ihnen gehören.
 
 Regeln: kein `import PySide6` und keine Oberfläche im Kern; Texte, die die Oberfläche zeigt,
@@ -77,6 +81,7 @@ Modul `PdfTool.Backend`:
 | `Updates` | `updates.UpdatesController` | Updates (vor der Installation: Sicherung) |
 | `Backup` | `backups.BackupController` | Einstellungen → Sicherung & Wiederherstellung |
 | `Diagnose` | `diagnose.DiagnoseController` | Einstellungen → Diagnose |
+| `Assistant` | `assistant.AssistantController` | KI-Assistent (optional): Einstellungen, Einrichten und Download des Modells, Gespräch zum aktuellen Dokument (`conversationModel`) für die Seitenleiste im Reader |
 
 - **Properties** entstehen mit `base.prop()` (Wert + Änderungssignal, nur echte Änderungen
   melden); Python-Code kann mit `observe()` darauf hören.
@@ -323,6 +328,9 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
   `test_qt_forms_v31.py`, `test_qt_ocr.py`, `test_qt_protect.py`, `test_qt_comfort.py` (Oberfläche mit Maus
   und Tastatur), `tests/test_mail.py` (Per E-Mail senden ohne E-Mail-Programm); Messung:
   `tests/bench_editor.py`.
+- KI-Assistent: `tests/test_assistant.py` (ohne Oberfläche) und `tests/test_qt_assistant.py` – statt
+  llama-server die Attrappe `tests/fixtures/fake_llama_server.py`, statt Hugging Face ein lokaler Testserver;
+  nie ein echtes Modell, nie Internet.
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
   (`tests/fixtures/config_v22.json` … `config_v272.json`, dazu Kundenakten und ein Vertragsstand)
   in die aktuelle Version und prüft das gespeicherte Ergebnis – schnell, ohne alte Setups.
@@ -332,7 +340,7 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
 ## CI
 
 - **Windows-Setup** (`.github/workflows/windows-setup.yml`, bei Pull Request, Push auf `main` und manuell):
-  Tests (die Qt-Tests in sechs gleichzeitig laufenden Jobs auf eigenen Rechnern) → Setup bauen →
+  Tests (die Qt-Tests in sieben gleichzeitig laufenden Jobs auf eigenen Rechnern) → Setup bauen →
   Clean Install der neuen Version → Upgrade von der unmittelbar vorherigen veröffentlichten Version
   (für eine Beta auch eine Beta; `windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases; das
   veröffentlichte Setup wird geladen, per SHA-256 geprüft und zwischengespeichert) → Runtime-Smoke-Test

@@ -111,6 +111,26 @@ def _editor_folder(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("PDFTOOL_EDITOR_DIR", str(tmp_path_factory.mktemp("editor")))
 
 
+def pytest_runtest_logreport(report) -> None:
+    """In der CI (GitHub Actions) jeden fehlgeschlagenen Test zusätzlich als Fehlermeldung am Lauf ausgeben – mit
+    Testname und dem Ende der Meldung, sichtbar auch ohne das Protokoll des Laufs."""
+    if not report.failed or os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    text = str(report.longreprtext or "")[-1500:]
+    message = f"{report.nodeid} ({report.when}): {text}".replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    sys.stdout.flush()
+    sys.stdout.buffer.write(f"\n::error title=Test fehlgeschlagen::{message}\n".encode("utf-8"))  # UTF-8, auch unter cp1252
+    sys.stdout.buffer.flush()
+
+
+@pytest.fixture(autouse=True)
+def _assistant_folder(monkeypatch, tmp_path_factory):
+    """Sprachmodelle des KI-Assistenten liegen in Tests in einem eigenen Ordner – nie im echten %LOCALAPPDATA% –, und
+    einen KI-Prozess gibt es nur, wenn ein Test die Attrappe ausdrücklich einsetzt (``PDFTOOL_LLAMA_SERVER``)."""
+    monkeypatch.setenv("PDFTOOL_AI_DIR", str(tmp_path_factory.mktemp("ki")))
+    monkeypatch.delenv("PDFTOOL_LLAMA_SERVER", raising=False)
+
+
 @pytest.fixture(autouse=True)
 def _updates_offline(monkeypatch, tmp_path_factory):
     """Tests gehen nie ins Internet und starten nie ein Setup: Der Updater der App fragt eine nicht

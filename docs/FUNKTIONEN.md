@@ -86,6 +86,35 @@ Speichern geprüft. Technische Einzelheiten: [PDF-EDITOR.md](PDF-EDITOR.md#schü
   nie von PDF Tool. Ohne eingerichtetes E-Mail-Programm (Simple MAPI): neue Nachricht ohne Anhang über
   `mailto:`, die Datei ist im Explorer markiert. Code: `app/qtapp/mail.py`.
 
+## PDF Reader: KI-Assistent (optional, seit 3.2)
+
+Fragen zum geöffneten PDF beantworten und Dokumente zusammenfassen – vollständig auf diesem PC, mit
+Seitenangaben. **Standardmäßig aus**; solange er aus ist, lädt PDF Tool nichts und startet keinen KI-Prozess.
+
+- **Einrichten:** Einstellungen → KI-Assistent einschalten und ein Sprachmodell wählen – »Genau« (Qwen3.5 4B,
+  2,6 GB, rund 5 GB Arbeitsspeicher beim Antworten) oder »Kompakt« (Qwen3.5 2B, 1,2 GB, rund 2 GB, etwa doppelt
+  so schnell, etwas ungenauer); empfohlen wird das passende Modell für den Arbeitsspeicher des PCs. Geladen wird
+  erst nach »Herunterladen«: über HTTPS von Hugging Face (Weiterleitungen nur zu dessen Speicher), feste
+  Version, Prüfsumme (SHA-256) vor der ersten Nutzung; anhalten und fortsetzen möglich. Das Modell liegt in
+  `%LOCALAPPDATA%\PDF-Tool-KI\modelle` – nicht in Sicherungen oder Support-Paketen; »Modell entfernen …« und die
+  Deinstallation löschen es.
+- **Im Reader:** rechte Seitenleiste »KI-Assistent« (Streifen am rechten Rand oder Kopf der Seitenleiste). Frage
+  eintippen, Eingabetaste – die Antwort erscheint Stück für Stück und nennt die Seiten (»S. 3«); ein Klick springt
+  dorthin. »Dokument zusammenfassen«, Vorschläge (Fristen und Termine, Beträge und Kosten, Beteiligte), Antwort
+  anhalten, kopieren, »Neues Gespräch«. Jedes PDF-Tab hat sein eigenes Gespräch (nur im Arbeitsspeicher).
+- **Wie er liest:** Der Text des PDFs wird in Abschnitte je Seite geteilt; für eine Frage sucht PDF Tool die
+  passenden Abschnitte (bis etwa 9.000 Zeichen) und gibt nur diese mit Seitenzahl an das Modell, das nur daraus
+  antworten soll. Zusammenfassungen lesen kurze Dokumente ganz, lange in bis zu fünf Teilen; reicht das nicht, nennt
+  die Antwort die letzte gelesene Seite. Gescannte Seiten ohne Text: erst »Text erkennen (OCR)«.
+- **Datenschutz:** Dokumente, Fragen und Antworten verlassen den PC nicht und werden nie gespeichert oder
+  protokolliert. Der KI-Prozess (llama.cpp) lauscht nur auf 127.0.0.1 mit einem zufälligen Schlüssel, startet mit
+  der ersten Frage und endet nach zehn Minuten ohne Frage, beim Ausschalten und mit PDF Tool. Antworten werden vor
+  der Anzeige maskiert – Inhalte aus dem PDF können keine Bilder oder Verweise einschleusen.
+- Antworten können Fehler enthalten – die Seitenangaben helfen beim Prüfen.
+
+Code: `app/assistant/` (Katalog, Ablage, Text und Suche, Anweisungen, KI-Prozess, Anfragen),
+`app/qtapp/assistant.py`, `Reader/AssistantPanel.qml`, Einstellungen-Karte »KI-Assistent«.
+
 ## Vertragsübersichten: Kundenakte und Kundenwiedererkennung
 
 Das Werkzeug hat die Ansichten **Übersicht erstellen**, **Stapel**, **Darstellung**, **Vorschau**,

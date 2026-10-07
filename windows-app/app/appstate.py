@@ -141,10 +141,10 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Schwärzen: Bereiche oder Text vormerken und wirklich aus der Datei entfernen – nicht nur abdecken. »Suchen und schwärzen« findet IBANs, E-Mail-Adressen, Telefonnummern, Datumsangaben und eigene Begriffe.",
-    "Vor dem Weitergeben: Dokument bereinigen, Kennwortschutz mit AES-256, Reduzieren und PDF verkleinern – alles über die neue Schaltfläche »Schützen«.",
-    "Seiten gestalten: Kopf- und Fußzeile, Seitenzahlen, Bates-Nummern und Wasserzeichen mit Vorschau, Seiten zuschneiden. Dazu Lesezeichen und Links setzen, ändern und löschen.",
-    "Unterschreiben: Unterschrift zeichnen oder aus einem Bild einlesen, Stempel wie GENEHMIGT oder BEZAHLT mit Datum – danach gleich verschieben und in der Größe ändern.",
+    "KI-Assistent (optional, standardmäßig aus): Fragen zum geöffneten PDF stellen und Dokumente zusammenfassen – mit Seitenangaben zum Anklicken, vollständig auf diesem PC. Einschalten unter Einstellungen → KI-Assistent.",
+    "Das Sprachmodell lädt PDF Tool nur auf Ihren Wunsch (1,2 oder 2,6 GB, mit Prüfsumme) – und »Modell entfernen« gibt den Speicherplatz jederzeit wieder frei. Dokumente, Fragen und Antworten verlassen den PC nicht.",
+    "Schützen und Weitergeben (seit Beta 1): Schwärzen, Dokument bereinigen, Kennwortschutz mit AES-256, Reduzieren und PDF verkleinern – über die Schaltfläche »Schützen«.",
+    "Seiten gestalten, unterschreiben und stempeln: Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Zuschneiden, Lesezeichen und Links; Unterschrift zeichnen oder aus einem Bild einlesen.",
     "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite.",
     "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )

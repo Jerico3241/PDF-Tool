@@ -111,6 +111,12 @@ class Runtime(QObject):
             self.app.register_work(controller.running_work)
         self.singletons["Backup"] = self.backup
         self.singletons["Diagnose"] = self.diagnose
+        # KI-Assistent (optional, standardmäßig aus): lädt nichts, bis er eingeschaltet und eingerichtet ist
+        from .assistant import AssistantController
+
+        self.assistant = AssistantController(self.app, cfg, self)
+        self.assistant.attach_reader(self.singletons["Reader"])
+        self.singletons["Assistant"] = self.assistant
         self.app.observe("ready", lambda ready: (self.backup.start(), self.diagnose.start()) if ready else None)
         # Windows-Einstellungen (Design, Akzentfarbe, Animationseffekte) sofort übernehmen
         from . import system

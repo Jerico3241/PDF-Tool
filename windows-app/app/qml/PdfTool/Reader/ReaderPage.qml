@@ -8,7 +8,8 @@ import PdfTool.Controls
 // des Fensters); links die Seitenleiste mit Seiten, Lesezeichen oder Suche, rechts Kommentare oder
 // Eigenschaften – jeweils mit ihren Umschaltern im eigenen Kopf, eingeklappt als schmaler Streifen mit
 // Symbolen –, in der Mitte die Seiten (oder »Seiten organisieren«). Ohne Dokument (nur kurz, etwa während
-// das erste geöffnet wird): ReaderStart; »Zuletzt verwendet« steht auf der Startseite. In schmalen Fenstern
+// das erste geöffnet wird): ReaderStart; »Zuletzt verwendet« steht auf der Startseite. Rechts außerdem der
+// KI-Assistent, wenn er in den Einstellungen eingeschaltet ist. In schmalen Fenstern
 // liegen die Seitenleisten über der Ansicht.
 // Tastenkürzel gelten nur, solange diese Seite zu sehen ist und kein Dialog offen ist.
 FocusScope {
@@ -237,7 +238,7 @@ FocusScope {
                         items: [
                             { key: "comments", icon: "comment", tip: "Kommentare", name: "readerRailComments" },
                             { key: "properties", icon: "text_font", tip: "Eigenschaften", name: "readerRailProperties" }
-                        ]
+                        ].concat(Assistant.enabled ? [{ key: "assistant", icon: "sparkle", tip: "KI-Assistent", name: "readerRailAssistant" }] : [])
                         onSelected: (key) => Reader.showRightPanel(key)
                     }
                     LeftPanel {

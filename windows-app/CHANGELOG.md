@@ -2,6 +2,59 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.2.0-beta.2
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Optionaler KI-Assistent: Fragen zum geöffneten PDF und
+Zusammenfassungen mit Seitenangaben, vollständig lokal mit llama.cpp; das Sprachmodell (Qwen3.5 4B oder 2B) wird nur
+auf ausdrücklichen Wunsch geladen und lässt sich jederzeit entfernen. Standardmäßig aus. Details in den
+[Release Notes](release-notes/3.2.0-beta.2.md).
+
+## KI-Assistent (`app/assistant/`, `qtapp/assistant.py`)
+
+- `catalog.py`: zwei Modelle (GGUF Q4_K_M von unsloth, Apache-2.0) mit festem Commit bei Hugging Face, Größe und
+  SHA-256; `recommended(ram)` (»Genau« ab 12 GB Arbeitsspeicher, sonst »Kompakt«).
+- `store.py`: `%LOCALAPPDATA%\PDF-Tool-KI\modelle` (Tests: `PDFTOOL_AI_DIR`), eingerichtet erst mit Größe und
+  Vermerk der geprüften Prüfsumme (`.sha256`), Teildownload `.part`, `remove`, Platzbedarf mit 512 MB Reserve.
+- `text.py`: Seitentexte bereinigt (Silbentrennung), Abschnitte bis 1.000 Zeichen nie über Seitengrenzen,
+  BM25-Index mit ausgeschriebenen Umlauten, Füllwörtern und Wortanfängen langer Wörter; `cited_pages` und `rich`
+  (Antwort maskiert, nur fett, Überschriften, Stichpunkte und Verweise `page:N` – Qt `StyledText`).
+- `prompts.py`: Antworten nur aus den Auszügen mit Seitenangabe; Fragen mit bis zu 9.000 Zeichen passender
+  Auszüge; Zusammenfassung in einem Schritt oder in bis zu fünf Teilen à 12.000 Zeichen mit Zusammenführung.
+- `runtime.py`: `llama-server` (gebündelt `ai\llama-server.exe`, Tests `PDFTOOL_LLAMA_SERVER`) mit `--host
+  127.0.0.1`, freiem Port, `--ctx-size 8192`, `--parallel 1`, `--no-webui`, `--log-disable`; Schlüssel über
+  `LLAMA_API_KEY`; `CREATE_NO_WINDOW`, `BELOW_NORMAL_PRIORITY_CLASS`, Job-Objekt mit
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; verständliche Fehler (fehlende DLL, Prozessor, Speicher).
+- `client.py`: `/v1/chat/completions` gestreamt (SSE), Qwen3.5 ohne »Nachdenken«
+  (`chat_template_kwargs.enable_thinking=false`), Temperatur 0,2; `cancel()` aus jedem Thread.
+- `AssistantController` (QML `Assistant`): Zustände off/setup/download/verify/ready, Konfiguration
+  `ki_assistent`/`ki_modell`, Einrichten-Dialog `assistant_setup`, Download über den Updater-Transport mit
+  `UrlPolicy` nur für huggingface.co und `*.hf.co`, SHA-256 im Arbeitsthread, Entfernen nach Rückfrage; Gespräch je
+  Dokument (`KeyedListModel`, beim Streamen ändert sich nur die Zeile der Antwort), Auszüge je Dokumentstand
+  zwischengespeichert, KI-Prozess erst bei Bedarf und nach zehn Minuten ohne Frage beendet.
+- Reader: rechte Seitenleiste `assistant` (`AssistantPanel.qml`, Streifen und Kopf nur eingeschaltet);
+  Ausschalten schließt sie in allen Tabs (`ReaderController.close_right_panel`). `PTextArea.submitOnEnter`.
+- Einstellungen: Karte „KI-Assistent (optional)“ mit Status, Fortschritt, Einrichten, Fortsetzen, Anhalten,
+  Anderes Modell, Modell entfernen und Hinweis zum Datenschutz.
+
+## Updater-Transport
+
+- `download(..., offset, keep_partial)`: Fortsetzen mit `Range` (206 mit passendem `Content-Range`, sonst von
+  vorn), Teildatei bleibt nach Abbruch, Zeitüberschreitung oder Verbindungsverlust; der Updater selbst nutzt das
+  nicht.
+
+## Setup, Prüfungen, Tests
+
+- `build.py`: llama.cpp b11476 (`llama-b11476-bin-win-cpu-x64.zip`, SHA-256) → `ai\`: `llama-server.exe`, DLLs
+  laut Importtabellen, `ggml-cpu-*.dll`, `LICENSES.txt` (von `llama.exe licenses`). Fehler des Builds in der CI
+  zusätzlich als Fehlermeldung am Lauf.
+- `release_check.check_ai`; Runtime-Smoke-Test mit dem gebündelten llama-server und einem Testmodell (1,2 MB),
+  Abbruch des Elternprozesses beendet den KI-Prozess; Installer ersetzt bzw. entfernt `ai\` und entfernt geladene
+  Modelle bei der Deinstallation (nur die eigenen Dateien).
+- `test_assistant.py` (ohne Oberfläche, Attrappe `fixtures/fake_llama_server.py`), `test_qt_assistant.py`
+  (lokaler Testserver statt Hugging Face: Weiterleitung, `Range`, Anhalten und Fortsetzen, falsche Prüfsumme,
+  fremde Weiterleitung, Speicherplatz, Entfernen, Fragen mit Seitenverweisen, Zusammenfassen in Teilen, Abbrechen,
+  Scans, Gespräche je Tab, Leerlauf, keine Inhalte in Protokollen).
+
 # PDF Tool 3.2.0-beta.1
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Schützen und Weitergeben: Schwärzen, Bereinigen,
