@@ -228,7 +228,7 @@ class ThemeController(Observable):
         if not self.micaAvailable:
             self.micaDescription = "Nicht verfügbar: erfordert Windows 11 mit aktivierten Transparenzeffekten."
         else:
-            self.micaDescription = "Titelleiste und Navigation erhalten den dezenten Farbton des Desktophintergrunds."
+            self.micaDescription = "Titelleiste und Tab-Leiste erhalten den dezenten Farbton des Desktophintergrunds."
 
     def _load_mica(self) -> None:
         if self._mica_thread is not None and self._mica_thread.is_alive():

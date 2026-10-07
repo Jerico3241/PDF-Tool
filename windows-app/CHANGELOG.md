@@ -2,6 +2,47 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.1.0-beta.4
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Neuer App-Rahmen nach dem Vorbild von Adobe Acrobat: Tabs
+oben statt Seitenleiste links, neue Startseite; Details in den [Release Notes](release-notes/3.1.0-beta.4.md).
+
+## Tab-Leiste
+
+- Die Seitenleiste der App (Start, Tools, Einstellungen; breit/kompakt) entfällt. Oben steht eine Tab-Leiste
+  (`Shell/AppTabs.qml`, `AppTab.qml`): ≡ Menü (PDF öffnen, Start, Einstellungen, Kurzanleitung, Neuerungen,
+  Über), ⌂ Start, je ein Tab für geöffnete Werkzeuge (`App.openTabs`: Vertragsübersichten, PDF reparieren,
+  Einstellungen) und für jedes geöffnete PDF (bisher eine eigene Leiste im Reader), „+“ öffnet PDFs; rechts
+  Kurzanleitung und Einstellungen.
+- Werkzeug-Tabs schließen mit ×, mittlerer Maustaste oder Strg+W (`App.closeTab`); Eingaben und laufende Arbeit
+  bleiben. War der Tab zu sehen, folgt der rechts daneben (nach den Werkzeugen das aktive PDF), sonst der links
+  daneben bzw. Start.
+- Der aktive Tab geht in die Inhaltsebene über; die Akzentmarkierung gleitet zwischen ⌂, Werkzeugen und PDFs und
+  bleibt unter ihrem Tab, wenn Tabs hinzukommen oder wegfallen. Neue Tabs blenden ein und heben sich leicht.
+- PDF-Tabs zeigen den Namen ohne „.pdf“, der vollständige Pfad steht im Tooltip; höchstens 240 px breit.
+- Viele Tabs: Werkzeug-Tabs werden schmaler, sobald die PDF-Tabs weniger als 200 px hätten; PDF-Tabs werden bis
+  144 px schmal (Name in der Mitte gekürzt). Haben auch dann nicht alle Platz, zeigt die Leiste nur ganze, gleich
+  breite Tabs und ‹ › zum Blättern; Pfeile, Mausrad (`PWheelScroll.sideways`, `notch`) und Ziehen bewegen um genau
+  einen Tab. Der aktive bleibt ganz zu sehen.
+- Der Reader erscheint erst mit dem geöffneten Dokument (kein leerer Reader); nach dem letzten geschlossenen
+  PDF geht es zur Startseite. Schlägt das Öffnen fehl, bleibt die Seite, auf der man war, mit dem Hinweis.
+  Strg+5 und „PDF Reader & Editor“ öffnen ohne Dokument die Dateiauswahl; Strg+O öffnet auf Start und in den
+  Einstellungen eine PDF.
+- Beim Beenden laufen keine Übergänge der Tab-Leiste mehr (`App.closing`), und zum Löschen vorgemerkte
+  QML-Objekte enden vor der Engine (`finish_incubation`) – kein Abbau halb gelöschter Tabs.
+- Die gespeicherte Einstellung `nav_kompakt` älterer Versionen bleibt erhalten, wird aber nicht mehr gelesen.
+
+## Startseite
+
+- Werkzeuge in einer Karte (Symbol, Name, Beschreibung, „Öffnen ›“, Tastenkürzel), daneben die Ablagefläche
+  „PDF hierher ziehen“ mit „Datei öffnen“; schmal untereinander. Drei Werkzeuge nebeneinander nur, wenn jedes
+  seine Fußzeile ganz zeigen kann (Schrift und Skalierung bestimmen die Breite) – sonst untereinander.
+- „Zuletzt verwendet“ (bisher „Zuletzt geöffnet“ im leeren Reader): Name, Ordner, wann geöffnet („Heute, 14:05“,
+  „Gestern, 09:12“, Datum), Größe wie im Explorer; Klick öffnet, „Im Ordner zeigen“, Entfernen, „Liste leeren“.
+  Gespeichert werden nur Pfad und Zeitpunkt (`reader_zuletzt_zeit`), Einträge älterer Versionen zunächst ohne
+  Zeitpunkt. Die Zeitangaben werden beim Zeigen der Startseite neu gebildet.
+- Datenschutzhinweis unter der Liste, ergänzt um das sichere Speichern (Prüfung der neuen Datei vor dem Ersetzen).
+
 # PDF Tool 3.1.0-beta.3
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Feinschliff: optische und technische Fehler der

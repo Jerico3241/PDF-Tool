@@ -19,16 +19,25 @@ Dokuments. **PDFium** (pypdfium2) zeichnet die Seiten, liefert Zeichen, Position
 prüft Änderungen. Beide greifen nur unter einer gemeinsamen Sperre (`pdfium_lock.PDFIUM_LOCK`) und
 nur aus dem Arbeitsthread auf ein Dokument zu.
 
-## Fensteraufbau: Navigation, Seitenleisten, Dokument
+## Fensteraufbau: Tabs, Seitenleisten, Dokument
 
 Drei getrennte Ebenen:
 
-1. **App-Navigation** (Start, Werkzeuge, Einstellungen – `Shell/AppShell.qml`):
-   - Ist im Reader ein Dokument geöffnet, ist sie eingeklappt: nur zentrierte Symbole, der gewählte
-     Bereich mit zurückhaltender Akzentfläche, Akzentsymbol und Markierung.
-   - Die Menüschaltfläche klappt sie vorübergehend aus – bis zum nächsten geöffneten Dokument oder
-     bis der Reader verlassen wird. Die gespeicherte Wahl „Navigation kompakt“ bleibt unberührt und
-     gilt auf der Startseite und in den anderen Werkzeugen wie bisher.
+1. **Tab-Leiste oben** (seit 3.1.0-beta.4, nach dem Vorbild von Adobe Acrobat – `Shell/AppTabs.qml`):
+   - ≡ Menü, ⌂ Start, je ein Tab für geöffnete Werkzeuge und **für jedes geöffnete PDF**, »+« öffnet
+     weitere PDFs; rechts Kurzanleitung und Einstellungen. Eine Seitenleiste der App gibt es nicht –
+     das Dokument hat die ganze Fensterbreite.
+   - Der aktive Tab hat die Farbe der Fläche darunter und geht in sie über; die Akzentmarkierung
+     gleitet zum aktiven Tab.
+   - Ein Klick auf ein PDF führt von überall in den Reader mit diesem Dokument (`Reader.showTab`).
+     Der Reader erscheint erst mit dem geöffneten Dokument; nach dem letzten geschlossenen PDF geht es
+     zur Startseite. Lässt sich eine Datei nicht öffnen, bleibt die Seite, auf der man war, und zeigt
+     den Hinweis.
+   - PDF-Tabs zeigen den Namen ohne „.pdf“ (vollständiger Pfad im Tooltip).
+   - Bei vielen Tabs werden die Werkzeug-Tabs schmaler, sobald die PDF-Tabs weniger als 200 px hätten;
+     die PDF-Tabs werden wie in Edge schmaler (bis 144 px). Haben auch dann nicht alle Platz, zeigt die
+     Leiste nur ganze Tabs und ‹ › zum Blättern; Pfeile, Mausrad und Ziehen bewegen um genau einen Tab.
+     Der aktive bleibt ganz zu sehen.
 2. **Seitenleisten** links (Seiten, Lesezeichen, Suchen) und rechts (Kommentare, Eigenschaften):
    - Feste Breiten, gleich, welcher Inhalt gezeigt wird: links 256 px, rechts 280 px
      (`Metrics.readerLeftPanelWidth`, `readerRightPanelWidth`).
@@ -68,14 +77,16 @@ Der Reader nutzt dasselbe Animationssystem wie die übrige App (Einstellungen �
 
 Was sich bewegt („Vollständig“):
 
-- **App-Navigation:** Sie klappt beim Öffnen eines Dokuments weich ein, die Beschriftungen blenden aus.
+- **Tab-Leiste:** Die Akzentmarkierung gleitet zum aktiven Tab – auch zwischen ⌂, Werkzeugen und PDFs –
+  und bleibt darunter, wenn Tabs hinzukommen oder wegfallen. Neue Tabs blenden ein und heben sich leicht,
+  geschlossene blenden aus, die übrigen rücken weich nach.
 - **Seitenleisten:**
   - Sie gleiten über ihren Streifen herein bzw. hinaus. Die Dokumentfläche nimmt ihre Breite einmal
     an, ohne Neuaufbau in jedem Bild.
   - Der Inhalt überblendet mit leichtem Versatz, die Auswahl im Kopf gleitet zum neuen Reiter.
   - Die Eigenschaften blenden kurz ein, wenn die Art der Auswahl wechselt (Text, Bild, mehrere).
-- **Dokument-Tabs:**
-  - Neue Tabs blenden ein und heben sich leicht, geschlossene blenden aus, die übrigen rücken weich nach.
+- **Dokument-Tabs** (in der Tab-Leiste oben):
+  - Neue Tabs blenden ein, geschlossene blenden aus, die übrigen rücken weich nach.
   - Die Markierung des aktiven Tabs gleitet.
   - Der Punkt für „ungespeichert“ blendet ein und aus; sein Platz ist reserviert, der Tab springt nicht.
 - **Werkzeuge:** Die Akzentmarkierung unter dem gewählten Werkzeug gleitet zum neuen Werkzeug.
@@ -452,7 +463,11 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
 - Fensteraufbau: `tests/test_qt_reader_layout.py`
   - feste Breiten der Seitenleisten, Umschalter im Kopf, Streifen zum Wiederöffnen
   - einheitliche Köpfe (kein Titel gekürzt), leere Zustände, Befehlsleiste ohne Umschalter
-  - eingeklappte Navigation im Dokument
+  - PDFs als Tabs neben ⌂ Start, Wechsel zur Startseite und zurück, nach dem letzten PDF die Startseite
+  - Öffnen von der Startseite: der Reader erscheint erst mit dem Dokument, Fehler bleiben auf der Startseite
+  - viele Tabs im schmalen Fenster: nur ganze Tabs mit ‹ ›, Pfeile und Mausrad blättern um einen Tab, der aktive
+    bleibt zu sehen
+  - Beenden mit Werkzeug-Tabs und vielen PDFs ohne QML-Meldungen beim Abbau
   - kein Neuanordnen in jedem Bild (Animationsprofile „Vollständig“ und „Aus“)
 - Texterkennung: `tests/test_editor_ocr.py` – Scans aus `editorsamples.scanned` (aufrecht, `/Rotate`,
   CropBox, gemischt), Lage der Treffer, Darstellung, Rückgängig, Ersetzen, Speichern, Abbruch, fehlende

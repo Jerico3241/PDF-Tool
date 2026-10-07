@@ -1,7 +1,7 @@
 """Werkzeuge von PDF Tool.
 
 Jedes Werkzeug ist ein eigenes Paket mit eigener Logik (ohne Oberflächencode); seine Seiten
-stehen in QML (``qml/PdfTool/Pages``), seine Controller in ``qtapp``. Startseite und Navigation
+stehen in QML (``qml/PdfTool/Pages``), seine Controller in ``qtapp``. Startseite und Tab-Leiste
 lesen nur die Beschreibung (``ToolInfo``); Werkzeuge greifen nicht auf die Daten anderer
 Werkzeuge zu.
 """

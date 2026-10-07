@@ -160,7 +160,7 @@ def accent_name(choice: str) -> str:
 class Palette:
     dark: bool
     # Flächen
-    mica: str  # Fensterhintergrund / Navigationsbereich (SolidBackgroundFillColorBase)
+    mica: str  # Fensterhintergrund / Tab-Leiste (SolidBackgroundFillColorBase)
     layer: str  # Inhaltsebene rechts (LayerFillColorDefault auf Mica)
     layer_stroke: str
     card: str  # CardBackgroundFillColorDefault auf der Inhaltsebene

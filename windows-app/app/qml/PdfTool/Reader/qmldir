@@ -1,7 +1,6 @@
 module PdfTool.Reader
 ReaderPage 1.0 ReaderPage.qml
 ReaderStart 1.0 ReaderStart.qml
-ReaderTabs 1.0 ReaderTabs.qml
 ReaderToolbar 1.0 ReaderToolbar.qml
 ToolOptions 1.0 ToolOptions.qml
 DocumentView 1.0 DocumentView.qml

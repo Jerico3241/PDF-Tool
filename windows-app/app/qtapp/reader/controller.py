@@ -10,7 +10,9 @@ protokolliert.
 from __future__ import annotations
 
 import os
+import stat
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -84,6 +86,10 @@ class ReaderController(Observable):
         self._ids = 0
         recent = cfg.get("reader_zuletzt")
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
+        # Wann zuletzt geöffnet (Startseite »Zuletzt verwendet«); Einträge aus älteren Versionen haben keine Zeit
+        opened = cfg.get("reader_zuletzt_zeit")
+        self._recent_opened = {str(k): str(v) for k, v in opened.items() if isinstance(k, str) and isinstance(v, str) and k in self._recent_paths} if isinstance(opened, dict) else {}
+        self._recent_stat: dict[str, tuple[bool, int]] = {}  # Pfad → (vorhanden, Größe) beim letzten Prüfen
         view = cfg.get("reader_ansicht") if isinstance(cfg.get("reader_ansicht"), dict) else {}
         self._view = {"fit": view.get("fit", "width") if view.get("fit") in ("width", "page", "") else "width", "zoom": float(view.get("zoom", 100) or 100), "mode": view.get("mode", "continuous")}
         if view.get("links") in LEFT_PANELS:
@@ -106,6 +112,7 @@ class ReaderController(Observable):
         app.observe("ready", self._ready)
         app.observe("pagesLoaded", self._pages_loaded)
         app.observe("currentPage", self._page_changed)
+        app.documents_open = lambda: self.hasDocument
 
     # QML: aktuelles Dokument ---------------------------------------------------------------------------------
     def _get_current(self):
@@ -219,7 +226,8 @@ class ReaderController(Observable):
         if not pdfs:
             self.app.notify("reader", "warning", "Bitte eine PDF-Datei wählen.", title="Keine PDF")
             return
-        if self.app.currentPage != "reader":
+        # Mit geöffneten Dokumenten sofort zum Reader – sonst erst, wenn das Dokument da ist (kein leerer Reader)
+        if self.app.currentPage != "reader" and self._docs:
             self.app.navigate(READER.key)
         for path in pdfs:
             existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
@@ -280,6 +288,8 @@ class ReaderController(Observable):
             controller.panels = {"left": self.leftPanel, "right": self.rightPanel, "organize": False}
             self.tabs.set_items([*self.tabs.items(), self._tab_item(controller)])
             self.activate(ident)
+            if self.app.currentPage != "reader":
+                self.app.navigate(READER.key)
             if recovered is None:
                 self.remember_recent(path)
             else:
@@ -291,23 +301,26 @@ class ReaderController(Observable):
         def failed(exc: BaseException, _details: str) -> None:
             self.opening = max(0, self.opening - 1)
             controller.deleteLater()
-            if isinstance(exc, PasswordRequired):
-                secret = self.ask_password(name, exc.wrong)
-                if secret is not None:
-                    self._open(path, secret, recovered)
-                else:
-                    self.app.set_status("Öffnen abgebrochen.", "neutral")
-                return
-            if isinstance(exc, DamagedDocument):
-                self._offer_repair(path)
-                return
-            if isinstance(exc, NotAPdf):
-                self.app.notify("reader", "error", f"»{name}« ist keine PDF-Datei.", title="Öffnen nicht möglich")
-                return
-            message = str(exc) if isinstance(exc, EditorError) else f"»{name}« konnte nicht geöffnet werden."
-            if not isinstance(exc, (EditorError, OSError)):
-                self.app.report_exception(_details)
-            self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
+            try:
+                if isinstance(exc, PasswordRequired):
+                    secret = self.ask_password(name, exc.wrong)
+                    if secret is not None:
+                        self._open(path, secret, recovered)
+                    else:
+                        self.app.set_status("Öffnen abgebrochen.", "neutral")
+                    return
+                if isinstance(exc, DamagedDocument):
+                    self._offer_repair(path)
+                    return
+                if isinstance(exc, NotAPdf):
+                    self.app.notify("reader", "error", f"»{name}« ist keine PDF-Datei.", title="Öffnen nicht möglich")
+                    return
+                message = str(exc) if isinstance(exc, EditorError) else f"»{name}« konnte nicht geöffnet werden."
+                if not isinstance(exc, (EditorError, OSError)):
+                    self.app.report_exception(_details)
+                self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
+            finally:
+                self._leave_if_empty()
 
         self.engine.submit(work, done, failed, label="öffnen")
 
@@ -362,6 +375,19 @@ class ReaderController(Observable):
         if self._current is not None:
             self._current.panels = {"left": self.leftPanel, "right": self.rightPanel, "organize": self.organize}
 
+    @Slot(str)
+    def showTab(self, key: str) -> None:  # noqa: N802
+        """Klick auf den Tab eines Dokuments – auch von der Startseite oder einem anderen Werkzeug aus."""
+        if key in self._docs:
+            self.activate(key)
+            self.app.navigate(READER.key)
+
+    def _leave_if_empty(self) -> None:
+        """Ohne Dokument gibt es im Reader nichts zu sehen: zurück zur Startseite (wie das letzte Dokument einer
+        Sitzung schließen) – nicht, solange noch ein Dokument geöffnet wird, und nicht beim Beenden."""
+        if not self._docs and self.opening == 0 and self.app.currentPage == "reader" and not self.app.closing:
+            self.app.navigate("home")
+
     @Slot(int)
     def activateIndex(self, offset: int) -> None:  # noqa: N802 - Strg+Tab / Strg+Umschalt+Tab
         keys = self.tabs.keys()
@@ -413,6 +439,7 @@ class ReaderController(Observable):
                 self.hasDocument = False
                 self.organize = False
                 self.leaveFullScreen()
+                self._leave_if_empty()
                 self.currentChanged.emit()
         controller.deleteLater()
 
@@ -421,19 +448,32 @@ class ReaderController(Observable):
         path = str(path)
         self._recent_paths = [path] + [p for p in self._recent_paths if not _same(p, path)]
         del self._recent_paths[RECENT_LIMIT:]
+        self._recent_opened = {p: when for p, when in self._recent_opened.items() if p in self._recent_paths}
+        self._recent_opened[path] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        self._recent_stat.pop(path, None)
         self._refresh_recent()
         self.app.schedule_save()
 
-    def _refresh_recent(self) -> None:
+    def _refresh_recent(self, probe: bool = True) -> None:
+        """Liste »Zuletzt verwendet«: Name, Ordner, wann geöffnet, Größe. ``probe=False``: nur die Zeitangaben neu
+        (»Heute« wird nach Mitternacht zu »Gestern«), ohne die Dateien erneut zu prüfen."""
         items = []
         for path in self._recent_paths:
+            if probe or path not in self._recent_stat:
+                self._recent_stat[path] = _file_info(path)
+            exists, size = self._recent_stat[path]
             p = Path(path)
-            items.append({"path": path, "name": p.name, "folder": str(p.parent), "missing": not p.is_file()})
+            items.append({
+                "path": path, "name": p.name, "folder": str(p.parent), "missing": not exists,
+                "size": size_text(size) if exists else "", "opened": opened_text(self._recent_opened.get(path, "")),
+            })
+        self._recent_stat = {path: info for path, info in self._recent_stat.items() if path in self._recent_paths}
         self.recent = items
 
     @Slot()
     def clearRecent(self) -> None:  # noqa: N802
         self._recent_paths = []
+        self._recent_opened = {}
         self._refresh_recent()
         self.app.schedule_save()
         self.app.set_status("Liste »Zuletzt geöffnet« geleert.", "success")
@@ -446,6 +486,7 @@ class ReaderController(Observable):
     @Slot(str)
     def removeRecent(self, path: str) -> None:  # noqa: N802
         self._recent_paths = [p for p in self._recent_paths if p != path]
+        self._recent_opened.pop(path, None)
         self._refresh_recent()
         self.app.schedule_save()
 
@@ -490,7 +531,7 @@ class ReaderController(Observable):
     # Vollbild ----------------------------------------------------------------------------------------------
     @Slot()
     def toggleFullScreen(self) -> None:  # noqa: N802
-        """F11: Vollbild mit dem Dokument (Navigation, Tabs und Leisten ausgeblendet) bzw. zurück."""
+        """F11: Vollbild mit dem Dokument (Tab-Leiste und Leisten ausgeblendet) bzw. zurück."""
         if self.fullScreen:
             self.leaveFullScreen()
             return
@@ -531,9 +572,11 @@ class ReaderController(Observable):
     def _page_changed(self, page: str) -> None:
         if page != "reader":
             self.leaveFullScreen()
+        if page == "home":
+            self._refresh_recent(probe=False)
 
     def config(self) -> dict:
-        return {"reader_zuletzt": list(self._recent_paths), "reader_ansicht": {**self._view, "links": self.leftPanel}, "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen)}
+        return {"reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel}, "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen)}
 
     # Dateiauswahl -------------------------------------------------------------------------------------------------
     def pick_pdf(self, title: str) -> str:
@@ -897,3 +940,40 @@ def _log(category: str = "pdf"):
     from diagnostics.applog import get
 
     return get(category)
+
+
+def _file_info(path: str) -> tuple[bool, int]:
+    """(vorhanden, Größe in Byte) – ein einziger Zugriff auf das Dateisystem je Eintrag."""
+    try:
+        info = os.stat(path)
+    except (OSError, ValueError):
+        return False, 0
+    return stat.S_ISREG(info.st_mode), int(info.st_size)
+
+
+def size_text(size: int) -> str:
+    """Dateigröße wie im Explorer: »850 Byte«, »120 KB«, »1,2 MB«, »1,1 GB«."""
+    if size < 1024:
+        return f"{size} Byte"
+    value, unit = size / 1024, "KB"
+    for bigger in ("MB", "GB"):
+        if round(value) < 1024:  # gerundet noch keine 1024 (sonst »1,0 MB« statt »1024 KB«)
+            break
+        value, unit = value / 1024, bigger
+    text = f"{value:.0f}" if unit == "KB" or round(value, 1) >= 100 else f"{value:.1f}"
+    return f"{text.replace('.', ',')} {unit}"
+
+
+def opened_text(stamp: str, now: datetime | None = None) -> str:
+    """Wann zuletzt geöffnet (Ortszeit): »Heute, 14:05«, »Gestern, 09:12«, sonst »03.10.2026«; ohne Zeitangabe
+    leer."""
+    try:
+        when = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%S")
+    except (TypeError, ValueError):
+        return ""
+    today = (now or datetime.now()).date()
+    if when.date() == today:
+        return f"Heute, {when:%H:%M}"
+    if when.date() == today - timedelta(days=1):
+        return f"Gestern, {when:%H:%M}"
+    return f"{when:%d.%m.%Y}"

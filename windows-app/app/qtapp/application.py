@@ -21,7 +21,7 @@ import traceback
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QObject, Qt, QtMsgType, QUrl, qInstallMessageHandler
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, QtMsgType, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine, QQmlEngine, qmlRegisterSingletonType
 from PySide6.QtQuick import QQuickWindow
@@ -220,14 +220,16 @@ def native_windows() -> bool:
 
 
 def finish_incubation(engine: QQmlEngine | None, timeout: float = 2.0) -> None:
-    """Noch entstehende QML-Objekte (z. B. Seiten, die im Hintergrund laden) fertig bauen, bevor
-    die Engine endet – ohne den Abbau mitten in ihrer Entstehung."""
+    """Noch entstehende QML-Objekte (z. B. Seiten, die im Hintergrund laden) fertig bauen und zum
+    Löschen vorgemerkte (z. B. Tabs der beim Beenden geschlossenen PDFs) löschen, bevor die Engine
+    endet – ohne den Abbau mitten in ihrer Entstehung und ohne Objekte, die ihre Engine überleben."""
     controller = engine.incubationController() if engine is not None else None
     if controller is None:
         return
     deadline = time.monotonic() + timeout
     while controller.incubatingObjectCount() > 0 and time.monotonic() < deadline:
         controller.incubateFor(20)
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow:

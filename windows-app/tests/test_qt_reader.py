@@ -133,17 +133,38 @@ def reader_app(ui_app):
 
 
 # --- Öffnen, Tabs, Zuletzt geöffnet ---------------------------------------------------------------------------
-def test_start_card_shortcut_and_empty_state(ui_app) -> None:
+def test_start_card_shortcut_and_empty_state(ui_app, tmp_path: Path) -> None:
+    """Ohne Dokument öffnet Strg+5 (wie das Werkzeug auf der Startseite) die Dateiauswahl – wie »Datei öffnen« in
+    anderen PDF-Programmen; der Reader erscheint mit dem gewählten Dokument. Abgebrochen bleibt die Seite."""
+    from qtapp import files
     from tools.registry import READER
 
+    h = ui_app
+    h.app.dialogs.shutdown()
     assert READER.title == "PDF Reader & Editor"
     assert READER.description == "PDFs öffnen, bearbeiten, organisieren und kommentieren."
-    ui_app.app.openShortcut(5)
+    h.app.openShortcut(5)  # Auswahl abgebrochen
     pump(0.3)
-    assert ui_app.app.currentPage == "reader"
-    assert ui_app.item("readerStart").isVisible()
-    assert ui_app.item("readerOpenButton") is not None
-    assert not reader(ui_app).hasDocument
+    assert h.app.currentPage == "home" and not reader(h).hasDocument
+    pdf = samples.standard_text(tmp_path / "Gewählt.pdf")
+    files.RESPONSES.append([str(pdf)])
+    h.app.openShortcut(5)
+    assert wait_until(lambda: reader(h).tabs.count == 1, 30)
+    settle(h)
+    assert h.app.currentPage == "reader" and reader(h).current.name == "Gewählt.pdf"
+    # Mit Dokument wechselt Strg+5 nur zum Reader
+    h.navigate("home", 0.3)
+    h.app.openShortcut(5)
+    pump(0.3)
+    assert h.app.currentPage == "reader" and reader(h).tabs.count == 1
+    # Ohne Dokument (etwa während das erste geöffnet wird) zeigt der Reader seinen leeren Zustand
+    assert reader(h).closeTab(reader(h).current.ident) is True
+    settle(h)
+    assert h.app.currentPage == "home"
+    h.navigate("reader", 0.3)
+    assert h.item("readerStart").isVisible()
+    assert h.item("readerOpenButton") is not None
+    assert not reader(h).hasDocument
 
 
 def test_open_dialog_tabs_dirty_marker_and_close_prompt(reader_app, tmp_path: Path, monkeypatch) -> None:
@@ -176,12 +197,22 @@ def test_open_dialog_tabs_dirty_marker_and_close_prompt(reader_app, tmp_path: Pa
     settle(h)
     assert reader(h).tabs.count == 1 and reader(h).current.name == "Rechnung B.pdf"
     assert digest(a) == original
-    # Zuletzt geöffnet: nur Pfade, lässt sich leeren
-    paths = [entry["path"] for entry in reader(h).recent]
-    assert str(a) in paths and str(b) in paths
+    # Zuletzt geöffnet (Startseite »Zuletzt verwendet«): nur Pfad, Zeitpunkt und Größe, lässt sich leeren
+    from qtapp.reader.controller import size_text
+
+    entries = {entry["path"]: entry for entry in reader(h).recent}
+    assert str(a) in entries and str(b) in entries
+    for path in (a, b):
+        entry = entries[str(path)]
+        assert entry["name"] == path.name and entry["folder"] == str(path.parent) and not entry["missing"]
+        assert entry["opened"].startswith("Heute, ") and entry["size"] == size_text(path.stat().st_size)
+    assert set(reader(h).config()["reader_zuletzt_zeit"]) == {str(a), str(b)}
+    reader(h).removeRecent(str(a))
+    assert [entry["path"] for entry in reader(h).recent] == [str(b)] and set(reader(h).config()["reader_zuletzt_zeit"]) == {str(b)}
     reader(h).clearRecent()
     assert reader(h).recent == []
     assert "reader_zuletzt" in reader(h).config() and reader(h).config()["reader_zuletzt"] == []
+    assert reader(h).config()["reader_zuletzt_zeit"] == {}
 
 
 def test_drop_on_home_opens_reader_and_same_file_only_once(ui_app, tmp_path: Path) -> None:
@@ -282,6 +313,22 @@ def test_large_document_stays_virtualized(reader_app, tmp_path: Path) -> None:
     assert len(prop(view, "slotPages")) < 20
     settle(h)
     assert reader(h).cache.bytes <= reader(h).cache.limit
+
+
+def test_recent_list_shows_size_and_time_like_explorer() -> None:
+    """Startseite »Zuletzt verwendet«: Größe wie im Explorer (gerundet nie »1024 KB«), Zeitpunkt »Heute«, »Gestern«
+    oder das Datum; Einträge älterer Versionen haben keinen Zeitpunkt."""
+    from datetime import datetime
+
+    from qtapp.reader.controller import opened_text, size_text
+
+    sizes = (850, 1024, 122880, 1048575, 1258291, 104805171, 104857600, 1181116006)
+    assert [size_text(size) for size in sizes] == ["850 Byte", "1 KB", "120 KB", "1,0 MB", "1,2 MB", "99,9 MB", "100 MB", "1,1 GB"]
+    now = datetime(2026, 10, 7, 12, 0)
+    assert opened_text("2026-10-07T09:05:00", now) == "Heute, 09:05"
+    assert opened_text("2026-10-06T23:59:00", now) == "Gestern, 23:59"
+    assert opened_text("2026-10-05T10:00:00", now) == "05.10.2026"
+    assert opened_text("", now) == opened_text("kaputt", now) == ""
 
 
 def test_render_cache_keeps_no_images_of_closed_documents() -> None:

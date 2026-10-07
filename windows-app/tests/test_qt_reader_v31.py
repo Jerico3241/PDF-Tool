@@ -42,7 +42,7 @@ def test_full_screen_shows_only_the_document_and_esc_returns(reader_app, tmp_pat
     doc = open_pdf(h, samples.standard_text(tmp_path / "Voll.pdf", pages=3))
     r = reader(h)
     before = h.window.visibility()
-    nav, tabs, toolbar = h.item("navigationPane"), h.item("readerTabs"), h.item("readerToolbar")
+    nav, tabs, toolbar = h.item("appTabs"), h.item("readerTabs"), h.item("readerToolbar")  # Tab-Leiste oben, Dokument-Tabs, Befehlsleiste
     assert nav.isVisible() and tabs.isVisible() and toolbar.isVisible()
     key(h, Qt.Key.Key_F11)
     assert r.fullScreen is True

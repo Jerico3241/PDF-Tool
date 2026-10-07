@@ -15,6 +15,13 @@ MouseArea {
     id: root
     objectName: "wheelScroll"
     property Flickable flickable: null
+    // Waagerechte Leiste (Tabs): das gewöhnliche Mausrad verschiebt waagerecht, wie die Tab-Leisten von Browsern
+    property bool sideways: false
+    // Feste Strecke je Raste statt der Windows-Einstellung (z. B. ein Tab); Touchpads sammeln ihre Pixel, bis eine
+    // ganze Strecke erreicht ist – die Ansicht steht so immer auf einer ganzen Strecke.
+    property real notch: 0
+    property real pendingX: 0
+    property real pendingY: 0
     // »Eine Bildschirmseite«: Qt meldet dann −1 oder einen sehr großen Wert
     readonly property int lines: Qt.styleHints.wheelScrollLines
     readonly property real step: lines > 0 && lines < 100 ? lines * 24 : (flickable ? Math.max(24, flickable.height - 48) : 72)
@@ -68,8 +75,26 @@ MouseArea {
             return
         }
         var pixels = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0
-        var dx = pixels ? -wheel.pixelDelta.x : -wheel.angleDelta.x / 120 * step
-        var dy = pixels ? -wheel.pixelDelta.y : -wheel.angleDelta.y / 120 * step
+        var unit = notch > 0 ? notch : step
+        var dx = pixels ? -wheel.pixelDelta.x : -wheel.angleDelta.x / 120 * unit
+        var dy = pixels ? -wheel.pixelDelta.y : -wheel.angleDelta.y / 120 * unit
+        if (sideways) {
+            dx += dy
+            dy = 0
+        }
+        if (notch > 0 && pixels) {
+            pendingX += dx
+            pendingY += dy
+            dx = Math.trunc(pendingX / notch) * notch
+            dy = Math.trunc(pendingY / notch) * notch
+            pendingX -= dx
+            pendingY -= dy
+            if (dx === 0 && dy === 0) {
+                wheel.accepted = true
+                return
+            }
+            pixels = false  // ganze Strecken weich wie mit dem Mausrad
+        }
         var moved = false
         if (dy !== 0) moved = move(false, dy, !pixels)
         if (dx !== 0) moved = move(true, dx, !pixels) || moved

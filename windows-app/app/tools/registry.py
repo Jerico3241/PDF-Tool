@@ -1,4 +1,4 @@
-"""Verzeichnis der Werkzeuge – gelesen von Startseite, Navigation und Tastenkürzeln.
+"""Verzeichnis der Werkzeuge – gelesen von Startseite, Tab-Leiste und Tastenkürzeln.
 
 Ein neues Werkzeug bekommt ein eigenes Paket unter ``tools/`` und einen Eintrag hier.
 """

@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QObject, QPointF, Qt
+from PySide6.QtTest import QTest
 
 from conftest import _prepare, neustart, pump, wait_until
 
@@ -87,7 +89,7 @@ def _szene(item) -> tuple[float, float, float, float]:
 
 
 def _teil(karte, name: str) -> tuple[float, float, float, float]:
-    """Lage eines Kartenteils relativ zur Karte (Symbol, Titel, Fußzeile, Tastenkürzel …)."""
+    """Lage eines Teils relativ zu seinem Werkzeug (Symbol, Titel, »Öffnen«, Tastenkürzel …)."""
     stapel = [karte]
     while stapel:
         aktuell = stapel.pop()
@@ -99,62 +101,54 @@ def _teil(karte, name: str) -> tuple[float, float, float, float]:
     raise AssertionError(name)
 
 
-KARTEN = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
+WERKZEUGE = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
 
 
-def _pruefe_startseite(h) -> int:
-    """Symmetrie der Startseite; liefert die Zahl der Spalten.
+def _pruefe_startseite(h) -> tuple[bool, int]:
+    """Aufbau der Startseite (Adobe-Prinzip); liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
 
-    Alle Karten gleich breit und gleich hoch, auf ganzen Pixeln; die Gruppe steht mittig (gleiche
-    Ränder – nur bei ungerader Breite der Seite ein Pixel Unterschied); jede Zeile füllt die Gruppe
-    bzw. steht als unvollständige letzte Zeile mittig darin (gleicher Abstand links und rechts)."""
-    karten = [h.item(name) for name in KARTEN]
-    raster, hinweis = h.item("homeGrid"), h.item("homePrivacy")
-    lagen = [_szene(k) for k in karten]
-    a = lagen[0]
-    # exakt gleich groß, alles auf ganzen Pixeln, gleicher Innenaufbau
-    for lage in lagen:
-        assert (lage[2], lage[3]) == (a[2], a[3]) and all(float(wert).is_integer() for wert in lage), lage
-    for teil in ("toolIcon", "toolTitle", "toolFooter", "toolOpen", "toolShortcut"):
-        for karte in karten[1:]:
-            assert _teil(karten[0], teil) == _teil(karte, teil), teil
-    assert _teil(karten[0], "toolIcon")[2:] == (48, 48)
-    # Fußzeile unten in der Karte, Tastenkürzel am rechten Rand
-    fx, fy, fw, fh = _teil(karten[0], "toolFooter")
-    assert fy + fh == pytest.approx(a[3] - 20, abs=0.5)
-    sx, _sy, sw, _sh = _teil(karten[0], "toolShortcut")
-    assert sx + sw == pytest.approx(a[2] - 20, abs=0.5)
-    # Gruppe mittig im Inhaltsbereich, höchstens 1040 px, Ränder mindestens 36 px
-    flaeche = raster.parentItem()
+    Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
+    breit, Ränder mindestens 36 px; Titel, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis an derselben
+    linken Kante. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
+    untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte; nebeneinander gleich
+    hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
+    oben, karte, ablage, zuletzt, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homeRecent", "homePrivacy"))
+    flaeche = oben.parentItem()
     while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
         flaeche = flaeche.parentItem()
     fx0, _fy0, fbreite, _fh0 = _szene(flaeche)
-    gx, gy, gbreite, _gh = _szene(raster)
+    gx, _gy, gbreite, _gh = _szene(oben)
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
-    assert gbreite <= 1040 and min(links, rechts) >= 36
-    # Titel und Datenschutzhinweis an der linken Kante der Gruppe
-    assert _szene(hinweis)[0] == gx and _szene(hinweis)[2] == gbreite
+    assert gbreite <= 1080 and min(links, rechts) >= 36
+    for teil in (zuletzt, hinweis):
+        assert _szene(teil)[0] == gx and _szene(teil)[2] == gbreite, teil.objectName()
     titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
     assert _szene(titel)[0] == gx
-    # Zeilen: gleiche Oberkante, Abstand 16 px zwischen den Karten und den Zeilen
-    zeilen: dict[float, list] = {}
+    k, a = _szene(karte), _szene(ablage)
+    nebeneinander = a[1] == k[1]
+    if nebeneinander:
+        assert k[0] == gx and a[2] == 260 and a[3] == k[3] and a[0] - (k[0] + k[2]) == 16 and a[0] + a[2] == gx + gbreite
+    else:
+        assert k[0] == a[0] == gx and k[2] == a[2] == gbreite and a[1] - (k[1] + k[3]) == 16
+    assert _szene(zuletzt)[1] - max(k[1] + k[3], a[1] + a[3]) == 16
+    werkzeuge = [h.item(name) for name in WERKZEUGE]
+    lagen = [_szene(w) for w in werkzeuge]
     for lage in lagen:
-        zeilen.setdefault(lage[1], []).append(lage)
-    oben = sorted(zeilen)
-    spalten = len(zeilen[oben[0]])
-    for nummer, y in enumerate(oben):
-        zeile = sorted(zeilen[y])
-        assert len(zeile) == spalten or (nummer == len(oben) - 1 and len(zeile) < spalten)  # nur die letzte Zeile unvollständig
-        for vorher, karte in zip(zeile, zeile[1:]):
-            assert karte[0] - (vorher[0] + vorher[2]) == 16
-        rand_links, rand_rechts = zeile[0][0] - gx, gx + gbreite - (zeile[-1][0] + zeile[-1][2])
-        assert rand_links == rand_rechts, (y, rand_links, rand_rechts)  # mittig in der Gruppe …
-        if len(zeile) == spalten:
-            assert rand_links == 0  # … volle Zeilen füllen sie ganz
-        if nummer:
-            assert y - (oben[nummer - 1] + a[3]) == 16
-    return spalten
+        assert lage[2] == lagen[0][2] and all(float(wert).is_integer() for wert in lage), lage
+    spalten = len({lage[0] for lage in lagen})
+    if spalten > 1:
+        assert len({lage[1] for lage in lagen}) == 1 and len({lage[3] for lage in lagen}) == 1  # eine Zeile, gleich hoch
+        for teil in ("toolIcon", "toolTitle", "toolOpen"):
+            for werkzeug in werkzeuge[1:]:
+                assert _teil(werkzeuge[0], teil)[:2] == _teil(werkzeug, teil)[:2], teil
+        rechte_kanten = {round(_teil(w, "toolShortcut")[0] + _teil(w, "toolShortcut")[2]) for w in werkzeuge}
+        assert len(rechte_kanten) == 1  # Tastenkürzel rechtsbündig
+        for vorher, danach in zip(lagen, lagen[1:]):
+            assert danach[0] - (vorher[0] + vorher[2]) == 8
+    erste, letzte = min(lage[0] for lage in lagen), max(lage[0] + lage[2] for lage in lagen)
+    assert abs((erste - k[0]) - (k[0] + k[2] - letzte)) <= 1  # mittig in der Karte
+    return nebeneinander, spalten
 
 
 def _alle(wurzel) -> list:
@@ -166,33 +160,31 @@ def _alle(wurzel) -> list:
     return alle
 
 
-# Fenstergrößen (geräteunabhängige Pixel) und erwartete Spalten: breit drei, mittel zwei (die dritte
-# Karte mittig darunter), schmal eine (760: kleinste Fensterbreite). 1093 × 614: 1366 × 768 bei 125 %;
-# 1280 × 720: 1920 × 1080 bei 150 %.
-GROESSEN = (((1920, 1080), 3), ((2560, 1440), 3), ((1366, 768), 3), ((1280, 720), 2), ((1093, 614), 2), ((900, 700), 2), ((760, 700), 1))
+# Fenstergrößen (geräteunabhängige Pixel) und erwarteter Aufbau: (Werkzeuge und Ablagefläche nebeneinander,
+# Spalten der Werkzeuge). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
+# bei 150 %.
+GROESSEN = (((1920, 1080), (True, 3)), ((2560, 1440), (True, 3)), ((1366, 768), (True, 3)), ((1280, 720), (True, 3)),
+            ((1093, 614), (True, 3)), ((900, 700), (False, 3)), ((760, 700), (False, 1)))
 
 
-@pytest.mark.parametrize("groesse,spalten", GROESSEN)
-def test_start_page_is_symmetric(ui_app, groesse, spalten) -> None:
+@pytest.mark.parametrize("groesse,aufbau", GROESSEN)
+def test_start_page_is_symmetric(ui_app, groesse, aufbau) -> None:
     h = ui_app
     h.window.resize(*groesse)
     pump(0.6)
-    assert _pruefe_startseite(h) == spalten
-    breite = _szene(h.item("toolCard_contracts"))[2]
-    if spalten == 3:
-        assert breite == (1040 - 2 * 16) / 3  # volle Gruppe
-    elif spalten == 2:
-        assert 360 <= breite <= (1040 - 16) / 2  # nie schmaler als die Mindestbreite nebeneinander
+    assert _pruefe_startseite(h) == aufbau
+    if aufbau[0] and groesse[0] >= 1280:
+        assert _szene(h.item("homeTop"))[2] == 1080  # volle Gruppe
 
 
 def test_start_page_at_this_scale(ui_app) -> None:
     """Alle Fenstergrößen bei der Skalierung dieses Prozesses (``QT_SCALE_FACTOR``, sonst 100 %)."""
     h = ui_app
     assert h.window.devicePixelRatio() == pytest.approx(float(os.environ.get("QT_SCALE_FACTOR") or 1))
-    for groesse, spalten in GROESSEN:
+    for groesse, aufbau in GROESSEN:
         h.window.resize(*groesse)
         pump(0.4)
-        assert _pruefe_startseite(h) == spalten, groesse
+        assert _pruefe_startseite(h) == aufbau, groesse
 
 
 @pytest.mark.parametrize("skalierung", ["1.25", "1.5", "1.75", "2"])
@@ -208,18 +200,59 @@ def test_start_page_is_symmetric_at_every_scale(skalierung: str) -> None:
 
 def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
     h = ui_app
-    for groesse, spalten in (((1366, 768), 3), ((1093, 614), 2)):
+    for groesse, aufbau in (((1366, 768), (True, 3)), ((900, 700), (False, 3))):
         h.window.resize(*groesse)
         pump(0.4)
-        karten = [h.item(name) for name in KARTEN]
-        beschreibung = karten[1].property("description")
-        vorher = _szene(karten[0])[3]
-        karten[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und die Karte höher macht, als sie es sonst wäre.")
+        werkzeuge = [h.item(name) for name in WERKZEUGE]
+        beschreibung = werkzeuge[1].property("description")
+        vorher = _szene(werkzeuge[0])[3]
+        werkzeuge[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und das Werkzeug höher macht, als es sonst wäre.")
         pump(0.3)
-        assert _szene(karten[0])[3] > vorher  # alle Karten wachsen gemeinsam …
-        assert _pruefe_startseite(h) == spalten  # … Fußzeile und Tastenkürzel bleiben auf einer Linie
-        karten[1].setProperty("description", beschreibung)
+        assert _szene(werkzeuge[0])[3] > vorher  # alle Werkzeuge der Zeile wachsen gemeinsam …
+        assert _pruefe_startseite(h) == aufbau  # … »Öffnen ›« und Tastenkürzel bleiben auf einer Linie
+        werkzeuge[1].setProperty("description", beschreibung)
         pump(0.3)
+
+
+def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(ui_app) -> None:
+    """Nebeneinander nur, wenn jedes Werkzeug »Öffnen ›« und sein Tastenkürzel ganz zeigen kann (unter Windows
+    bestimmen Schrift und Skalierung die Breite) – sonst untereinander, nie über den Rand der Karte hinaus."""
+    h = ui_app
+    h.window.resize(1093, 614)
+    pump(0.4)
+    assert _pruefe_startseite(h) == (True, 3)
+    werkzeug = h.item(WERKZEUGE[0])
+    kuerzel = werkzeug.property("shortcut")
+    werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+F12")  # Fußzeile breiter als ein Drittel der Karte
+    pump(0.4)
+    assert _pruefe_startseite(h) == (True, 1)
+    rest = _szene(werkzeug)[2] - (_teil(werkzeug, "toolShortcut")[0] + _teil(werkzeug, "toolShortcut")[2])
+    assert rest >= 12  # Innenabstand rechts bleibt frei
+    werkzeug.setProperty("shortcut", kuerzel)
+    pump(0.4)
+    assert _pruefe_startseite(h) == (True, 3)
+
+
+def test_start_page_tools_open_their_tool(app) -> None:
+    """Ein Klick auf ein Werkzeug öffnet es (mit Tab); »PDF Reader & Editor« ohne geöffnetes PDF fragt nach einer
+    PDF – einen leeren Reader gibt es nicht."""
+    from qtapp import files
+
+    for name, page in (("toolCard_contracts", "create"), ("toolCard_repair", "repair")):
+        app.navigate("home", 0.4)
+        item = app.item(name)
+        QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
+        pump(0.4)
+        assert app.app.currentPage == page
+    app.navigate("home", 0.4)
+    karten = [app.item(name) for name in WERKZEUGE]
+    assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 3
+    files.RESPONSES.append([])  # Dateiauswahl: abbrechen
+    item = app.item("toolCard_reader")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
+    pump(0.4)
+    assert files.RESPONSES == [] and app.app.currentPage == "home"  # gefragt, abgebrochen: bleibt auf Start
+    assert not app.messages()
 
 
 def test_window_title_marks_beta_versions() -> None:
@@ -271,9 +304,13 @@ def test_shortcuts_open_tools(app) -> None:
     app.app.openShortcut(4)
     pump(0.2)
     assert app.app.currentPage == "settings"
+    # Strg+5 ohne geöffnetes PDF: eine PDF wählen (Dateiauswahl) – es gibt keinen leeren Reader
+    from qtapp import files
+
+    files.RESPONSES.append([])  # abbrechen
     app.app.openShortcut(5)
     pump(0.2)
-    assert app.app.currentTool == READER.key and app.app.currentPage == "reader"
+    assert files.RESPONSES == [] and app.app.currentPage == "settings"
     app.app.openShortcut(1)
     pump(0.2)
     assert app.app.currentPage == "home"
@@ -364,106 +401,93 @@ def test_theme_accent_and_profile_apply_live_and_persist(app, config_file: Path)
     assert neu.theme.mode == "dark" and neu.theme.accentChoice == "#C239B3" and neu.theme.profile == "reduced"
 
 
-def test_nav_compact_toggle_persists(app, config_file: Path) -> None:
-    app.app.setNavCompact(True)
+def test_tools_open_as_tabs_next_to_start_and_close_again(app) -> None:
+    """Adobe-Prinzip: Werkzeuge erscheinen beim Öffnen als Tab neben ⌂ Start (in der Reihenfolge des Öffnens) und
+    bleiben, bis man sie schließt – Eingaben bleiben dabei erhalten. Ist der geschlossene Tab zu sehen, folgt der
+    rechts daneben, sonst der links daneben bzw. Start. Strg+W schließt den Tab des sichtbaren Werkzeugs."""
+    a = app.app
+    assert app.item("navigationPane") is None and app.item("appTabs").isVisible()
+    assert a.openTabs == [] and app.item("tabHome").property("active") is True
+    app.navigate("repair", 0.3)
+    app.navigate("layout", 0.3)  # eine Ansicht der Vertragsübersichten
+    app.navigate("settings", 0.3)
+    assert a.openTabs == ["repair", "contracts", "settings"]
+    assert app.item("tab_settings").property("active") and not app.item("tab_repair").property("active")
+    app.navigate("home", 0.3)
+    assert a.openTabs == ["repair", "contracts", "settings"] and app.item("tabHome").property("active")
+    # Klick auf einen Tab: das Werkzeug mit seiner zuletzt gezeigten Ansicht
+    tab = app.item("tab_contracts")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, tab.mapToScene(QPointF(30, tab.height() / 2)).toPoint())
     pump(0.4)
-    app.app.persist()
-    assert json.loads(config_file.read_text(encoding="utf-8"))["nav_kompakt"] is True
-    neu = neustart(app)
-    assert neu.app.navCompact is True
+    assert a.currentPage == "layout" and tab.property("active")
+    # den sichtbaren Tab schließen: der rechts daneben folgt
+    a.closeTab("contracts")
+    pump(0.3)
+    assert a.openTabs == ["repair", "settings"] and a.currentPage == "settings"
+    # Strg+W: Tab des sichtbaren Werkzeugs – ganz rechts, also folgt der links daneben
+    QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+    pump(0.3)
+    assert a.openTabs == ["repair"] and a.currentPage == "repair"
+    # wieder geöffnet: die zuletzt gezeigte Ansicht – Eingaben bleiben erhalten
+    a.openTool(CONTRACTS.key)
+    pump(0.3)
+    assert a.openTabs == ["repair", "contracts"] and a.currentPage == "layout"
+    # einen anderen Tab schließen: die Seite bleibt
+    a.closeTab("repair")
+    pump(0.3)
+    assert a.openTabs == ["contracts"] and a.currentPage == "layout"
+    # der letzte Tab: Start
+    a.closeTab("contracts")
+    pump(0.3)
+    assert a.openTabs == [] and a.currentPage == "home"
+    assert not app.messages()
 
 
-def test_breakpoint_hysteresis_and_toggle(app) -> None:
-    """Knapp unter einem Breakpoint bleibt der bisherige Zustand (8 px Hysterese wie 2.6.1); die
-    Menüschaltfläche klappt die Navigation auch im schmalen Fenster aus, ein Breakpoint setzt das
-    zurück und stellt sofort um – ohne Animation."""
-    shell = app.item("shell")
-    for width, mode in ((1010, "wide"), (1004, "wide"), (998, "medium"), (1004, "medium"), (1008, "wide"), (814, "medium"), (810, "compact"), (818, "compact"), (820, "medium")):
-        app.window.resize(width, 700)
-        pump(0.02)
-        assert shell.property("mode") == mode, width
-    assert shell.property("paneExpanded") is False
-    shell.togglePane()
-    pump(0.4)
-    assert shell.property("paneExpanded") is True and shell.property("userExpanded") is True
-    app.window.resize(1100, 700)
-    pump(0.02)
-    assert shell.property("mode") == "wide" and shell.property("userExpanded") is False
-    assert not shell.property("paneAnimated")
-
-
-def test_pane_toggle_lays_out_the_page_once(app) -> None:
-    """Ein- und Ausklappen der Navigation: Die Seite erhält ihre neue Breite sofort – einmal, nicht in
-    jedem Bild der Animation; nur die Inhaltsebene gleitet mit (wie 2.6.1)."""
-    from qtutil import qml_type
-
-    app.window.resize(1100, 700)
-    app.navigate("create", 0.4)
-    shell = app.item("shell")
-    stack = [app.window.contentItem()]
-    host = None
-    while stack and host is None:
-        current = stack.pop()
-        if qml_type(current) == "PageHost":
-            host = current
-        stack.extend(current.childItems())
-    assert host is not None
-    for expanded in (False, True):
-        widths: list[float] = []
-        host.widthChanged.connect(lambda: widths.append(host.width()))
-        shell.togglePane()
-        pump(0.5)
-        host.widthChanged.disconnect()
-        assert shell.property("paneExpanded") is expanded
-        assert len(widths) == 1, widths
-        assert widths[0] == 1100 - (240 if expanded else 48) - 1
-
-
-def test_compact_navigation_has_no_gap_and_the_marker_stays_on_its_entry(app) -> None:
-    """Eingeklappt wird die Überschrift »Tools« zur schmalen Trennlinie – bis 3.1.0-beta.2 blieb sie 32 px
-    hoch, zwischen »Start« und den Tools lagen 40 px statt 4 px. Beim Ein- und Ausklappen bleibt die
-    Markierung in jedem Bild auf ihrem Eintrag; bei einem Wechsel gleitet sie und endet genau dort."""
-    from PySide6.QtCore import QPointF
-
-    app.window.resize(1280, 800)
+def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
+    """Die Akzentmarkierung gleitet zum neuen Tab (nur »Vollständig«) und steht danach genau darunter – auch wenn
+    links davon ein Tab wegfällt."""
     app.settings.setProfile("full")
-    app.app.setNavCompact(False)
-    app.navigate("repair", 0.5)
-    shell, pane, indicator = app.item("shell"), app.item("navigationPane"), app.item("navIndicator")
-    entries, stack = {}, [pane]
-    while stack:
-        item = stack.pop()
-        stack.extend(item.childItems())
-        if item.property("key") and item.property("label") is not None:
-            entries[item.property("key")] = item
+    marker = app.item("tabIndicator")
 
-    def top(item) -> float:
-        return item.mapToScene(QPointF(0, 0)).y()
+    def mitte(item) -> float:
+        return item.mapToScene(QPointF(item.width() / 2, 0)).x()
 
-    def gap() -> float:  # zwischen »Start« und dem ersten Tool
-        return top(entries["reader"]) - (top(entries["home"]) + entries["home"].height())
-
-    def offset(key: str) -> float:  # Markierung gegenüber der Mitte ihres Eintrags
-        return abs(top(indicator) + indicator.height() / 2 - top(entries[key]) - entries[key].height() / 2)
-
-    assert shell.property("paneExpanded") is True and gap() == 40  # ausgeklappt: Platz für »Tools«
-    worst = 0.0
-    shell.togglePane()  # einklappen, animiert
-    for _ in range(40):
+    app.navigate("repair", 0.6)
+    assert abs(mitte(marker) - mitte(app.item("tab_repair"))) < 1
+    vorher, ziel = mitte(marker), mitte(app.item("tabHome"))
+    app.app.navigate("home")
+    lagen = []
+    for _ in range(30):
         pump(0.01)
-        worst = max(worst, offset("repair"))
-    assert pane.width() == 48 and worst < 0.5
-    assert gap() == 17  # 8 px, Trennlinie, 8 px
-    line = [item for item in app.items("navSeparator") if item.isVisible()]
-    assert len(line) == 1 and top(line[0]) - (top(entries["home"]) + entries["home"].height()) == 8
-    assert top(entries["reader"]) - (top(line[0]) + 1) == 8
-    app.app.navigate("home")  # Wechsel: gleitet vom alten Eintrag …
-    assert offset("home") > 20 if app.theme.effectiveProfile == "full" else offset("home") < 0.5
+        lagen.append(mitte(marker))
+    assert any(ziel + 2 < lage < vorher - 2 for lage in lagen) == (app.theme.effectiveProfile == "full")  # unterwegs (nur »Vollständig«)
+    pump(0.4)
+    assert abs(mitte(marker) - ziel) < 1
+    app.navigate("settings", 0.4)
+    app.navigate("layout", 0.6)
+    assert abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
+    app.app.closeTab("settings")  # links vom aktiven Tab: dieser rückt nach, die Markierung bleibt darunter
+    pump(0.6)
+    assert app.app.currentPage == "layout" and abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
+    app.settings.setProfile("off")
+    app.navigate("home", 0.1)
+    assert abs(mitte(marker) - mitte(app.item("tabHome"))) < 1  # »Aus«: sofort
+    app.settings.setProfile("full")
+    assert not app.messages()
+
+
+def test_menu_offers_open_settings_help_and_about(app) -> None:
+    """≡ Menü: PDF öffnen, Start, Einstellungen, Kurzanleitung, Neuerungen, Über – ein Eintrag führt dorthin."""
+    button = app.item("appMenuButton")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
+    pump(0.4)
+    assert app.item("appMenu").property("opened") is True
+    names = ("menuOpen", "menuHome", "menuSettings", "menuHelp", "menuNews", "menuAbout")
+    assert [app.item(name).property("text") for name in names] == ["PDF öffnen …", "Start", "Einstellungen", "Kurzanleitung", "Neu in dieser Version", "Über PDF Tool"]
+    entry = app.item("menuSettings")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, entry.mapToScene(QPointF(entry.width() / 2, entry.height() / 2)).toPoint())
     pump(0.5)
-    assert offset("home") < 0.5  # … und endet genau am neuen
-    shell.togglePane()  # ausklappen: wieder Platz für die Überschrift
-    pump(0.5)
-    assert shell.property("paneExpanded") is True and gap() == 40 and offset("home") < 0.5
+    assert app.app.currentPage == "settings" and app.item("appMenu").property("opened") is False
     assert not app.messages()
 
 
@@ -499,12 +523,12 @@ def test_drop_on_start_page_routes_by_file_type(app, tmp_path: Path, excel_file:
     pdfsamples.healthy(pdf, pages=1)
     assert app.app.currentPage == "home"
     assert app.app.dragEnter([pdf.as_uri()]) is True
-    app.app.drop([pdf.as_uri()])  # seit 3.0.0: PDFs öffnet der PDF Reader
-    assert app.app.currentPage == "reader"
+    app.app.drop([pdf.as_uri()])  # seit 3.0.0: PDFs öffnet der PDF Reader – er erscheint mit dem geöffneten Dokument
     reader = app.runtime.reader.controller
     assert wait_until(lambda: reader.current is not None and reader.current.pageCount == 1, 60)
-    reader.closeCurrent()
-    app.navigate("home")
+    assert wait_until(lambda: app.app.currentPage == "reader", 5)
+    reader.closeCurrent()  # das letzte Dokument: zurück zur Startseite
+    assert wait_until(lambda: app.app.currentPage == "home", 5)
     app.app.drop([excel_file.as_uri()])
     assert app.app.currentPage == "create"
     assert wait_until(lambda: app.overview.analysis() is not None, 60)

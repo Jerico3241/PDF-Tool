@@ -290,8 +290,8 @@ Flickable {
     function resized() {
         if (!doc) return
         var point = viewAnchor
-        // Ganz oben (z. B. gleich nach dem Öffnen, während Navigation oder Seitenleisten auf- und
-        // zugehen) bleibt die Ansicht oben; sonst bleibt die Stelle in der Mitte stehen
+        // Ganz oben (z. B. gleich nach dem Öffnen, während Seitenleisten auf- und zugehen) bleibt die
+        // Ansicht oben; sonst bleibt die Stelle in der Mitte stehen
         var top = contentY <= 1
         restoring = true
         doc.setViewport(width, height, ratio)

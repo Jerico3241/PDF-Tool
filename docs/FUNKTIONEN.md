@@ -6,11 +6,21 @@ Ausführliche Beschreibung der Werkzeuge mit Verweisen auf den Code. Die kurze V
 
 ## Werkzeuge
 
-Nach dem Start zeigt PDF Tool eine Startseite mit allen Werkzeugen. Die Navigation links führt zu
-**Start**, den **Tools** und den **Einstellungen**. Eine Datei kann direkt in das Fenster gezogen
-werden: Auf der Startseite öffnen PDFs (eine oder mehrere) den „PDF Reader & Editor“, eine
-Excel-Liste „Vertragsübersichten“; auf der Seite „PDF reparieren“ werden PDFs zur Reparatur
-hinzugefügt.
+Nach dem Start zeigt PDF Tool die Startseite: die Werkzeuge, eine Ablagefläche zum Öffnen von PDFs
+und „Zuletzt verwendet“ (Name, Ordner, wann geöffnet, Größe). Oben liegt – nach dem Vorbild von
+Adobe Acrobat – eine Tab-Leiste (seit 3.1.0-beta.4, `Shell/AppTabs.qml`):
+
+- **≡ Menü:** PDF öffnen, Start, Einstellungen, Kurzanleitung, Neuerungen, Über PDF Tool.
+- **⌂ Start** ganz links; jedes geöffnete Werkzeug (Vertragsübersichten, PDF reparieren,
+  Einstellungen) und jedes geöffnete PDF ist ein Tab daneben, »+« öffnet weitere PDFs. Ein Werkzeug-Tab
+  bleibt, bis man ihn schließt (×, mittlere Maustaste, Strg+W); Eingaben bleiben dabei erhalten.
+- Rechts: Kurzanleitung (F1) und Einstellungen. Eine Seitenleiste gibt es nicht – PDFs und Werkzeuge
+  haben die ganze Fensterbreite.
+
+Eine Datei kann direkt in das Fenster gezogen werden: Auf der Startseite öffnen PDFs (eine oder
+mehrere) den „PDF Reader & Editor“, eine Excel-Liste „Vertragsübersichten“; auf der Seite „PDF
+reparieren“ werden PDFs zur Reparatur hinzugefügt. Der Reader erscheint mit dem geöffneten Dokument
+(nie leer); nach dem letzten geschlossenen PDF geht es zur Startseite.
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
@@ -19,7 +29,7 @@ hinzugefügt.
 | **PDF reparieren** | Analysiert beschädigte PDF-Dateien – eine oder mehrere auf einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen, bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten; Ausgabenamen je Datei, nie wird eine vorhandene Datei überschrieben | Fachlogik: `app/tools/pdf_repair/` (`batch.py` für Liste, Zustände und Ausgabenamen, `recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seiten: `app/qml/PdfTool/Pages/RepairPage.qml`, `RepairItem.qml` |
 
 Die Werkzeuge sind voneinander getrennt: Jedes hat eigene Seiten, eigene Einstellungen und eigene
-Logik; gemeinsam sind nur Fenster, Navigation, Design und Dialoge (`app/qtapp/app.py`,
+Logik; gemeinsam sind nur Fenster, Tab-Leiste, Design und Dialoge (`app/qtapp/app.py`,
 `app/qml/PdfTool/Shell/`, `app/qml/PdfTool/Controls/`). Neue Werkzeuge bekommen ein eigenes Paket
 unter `app/tools/` (Fachlogik ohne Oberfläche), einen Controller unter `app/qtapp/`, eine Seite
 unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – siehe
@@ -344,7 +354,7 @@ Seitenzahl und Zoomstufe haben eine feste Breite, der Zustand („Vorschau wird 
 - **Animationen:** Profil „Vollständig“, „Reduziert“ oder „Aus“ (Einstellungen → Verhalten →
   Animationen); ist in
   Windows „Animationseffekte“ aus, gilt mindestens „Reduziert“. Seitenwechsel (Aus-/Einblenden mit
-  leichter Bewegung), Navigationsindikator, Menüs, Tooltips, Aufklappbereiche, InfoBars, Dialoge,
+  leichter Bewegung), Markierung des aktiven Tabs, Menüs, Tooltips, Aufklappbereiche, InfoBars, Dialoge,
   Schaltflächen, Schalter und Statuswechsel sind animiert; alle Dauern stehen zentral in
   `Style/Motion.qml` und gelten sofort ohne Neustart.
 - **Anzeige:** Hell/Dunkel/„Wie Windows“ und Windows-Akzentfarbe live, Mica (nur wenn Windows es

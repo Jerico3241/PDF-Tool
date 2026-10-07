@@ -122,13 +122,14 @@ Ressource und dass kein Code mehr tkinter verwendet.
 **Manuelle Prüfung vor einem Release (Windows 10/11):**
 
 1. Skalierung 100 %, 125 %, 150 %, 175 % und 200 % (Einstellungen → Anzeige): Start ohne weißes
-   oder halbfertiges Fenster, keine abgeschnittenen Texte, Navigation breit/kompakt, Einstellungen
-   vollständig lesbar. Zum Nachbilden eignet sich `QT_SCALE_FACTOR=1.5`.
+   oder halbfertiges Fenster, keine abgeschnittenen Texte, Tab-Leiste mit mehreren Werkzeugen und
+   Dokumenten, Einstellungen vollständig lesbar. Zum Nachbilden eignet sich `QT_SCALE_FACTOR=1.5`.
 2. Hell/Dunkel mehrfach wechseln (auch „Wie Windows“ und über die Windows-Einstellung): Wechsel in
    einem Schritt, Titelleiste und Mica passend.
-3. „Animationseffekte“ in Windows aus: Seitenwechsel, Navigation und Bereiche ohne Bewegung.
-4. Fenstergröße langsam und schnell ziehen, maximieren, wiederherstellen, Navigation ein- und
-   ausklappen: keine springenden Karten, kein Flackern.
+3. „Animationseffekte“ in Windows aus: Seitenwechsel, Tab-Markierung und Bereiche ohne Bewegung.
+4. Fenstergröße langsam und schnell ziehen, maximieren, wiederherstellen, mehrere Werkzeuge und
+   PDFs als Tabs öffnen und schließen: keine springenden Karten oder Tabs, kein Flackern, der aktive
+   Tab bleibt sichtbar.
 5. Schnell zwischen „Übersicht erstellen“, „Darstellung“, „Vorschau“, „Stapel“ und (mit Kundenakte)
    „Kunden“ wechseln: keine leeren oder halb aufgebauten Seiten.
 6. Kundenakte aus → ein → aus → ein: Daten bleiben, keine doppelten Einträge; Stapel und PDF ohne

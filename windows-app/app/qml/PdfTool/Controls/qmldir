@@ -43,6 +43,5 @@ PTextCaret 1.0 PTextCaret.qml
 PTextField 1.0 PTextField.qml
 PTextMenu 1.0 PTextMenu.qml
 PToggle 1.0 PToggle.qml
-PToolCard 1.0 PToolCard.qml
 PToolTip 1.0 PToolTip.qml
 PWheelScroll 1.0 PWheelScroll.qml

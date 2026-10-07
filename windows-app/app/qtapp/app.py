@@ -1,4 +1,4 @@
-"""AppController: Navigation, Statuszeile, Hinweise, Speichern, Dateien und Tastenkürzel.
+"""AppController: Navigation und Tabs, Statuszeile, Hinweise, Speichern, Dateien und Tastenkürzel.
 
 Der AppController stellt nur die gemeinsame Infrastruktur bereit. Was ein Werkzeug bei
 Strg+Enter, Strg+O, Strg+F, F1 oder beim Ablegen einer Datei tut, entscheidet das Werkzeug
@@ -31,6 +31,8 @@ HOME = "home"
 SETTINGS = "settings"
 PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
 SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key)  # Strg+1 … Strg+5
+# Mit eigenem Tab neben ⌂ Start: diese Werkzeuge und die Einstellungen. Der Reader zeigt seine Dokumente als Tabs.
+TAB_KEYS = (CONTRACTS.key, REPAIR.key, SETTINGS)
 HOME_HINT = "Strg+5  PDF Reader & Editor   ·   Strg+2  Vertragsübersichten   ·   Strg+3  PDF reparieren"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
@@ -42,14 +44,14 @@ ABOUT_TEXT = (
 ABOUT_QUOTE = "„Ich beleidige seine Mutter, weil wenn ich seine Mutter beleidige, beleidige ich nur ihn oder maximal noch seine Mutter.“"
 ABOUT_QUOTE_AUTHOR = "— Manuelsen"
 HOME_STEPS = (
-    "Auf der Startseite ein Werkzeug wählen – oder links in der Navigation unter »Tools«.",
+    "Auf der Startseite ein Werkzeug wählen. Geöffnete Werkzeuge und PDFs stehen oben als Tabs; ⌂ führt zurück zur Startseite.",
     "»PDF Reader & Editor« öffnet PDFs zum Lesen, Bearbeiten, Organisieren und Kommentieren (Strg+5).",
     "»Vertragsübersichten« erstellt aus einer Excel-Liste eine PDF (Strg+2).",
     "»PDF reparieren« analysiert beschädigte PDF-Dateien und überträgt lesbare Inhalte in eine neue PDF (Strg+3).",
 )
 HOME_NOTES = (
     "Eine Datei kann auch direkt in das Fenster gezogen werden: Auf der Startseite öffnet eine PDF den »PDF Reader & Editor«, eine Excel-Liste »Vertragsübersichten«; auf der Seite »PDF reparieren« wird eine PDF zur Reparatur hinzugefügt.",
-    "Design, Akzentfarbe, Mica und Animationen stehen unter »Einstellungen« (Strg+4).",
+    "Design, Akzentfarbe, Mica und Animationen stehen unter »Einstellungen« (Zahnrad oben rechts, Strg+4).",
     "Alle Dateien werden lokal verarbeitet; es wird nichts hochgeladen.",
 )
 SEVERITY_TO_STATUS = {"success": "success", "error": "error", "warning": "warning", "info": "info", "neutral": "neutral"}
@@ -97,7 +99,7 @@ class AppController(Observable):
     currentPageChanged, currentPage = prop(str, "currentPage", "")
     currentToolChanged, currentTool = prop(str, "currentTool", "")
     unavailablePagesChanged, unavailablePages = prop(list, "unavailablePages", [])
-    navCompactChanged, navCompact = prop(bool, "navCompact", False)
+    openTabsChanged, openTabs = prop(list, "openTabs", [])  # Werkzeuge mit eigenem Tab, in der Reihenfolge des Öffnens
     statusTextChanged, statusText = prop(str, "statusText", "Bereit")
     statusKindChanged, statusKind = prop(str, "statusKind", "neutral")
     statusSerialChanged, statusSerial = prop(int, "statusSerial", 0)
@@ -106,6 +108,7 @@ class AppController(Observable):
     dragAcceptedChanged, dragAccepted = prop(bool, "dragAccepted", False)
     readyChanged, ready = prop(bool, "ready", False)
     pagesLoadedChanged, pagesLoaded = prop(bool, "pagesLoaded", False)  # alle Seiten im Hintergrund geladen
+    closingChanged, closing = prop(bool, "closing", False)  # PDF Tool wird beendet (QML: keine Übergänge mehr)
 
     closeAccepted = Signal()  # QML schließt danach das Fenster
     focusRequested = Signal(str)  # Name eines Eingabefelds (z. B. »kd«), das den Fokus erhalten soll
@@ -123,14 +126,13 @@ class AppController(Observable):
         self.theme = None  # ThemeController
         self.settings = None  # SettingsController (z. B. Ansicht neu geöffneter PDFs)
         self.chrome = "none"  # Titelleiste: »mica«, »solid« oder »none«
-        self.closing = False
         self._tools: dict[str, ToolHooks] = {}
         self._config_parts: list[Callable[[], dict]] = []
         self.restart_requested = False  # nach dem Beenden neu starten (Wiederherstellung)
         self._at_shutdown: list[Callable[[], None]] = []
         self._last_page: dict[str, str] = {}
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
-        self.set_quietly("navCompact", bool(cfg.get("nav_kompakt", False)))
+        self.documents_open: Callable[[], bool] = lambda: False  # geöffnete PDFs im Reader (setzt der Reader)
         self.navigations = 0  # Seitenwechsel (Tests, Diagnose)
 
     # Konstante Angaben für QML ------------------------------------------------------------
@@ -232,22 +234,55 @@ class AppController(Observable):
         self.navigations += 1
         self.currentTool = tool_key
         self.currentPage = page
+        tab = self.tab_for(page)
+        if tab and tab not in self.openTabs:
+            self.openTabs = [*self.openTabs, tab]
         self.refresh_hint()
+
+    def tab_for(self, page: str) -> str:
+        """Tab einer Seite: das Werkzeug (Vertragsübersichten, PDF reparieren) bzw. »settings« – Start und der
+        Reader haben keinen eigenen (die Dokumente des Readers sind Tabs)."""
+        if page == SETTINGS:
+            return SETTINGS
+        info = tool_for_page(page)
+        return info.key if info is not None and info.key in TAB_KEYS else ""
+
+    @Slot(str)
+    def closeTab(self, key: str) -> None:  # noqa: N802
+        """Tab eines Werkzeugs schließen – Eingaben und laufende Arbeit bleiben erhalten. War er zu sehen, folgt
+        der Tab rechts daneben (nach den Werkzeugen das aktive Dokument), sonst der links daneben bzw. Start."""
+        tabs = list(self.openTabs)
+        if key not in tabs:
+            return
+        index = tabs.index(key)
+        tabs.remove(key)
+        self.openTabs = tabs
+        if self.tab_for(self.currentPage) != key:
+            return
+        if index < len(tabs):
+            self.navigate(tabs[index])
+        elif self.documents_open():
+            self.navigate(READER.key)
+        elif tabs:
+            self.navigate(tabs[-1])
+        else:
+            self.navigate(HOME)
 
     @Slot(str)
     def openTool(self, key: str) -> None:  # noqa: N802 - QML-Schreibweise
+        """Werkzeug von der Startseite bzw. per Tastenkürzel: der Reader zeigt das aktive Dokument – ohne
+        Dokument wählt man eine PDF (wie »Datei öffnen« bei anderen PDF-Programmen)."""
+        if key == READER.key and not self.documents_open():
+            hooks = self._tools.get(READER.key)
+            if hooks is not None:
+                hooks.open_action(READER.key)
+            return
         self.navigate(key)
 
     @Slot(int)
     def openShortcut(self, number: int) -> None:  # noqa: N802
         if 1 <= number <= len(SHORTCUT_TARGETS):
-            self.navigate(SHORTCUT_TARGETS[number - 1])
-
-    @Slot(bool)
-    def setNavCompact(self, compact: bool) -> None:  # noqa: N802
-        if bool(compact) != self.navCompact:
-            self.navCompact = bool(compact)
-            self.schedule_save()
+            self.openTool(SHORTCUT_TARGETS[number - 1])
 
     def refresh_hint(self) -> None:
         _key, hooks = self._page_tool()
@@ -262,7 +297,10 @@ class AppController(Observable):
 
     @Slot()
     def openAction(self) -> None:  # noqa: N802
+        """Strg+O: was das Werkzeug der Seite öffnet; auf Start und in den Einstellungen eine PDF."""
         _key, hooks = self._page_tool()
+        if hooks is None:
+            hooks = self._tools.get(READER.key)
         if hooks is not None:
             hooks.open_action(self.currentPage)
 
@@ -355,7 +393,7 @@ class AppController(Observable):
         hooks = self._tools.get(key)
         if hooks is None:
             return
-        if page_tool != key:
+        if page_tool != key and key != READER.key:  # der Reader erscheint erst mit dem geöffneten Dokument
             self.navigate(key)
         hooks.drop(paths, self.currentPage)
 
@@ -481,7 +519,6 @@ class AppController(Observable):
         data.update(
             {
                 "gesehen": self.state.gesehen,
-                "nav_kompakt": bool(self.navCompact),
                 "ordner_excel": self._dirs.get("excel", ""),
                 "ordner_logo": self._dirs.get("logo", ""),
             }

@@ -116,7 +116,7 @@ def test_old_settings_load_into_current_version(alt) -> None:
     # Darstellung und Bedienung
     assert (h.theme.mode, h.theme.accentChoice, h.theme.micaEnabled) == ("dark", "#1F5AA6", False)
     assert h.theme.profile == ("off" if daten.get("animationen") is False else "full")
-    assert h.app.navCompact is True
+    assert h.app.cfg.get("nav_kompakt") is True  # seit 3.1.0-beta.4 ohne Seitenleiste: unbenutzt, aber erhalten
     if "reparatur_ausgabe" in daten:
         assert (h.repair.outMode, h.repair.out_dir, h.repair.source_dir) == ("ordner", "C:\\Reparatur", "C:\\Quelle")
     # »PDF reparieren«: die Namensregel ist neu in 2.7.1 – fehlt sie, bleibt es bei »<Name>_repariert.pdf«
