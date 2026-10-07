@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QObject, QPointF, Qt
 from PySide6.QtTest import QTest
 
 from conftest import _prepare, neustart, pump, wait_until
@@ -89,7 +89,7 @@ def _szene(item) -> tuple[float, float, float, float]:
 
 
 def _teil(karte, name: str) -> tuple[float, float, float, float]:
-    """Lage eines Kartenteils relativ zur Karte (Symbol, Titel, Fußzeile, Tastenkürzel …)."""
+    """Lage eines Teils relativ zu seinem Werkzeug (Symbol, Titel, »Öffnen«, Tastenkürzel …)."""
     stapel = [karte]
     while stapel:
         aktuell = stapel.pop()
@@ -101,62 +101,54 @@ def _teil(karte, name: str) -> tuple[float, float, float, float]:
     raise AssertionError(name)
 
 
-KARTEN = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
+WERKZEUGE = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
 
 
-def _pruefe_startseite(h) -> int:
-    """Symmetrie der Startseite; liefert die Zahl der Spalten.
+def _pruefe_startseite(h) -> tuple[bool, int]:
+    """Aufbau der Startseite (Adobe-Prinzip); liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
 
-    Alle Karten gleich breit und gleich hoch, auf ganzen Pixeln; die Gruppe steht mittig (gleiche
-    Ränder – nur bei ungerader Breite der Seite ein Pixel Unterschied); jede Zeile füllt die Gruppe
-    bzw. steht als unvollständige letzte Zeile mittig darin (gleicher Abstand links und rechts)."""
-    karten = [h.item(name) for name in KARTEN]
-    raster, hinweis = h.item("homeGrid"), h.item("homePrivacy")
-    lagen = [_szene(k) for k in karten]
-    a = lagen[0]
-    # exakt gleich groß, alles auf ganzen Pixeln, gleicher Innenaufbau
-    for lage in lagen:
-        assert (lage[2], lage[3]) == (a[2], a[3]) and all(float(wert).is_integer() for wert in lage), lage
-    for teil in ("toolIcon", "toolTitle", "toolFooter", "toolOpen", "toolShortcut"):
-        for karte in karten[1:]:
-            assert _teil(karten[0], teil) == _teil(karte, teil), teil
-    assert _teil(karten[0], "toolIcon")[2:] == (48, 48)
-    # Fußzeile unten in der Karte, Tastenkürzel am rechten Rand
-    fx, fy, fw, fh = _teil(karten[0], "toolFooter")
-    assert fy + fh == pytest.approx(a[3] - 20, abs=0.5)
-    sx, _sy, sw, _sh = _teil(karten[0], "toolShortcut")
-    assert sx + sw == pytest.approx(a[2] - 20, abs=0.5)
-    # Gruppe mittig im Inhaltsbereich, höchstens 1040 px, Ränder mindestens 36 px
-    flaeche = raster.parentItem()
+    Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
+    breit, Ränder mindestens 36 px; Titel, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis an derselben
+    linken Kante. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
+    untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte; nebeneinander gleich
+    hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
+    oben, karte, ablage, zuletzt, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homeRecent", "homePrivacy"))
+    flaeche = oben.parentItem()
     while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
         flaeche = flaeche.parentItem()
     fx0, _fy0, fbreite, _fh0 = _szene(flaeche)
-    gx, gy, gbreite, _gh = _szene(raster)
+    gx, _gy, gbreite, _gh = _szene(oben)
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
-    assert gbreite <= 1040 and min(links, rechts) >= 36
-    # Titel und Datenschutzhinweis an der linken Kante der Gruppe
-    assert _szene(hinweis)[0] == gx and _szene(hinweis)[2] == gbreite
+    assert gbreite <= 1080 and min(links, rechts) >= 36
+    for teil in (zuletzt, hinweis):
+        assert _szene(teil)[0] == gx and _szene(teil)[2] == gbreite, teil.objectName()
     titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
     assert _szene(titel)[0] == gx
-    # Zeilen: gleiche Oberkante, Abstand 16 px zwischen den Karten und den Zeilen
-    zeilen: dict[float, list] = {}
+    k, a = _szene(karte), _szene(ablage)
+    nebeneinander = a[1] == k[1]
+    if nebeneinander:
+        assert k[0] == gx and a[2] == 260 and a[3] == k[3] and a[0] - (k[0] + k[2]) == 16 and a[0] + a[2] == gx + gbreite
+    else:
+        assert k[0] == a[0] == gx and k[2] == a[2] == gbreite and a[1] - (k[1] + k[3]) == 16
+    assert _szene(zuletzt)[1] - max(k[1] + k[3], a[1] + a[3]) == 16
+    werkzeuge = [h.item(name) for name in WERKZEUGE]
+    lagen = [_szene(w) for w in werkzeuge]
     for lage in lagen:
-        zeilen.setdefault(lage[1], []).append(lage)
-    oben = sorted(zeilen)
-    spalten = len(zeilen[oben[0]])
-    for nummer, y in enumerate(oben):
-        zeile = sorted(zeilen[y])
-        assert len(zeile) == spalten or (nummer == len(oben) - 1 and len(zeile) < spalten)  # nur die letzte Zeile unvollständig
-        for vorher, karte in zip(zeile, zeile[1:]):
-            assert karte[0] - (vorher[0] + vorher[2]) == 16
-        rand_links, rand_rechts = zeile[0][0] - gx, gx + gbreite - (zeile[-1][0] + zeile[-1][2])
-        assert rand_links == rand_rechts, (y, rand_links, rand_rechts)  # mittig in der Gruppe …
-        if len(zeile) == spalten:
-            assert rand_links == 0  # … volle Zeilen füllen sie ganz
-        if nummer:
-            assert y - (oben[nummer - 1] + a[3]) == 16
-    return spalten
+        assert lage[2] == lagen[0][2] and all(float(wert).is_integer() for wert in lage), lage
+    spalten = len({lage[0] for lage in lagen})
+    if spalten > 1:
+        assert len({lage[1] for lage in lagen}) == 1 and len({lage[3] for lage in lagen}) == 1  # eine Zeile, gleich hoch
+        for teil in ("toolIcon", "toolTitle", "toolOpen"):
+            for werkzeug in werkzeuge[1:]:
+                assert _teil(werkzeuge[0], teil)[:2] == _teil(werkzeug, teil)[:2], teil
+        rechte_kanten = {round(_teil(w, "toolShortcut")[0] + _teil(w, "toolShortcut")[2]) for w in werkzeuge}
+        assert len(rechte_kanten) == 1  # Tastenkürzel rechtsbündig
+        for vorher, danach in zip(lagen, lagen[1:]):
+            assert danach[0] - (vorher[0] + vorher[2]) == 8
+    erste, letzte = min(lage[0] for lage in lagen), max(lage[0] + lage[2] for lage in lagen)
+    assert abs((erste - k[0]) - (k[0] + k[2] - letzte)) <= 1  # mittig in der Karte
+    return nebeneinander, spalten
 
 
 def _alle(wurzel) -> list:
@@ -168,33 +160,31 @@ def _alle(wurzel) -> list:
     return alle
 
 
-# Fenstergrößen (geräteunabhängige Pixel) und erwartete Spalten: breit drei, mittel zwei (die dritte
-# Karte mittig darunter), schmal eine (760: kleinste Fensterbreite). 1093 × 614: 1366 × 768 bei 125 %;
-# 1280 × 720: 1920 × 1080 bei 150 %.
-GROESSEN = (((1920, 1080), 3), ((2560, 1440), 3), ((1366, 768), 3), ((1280, 720), 2), ((1093, 614), 2), ((900, 700), 2), ((760, 700), 1))
+# Fenstergrößen (geräteunabhängige Pixel) und erwarteter Aufbau: (Werkzeuge und Ablagefläche nebeneinander,
+# Spalten der Werkzeuge). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
+# bei 150 %.
+GROESSEN = (((1920, 1080), (True, 3)), ((2560, 1440), (True, 3)), ((1366, 768), (True, 3)), ((1280, 720), (True, 3)),
+            ((1093, 614), (True, 3)), ((900, 700), (False, 3)), ((760, 700), (False, 1)))
 
 
-@pytest.mark.parametrize("groesse,spalten", GROESSEN)
-def test_start_page_is_symmetric(ui_app, groesse, spalten) -> None:
+@pytest.mark.parametrize("groesse,aufbau", GROESSEN)
+def test_start_page_is_symmetric(ui_app, groesse, aufbau) -> None:
     h = ui_app
     h.window.resize(*groesse)
     pump(0.6)
-    assert _pruefe_startseite(h) == spalten
-    breite = _szene(h.item("toolCard_contracts"))[2]
-    if spalten == 3:
-        assert breite == (1040 - 2 * 16) / 3  # volle Gruppe
-    elif spalten == 2:
-        assert 360 <= breite <= (1040 - 16) / 2  # nie schmaler als die Mindestbreite nebeneinander
+    assert _pruefe_startseite(h) == aufbau
+    if aufbau[0] and groesse[0] >= 1280:
+        assert _szene(h.item("homeTop"))[2] == 1080  # volle Gruppe
 
 
 def test_start_page_at_this_scale(ui_app) -> None:
     """Alle Fenstergrößen bei der Skalierung dieses Prozesses (``QT_SCALE_FACTOR``, sonst 100 %)."""
     h = ui_app
     assert h.window.devicePixelRatio() == pytest.approx(float(os.environ.get("QT_SCALE_FACTOR") or 1))
-    for groesse, spalten in GROESSEN:
+    for groesse, aufbau in GROESSEN:
         h.window.resize(*groesse)
         pump(0.4)
-        assert _pruefe_startseite(h) == spalten, groesse
+        assert _pruefe_startseite(h) == aufbau, groesse
 
 
 @pytest.mark.parametrize("skalierung", ["1.25", "1.5", "1.75", "2"])
@@ -210,18 +200,59 @@ def test_start_page_is_symmetric_at_every_scale(skalierung: str) -> None:
 
 def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
     h = ui_app
-    for groesse, spalten in (((1366, 768), 3), ((1093, 614), 2)):
+    for groesse, aufbau in (((1366, 768), (True, 3)), ((900, 700), (False, 3))):
         h.window.resize(*groesse)
         pump(0.4)
-        karten = [h.item(name) for name in KARTEN]
-        beschreibung = karten[1].property("description")
-        vorher = _szene(karten[0])[3]
-        karten[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und die Karte höher macht, als sie es sonst wäre.")
+        werkzeuge = [h.item(name) for name in WERKZEUGE]
+        beschreibung = werkzeuge[1].property("description")
+        vorher = _szene(werkzeuge[0])[3]
+        werkzeuge[1].setProperty("description", "Eine deutlich längere Beschreibung, die in dieser Breite über mehrere Zeilen läuft und das Werkzeug höher macht, als es sonst wäre.")
         pump(0.3)
-        assert _szene(karten[0])[3] > vorher  # alle Karten wachsen gemeinsam …
-        assert _pruefe_startseite(h) == spalten  # … Fußzeile und Tastenkürzel bleiben auf einer Linie
-        karten[1].setProperty("description", beschreibung)
+        assert _szene(werkzeuge[0])[3] > vorher  # alle Werkzeuge der Zeile wachsen gemeinsam …
+        assert _pruefe_startseite(h) == aufbau  # … »Öffnen ›« und Tastenkürzel bleiben auf einer Linie
+        werkzeuge[1].setProperty("description", beschreibung)
         pump(0.3)
+
+
+def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(ui_app) -> None:
+    """Nebeneinander nur, wenn jedes Werkzeug »Öffnen ›« und sein Tastenkürzel ganz zeigen kann (unter Windows
+    bestimmen Schrift und Skalierung die Breite) – sonst untereinander, nie über den Rand der Karte hinaus."""
+    h = ui_app
+    h.window.resize(1093, 614)
+    pump(0.4)
+    assert _pruefe_startseite(h) == (True, 3)
+    werkzeug = h.item(WERKZEUGE[0])
+    kuerzel = werkzeug.property("shortcut")
+    werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+F12")  # Fußzeile breiter als ein Drittel der Karte
+    pump(0.4)
+    assert _pruefe_startseite(h) == (True, 1)
+    rest = _szene(werkzeug)[2] - (_teil(werkzeug, "toolShortcut")[0] + _teil(werkzeug, "toolShortcut")[2])
+    assert rest >= 12  # Innenabstand rechts bleibt frei
+    werkzeug.setProperty("shortcut", kuerzel)
+    pump(0.4)
+    assert _pruefe_startseite(h) == (True, 3)
+
+
+def test_start_page_tools_open_their_tool(app) -> None:
+    """Ein Klick auf ein Werkzeug öffnet es (mit Tab); »PDF Reader & Editor« ohne geöffnetes PDF fragt nach einer
+    PDF – einen leeren Reader gibt es nicht."""
+    from qtapp import files
+
+    for name, page in (("toolCard_contracts", "create"), ("toolCard_repair", "repair")):
+        app.navigate("home", 0.4)
+        item = app.item(name)
+        QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
+        pump(0.4)
+        assert app.app.currentPage == page
+    app.navigate("home", 0.4)
+    karten = [app.item(name) for name in WERKZEUGE]
+    assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 3
+    files.RESPONSES.append([])  # Dateiauswahl: abbrechen
+    item = app.item("toolCard_reader")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
+    pump(0.4)
+    assert files.RESPONSES == [] and app.app.currentPage == "home"  # gefragt, abgebrochen: bleibt auf Start
+    assert not app.messages()
 
 
 def test_window_title_marks_beta_versions() -> None:

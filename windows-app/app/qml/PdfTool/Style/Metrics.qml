@@ -48,13 +48,15 @@ QtObject {
     readonly property int statusBarHeight: 32
     readonly property int cardPadding: 16
 
-    // Startseite: Werkzeugkarten in einer zentrierten Gruppe (gleich breite Spalten, fester Abstand)
-    readonly property int homeMaxWidth: 1040      // Breite der Gruppe (Kopf, Karten, Hinweis) höchstens
+    // Startseite: Werkzeuge und Ablagefläche, darunter »Zuletzt verwendet« – in einer zentrierten Gruppe
+    readonly property int homeMaxWidth: 1080      // Breite der Gruppe (Kopf, Karten, Hinweis) höchstens
     readonly property int toolCardGap: 16         // Abstand zwischen den Karten – waagerecht und senkrecht
-    readonly property int toolCardMinWidth: 360   // schmaler: eine Spalte (Gruppe < 2 × 360 + 16 = 736)
-    readonly property int toolCardMinHeight: 148
-    readonly property int toolCardPadding: 20
-    readonly property int toolIconBox: 48         // Symbolfläche (quadratisch)
+    readonly property int homeSideBySideFrom: 860 // ab dieser Breite stehen Werkzeuge und Ablagefläche nebeneinander
+    readonly property int homeToolsInRowFrom: 700 // ab dieser Kartenbreite stehen die Werkzeuge nebeneinander
+    readonly property int homeDropWidth: 260
+    readonly property int homeRecentFolderFrom: 640  // schmaler: »Zuletzt verwendet« ohne Spalte »Ordner«
+    readonly property int homeRecentWhenWidth: 130
+    readonly property int homeRecentSizeWidth: 72
 
     // PDF Reader & Editor
     readonly property int readerToolbarHeight: 48

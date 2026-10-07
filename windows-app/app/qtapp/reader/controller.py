@@ -10,7 +10,9 @@ protokolliert.
 from __future__ import annotations
 
 import os
+import stat
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -84,6 +86,10 @@ class ReaderController(Observable):
         self._ids = 0
         recent = cfg.get("reader_zuletzt")
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
+        # Wann zuletzt geöffnet (Startseite »Zuletzt verwendet«); Einträge aus älteren Versionen haben keine Zeit
+        opened = cfg.get("reader_zuletzt_zeit")
+        self._recent_opened = {str(k): str(v) for k, v in opened.items() if isinstance(k, str) and isinstance(v, str) and k in self._recent_paths} if isinstance(opened, dict) else {}
+        self._recent_stat: dict[str, tuple[bool, int]] = {}  # Pfad → (vorhanden, Größe) beim letzten Prüfen
         view = cfg.get("reader_ansicht") if isinstance(cfg.get("reader_ansicht"), dict) else {}
         self._view = {"fit": view.get("fit", "width") if view.get("fit") in ("width", "page", "") else "width", "zoom": float(view.get("zoom", 100) or 100), "mode": view.get("mode", "continuous")}
         if view.get("links") in LEFT_PANELS:
@@ -442,19 +448,32 @@ class ReaderController(Observable):
         path = str(path)
         self._recent_paths = [path] + [p for p in self._recent_paths if not _same(p, path)]
         del self._recent_paths[RECENT_LIMIT:]
+        self._recent_opened = {p: when for p, when in self._recent_opened.items() if p in self._recent_paths}
+        self._recent_opened[path] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        self._recent_stat.pop(path, None)
         self._refresh_recent()
         self.app.schedule_save()
 
-    def _refresh_recent(self) -> None:
+    def _refresh_recent(self, probe: bool = True) -> None:
+        """Liste »Zuletzt verwendet«: Name, Ordner, wann geöffnet, Größe. ``probe=False``: nur die Zeitangaben neu
+        (»Heute« wird nach Mitternacht zu »Gestern«), ohne die Dateien erneut zu prüfen."""
         items = []
         for path in self._recent_paths:
+            if probe or path not in self._recent_stat:
+                self._recent_stat[path] = _file_info(path)
+            exists, size = self._recent_stat[path]
             p = Path(path)
-            items.append({"path": path, "name": p.name, "folder": str(p.parent), "missing": not p.is_file()})
+            items.append({
+                "path": path, "name": p.name, "folder": str(p.parent), "missing": not exists,
+                "size": size_text(size) if exists else "", "opened": opened_text(self._recent_opened.get(path, "")),
+            })
+        self._recent_stat = {path: info for path, info in self._recent_stat.items() if path in self._recent_paths}
         self.recent = items
 
     @Slot()
     def clearRecent(self) -> None:  # noqa: N802
         self._recent_paths = []
+        self._recent_opened = {}
         self._refresh_recent()
         self.app.schedule_save()
         self.app.set_status("Liste »Zuletzt geöffnet« geleert.", "success")
@@ -467,6 +486,7 @@ class ReaderController(Observable):
     @Slot(str)
     def removeRecent(self, path: str) -> None:  # noqa: N802
         self._recent_paths = [p for p in self._recent_paths if p != path]
+        self._recent_opened.pop(path, None)
         self._refresh_recent()
         self.app.schedule_save()
 
@@ -552,9 +572,11 @@ class ReaderController(Observable):
     def _page_changed(self, page: str) -> None:
         if page != "reader":
             self.leaveFullScreen()
+        if page == "home":
+            self._refresh_recent(probe=False)
 
     def config(self) -> dict:
-        return {"reader_zuletzt": list(self._recent_paths), "reader_ansicht": {**self._view, "links": self.leftPanel}, "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen)}
+        return {"reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel}, "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen)}
 
     # Dateiauswahl -------------------------------------------------------------------------------------------------
     def pick_pdf(self, title: str) -> str:
@@ -918,3 +940,40 @@ def _log(category: str = "pdf"):
     from diagnostics.applog import get
 
     return get(category)
+
+
+def _file_info(path: str) -> tuple[bool, int]:
+    """(vorhanden, Größe in Byte) – ein einziger Zugriff auf das Dateisystem je Eintrag."""
+    try:
+        info = os.stat(path)
+    except (OSError, ValueError):
+        return False, 0
+    return stat.S_ISREG(info.st_mode), int(info.st_size)
+
+
+def size_text(size: int) -> str:
+    """Dateigröße wie im Explorer: »850 Byte«, »120 KB«, »1,2 MB«, »1,1 GB«."""
+    if size < 1024:
+        return f"{size} Byte"
+    value, unit = size / 1024, "KB"
+    for bigger in ("MB", "GB"):
+        if round(value) < 1024:  # gerundet noch keine 1024 (sonst »1,0 MB« statt »1024 KB«)
+            break
+        value, unit = value / 1024, bigger
+    text = f"{value:.0f}" if unit == "KB" or round(value, 1) >= 100 else f"{value:.1f}"
+    return f"{text.replace('.', ',')} {unit}"
+
+
+def opened_text(stamp: str, now: datetime | None = None) -> str:
+    """Wann zuletzt geöffnet (Ortszeit): »Heute, 14:05«, »Gestern, 09:12«, sonst »03.10.2026«; ohne Zeitangabe
+    leer."""
+    try:
+        when = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%S")
+    except (TypeError, ValueError):
+        return ""
+    today = (now or datetime.now()).date()
+    if when.date() == today:
+        return f"Heute, {when:%H:%M}"
+    if when.date() == today - timedelta(days=1):
+        return f"Gestern, {when:%H:%M}"
+    return f"{when:%d.%m.%Y}"

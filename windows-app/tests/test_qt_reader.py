@@ -197,12 +197,22 @@ def test_open_dialog_tabs_dirty_marker_and_close_prompt(reader_app, tmp_path: Pa
     settle(h)
     assert reader(h).tabs.count == 1 and reader(h).current.name == "Rechnung B.pdf"
     assert digest(a) == original
-    # Zuletzt geöffnet: nur Pfade, lässt sich leeren
-    paths = [entry["path"] for entry in reader(h).recent]
-    assert str(a) in paths and str(b) in paths
+    # Zuletzt geöffnet (Startseite »Zuletzt verwendet«): nur Pfad, Zeitpunkt und Größe, lässt sich leeren
+    from qtapp.reader.controller import size_text
+
+    entries = {entry["path"]: entry for entry in reader(h).recent}
+    assert str(a) in entries and str(b) in entries
+    for path in (a, b):
+        entry = entries[str(path)]
+        assert entry["name"] == path.name and entry["folder"] == str(path.parent) and not entry["missing"]
+        assert entry["opened"].startswith("Heute, ") and entry["size"] == size_text(path.stat().st_size)
+    assert set(reader(h).config()["reader_zuletzt_zeit"]) == {str(a), str(b)}
+    reader(h).removeRecent(str(a))
+    assert [entry["path"] for entry in reader(h).recent] == [str(b)] and set(reader(h).config()["reader_zuletzt_zeit"]) == {str(b)}
     reader(h).clearRecent()
     assert reader(h).recent == []
     assert "reader_zuletzt" in reader(h).config() and reader(h).config()["reader_zuletzt"] == []
+    assert reader(h).config()["reader_zuletzt_zeit"] == {}
 
 
 def test_drop_on_home_opens_reader_and_same_file_only_once(ui_app, tmp_path: Path) -> None:
@@ -303,6 +313,22 @@ def test_large_document_stays_virtualized(reader_app, tmp_path: Path) -> None:
     assert len(prop(view, "slotPages")) < 20
     settle(h)
     assert reader(h).cache.bytes <= reader(h).cache.limit
+
+
+def test_recent_list_shows_size_and_time_like_explorer() -> None:
+    """Startseite »Zuletzt verwendet«: Größe wie im Explorer (gerundet nie »1024 KB«), Zeitpunkt »Heute«, »Gestern«
+    oder das Datum; Einträge älterer Versionen haben keinen Zeitpunkt."""
+    from datetime import datetime
+
+    from qtapp.reader.controller import opened_text, size_text
+
+    sizes = (850, 1024, 122880, 1048575, 1258291, 104805171, 104857600, 1181116006)
+    assert [size_text(size) for size in sizes] == ["850 Byte", "1 KB", "120 KB", "1,0 MB", "1,2 MB", "99,9 MB", "100 MB", "1,1 GB"]
+    now = datetime(2026, 10, 7, 12, 0)
+    assert opened_text("2026-10-07T09:05:00", now) == "Heute, 09:05"
+    assert opened_text("2026-10-06T23:59:00", now) == "Gestern, 23:59"
+    assert opened_text("2026-10-05T10:00:00", now) == "05.10.2026"
+    assert opened_text("", now) == opened_text("kaputt", now) == ""
 
 
 def test_render_cache_keeps_no_images_of_closed_documents() -> None:
