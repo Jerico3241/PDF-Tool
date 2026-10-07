@@ -30,6 +30,7 @@ META = "sitzung.json"
 LOCK = "sperre"
 FOLDER = "PDF-Tool-Editor"
 STALE_AFTER = 30 * 24 * 3600  # verwaiste Sitzungen nach 30 Tagen ohne Rückfrage entfernen
+BACKUP_MAX_AGE = 7 * 24 * 3600  # Sicherungskopien vor dem Überschreiben
 
 
 def root_dir() -> Path:
@@ -46,6 +47,24 @@ def root_dir() -> Path:
 
 def backups_dir(root: Path | None = None) -> Path:
     return (root or root_dir()) / BACKUPS
+
+
+def cleanup_backups(backup_dir: Path, now: float | None = None) -> int:
+    """Sicherungen älter als ``BACKUP_MAX_AGE`` entfernen (beim Start)."""
+    now = time.time() if now is None else now
+    removed = 0
+    try:
+        entries = list(backup_dir.glob("*.pdf"))
+    except OSError:
+        return 0
+    for entry in entries:
+        try:
+            if now - entry.stat().st_mtime > BACKUP_MAX_AGE:
+                entry.unlink()
+                removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 @dataclass(frozen=True)

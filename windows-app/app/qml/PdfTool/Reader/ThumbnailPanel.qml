@@ -75,7 +75,9 @@ ListView {
                 id: image
                 anchors.fill: parent
                 anchors.margins: row.current ? 2 : 1
-                source: list.doc ? "image://pdfpage/" + list.doc.docId + "/" + row.index + "/" + Math.round(paper.width * list.ratio) + "/" + list.doc.revision + "/thumb" : ""
+                // Beim Tabwechsel zeigen die Zeilen kurz noch Plätze des vorigen Dokuments – keine Bilder für Seiten,
+                // die es im neuen Dokument nicht gibt
+                source: list.doc && row.index < list.doc.pageCount ? "image://pdfpage/" + list.doc.docId + "/" + row.index + "/" + Math.round(paper.width * list.ratio) + "/" + list.doc.revision + "/thumb" : ""
             }
         }
         PText {

@@ -26,6 +26,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtQuick import QQuickAsyncImageProvider, QQuickImageResponse, QQuickTextureFactory
 
 EDIT, VIEW, THUMB, BACKGROUND = 0, 1, 2, 3
+THUMB_WIDTH = 120  # Breite der Miniaturen (Pixel)
 CACHE_BYTES = 320 * 1024 * 1024  # Seitenbilder im Speicher (zuletzt benutzte bleiben)
 
 
@@ -185,6 +186,7 @@ class RenderCache:
         self._items: OrderedDict[tuple, QImage] = OrderedDict()
         self._bytes = 0
         self._lock = threading.Lock()
+        self._dropped: set[str] = set()  # geschlossene Dokumente (Kennungen werden nie wiederverwendet)
 
     def get(self, key: tuple) -> QImage | None:
         with self._lock:
@@ -198,6 +200,8 @@ class RenderCache:
         if size > self.limit:
             return
         with self._lock:
+            if key[0] in self._dropped:
+                return  # Bild eines inzwischen geschlossenen Dokuments (war beim Schließen in Arbeit)
             old = self._items.pop(key, None)
             if old is not None:
                 self._bytes -= old.sizeInBytes()
@@ -208,7 +212,9 @@ class RenderCache:
                 self._bytes -= dropped.sizeInBytes()
 
     def drop(self, document: str) -> None:
+        """Alle Bilder eines geschlossenen Dokuments entfernen – auch solche, die danach noch fertig werden."""
         with self._lock:
+            self._dropped.add(document)
             for key in [key for key in self._items if key[0] == document]:
                 self._bytes -= self._items.pop(key).sizeInBytes()
 

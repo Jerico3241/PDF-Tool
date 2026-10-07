@@ -16,7 +16,6 @@ from pathlib import Path
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from tools.pdf_editor import recovery
-from tools.pdf_editor import save as save_engine
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
 from tools.registry import READER
 
@@ -24,10 +23,9 @@ from .. import files
 from ..base import Observable, prop
 from ..models import KeyedListModel
 from .document import DocumentController
-from tools.pdf_editor.render import MAX_PIXELS
+from tools.pdf_editor.limits import MAX_PIXELS
 
-from .engine import BACKGROUND, THUMB, VIEW, Engine, PageImageProvider, RenderCache
-from .session import THUMB_WIDTH, Session
+from .engine import BACKGROUND, THUMB, THUMB_WIDTH, VIEW, Engine, PageImageProvider, RenderCache
 
 RECENT_LIMIT = 12
 TAB_LIMIT = 24
@@ -103,8 +101,10 @@ class ReaderController(Observable):
         self._clipboard_watched = False
         self.source_dir = str(cfg.get("ordner_reader") or "")
         self._external: list[str] = []
+        self._preloaded = False  # PDF-Engine vorab geladen (bzw. angestoßen)
         self._refresh_recent()
         app.observe("ready", self._ready)
+        app.observe("pagesLoaded", self._pages_loaded)
         app.observe("currentPage", self._page_changed)
 
     # QML: aktuelles Dokument ---------------------------------------------------------------------------------
@@ -192,6 +192,7 @@ class ReaderController(Observable):
             self.open_paths(paths)
         else:
             self._external.extend(paths)
+            self._preload()  # die PDF-Engine lädt schon, während das erste Bild entsteht
 
     def _ready(self, ready: bool) -> None:
         if not ready:
@@ -201,7 +202,17 @@ class ReaderController(Observable):
             self.open_paths(waiting)
         self.offer_recovery()
         # Sicherungskopien vor dem Überschreiben: älter als 7 Tage entfernen (je Datei bleiben höchstens 3)
-        self.engine.submit(lambda: save_engine.cleanup_backups(recovery.backups_dir()), None, lambda _exc, _details: None, priority=BACKGROUND, label="aufräumen")
+        self.engine.submit(lambda: recovery.cleanup_backups(recovery.backups_dir()), None, lambda _exc, _details: None, priority=BACKGROUND, label="aufräumen")
+
+    def _pages_loaded(self, loaded: bool) -> None:
+        if loaded:
+            self._preload()
+
+    def _preload(self) -> None:
+        """PDF-Engine im Arbeitsthread vorab laden (einmal) – das erste Öffnen wartet dann nicht darauf."""
+        if not self._preloaded:
+            self._preloaded = True
+            self.engine.submit(_preload_engine, None, lambda _exc, _details: None, priority=BACKGROUND, label="vorladen")
 
     def open_paths(self, paths: list[str]) -> None:
         pdfs = [p for p in paths if p.lower().endswith(".pdf") or _looks_like_pdf(p)]
@@ -229,6 +240,8 @@ class ReaderController(Observable):
         self.app.set_status(f"Wird geöffnet: {name} …", "busy")
 
         def work():
+            from .session import Session  # PDF-Engine (pikepdf, PDFium) erst beim ersten Öffnen – im Arbeitsthread
+
             if recovered is not None:
                 session = Session.from_recovery(ident, recovered, password)
             else:
@@ -871,6 +884,12 @@ def _looks_like_pdf(path: str) -> bool:
             return b"%PDF-" in handle.read(1024)
     except OSError:
         return False
+
+
+def _preload_engine() -> None:
+    """PDF-Engine (pikepdf, PDFium, Bearbeiten, Speichern) vorab laden – im Arbeitsthread, wenn die Oberfläche
+    fertig ist. Das erste Öffnen wartet dann nicht auf das Laden der Module."""
+    from . import session  # noqa: F401
 
 
 def _log(category: str = "pdf"):

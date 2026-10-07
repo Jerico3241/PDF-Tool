@@ -20,8 +20,6 @@ from tools.pdf_editor.geometry import normalize, union
 
 from .engine import raster_to_qimage
 
-THUMB_WIDTH = 120
-
 
 @dataclass
 class PageText:

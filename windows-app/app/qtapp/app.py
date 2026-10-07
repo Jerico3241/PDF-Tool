@@ -105,6 +105,7 @@ class AppController(Observable):
     dragActiveChanged, dragActive = prop(bool, "dragActive", False)
     dragAcceptedChanged, dragAccepted = prop(bool, "dragAccepted", False)
     readyChanged, ready = prop(bool, "ready", False)
+    pagesLoadedChanged, pagesLoaded = prop(bool, "pagesLoaded", False)  # alle Seiten im Hintergrund geladen
 
     closeAccepted = Signal()  # QML schließt danach das Fenster
     focusRequested = Signal(str)  # Name eines Eingabefelds (z. B. »kd«), das den Fokus erhalten soll
@@ -301,6 +302,11 @@ class AppController(Observable):
         self.ready = True
         if major_minor(self.state.gesehen) != major_minor(VERSION):
             self.timers.later("changelog", 500, self._show_news)
+
+    @Slot()
+    def markPagesLoaded(self) -> None:  # noqa: N802
+        """Aus QML: alle Seiten sind geladen – Zeit für Vorarbeiten, die den Start nicht bremsen sollen."""
+        self.pagesLoaded = True
 
     def _show_news(self) -> None:
         self.state.gesehen = VERSION

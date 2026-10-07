@@ -284,6 +284,21 @@ def test_large_document_stays_virtualized(reader_app, tmp_path: Path) -> None:
     assert reader(h).cache.bytes <= reader(h).cache.limit
 
 
+def test_render_cache_keeps_no_images_of_closed_documents() -> None:
+    """Ein Seitenbild, das beim Schließen noch in Arbeit war und erst danach fertig wird, bleibt nicht im Speicher."""
+    from PySide6.QtGui import QImage
+    from qtapp.reader.engine import RenderCache
+
+    cache = RenderCache(limit=8 * 1024 * 1024)
+    image = QImage(200, 300, QImage.Format.Format_RGB32)
+    cache.put(("d1", 0, 200, 0, "page", ()), image)
+    cache.put(("d2", 0, 200, 0, "page", ()), image)
+    cache.drop("d1")
+    cache.put(("d1", 1, 200, 0, "page", ()), image)  # verspätet fertig
+    assert len(cache) == 1 and cache.bytes == image.sizeInBytes()
+    assert cache.get(("d2", 0, 200, 0, "page", ())) is not None and cache.get(("d1", 1, 200, 0, "page", ())) is None
+
+
 # --- Text: Auswahl, Kopieren, Suche --------------------------------------------------------------------------------
 def test_text_selection_by_mouse_and_copy(reader_app, tmp_path: Path) -> None:
     h = reader_app
