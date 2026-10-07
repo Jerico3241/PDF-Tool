@@ -185,6 +185,121 @@ PPage {
         }
     }
 
+    PSectionTitle { text: "KI-Assistent" }
+
+    // Optional und standardmäßig aus: Erst »Ein« und »Herunterladen« laden ein Sprachmodell (1,3 oder 2,7 GB), das sich
+    // jederzeit wieder entfernen lässt. Dokumente, Fragen und Antworten bleiben auf diesem PC.
+    PCard {
+        id: assistantCard
+        objectName: "assistantCard"
+        Layout.fillWidth: true
+        title: "KI-Assistent (optional)"
+        iconName: "sparkle"
+        subtitle: "Beantwortet Fragen zum geöffneten PDF und fasst Dokumente zusammen – mit Seitenangaben, vollständig auf diesem PC. Braucht ein Sprachmodell, das nur auf Wunsch geladen wird."
+        readonly property string phase: Assistant.state
+        readonly property bool loading: phase === "download" || phase === "verify"
+        // Welche Schaltflächen passen (eigene Werte, nicht ``visible`` der Schaltflächen: das hinge an der Zeile darüber)
+        readonly property bool canSetup: Assistant.enabled && phase === "setup" && Assistant.partial === ""
+        readonly property bool canResume: Assistant.enabled && phase === "setup" && Assistant.partial !== ""
+        readonly property bool canPause: phase === "download"
+        readonly property bool canChange: phase === "ready"
+        readonly property bool canRemove: !loading && (Assistant.modelKey !== "" || Assistant.partial !== "")
+        headerRight: PToggle {
+            objectName: "assistantToggle"
+            label: "KI-Assistent"
+            checked: Assistant.enabled
+            enabled: Assistant.available || Assistant.enabled
+            onToggled: {
+                Assistant.setEnabled(checked)
+                // eingeschaltet, aber noch kein Modell: gleich auswählen lassen
+                if (checked && Assistant.state === "setup" && Assistant.partial === "") Assistant.setup()
+            }
+        }
+        PText {
+            objectName: "assistantStatus"
+            Layout.fillWidth: true
+            text: Assistant.available || Assistant.enabled ? Assistant.statusText : "In dieser Installation nicht enthalten."
+            tone: Assistant.state === "ready" ? "" : "secondary"
+            wrap: true
+        }
+        PCollapse {
+            Layout.fillWidth: true
+            expanded: assistantCard.loading
+            ColumnLayout {
+                width: parent.width
+                spacing: 6
+                PProgressBar {
+                    objectName: "assistantProgress"
+                    Layout.fillWidth: true
+                    Layout.topMargin: 12
+                    value: Assistant.progress
+                    indeterminate: assistantCard.phase === "verify"
+                }
+                PText { objectName: "assistantProgressText"; Layout.fillWidth: true; text: Assistant.progressText; textStyle: "caption"; tone: "secondary"; wrap: true }
+            }
+        }
+        Flow {
+            Layout.fillWidth: true
+            Layout.topMargin: 12
+            spacing: 8
+            visible: assistantCard.canSetup || assistantCard.canResume || assistantCard.canPause || assistantCard.canChange || assistantCard.canRemove
+            PButton {
+                objectName: "assistantSetup"
+                visible: assistantCard.canSetup
+                kind: "accent"
+                iconName: "arrow_download"
+                text: "Einrichten …"
+                tip: "Sprachmodell wählen und laden"
+                onClicked: Assistant.setup()
+            }
+            PButton {
+                objectName: "assistantResume"
+                visible: assistantCard.canResume
+                kind: "accent"
+                iconName: "arrow_download"
+                text: "Download fortsetzen"
+                onClicked: Assistant.download(Assistant.partial)
+            }
+            PButton {
+                objectName: "assistantCancel"
+                visible: assistantCard.canPause
+                text: "Anhalten"
+                tip: "Download anhalten – er lässt sich später fortsetzen"
+                onClicked: Assistant.cancelDownload()
+            }
+            PButton {
+                objectName: "assistantChange"
+                visible: assistantCard.canChange
+                text: "Anderes Modell …"
+                tip: "Genaueres oder kleineres Sprachmodell wählen – das bisherige wird danach gelöscht"
+                onClicked: Assistant.setup()
+            }
+            PButton {
+                objectName: "assistantRemove"
+                visible: assistantCard.canRemove
+                kind: "subtle"
+                iconName: "delete"
+                text: "Modell entfernen …"
+                tip: "Sprachmodell von diesem PC löschen und den Speicherplatz freigeben"
+                onClicked: Assistant.removeModel()
+            }
+        }
+        PInfoBar { Layout.fillWidth: true; notice: Notices.area("assistant") }
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 12
+            spacing: 8
+            PIcon { Layout.alignment: Qt.AlignTop; name: "shield_checkmark"; size: 16; color: Theme.textSecondary }
+            PText {
+                Layout.fillWidth: true
+                text: "Dokumente, Fragen und Antworten verlassen diesen PC nicht und werden nicht gespeichert. Nur das Sprachmodell wird einmal über HTTPS von Hugging Face geladen und vor der Nutzung geprüft."
+                textStyle: "caption"
+                tone: "secondary"
+                wrap: true
+            }
+        }
+    }
+
     PSectionTitle { text: "Vertragsübersichten" }
 
     PSettingsCard {
