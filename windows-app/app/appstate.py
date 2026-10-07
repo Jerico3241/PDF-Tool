@@ -148,6 +148,7 @@ NEUERUNGEN = (
     "Reader: Vollbild (F11), Anhänge, Seitenleisten je Tab, »Gehe zu Seite« (Strg+G), freie Zoomeingabe und gewählte Seiten drucken.",
     "Neu in Beta 2 – schneller: Die Startseite steht im ersten Bild, PDFs per Doppelklick öffnen direkt im Reader, »PDF reparieren« arbeitet viele Dateien mehrfach so schnell ab.",
     "Neu in Beta 3 – Feinschliff: gleichmäßiges Scrollen mit dem Mausrad, Werkzeug »Verschieben« und Ziehen neben der Seite, Werkzeuge lassen sich wieder abwählen, dazu viele Korrekturen an der Oberfläche.",
+    "Neu in Beta 4 – Tabs statt Seitenleiste: ⌂ Start, geöffnete Werkzeuge und PDFs als Tabs oben wie in Adobe Acrobat, ≡ Menü; neue Startseite mit Werkzeugen, Ablagefläche und »Zuletzt verwendet«.",
     "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 

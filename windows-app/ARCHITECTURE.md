@@ -61,7 +61,7 @@ Modul `PdfTool.Backend`:
 
 | QML-Name | Klasse | Aufgabe |
 | --- | --- | --- |
-| `App` | `app.AppController` | Navigation, Statuszeile, Hinweise, Tastenkürzel, Drag & Drop, Speichern, Beenden |
+| `App` | `app.AppController` | Navigation und Werkzeug-Tabs (`openTabs`, `closeTab`), Statuszeile, Hinweise, Tastenkürzel, Drag & Drop, Speichern, Beenden |
 | `ThemeBackend` | `theme.ThemeController` | Hell/Dunkel, Akzentfarbe, Mica, Animationsprofil, Design-Tokens |
 | `Settings` | `settings.SettingsController` | Seite „Einstellungen“ (inkl. Kundenakte an/aus) |
 | `Dialogs` / `Notices` | `dialogs.DialogService` / `notices.NoticeCenter` | Dialoge in QML, InfoBars je Bereich |
@@ -149,9 +149,21 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
 | --- | --- |
 | `PdfTool.Style` | `Theme` (Farben aus `ThemeBackend`), `Metrics` (Abstände, Radien, Größen), `Typography`, `Motion` (Animationsdauern und -kurven, Profil) |
 | `PdfTool.Controls` | Steuerelemente `P…` auf Basis von Qt Quick Templates (Button, TextField, ComboBox, Toggle, InfoBar, Card, Collapse, ListPage …) |
-| `PdfTool.Shell` | Fenster: Navigation, Seitenwechsel (`PageHost`), Statuszeile, Dialoge (`DialogHost`) |
+| `PdfTool.Shell` | Fenster: Tab-Leiste oben (`AppTabs`, `AppTab`), Seitenwechsel (`PageHost`), Statuszeile, Dialoge (`DialogHost`) |
 | `PdfTool.Pages` | Seiten: Start, Einstellungen, Vertragsübersichten (Erstellen, Darstellung, Vorschau, Stapel, Vergleich, Kunden), PDF reparieren |
 | `PdfTool.Dialogs` | Inhalte der Dialoge (Kurzanleitung, Über, Neuerungen, Kunden wählen …) |
+
+**Tab-Leiste (Adobe-Prinzip, seit 3.1.0-beta.4):** `AppTabs` zeigt ≡ Menü, ⌂ Start, die geöffneten
+Werkzeuge (`App.openTabs`: Vertragsübersichten, PDF reparieren, Einstellungen – in der Reihenfolge des
+Öffnens) und die Dokumente des Readers (`Reader.tabs`). `App.navigate` legt den Tab eines Werkzeugs an,
+`App.closeTab` schließt ihn – Eingaben bleiben, war er zu sehen, folgt der Tab rechts daneben (nach den
+Werkzeugen das aktive Dokument), sonst der links daneben bzw. Start. Einen Tab für den Reader selbst gibt
+es nicht: `App.openTool("reader")` zeigt das aktive Dokument oder fragt nach einer PDF; der Reader
+navigiert erst mit dem geöffneten Dokument zu sich (`ReaderController.open_paths`) und nach dem letzten
+geschlossenen zur Startseite (`_leave_if_empty`). Die Breiten bei Platzmangel rechnet `AppTabs` aus der
+Leistenbreite (keine Bindung über die Inhaltsbreite der Dokument-Tabs – das gäbe eine Schleife). Beim
+Beenden (`App.closing`) schließen die PDFs ohne Übergänge, und `finish_incubation` löscht zum Löschen
+vorgemerkte QML-Objekte, bevor die Engine endet.
 
 Seiten entstehen je einmal (Loader): die erste – die Startseite, bei »Öffnen mit« der Reader –
 synchron beim Laden der Oberfläche (sie steht im ersten Bild), die übrigen danach im Hintergrund.

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.1.0-beta.3 (Beta zum Testen)
+Version 3.1.0-beta.4 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -27,7 +27,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.1.0-beta.3.exe
+PDF-Tool-Setup-3.1.0-beta.4.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -37,10 +37,20 @@ Python-Installation, qpdf, Ghostscript, Tesseract oder andere
 Zusatzprogramme sind nicht nötig.
 
 
-Neu in Version 3.1 (Beta 3) – Feinschliff; Formulare, Texterkennung, Objekte
-----------------------------------------------------------------------------
+Neu in Version 3.1 (Beta 4) – Tabs; Formulare, Texterkennung, Objekte
+----------------------------------------------------------------------
 Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
 (Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.1.0 Beta“.
+Neu in Beta 4 – Tabs statt Seitenleiste (wie in Adobe Acrobat):
+- Oben eine Tab-Leiste: ⌂ Start, daneben jedes geöffnete PDF und jedes
+  geöffnete Werkzeug als Tab, „+“ öffnet weitere PDFs; ≡ öffnet das Menü,
+  rechts Kurzanleitung und Einstellungen. Die Seitenleiste links entfällt –
+  PDFs und Werkzeuge haben die ganze Fensterbreite. Werkzeug-Tabs schließen
+  mit ×, mittlerer Maustaste oder Strg+W; Eingaben bleiben erhalten.
+- Neue Startseite: Werkzeuge, eine Ablagefläche zum Öffnen von PDFs und
+  „Zuletzt verwendet“ mit Ordner, Zeitpunkt und Größe.
+- Der Reader erscheint mit dem geöffneten PDF; nach dem letzten
+  geschlossenen PDF geht es zur Startseite.
 Neu in Beta 3 – Feinschliff:
 - Scrollen: Jede Mausrad-Raste verschiebt gleich weit, auch wenn das Rad
   zügig gedreht wird; je Raste so weit wie in Edge und Chrome.
@@ -344,17 +354,17 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 3.1.0-beta.2 auf 3.1.0-beta.3 (Kanal „Beta“): Das Setup
+Update von PDF Tool 3.1.0-beta.3 auf 3.1.0-beta.4 (Kanal „Beta“): Das Setup
 ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
-unverändert.
+unverändert; die zuletzt geöffneten PDFs stehen auf der Startseite.
 
-Update von PDF Tool 3.0.0-beta.2 auf 3.1.0-beta.3 (Kanal „Beta“): Das Setup
+Update von PDF Tool 3.0.0-beta.2 auf 3.1.0-beta.4 (Kanal „Beta“): Das Setup
 ersetzt nur die Programmdateien und legt die Texterkennung im Unterordner
 „ocr“ an. Alle Einstellungen und Daten bleiben unverändert; der gewählte
 Kanal „Beta“ erscheint als eingeschalteter Schalter „Beta-Versionen
 erhalten“.
 
-Update von PDF Tool 2.8 auf 3.1.0-beta.3 (Kanal „Beta“): Das Setup ersetzt
+Update von PDF Tool 2.8 auf 3.1.0-beta.4 (Kanal „Beta“): Das Setup ersetzt
 nur die Programmdateien und trägt PDF Tool unter „Öffnen mit“ für
 PDF-Dateien ein (die Standard-App für PDF bleibt unverändert). Alle
 Einstellungen und Daten bleiben unverändert. Der Kanal „Stable“ erhält diese
@@ -461,12 +471,17 @@ Stille Deinstallation:
 
 Verwendung
 ----------
-Startseite: Jedes Werkzeug hat eine Karte mit „Öffnen“. Dateien können
-auch direkt in das Fenster gezogen werden: PDFs (eine oder mehrere) öffnen
-„PDF reparieren“, eine Excel-Liste „Vertragsübersichten“.
+Startseite: die Werkzeuge mit „Öffnen“, eine Ablagefläche zum Öffnen von
+PDFs und „Zuletzt verwendet“. Oben stehen ⌂ Start, die geöffneten Werkzeuge
+und PDFs als Tabs; ≡ öffnet das Menü, rechts stehen Kurzanleitung und
+Einstellungen. Dateien können auch direkt in das Fenster gezogen werden:
+Auf der Startseite öffnen PDFs (eine oder mehrere) den „PDF Reader &
+Editor“, eine Excel-Liste „Vertragsübersichten“; auf der Seite „PDF
+reparieren“ werden PDFs zur Reparatur hinzugefügt.
 
 Tastatur: Strg+1 Start · Strg+2 Vertragsübersichten · Strg+3 PDF reparieren ·
-Strg+4 Einstellungen · Strg+O Datei wählen · Strg+Enter Hauptaktion des
+Strg+4 Einstellungen · Strg+5 PDF Reader & Editor · Strg+O Datei wählen ·
+Strg+W Tab schließen · Strg+Enter Hauptaktion des
 Werkzeugs · Strg+F bekannten Kunden suchen (Vertragsübersichten, mit
 Kundenakte) ·
 F1 Kurzanleitung · Tab/Umschalt+Tab zwischen Feldern wechseln ·
@@ -795,8 +810,8 @@ Einstellungen der Werkzeuge stehen im jeweiligen Werkzeug.
 Windows-11-Design
 -----------------
 Die Oberfläche (Qt 6, Qt Quick) folgt dem Fluent Design von Windows 11:
-Navigation links, Karten mit runden Ecken, Segoe-UI-Variable-Schrift und
-Fluent-Symbole. Unter Windows 11 erhalten Titelleiste und Navigation das
+Tab-Leiste oben, Karten mit runden Ecken, Segoe-UI-Variable-Schrift und
+Fluent-Symbole. Unter Windows 11 erhalten Titelleiste und Tab-Leiste das
 Mica-Material, unter Windows 10 eine passende einfarbige Fläche.
 Animationen richten sich nach der Windows-Einstellung „Animationseffekte“
 (dann mindestens „Reduziert“) und lassen sich in der App auf „Reduziert“
