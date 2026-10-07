@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pikepdf
 import pytest
-from PySide6.QtCore import QObject, QPoint, Qt, QTimer
+from PySide6.QtCore import QObject, Qt, QTimer
 from PySide6.QtTest import QTest
 
 import editorsamples as samples

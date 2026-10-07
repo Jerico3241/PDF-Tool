@@ -718,9 +718,10 @@ def ui_probe(qt_application, full: bool) -> None:
     qt.exec()
     qt_application.finish_incubation(engine_qml)  # wie beim Beenden der App
     del engine_qml
+    from appstate import VERSION
     from qtapp.app import window_title
 
-    qt_app_title = window_title(appstate.VERSION)  # »PDF Tool«, bei einer Beta mit Versionsnummer
+    qt_app_title = window_title(VERSION)  # »PDF Tool«, bei einer Beta mit Versionsnummer
     check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
     check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")
     check(shown.get("page") == "home", "Startseite fehlt")
