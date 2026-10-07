@@ -42,6 +42,11 @@ alles unter `windows-app/app/qml/`.
 
 - Seiten: `PPage` (scrollende Seite) bzw. `PListPage` (lange, virtualisierte Liste). Zeilen nutzen
   `columnX`/`columnWidth` der Seite.
+- **Mausrad:** Jede eigene scrollende Ansicht (`Flickable`, `ListView`, `GridView`) bekommt
+  `PWheelScroll { flickable: … }` – jede Raste verschiebt gleich weit, schnell gedrehte Rasten
+  addieren sich, die Bewegung folgt `Motion`. `PPage` und `PListPage` haben es schon. Qts eigene
+  Mausrad-Bewegung beginnt bei jeder Raste neu an der erreichten Stelle und verliert beim zügigen
+  Drehen bis zur Hälfte der Strecke (Test: `test_qt_shell.py`).
 - Große Listen immer als `ListView` mit Modell und `reuseItems`, nie als `Repeater` über hunderte
   Einträge. Wiederverwendete Zeilen (`ListView.onReused`) setzen zurück, was Übergänge oder eigene
   Zustände verändert haben (z. B. `opacity`/`scale` nach `add`/`remove`, aufgeklappte Details – deren
@@ -81,6 +86,11 @@ alles unter `windows-app/app/qml/`.
   `App`); sichtbarer Fokusrahmen `PFocusRing`.
 - `Accessible.role`/`Accessible.name` für eigene Steuerelemente und Listenzeilen.
 - Tooltips (`tip`) für Symbolschaltflächen.
+- **Schaltflächen mit Zustand** (Werkzeug, Fett, Ausrichtung, „Seiten organisieren“ …): `toggle: true`,
+  `checked` an den Zustand im Controller gebunden, `onClicked` ändert nur diesen Zustand. Nicht
+  `checkable: true` – dann schaltet der Klick die Schaltfläche selbst um, löst die Bindung und zeigt
+  danach einen Zustand, den es nicht gibt. Ein erneuter Klick auf ein gewähltes Werkzeug kehrt zu
+  „Auswählen“ zurück.
 
 ## Prüfen
 

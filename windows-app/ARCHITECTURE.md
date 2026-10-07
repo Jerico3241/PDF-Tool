@@ -162,6 +162,17 @@ Hintergrund, wird vorher ein PDF geöffnet, sofort. Ein Seitenwechsel blendet di
 die fertige neue ein – nichts wird neu aufgebaut. Im Setup kommt die Oberfläche aus der Qt-Ressource `qrc:/qml` (`qml_rc.py`, erzeugt
 von `windows-app/qmlres.py`).
 
+**Mausrad:** Qt 6.11 bewegt ein `Flickable` je Mausrad-Raste mit einer eigenen Animation, die bei
+jeder Raste an der gerade erreichten Stelle neu beginnt – zügig gedreht kam die Ansicht nur gut halb
+so weit. Deshalb liegt in jeder scrollenden Ansicht ein `PWheelScroll` (`Controls/PWheelScroll.qml`)
+als unterstes Element im Inhalt: Es verschiebt je Raste um `Qt.styleHints.wheelScrollLines` × 24 px
+(Windows-Einstellung „Eine Bildschirmseite“: um die Höhe der Ansicht ohne zwei Zeilen),
+schnell folgende Rasten verlängern das Ziel der laufenden Bewegung (160 ms; „Reduziert“ und „Aus“:
+sofort), Touchpads mit Pixelangaben folgen direkt. Was im Inhalt selbst scrollt, bekommt das Rad
+zuerst, an seinem Ende geht es an die Ansicht weiter; mit Strg oder Umschalt bleibt es bei den
+Handlern der Ansicht (Zoom, waagerecht). `tune_wheel` (`qtapp/application.py`) rechnet die Zeilen aus
+den Windows-Einstellungen beim Start auf rund 32 px je Zeile um, wie Edge und Chrome.
+
 **Qt 6.11 und das Laden im Hintergrund:** Mit der schrittweisen Speicherbereinigung der QML-Engine
 können Objekte, die beim Laden der Seiten im Hintergrund entstehen, ihre QML-Funktionen verlieren;
 ein `Connections` mit Funktionen stürzt dann beim Fertigstellen ab (Windows und Linux, im Stresstest

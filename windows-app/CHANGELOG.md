@@ -2,6 +2,50 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.1.0-beta.3
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Feinschliff: optische und technische Fehler der
+ganzen App behoben, fehlende Bewegungen ergänzt; Details in den [Release Notes](release-notes/3.1.0-beta.3.md).
+
+## Scrollen
+
+- Jede Mausrad-Raste verschiebt um dieselbe Strecke, schnell gedrehte Rasten addieren sich (Qts eigene
+  Bewegung begann bei jeder Raste neu und verlor beim zügigen Drehen bis zu gut der Hälfte der Strecke).
+  Strecke je Raste wie in Edge und Chrome: rund 32 px je Zeile der Windows-Einstellung (Standard 96 statt
+  72 px; „Eine Bildschirmseite“: die Höhe der Ansicht ohne zwei Zeilen). Gilt für Seiten, Listen, PDF-Ansicht, Seitenleisten, „Seiten organisieren“, Vorschau und Dialoge
+  (`PWheelScroll`); an seinem Ende gibt ein Bereich das Mausrad an den umgebenden weiter.
+- Die Bildlaufleiste erscheint auch beim Scrollen mit Mausrad und Tastatur kurz.
+
+## PDF Reader & Editor
+
+- Werkzeuge lassen sich abwählen: Ein Klick auf das gewählte Werkzeug kehrt zu „Auswählen“ zurück (bisher
+  änderte sich nur die Schaltfläche). Ebenso die Feldarten beim Gestalten von Formularen.
+- Umschalter zeigen immer den wirklichen Zustand (Werkzeuge, „Seiten organisieren“, „Seitenbreite“,
+  „Ganze Seite“, Fett/Kursiv/Unterstrichen/Durchgestrichen/Ausrichtung im Texteditor): Sie schalten sich
+  nicht mehr selbst um und verlieren so nie die Bindung an den Zustand.
+- Neues Werkzeug „Verschieben“ (Hand): Dokument mit gedrückter linker Maustaste ziehen. In jedem Werkzeug
+  zieht die linke Maustaste auf der freien Fläche neben den Seiten, die mittlere überall; Umschalt +
+  Mausrad verschiebt waagerecht.
+- Seiten organisieren: Die Befehlsleiste wächst beim Umbrechen mit („Text erkennen …“ lag über der ersten
+  Seitenreihe); „1 Seite“ statt „1 Seiten“.
+- Der Texteditor blendet beim Öffnen ein.
+
+## Oberfläche
+
+- Navigation eingeklappt: Die Überschrift „Tools“ wird zur schmalen Trennlinie (bisher blieb sie
+  unsichtbar 32 px hoch – zwischen „Start“ und den Tools lagen 40 statt 4 px). Sie schrumpft mit der
+  Breite; die Markierung des gewählten Eintrags bleibt dabei auf ihrem Eintrag.
+- Vertragsübersichten und Stapel-Filter: Die Markierung der gewählten Ansicht wurde nie gezeichnet (der
+  Repeater meldete seine Einträge, bevor es sie gab); jetzt gleitet sie zur gewählten Ansicht. Die
+  Einträge springen beim Wechsel nicht mehr (Breite für die fette Schrift reserviert).
+- Kartenköpfe ohne Untertitel: Schaltflächen rechts mittig zur Titelzeile.
+- Stapel: Abstand unter den Ansichten wie überall (bisher 12 px mehr); „Fügen Sie …“ statt „Füge …“;
+  Überschriften leerer Listen ohne Punkt (auch „Kunden“).
+- PDF reparieren: „PDFs auswählen“ mit Ordnersymbol.
+- Statuszeile: Das Symbol blendet mit der Meldung um.
+- „1 Seite“/„2 Seiten“ statt „Seite(n)“ beim Öffnen, Drucken, in der Texterkennung, beim Export, in den
+  Hinweisen von „PDF reparieren“ und in der Kundenakte.
+
 # PDF Tool 3.1.0-beta.2
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Nur Leistung – keine neuen Funktionen;
