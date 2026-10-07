@@ -73,6 +73,12 @@ def test_delete_pages_and_undo(tmp_path: Path) -> None:
         assert footers(doc) == [f"Seite {n} von 5" for n in range(1, 6)]
         with pytest.raises(UnsupportedEdit):
             pages.delete(doc, history, range(5))
+        assert history.undo_title == ""
+        # Ausschneiden (erst kopiert, dann entfernt) heißt auch so im Verlauf
+        pages.delete(doc, history, [0], cut=True)
+        assert history.undo_title == "Seite ausschneiden" and doc.page_count == 4
+        pages.delete(doc, history, [0, 1], cut=True)
+        assert history.undo_title == "Seiten ausschneiden" and doc.page_count == 2
     finally:
         doc.close()
 
@@ -305,3 +311,38 @@ def test_organized_document_saves_with_validation(tmp_path: Path) -> None:
     with pikepdf.open(path) as pdf:
         assert len(pdf.pages) == 4 and pdf.check_pdf_syntax() == []
         assert "notiz.txt" in pdf.attachments
+
+
+# --- 3.1: Seiten kopieren und einfügen (Zwischenablage), Teilimport ------------------------------------------------
+def footer(doc: EditorDocument, page: int) -> str:
+    return next(line for line in textlayer.text(doc, page).splitlines() if line.startswith("Seite "))
+
+
+def test_copied_pages_paste_into_another_document_in_order(tmp_path: Path) -> None:
+    source = EditorDocument.open(samples.standard_text(tmp_path / "quelle.pdf", pages=3))
+    target = EditorDocument.open(samples.standard_text(tmp_path / "ziel.pdf", pages=2))
+    data = pages.copy_pages(source, [2, 0])
+    assert not source.dirty and data.startswith(b"%PDF")
+    history = commands.History()
+    pages.insert_from(target, history, 1, pikepdf.open(io.BytesIO(data)), title="Seiten einfügen")
+    assert [footer(target, n) for n in range(4)] == ["Seite 1 von 2", "Seite 3 von 3", "Seite 1 von 3", "Seite 2 von 2"]
+    history.undo(target)
+    assert target.page_count == 2
+    history.redo(target)
+    saved = tmp_path / "gespeichert.pdf"
+    save.save(target, saved)
+    assert EditorDocument.open(saved).page_count == 4
+
+
+def test_partial_import_takes_only_the_chosen_pages(tmp_path: Path) -> None:
+    doc = EditorDocument.open(samples.standard_text(tmp_path / "d.pdf", pages=1))
+    other = samples.standard_text(tmp_path / "andere.pdf", pages=5)
+    chosen = pages.parse_pages("2, 4-5", 5)
+    pages.insert_from(doc, commands.History(), 1, pages.open_source(other), chosen)
+    assert [footer(doc, n) for n in range(4)] == ["Seite 1 von 1", "Seite 2 von 5", "Seite 4 von 5", "Seite 5 von 5"]
+
+
+def test_copy_pages_respects_permissions(tmp_path: Path) -> None:
+    doc = EditorDocument.open(samples.encrypted(tmp_path / "e.pdf", allow_edit=False), password="geheim")
+    with pytest.raises(ReadOnlyDocument):
+        pages.copy_pages(doc, [0])
