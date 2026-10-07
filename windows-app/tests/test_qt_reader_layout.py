@@ -1,10 +1,10 @@
-"""Qt-Oberfläche: Aufbau des PDF Readers – App-Navigation, Seitenleisten und Dokumentfläche.
+"""Qt-Oberfläche: Aufbau des PDF Readers – Tab-Leiste, Seitenleisten und Dokumentfläche.
 
-Drei Ebenen: die App-Navigation (bei geöffnetem Dokument eingeklappt), die Seitenleisten links und rechts
-mit festen Breiten und ihren Umschaltern im eigenen Kopf (geschlossen: ein schmaler Streifen mit ihren
-Symbolen), in der Mitte die Dokumentfläche. Bedient wird wie von Hand (Klicks auf Reiter, Streifen,
-Schließen und Menüschaltfläche). Nach jedem Test darf die QML-Engine keine Meldung ausgegeben haben
-(Fixtures ``ui_app`` bzw. ``app``).
+Drei Ebenen: die Tab-Leiste oben (jedes PDF ein Tab neben ⌂ Start, seit 3.1.0-beta.4), die Seitenleisten links
+und rechts mit festen Breiten und ihren Umschaltern im eigenen Kopf (geschlossen: ein schmaler Streifen mit ihren
+Symbolen), in der Mitte die Dokumentfläche. Bedient wird wie von Hand (Klicks auf Tabs, Reiter, Streifen und
+Schließen, Mausrad). Nach jedem Test darf die QML-Engine keine Meldung ausgegeben haben (Fixtures ``ui_app`` bzw.
+``app``).
 """
 
 from __future__ import annotations
@@ -12,10 +12,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QPointF
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QGuiApplication, QWheelEvent
 
 import editorsamples as samples
-from conftest import pump, wait_until
+from conftest import neustart, pump, wait_until
 from test_qt_reader import click, open_pdf, reader, settle, window_point
 
 LEFT_WIDTH, RIGHT_WIDTH, RAIL = 300, 280, 44  # Metrics.readerLeftPanelWidth / readerRightPanelWidth / readerRailWidth
@@ -157,27 +158,139 @@ def test_empty_states_are_calm_and_explain_what_to_do(reader_app, tmp_path: Path
     assert empty.isVisible() and empty.property("title") == "Kein Objekt ausgewählt"
 
 
-# --- App-Navigation: im Dokument eingeklappt --------------------------------------------------------------------
-def test_navigation_collapses_for_documents_and_expands_elsewhere(reader_app, tmp_path: Path) -> None:
+# --- Tab-Leiste oben: Dokumente als Tabs neben ⌂ Start (Adobe-Prinzip) ------------------------------------------
+def test_documents_are_tabs_next_to_start(reader_app, tmp_path: Path) -> None:
+    """Jedes PDF ist ein Tab in der Leiste oben neben ⌂ Start – eine Seitenleiste der App gibt es nicht, das Dokument
+    hat die ganze Breite. ⌂ führt zur Startseite, ein Klick auf ein PDF zurück in den Reader mit diesem Dokument;
+    nach dem letzten geschlossenen PDF geht es zur Startseite."""
     h = reader_app
-    pane = h.item("navigationPane")
-    expanded = pane.width()
-    assert expanded > 100  # breites Fenster, Reader ohne Dokument: ausgeklappt
-    open_pdf(h, samples.standard_text(tmp_path / "eins.pdf"))
-    assert wait_until(lambda: pane.width() < 60, 3)  # kompakt: nur Symbole
-    assert h.item("readerView").property("contentY") == 0  # die erste Seite beginnt oben
-    # Menüschaltfläche: vorübergehend ausklappen – die gespeicherte Wahl bleibt
-    stored = h.app.navCompact
-    press(h, "navigationToggle")
-    assert wait_until(lambda: pane.width() > 100, 3) and h.app.navCompact == stored
-    # Nächstes Dokument: wieder kompakt
-    open_pdf(h, samples.standard_text(tmp_path / "zwei.pdf"))
-    assert wait_until(lambda: pane.width() < 60, 3)
-    # Startseite: normale Navigation
-    h.navigate("home", 0.5)
-    assert wait_until(lambda: pane.width() > 100, 3)
-    h.navigate("reader", 0.5)
-    assert wait_until(lambda: pane.width() < 60, 3)
+    a, r = h.app, reader(h)
+    eins = open_pdf(h, samples.standard_text(tmp_path / "eins.pdf"))
+    zwei = open_pdf(h, samples.standard_text(tmp_path / "zwei.pdf"))
+    assert h.item("navigationPane") is None
+    assert h.item("readerToolbar").mapToScene(QPointF(0, 0)).x() == 0  # Befehlsleiste ab dem linken Fensterrand
+    tab = [h.item("readerTab_0"), h.item("readerTab_1")]
+    assert tab[1].property("active") and not tab[0].property("active") and not h.item("tabHome").property("active")
+    press(h, "tabHome")
+    assert a.currentPage == "home" and h.item("tabHome").property("active") and not tab[1].property("active")
+    press(h, "readerTab_0")
+    assert a.currentPage == "reader" and r.currentKey == eins.docId and tab[0].property("active")
+    r.closeTab(eins.docId)
+    pump(0.4)
+    assert a.currentPage == "reader" and r.currentKey == zwei.docId
+    r.closeTab(zwei.docId)
+    pump(0.4)
+    assert a.currentPage == "home" and not r.hasDocument
+
+
+def test_open_from_start_shows_the_reader_once_the_document_is_there(ui_app, tmp_path: Path) -> None:
+    """Von der Startseite aus erscheint der Reader erst mit dem geöffneten Dokument – nie leer. Lässt sich eine Datei
+    nicht öffnen, bleibt die Startseite und zeigt den Hinweis."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    h.navigate("home", 0.3)
+    r = reader(h)
+    kaputt = tmp_path / "kein.pdf"
+    kaputt.write_text("kein PDF", encoding="utf-8")
+    r.open_paths([str(kaputt)])
+    assert h.app.currentPage == "home"
+    assert wait_until(lambda: r.opening == 0, 30)
+    settle(h)
+    assert h.app.currentPage == "home" and h.item("homeReaderInfo").property("shown") is True
+    r.open_paths([str(samples.standard_text(tmp_path / "gut.pdf"))])
+    assert h.app.currentPage == "home"  # noch nicht geöffnet
+    assert wait_until(lambda: r.tabs.count == 1 and h.app.currentPage == "reader", 30)
+
+
+def test_many_tabs_show_whole_tabs_with_arrows_and_move_by_one_tab(reader_app, tmp_path: Path) -> None:
+    """Viele Tabs im schmalen Fenster: Die Werkzeug-Tabs werden schmaler, damit die PDF-Tabs mindestens 200 px haben;
+    reicht der Platz nicht für alle PDF-Tabs (je mindestens 144 px), zeigt die Leiste nur ganze, gleich breite Tabs
+    und ‹ › zum Blättern – nie einen halb abgeschnittenen Tab. Pfeile und Mausrad verschieben um genau einen Tab,
+    nie über das Ende hinaus; der aktive Tab bleibt ganz zu sehen. Im Tab steht der Name ohne ».pdf«."""
+    h = reader_app
+    a, r = h.app, reader(h)
+    for page in ("repair", "create", "settings"):
+        a.navigate(page)
+        pump(0.2)
+    for nummer in range(6):
+        open_pdf(h, samples.standard_text(tmp_path / f"Dokument mit einem recht langen Namen {nummer}.pdf"))
+    h.window.resize(760, 560)
+    pump(0.6)
+    leiste, docs = h.item("appTabs"), h.item("readerTabs")
+    zurueck, weiter = h.item("readerTabsBack"), h.item("readerTabsForward")
+    assert leiste.width() == 760 and right_x(h.item("appSettingsButton")) <= 760
+    assert leiste.property("docsOverflow") and zurueck.isVisible() and weiter.isVisible()
+    takt = leiste.property("docPitch")
+    assert takt == 146 and docs.width() == leiste.property("docsShown") * takt - 2 and docs.width() >= 144
+
+    def ganz_zu_sehen(tab) -> bool:
+        return left_x(docs) - 0.5 <= left_x(tab) and right_x(tab) <= right_x(docs) + 0.5
+
+    def nur_ganze_tabs() -> bool:
+        for nummer in range(6):
+            tab = h.item(f"readerTab_{nummer}")  # die Liste legt nur Tabs in der Nähe des Sichtbaren an
+            if tab is None:
+                continue
+            assert tab.width() == 144
+            draussen = right_x(tab) <= left_x(docs) + 0.5 or left_x(tab) >= right_x(docs) - 0.5
+            if not (draussen or ganz_zu_sehen(tab)):
+                return False
+        return True
+
+    assert ganz_zu_sehen(h.item("readerTab_5")) and nur_ganze_tabs()  # zuletzt geöffnet = aktiv
+    r.activate(r.tabs.keys()[0])
+    pump(0.5)
+    assert ganz_zu_sehen(h.item("readerTab_0")) and docs.property("contentX") == 0
+    assert not zurueck.property("enabled") and weiter.property("enabled")
+    assert h.item("readerTab_0").property("title") == "Dokument mit einem recht langen Namen 0"
+    mitte = docs.mapToScene(QPointF(docs.width() / 2, docs.height() / 2))
+
+    def rad(schritte: int) -> None:
+        for _ in range(abs(schritte)):
+            ereignis = QWheelEvent(mitte, QPointF(h.window.mapToGlobal(mitte.toPoint())), QPoint(0, 0), QPoint(0, -120 if schritte > 0 else 120),
+                                   Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+            QGuiApplication.sendEvent(h.window, ereignis)
+            pump(0.3)
+
+    rad(1)
+    assert docs.property("contentX") == pytest.approx(takt) and nur_ganze_tabs() and zurueck.property("enabled")
+    press(h, "readerTabsForward")
+    assert docs.property("contentX") == pytest.approx(2 * takt) and nur_ganze_tabs()
+    rad(20)  # nie über das Ende hinaus
+    ende = docs.property("contentWidth") - docs.width()
+    assert docs.property("contentX") == pytest.approx(ende) and ende % takt == pytest.approx(0) and nur_ganze_tabs()
+    assert not weiter.property("enabled")
+    press(h, "readerTabsBack")
+    assert docs.property("contentX") == pytest.approx(ende - takt)
+    rad(-30)
+    assert docs.property("contentX") == pytest.approx(0)
+    # Breites Fenster: alle Tabs haben Platz – keine Pfeile, kein Bildlauf
+    h.window.resize(1920, 1080)
+    pump(0.6)
+    assert not leiste.property("docsOverflow") and not zurueck.isVisible() and not weiter.isVisible()
+    assert docs.property("contentX") == 0 and docs.width() == docs.property("contentWidth")
+
+
+def test_closing_with_many_tabs_leaves_no_qml_messages(reader_app, tmp_path: Path, capfd) -> None:
+    """Beenden mit Werkzeug-Tabs und vielen PDFs: Beim Schließen der PDFs laufen keine Übergänge der Tab-Leiste
+    mehr, und zum Löschen vorgemerkte Tabs enden vor der QML-Engine – sonst meldete Qt beim Abbau »Cannot find
+    member data« für halb abgebaute Tabs."""
+    h = reader_app
+    a, r = h.app, reader(h)
+    for page in ("repair", "create", "settings"):
+        a.navigate(page)
+        pump(0.2)
+    for nummer in range(6):
+        open_pdf(h, samples.standard_text(tmp_path / f"Dokument mit einem recht langen Namen {nummer}.pdf"))
+    h.window.resize(760, 560)
+    pump(0.6)
+    r.activate(r.tabs.keys()[0])
+    pump(0.5)
+    capfd.readouterr()
+    neu = neustart(h)  # beendet wie beim Schließen des Fensters und startet neu
+    ausgabe = capfd.readouterr().err
+    assert not [zeile for zeile in ausgabe.splitlines() if "QML" in zeile], ausgabe[-3000:]
+    assert neu.app.currentPage == "home" and reader(neu).tabs.count == 0
 
 
 # --- Bewegung: kurz, ohne Umbauen in jedem Bild; »Aus« sofort --------------------------------------------------

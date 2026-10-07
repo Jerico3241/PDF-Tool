@@ -46,7 +46,7 @@ PPage {
         Layout.topMargin: 4
         iconName: "color"
         title: "Akzentfarbe"
-        description: "Für Schaltflächen, Auswahl, Hinweise und die Navigation"
+        description: "Für Schaltflächen, Auswahl, Hinweise und die Tabs"
         expandable: true
         expanded: true
         PText {

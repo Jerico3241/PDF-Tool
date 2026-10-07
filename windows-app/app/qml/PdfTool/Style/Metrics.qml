@@ -31,12 +31,15 @@ QtObject {
     readonly property int iconSizeHero: 40
     readonly property int focusWidth: 2
 
-    // Navigation und Seiten
-    readonly property int navItemHeight: 36
-    readonly property int navHeaderHeight: 32
-    readonly property int navSeparatorHeight: 9  // eingeklappt: Überschrift als Linie, je 8 px Abstand
-    readonly property int paneExpanded: 240
-    readonly property int paneCompact: 48
+    // Tab-Leiste oben (⌂ Start, Werkzeuge, Dokumente) und Seiten
+    readonly property int appBarHeight: 40
+    readonly property int appTabHeight: 34
+    readonly property int appTabMaxWidth: 240
+    readonly property int appTabIconOnly: 40   // ⌂ Start: nur das Symbol
+    readonly property int appTabMinWidth: 76   // Werkzeug-Tab bei Platzmangel: Symbol, Anfang des Namens, ×
+    readonly property int appDocsMinWidth: 200 // Platz der Dokument-Tabs bei Platzmangel (mindestens)
+    readonly property int appDocTabMinWidth: 144 // Dokument-Tab bei Platzmangel; noch weniger Platz: ganze Tabs mit ‹ ›
+    readonly property int appTabScroll: 24       // ‹ › neben den Dokument-Tabs, wenn nicht alle Platz haben
     readonly property int pageMaxWidth: 1180
     readonly property int pagePaddingLeft: 36
     readonly property int pagePaddingRight: 28
@@ -54,8 +57,6 @@ QtObject {
     readonly property int toolIconBox: 48         // Symbolfläche (quadratisch)
 
     // PDF Reader & Editor
-    readonly property int readerTabHeight: 36
-    readonly property int readerTabMaxWidth: 220
     readonly property int readerToolbarHeight: 48
     // Seitenleisten: feste Breiten je Seite – gleich, welcher Inhalt gezeigt wird (kein Springen)
     readonly property int readerLeftPanelWidth: 300  // Platz für vier Umschalter (Seiten, Lesezeichen, Suche, Anhänge) und den ganzen Titel
@@ -68,9 +69,6 @@ QtObject {
     readonly property int readerNarrowFrom: 820   // schmaler: Seitenleisten liegen über der Ansicht
     readonly property int readerHandle: 10        // Anfasser zum Ändern der Bildgröße
 
-    // Responsive Zustände (Fensterbreite in geräteunabhängigen Pixeln)
-    readonly property int wideFrom: 1008
-    readonly property int mediumFrom: 820
-    readonly property int breakpointHysteresis: 8
+    // Responsive Zustände (Breite in geräteunabhängigen Pixeln)
     readonly property int twoColumnsFrom: 740
 }

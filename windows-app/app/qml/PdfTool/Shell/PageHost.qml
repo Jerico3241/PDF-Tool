@@ -61,7 +61,7 @@ Item {
         shownKey = key
         slot.transform = [shift]
         slot.visible = true
-        // Tastaturfokus nur mitnehmen, wenn er auf der verlassenen Seite lag (sonst bleibt er z. B. in der Navigation)
+        // Tastaturfokus nur mitnehmen, wenn er auf der verlassenen Seite lag (sonst bleibt er z. B. in der Tab-Leiste)
         if (hadFocus) slot.forceActiveFocus()
         // Ohne Animation: »Aus« – und die erste Seite beim Start (sie steht fertig im ersten Bild)
         if (!Motion.enabled || !App.ready) { slot.opacity = 1; shift.y = 0; return }

@@ -133,17 +133,38 @@ def reader_app(ui_app):
 
 
 # --- Öffnen, Tabs, Zuletzt geöffnet ---------------------------------------------------------------------------
-def test_start_card_shortcut_and_empty_state(ui_app) -> None:
+def test_start_card_shortcut_and_empty_state(ui_app, tmp_path: Path) -> None:
+    """Ohne Dokument öffnet Strg+5 (wie das Werkzeug auf der Startseite) die Dateiauswahl – wie »Datei öffnen« in
+    anderen PDF-Programmen; der Reader erscheint mit dem gewählten Dokument. Abgebrochen bleibt die Seite."""
+    from qtapp import files
     from tools.registry import READER
 
+    h = ui_app
+    h.app.dialogs.shutdown()
     assert READER.title == "PDF Reader & Editor"
     assert READER.description == "PDFs öffnen, bearbeiten, organisieren und kommentieren."
-    ui_app.app.openShortcut(5)
+    h.app.openShortcut(5)  # Auswahl abgebrochen
     pump(0.3)
-    assert ui_app.app.currentPage == "reader"
-    assert ui_app.item("readerStart").isVisible()
-    assert ui_app.item("readerOpenButton") is not None
-    assert not reader(ui_app).hasDocument
+    assert h.app.currentPage == "home" and not reader(h).hasDocument
+    pdf = samples.standard_text(tmp_path / "Gewählt.pdf")
+    files.RESPONSES.append([str(pdf)])
+    h.app.openShortcut(5)
+    assert wait_until(lambda: reader(h).tabs.count == 1, 30)
+    settle(h)
+    assert h.app.currentPage == "reader" and reader(h).current.name == "Gewählt.pdf"
+    # Mit Dokument wechselt Strg+5 nur zum Reader
+    h.navigate("home", 0.3)
+    h.app.openShortcut(5)
+    pump(0.3)
+    assert h.app.currentPage == "reader" and reader(h).tabs.count == 1
+    # Ohne Dokument (etwa während das erste geöffnet wird) zeigt der Reader seinen leeren Zustand
+    assert reader(h).closeTab(reader(h).current.ident) is True
+    settle(h)
+    assert h.app.currentPage == "home"
+    h.navigate("reader", 0.3)
+    assert h.item("readerStart").isVisible()
+    assert h.item("readerOpenButton") is not None
+    assert not reader(h).hasDocument
 
 
 def test_open_dialog_tabs_dirty_marker_and_close_prompt(reader_app, tmp_path: Path, monkeypatch) -> None:

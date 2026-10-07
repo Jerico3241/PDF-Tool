@@ -230,7 +230,7 @@ def apply_window_chrome(hwnd: int, dark: bool, caption: str | None = None, text:
     """Titelleiste in das Design einbinden: dunkler Modus, runde Ecken, Mica bzw. Farbe der App.
 
     Die App zeichnet ihren Inhalt deckend; DWM-Mica ist deshalb nur in der Titelleiste zu sehen –
-    Navigation und Hintergrund erhalten dasselbe Material aus dem Desktophintergrund (``mica``).
+    Tab-Leiste und Hintergrund erhalten dasselbe Material aus dem Desktophintergrund (``mica``).
     Rückgabe: ``"mica"`` (DWM-Material in der Titelleiste), ``"solid"`` (Titelleiste in der Farbe
     der App) oder ``"none"`` (ältere Systeme: nur heller bzw. dunkler Rahmen).
     """

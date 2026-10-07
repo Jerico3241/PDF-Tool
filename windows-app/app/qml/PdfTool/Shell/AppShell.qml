@@ -3,66 +3,14 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Aufbau des Hauptfensters: Mica-Hintergrund, Navigation, Inhaltsebene mit Seiten und
-// Statuszeile, Dialoge, Drag & Drop und Tastenkürzel.
+// Aufbau des Hauptfensters (Adobe-Prinzip): oben die Tab-Leiste mit ≡ Menü, ⌂ Start, den Tabs der geöffneten
+// Werkzeuge und PDFs; darunter die Inhaltsebene mit Seiten und Statuszeile über die ganze Breite. Dazu
+// Dialoge, Drag & Drop und Tastenkürzel.
 FocusScope {
     id: shell
     property alias pages: host
-    // Breakpoints: breit (Navigation ausgeklappt), mittel und kompakt (Navigation eingeklappt) – mit
-    // kleiner Hysterese, damit ein Fenster an der Grenze nicht hin- und herspringt (wie 2.6.1).
-    // Ein Breakpoint stellt sofort um; animiert wird nur das Ein- und Ausklappen per Schaltfläche.
-    property string mode: "wide"
-    property bool userExpanded: false
-    property bool paneAnimated: false
-    // Im Dokument (Reader mit geöffneter PDF) zählt die Breite: dort ist die Navigation eingeklappt.
-    // Die Menüschaltfläche klappt sie nur vorübergehend aus – bis zum nächsten geöffneten Dokument oder
-    // bis der Reader verlassen wird; die gespeicherte Wahl (»nav_kompakt«) bleibt unberührt.
-    readonly property bool documentFocus: App.currentPage === "reader" && Reader.hasDocument
-    property bool documentExpanded: false
-    readonly property int documentCount: Reader.tabs.count
-    property int knownDocuments: 0
-    onDocumentCountChanged: {
-        if (documentCount > knownDocuments) documentExpanded = false  // neues Dokument: wieder kompakt
-        knownDocuments = documentCount
-    }
-    onDocumentFocusChanged: {
-        paneAnimated = true
-        documentExpanded = false
-    }
-    readonly property bool paneExpanded: documentFocus ? documentExpanded : (App.navCompact ? false : (mode === "wide" ? true : userExpanded))
-    // Vollbild (F11 im Reader): nur das Dokument – Navigation, Hinweisleiste und Statuszeile ausgeblendet
+    // Vollbild (F11 im Reader): nur das Dokument – Tab-Leiste, Hinweisleiste und Statuszeile ausgeblendet
     readonly property bool fullScreen: Reader.fullScreen
-
-    function modeFor(w) {
-        var hysteresis = Metrics.breakpointHysteresis
-        if (w >= Metrics.wideFrom - (mode === "wide" ? hysteresis : 0)) return "wide"
-        if (w >= Metrics.mediumFrom - (mode !== "compact" ? hysteresis : 0)) return "medium"
-        return "compact"
-    }
-    function updateMode() {
-        var next = modeFor(width)
-        if (next === mode) return
-        paneAnimated = false
-        if (next === "wide" || mode === "wide") userExpanded = false
-        mode = next
-    }
-    onWidthChanged: updateMode()
-
-    function togglePane() {
-        paneAnimated = true
-        if (documentFocus) {
-            documentExpanded = !documentExpanded
-            return
-        }
-        if (paneExpanded) {
-            App.setNavCompact(true)
-            userExpanded = false
-        } else {
-            App.setNavCompact(false)
-            // auch bei schmalem Fenster klappt die Menüschaltfläche die Navigation aus
-            userExpanded = mode !== "wide"
-        }
-    }
 
     // Themawechsel: das bisherige Bild blendet über dem neuen aus (kurz, »Aus«: sofort)
     property var pendingTheme: null
@@ -110,53 +58,48 @@ FocusScope {
             cache: true
         }
 
-        NavigationPane {
-            id: nav
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
+        AppTabs {
+            id: tabs
             anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
             visible: !shell.fullScreen
-            expanded: shell.paneExpanded
-            animated: shell.paneAnimated
-            onToggleRequested: shell.togglePane()
+            height: shell.fullScreen ? 0 : implicitHeight
+            z: 1  // über der Kante der Inhaltsebene: der aktive Tab geht in sie über
         }
 
-        // Inhaltsebene: nur die obere linke Ecke ist abgerundet (Windows 11). Klappt die Navigation
-        // ein oder aus, gleitet die Ebene mit; Seite und Statuszeile nehmen ihre neue Breite sofort
-        // an – sie werden einmal neu angeordnet, nicht in jedem Bild der Animation (wie 2.6.1).
+        // Inhaltsebene über die ganze Breite unter den Tabs; ihre obere Kante ist eine feine Linie, die unter dem
+        // aktiven Tab verschwindet.
         Rectangle {
             id: layer
-            readonly property real navSpace: shell.fullScreen ? 0 : nav.targetWidth
-            x: shell.fullScreen ? 0 : nav.width
-            y: 0
-            width: parent.width - x + radius
-            height: parent.height + radius
-            radius: shell.fullScreen ? 0 : Metrics.radiusCard
+            x: 0
+            y: tabs.height
+            width: parent.width
+            height: parent.height - y
             color: Theme.layer
-            border.width: shell.fullScreen ? 0 : 1
-            border.color: Theme.layerStroke
+            Rectangle { width: parent.width; height: 1; color: Theme.layerStroke; visible: !shell.fullScreen }
 
             // Hinweisleiste für Updates über den Seiten (die Seiten rücken einmal um ihre Höhe)
             UpdateBanner {
                 id: updateBanner
-                x: 1
-                y: 1
-                width: shell.width - layer.navSpace - 1
+                x: 0
+                y: shell.fullScreen ? 0 : 1
+                width: layer.width
                 height: implicitHeight
                 suppressed: shell.fullScreen
             }
             PageHost {
                 id: host
-                x: 1
-                y: 1 + updateBanner.height
-                width: shell.width - layer.navSpace - 1
-                height: shell.height - 1 - status.height - updateBanner.height
+                x: 0
+                y: updateBanner.y + updateBanner.height
+                width: layer.width
+                height: layer.height - y - status.height
             }
             StatusBar {
                 id: status
-                x: 1
-                y: shell.height - height
-                width: shell.width - layer.navSpace - 1
+                x: 0
+                y: layer.height - height
+                width: layer.width
                 height: shell.fullScreen ? 0 : implicitHeight
                 visible: !shell.fullScreen
             }
@@ -212,4 +155,7 @@ FocusScope {
     Shortcut { sequence: "Ctrl+3"; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
     Shortcut { sequence: "Ctrl+4"; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
     Shortcut { sequence: "Ctrl+5"; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
+    // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument)
+    readonly property string currentTab: App.currentPage === "settings" ? "settings" : App.currentTool
+    Shortcut { sequence: "Ctrl+W"; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }
 }

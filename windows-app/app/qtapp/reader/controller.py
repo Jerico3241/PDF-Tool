@@ -106,6 +106,7 @@ class ReaderController(Observable):
         app.observe("ready", self._ready)
         app.observe("pagesLoaded", self._pages_loaded)
         app.observe("currentPage", self._page_changed)
+        app.documents_open = lambda: self.hasDocument
 
     # QML: aktuelles Dokument ---------------------------------------------------------------------------------
     def _get_current(self):
@@ -219,7 +220,8 @@ class ReaderController(Observable):
         if not pdfs:
             self.app.notify("reader", "warning", "Bitte eine PDF-Datei wählen.", title="Keine PDF")
             return
-        if self.app.currentPage != "reader":
+        # Mit geöffneten Dokumenten sofort zum Reader – sonst erst, wenn das Dokument da ist (kein leerer Reader)
+        if self.app.currentPage != "reader" and self._docs:
             self.app.navigate(READER.key)
         for path in pdfs:
             existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
@@ -280,6 +282,8 @@ class ReaderController(Observable):
             controller.panels = {"left": self.leftPanel, "right": self.rightPanel, "organize": False}
             self.tabs.set_items([*self.tabs.items(), self._tab_item(controller)])
             self.activate(ident)
+            if self.app.currentPage != "reader":
+                self.app.navigate(READER.key)
             if recovered is None:
                 self.remember_recent(path)
             else:
@@ -291,23 +295,26 @@ class ReaderController(Observable):
         def failed(exc: BaseException, _details: str) -> None:
             self.opening = max(0, self.opening - 1)
             controller.deleteLater()
-            if isinstance(exc, PasswordRequired):
-                secret = self.ask_password(name, exc.wrong)
-                if secret is not None:
-                    self._open(path, secret, recovered)
-                else:
-                    self.app.set_status("Öffnen abgebrochen.", "neutral")
-                return
-            if isinstance(exc, DamagedDocument):
-                self._offer_repair(path)
-                return
-            if isinstance(exc, NotAPdf):
-                self.app.notify("reader", "error", f"»{name}« ist keine PDF-Datei.", title="Öffnen nicht möglich")
-                return
-            message = str(exc) if isinstance(exc, EditorError) else f"»{name}« konnte nicht geöffnet werden."
-            if not isinstance(exc, (EditorError, OSError)):
-                self.app.report_exception(_details)
-            self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
+            try:
+                if isinstance(exc, PasswordRequired):
+                    secret = self.ask_password(name, exc.wrong)
+                    if secret is not None:
+                        self._open(path, secret, recovered)
+                    else:
+                        self.app.set_status("Öffnen abgebrochen.", "neutral")
+                    return
+                if isinstance(exc, DamagedDocument):
+                    self._offer_repair(path)
+                    return
+                if isinstance(exc, NotAPdf):
+                    self.app.notify("reader", "error", f"»{name}« ist keine PDF-Datei.", title="Öffnen nicht möglich")
+                    return
+                message = str(exc) if isinstance(exc, EditorError) else f"»{name}« konnte nicht geöffnet werden."
+                if not isinstance(exc, (EditorError, OSError)):
+                    self.app.report_exception(_details)
+                self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
+            finally:
+                self._leave_if_empty()
 
         self.engine.submit(work, done, failed, label="öffnen")
 
@@ -362,6 +369,19 @@ class ReaderController(Observable):
         if self._current is not None:
             self._current.panels = {"left": self.leftPanel, "right": self.rightPanel, "organize": self.organize}
 
+    @Slot(str)
+    def showTab(self, key: str) -> None:  # noqa: N802
+        """Klick auf den Tab eines Dokuments – auch von der Startseite oder einem anderen Werkzeug aus."""
+        if key in self._docs:
+            self.activate(key)
+            self.app.navigate(READER.key)
+
+    def _leave_if_empty(self) -> None:
+        """Ohne Dokument gibt es im Reader nichts zu sehen: zurück zur Startseite (wie das letzte Dokument einer
+        Sitzung schließen) – nicht, solange noch ein Dokument geöffnet wird, und nicht beim Beenden."""
+        if not self._docs and self.opening == 0 and self.app.currentPage == "reader" and not self.app.closing:
+            self.app.navigate("home")
+
     @Slot(int)
     def activateIndex(self, offset: int) -> None:  # noqa: N802 - Strg+Tab / Strg+Umschalt+Tab
         keys = self.tabs.keys()
@@ -413,6 +433,7 @@ class ReaderController(Observable):
                 self.hasDocument = False
                 self.organize = False
                 self.leaveFullScreen()
+                self._leave_if_empty()
                 self.currentChanged.emit()
         controller.deleteLater()
 
@@ -490,7 +511,7 @@ class ReaderController(Observable):
     # Vollbild ----------------------------------------------------------------------------------------------
     @Slot()
     def toggleFullScreen(self) -> None:  # noqa: N802
-        """F11: Vollbild mit dem Dokument (Navigation, Tabs und Leisten ausgeblendet) bzw. zurück."""
+        """F11: Vollbild mit dem Dokument (Tab-Leiste und Leisten ausgeblendet) bzw. zurück."""
         if self.fullScreen:
             self.leaveFullScreen()
             return

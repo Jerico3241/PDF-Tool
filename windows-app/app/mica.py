@@ -2,7 +2,7 @@
 
 DWM legt Mica (DWMSBT_MAINWINDOW) hinter das ganze Fenster, die Oberfläche übermalt den
 Client-Bereich aber deckend. Deshalb erhält die Titelleiste echtes DWM-Mica,
-während der Navigationsbereich dasselbe Material aus dem Desktophintergrund
+während der Hintergrund der Tab-Leiste dasselbe Material aus dem Desktophintergrund
 berechnet – mit dem Rezept, das Windows für Mica verwendet:
 
 1. stark weichgezeichneter Desktophintergrund,

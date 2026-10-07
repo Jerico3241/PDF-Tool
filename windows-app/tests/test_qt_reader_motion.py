@@ -114,7 +114,7 @@ def test_document_tabs_indicator_and_dirty_dot(motion_app, tmp_path: Path) -> No
     h = motion_app
     r = reader(h)
     docs = [open_pdf(h, samples.standard_text(tmp_path / f"tab{i}.pdf")) for i in range(3)]
-    indicator = h.item("readerTabIndicator")
+    indicator = h.item("tabIndicator")  # eine Markierung für alle Tabs der Leiste oben
 
     def tab(i: int):
         return h.item(f"readerTab_{i}")
@@ -129,7 +129,7 @@ def test_document_tabs_indicator_and_dirty_dot(motion_app, tmp_path: Path) -> No
     assert r.currentKey == docs[0].docId and abs(center_x(indicator) - center_x(tab(0))) < 1.5
     # Ungespeichert: der Punkt blendet ein, nach dem Speichern wieder aus; der Tab wird dabei nicht breiter
     width = tab(0).width()
-    dot = [item for item in h.items("readerTabDirty") if item.parentItem().parentItem().objectName() == "readerTab_0"][0]
+    dot = [item for item in h.items("readerTabDirty") if item.parentItem().parentItem().parentItem().objectName() == "readerTab_0"][0]
     assert dot.property("opacity") == 0
     docs[0].rotatePages([0], 90)
     settle(h)

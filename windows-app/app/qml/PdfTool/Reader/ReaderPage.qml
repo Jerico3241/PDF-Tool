@@ -4,11 +4,12 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// »PDF Reader & Editor«: Tabs, Befehlsleiste, Leiste des Werkzeugs; links die Seitenleiste mit Seiten,
-// Lesezeichen oder Suche, rechts Kommentare oder Eigenschaften – jeweils mit ihren Umschaltern im
-// eigenen Kopf, eingeklappt als schmaler Streifen mit Symbolen –, in der Mitte die Seiten (oder »Seiten
-// organisieren«). Ohne Dokument: Öffnen und »Zuletzt geöffnet«. In schmalen Fenstern liegen die
-// Seitenleisten über der Ansicht.
+// »PDF Reader & Editor«: Befehlsleiste, Leiste des Werkzeugs (die Dokument-Tabs stehen oben in der Leiste
+// des Fensters); links die Seitenleiste mit Seiten, Lesezeichen oder Suche, rechts Kommentare oder
+// Eigenschaften – jeweils mit ihren Umschaltern im eigenen Kopf, eingeklappt als schmaler Streifen mit
+// Symbolen –, in der Mitte die Seiten (oder »Seiten organisieren«). Ohne Dokument (nur kurz, etwa während
+// das erste geöffnet wird): ReaderStart; »Zuletzt verwendet« steht auf der Startseite. In schmalen Fenstern
+// liegen die Seitenleisten über der Ansicht.
 // Tastenkürzel gelten nur, solange diese Seite zu sehen ist und kein Dialog offen ist.
 FocusScope {
     id: page
@@ -69,8 +70,8 @@ FocusScope {
                 anchors.fill: parent
                 spacing: 0
 
-                // Im Vollbild (F11) nur das Dokument mit den schwebenden Leisten
-                ReaderTabs { Layout.fillWidth: true; visible: !Reader.fullScreen }
+                // Die Dokument-Tabs stehen in der Leiste oben (AppTabs). Im Vollbild (F11) nur das Dokument mit den
+                // schwebenden Leisten
                 ReaderToolbar { Layout.fillWidth: true; doc: page.doc; visible: !Reader.fullScreen }
 
                 Item {

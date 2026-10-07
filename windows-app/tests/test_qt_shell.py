@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtTest import QTest
 
 from conftest import _prepare, neustart, pump, wait_until
 
@@ -271,9 +273,13 @@ def test_shortcuts_open_tools(app) -> None:
     app.app.openShortcut(4)
     pump(0.2)
     assert app.app.currentPage == "settings"
+    # Strg+5 ohne geöffnetes PDF: eine PDF wählen (Dateiauswahl) – es gibt keinen leeren Reader
+    from qtapp import files
+
+    files.RESPONSES.append([])  # abbrechen
     app.app.openShortcut(5)
     pump(0.2)
-    assert app.app.currentTool == READER.key and app.app.currentPage == "reader"
+    assert files.RESPONSES == [] and app.app.currentPage == "settings"
     app.app.openShortcut(1)
     pump(0.2)
     assert app.app.currentPage == "home"
@@ -364,106 +370,93 @@ def test_theme_accent_and_profile_apply_live_and_persist(app, config_file: Path)
     assert neu.theme.mode == "dark" and neu.theme.accentChoice == "#C239B3" and neu.theme.profile == "reduced"
 
 
-def test_nav_compact_toggle_persists(app, config_file: Path) -> None:
-    app.app.setNavCompact(True)
+def test_tools_open_as_tabs_next_to_start_and_close_again(app) -> None:
+    """Adobe-Prinzip: Werkzeuge erscheinen beim Öffnen als Tab neben ⌂ Start (in der Reihenfolge des Öffnens) und
+    bleiben, bis man sie schließt – Eingaben bleiben dabei erhalten. Ist der geschlossene Tab zu sehen, folgt der
+    rechts daneben, sonst der links daneben bzw. Start. Strg+W schließt den Tab des sichtbaren Werkzeugs."""
+    a = app.app
+    assert app.item("navigationPane") is None and app.item("appTabs").isVisible()
+    assert a.openTabs == [] and app.item("tabHome").property("active") is True
+    app.navigate("repair", 0.3)
+    app.navigate("layout", 0.3)  # eine Ansicht der Vertragsübersichten
+    app.navigate("settings", 0.3)
+    assert a.openTabs == ["repair", "contracts", "settings"]
+    assert app.item("tab_settings").property("active") and not app.item("tab_repair").property("active")
+    app.navigate("home", 0.3)
+    assert a.openTabs == ["repair", "contracts", "settings"] and app.item("tabHome").property("active")
+    # Klick auf einen Tab: das Werkzeug mit seiner zuletzt gezeigten Ansicht
+    tab = app.item("tab_contracts")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, tab.mapToScene(QPointF(30, tab.height() / 2)).toPoint())
     pump(0.4)
-    app.app.persist()
-    assert json.loads(config_file.read_text(encoding="utf-8"))["nav_kompakt"] is True
-    neu = neustart(app)
-    assert neu.app.navCompact is True
+    assert a.currentPage == "layout" and tab.property("active")
+    # den sichtbaren Tab schließen: der rechts daneben folgt
+    a.closeTab("contracts")
+    pump(0.3)
+    assert a.openTabs == ["repair", "settings"] and a.currentPage == "settings"
+    # Strg+W: Tab des sichtbaren Werkzeugs – ganz rechts, also folgt der links daneben
+    QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+    pump(0.3)
+    assert a.openTabs == ["repair"] and a.currentPage == "repair"
+    # wieder geöffnet: die zuletzt gezeigte Ansicht – Eingaben bleiben erhalten
+    a.openTool(CONTRACTS.key)
+    pump(0.3)
+    assert a.openTabs == ["repair", "contracts"] and a.currentPage == "layout"
+    # einen anderen Tab schließen: die Seite bleibt
+    a.closeTab("repair")
+    pump(0.3)
+    assert a.openTabs == ["contracts"] and a.currentPage == "layout"
+    # der letzte Tab: Start
+    a.closeTab("contracts")
+    pump(0.3)
+    assert a.openTabs == [] and a.currentPage == "home"
+    assert not app.messages()
 
 
-def test_breakpoint_hysteresis_and_toggle(app) -> None:
-    """Knapp unter einem Breakpoint bleibt der bisherige Zustand (8 px Hysterese wie 2.6.1); die
-    Menüschaltfläche klappt die Navigation auch im schmalen Fenster aus, ein Breakpoint setzt das
-    zurück und stellt sofort um – ohne Animation."""
-    shell = app.item("shell")
-    for width, mode in ((1010, "wide"), (1004, "wide"), (998, "medium"), (1004, "medium"), (1008, "wide"), (814, "medium"), (810, "compact"), (818, "compact"), (820, "medium")):
-        app.window.resize(width, 700)
-        pump(0.02)
-        assert shell.property("mode") == mode, width
-    assert shell.property("paneExpanded") is False
-    shell.togglePane()
-    pump(0.4)
-    assert shell.property("paneExpanded") is True and shell.property("userExpanded") is True
-    app.window.resize(1100, 700)
-    pump(0.02)
-    assert shell.property("mode") == "wide" and shell.property("userExpanded") is False
-    assert not shell.property("paneAnimated")
-
-
-def test_pane_toggle_lays_out_the_page_once(app) -> None:
-    """Ein- und Ausklappen der Navigation: Die Seite erhält ihre neue Breite sofort – einmal, nicht in
-    jedem Bild der Animation; nur die Inhaltsebene gleitet mit (wie 2.6.1)."""
-    from qtutil import qml_type
-
-    app.window.resize(1100, 700)
-    app.navigate("create", 0.4)
-    shell = app.item("shell")
-    stack = [app.window.contentItem()]
-    host = None
-    while stack and host is None:
-        current = stack.pop()
-        if qml_type(current) == "PageHost":
-            host = current
-        stack.extend(current.childItems())
-    assert host is not None
-    for expanded in (False, True):
-        widths: list[float] = []
-        host.widthChanged.connect(lambda: widths.append(host.width()))
-        shell.togglePane()
-        pump(0.5)
-        host.widthChanged.disconnect()
-        assert shell.property("paneExpanded") is expanded
-        assert len(widths) == 1, widths
-        assert widths[0] == 1100 - (240 if expanded else 48) - 1
-
-
-def test_compact_navigation_has_no_gap_and_the_marker_stays_on_its_entry(app) -> None:
-    """Eingeklappt wird die Überschrift »Tools« zur schmalen Trennlinie – bis 3.1.0-beta.2 blieb sie 32 px
-    hoch, zwischen »Start« und den Tools lagen 40 px statt 4 px. Beim Ein- und Ausklappen bleibt die
-    Markierung in jedem Bild auf ihrem Eintrag; bei einem Wechsel gleitet sie und endet genau dort."""
-    from PySide6.QtCore import QPointF
-
-    app.window.resize(1280, 800)
+def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
+    """Die Akzentmarkierung gleitet zum neuen Tab (nur »Vollständig«) und steht danach genau darunter – auch wenn
+    links davon ein Tab wegfällt."""
     app.settings.setProfile("full")
-    app.app.setNavCompact(False)
-    app.navigate("repair", 0.5)
-    shell, pane, indicator = app.item("shell"), app.item("navigationPane"), app.item("navIndicator")
-    entries, stack = {}, [pane]
-    while stack:
-        item = stack.pop()
-        stack.extend(item.childItems())
-        if item.property("key") and item.property("label") is not None:
-            entries[item.property("key")] = item
+    marker = app.item("tabIndicator")
 
-    def top(item) -> float:
-        return item.mapToScene(QPointF(0, 0)).y()
+    def mitte(item) -> float:
+        return item.mapToScene(QPointF(item.width() / 2, 0)).x()
 
-    def gap() -> float:  # zwischen »Start« und dem ersten Tool
-        return top(entries["reader"]) - (top(entries["home"]) + entries["home"].height())
-
-    def offset(key: str) -> float:  # Markierung gegenüber der Mitte ihres Eintrags
-        return abs(top(indicator) + indicator.height() / 2 - top(entries[key]) - entries[key].height() / 2)
-
-    assert shell.property("paneExpanded") is True and gap() == 40  # ausgeklappt: Platz für »Tools«
-    worst = 0.0
-    shell.togglePane()  # einklappen, animiert
-    for _ in range(40):
+    app.navigate("repair", 0.6)
+    assert abs(mitte(marker) - mitte(app.item("tab_repair"))) < 1
+    vorher, ziel = mitte(marker), mitte(app.item("tabHome"))
+    app.app.navigate("home")
+    lagen = []
+    for _ in range(30):
         pump(0.01)
-        worst = max(worst, offset("repair"))
-    assert pane.width() == 48 and worst < 0.5
-    assert gap() == 17  # 8 px, Trennlinie, 8 px
-    line = [item for item in app.items("navSeparator") if item.isVisible()]
-    assert len(line) == 1 and top(line[0]) - (top(entries["home"]) + entries["home"].height()) == 8
-    assert top(entries["reader"]) - (top(line[0]) + 1) == 8
-    app.app.navigate("home")  # Wechsel: gleitet vom alten Eintrag …
-    assert offset("home") > 20 if app.theme.effectiveProfile == "full" else offset("home") < 0.5
+        lagen.append(mitte(marker))
+    assert any(ziel + 2 < lage < vorher - 2 for lage in lagen) == (app.theme.effectiveProfile == "full")  # unterwegs (nur »Vollständig«)
+    pump(0.4)
+    assert abs(mitte(marker) - ziel) < 1
+    app.navigate("settings", 0.4)
+    app.navigate("layout", 0.6)
+    assert abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
+    app.app.closeTab("settings")  # links vom aktiven Tab: dieser rückt nach, die Markierung bleibt darunter
+    pump(0.6)
+    assert app.app.currentPage == "layout" and abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
+    app.settings.setProfile("off")
+    app.navigate("home", 0.1)
+    assert abs(mitte(marker) - mitte(app.item("tabHome"))) < 1  # »Aus«: sofort
+    app.settings.setProfile("full")
+    assert not app.messages()
+
+
+def test_menu_offers_open_settings_help_and_about(app) -> None:
+    """≡ Menü: PDF öffnen, Start, Einstellungen, Kurzanleitung, Neuerungen, Über – ein Eintrag führt dorthin."""
+    button = app.item("appMenuButton")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
+    pump(0.4)
+    assert app.item("appMenu").property("opened") is True
+    names = ("menuOpen", "menuHome", "menuSettings", "menuHelp", "menuNews", "menuAbout")
+    assert [app.item(name).property("text") for name in names] == ["PDF öffnen …", "Start", "Einstellungen", "Kurzanleitung", "Neu in dieser Version", "Über PDF Tool"]
+    entry = app.item("menuSettings")
+    QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, entry.mapToScene(QPointF(entry.width() / 2, entry.height() / 2)).toPoint())
     pump(0.5)
-    assert offset("home") < 0.5  # … und endet genau am neuen
-    shell.togglePane()  # ausklappen: wieder Platz für die Überschrift
-    pump(0.5)
-    assert shell.property("paneExpanded") is True and gap() == 40 and offset("home") < 0.5
+    assert app.app.currentPage == "settings" and app.item("appMenu").property("opened") is False
     assert not app.messages()
 
 
@@ -499,12 +492,12 @@ def test_drop_on_start_page_routes_by_file_type(app, tmp_path: Path, excel_file:
     pdfsamples.healthy(pdf, pages=1)
     assert app.app.currentPage == "home"
     assert app.app.dragEnter([pdf.as_uri()]) is True
-    app.app.drop([pdf.as_uri()])  # seit 3.0.0: PDFs öffnet der PDF Reader
-    assert app.app.currentPage == "reader"
+    app.app.drop([pdf.as_uri()])  # seit 3.0.0: PDFs öffnet der PDF Reader – er erscheint mit dem geöffneten Dokument
     reader = app.runtime.reader.controller
     assert wait_until(lambda: reader.current is not None and reader.current.pageCount == 1, 60)
-    reader.closeCurrent()
-    app.navigate("home")
+    assert wait_until(lambda: app.app.currentPage == "reader", 5)
+    reader.closeCurrent()  # das letzte Dokument: zurück zur Startseite
+    assert wait_until(lambda: app.app.currentPage == "home", 5)
     app.app.drop([excel_file.as_uri()])
     assert app.app.currentPage == "create"
     assert wait_until(lambda: app.overview.analysis() is not None, 60)

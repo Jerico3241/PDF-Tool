@@ -154,10 +154,6 @@ def zwischenablage() -> str:
     return QGuiApplication.clipboard().text()
 
 
-def navigationsbereich(h):
-    return finde(h.item("shell"), lambda e: qml_typ(e).startswith("NavigationPane"))[0]
-
-
 def statusleiste(h):
     return finde(h.window.contentItem(), lambda e: qml_typ(e).startswith("StatusBar"))[0]
 
@@ -528,16 +524,11 @@ def test_toggle_switch_and_combobox_keyboard(ui_app) -> None:
 
 def test_scaling_does_not_break(ui_app) -> None:
     h = ui_app
-    navigation = navigationsbereich(h)
-    for breite, hoehe in ((760, 540), (1280, 720), (1920, 1080)):
+    leiste = h.item("appTabs")
+    for breite, hoehe in ((760, 540), (1280, 720), (1920, 1080), (760, 540)):
         h.window.resize(breite, hoehe)
         pump(0.4)
-        assert navigation.width() > 0
-    h.window.resize(760, 540)
-    pump(0.6)
-    shell = h.item("shell")
-    assert shell.property("mode") == "compact" and shell.property("paneExpanded") is False
-    assert navigation.width() == 48  # kompakte Navigation (nur Symbole)
+        assert leiste.width() == breite and leiste.height() == 40  # Tab-Leiste über die ganze Breite
 
 
 def test_long_status_is_elided_and_keeps_hints(ui_app) -> None:
@@ -738,33 +729,48 @@ def test_all_pages_prepared_at_startup(ui_app) -> None:
 
 
 def test_navigation_shows_finished_page_without_rebuild(ui_app) -> None:
+    """Seitenwechsel zeigen die fertige Seite – keine Seite erzeugt ein Element neu. Nur die Tab-Leiste erhält
+    beim ersten Öffnen eines Werkzeugs dessen Tab und behält ihn bei jedem weiteren Wechsel."""
     h = ui_app
     seiten = {key: h.item(f"page_{key}").property("item") for key in h.PAGES}
-    anzahl = len(list(elemente(h.window.contentItem())))
-    for key in ("layout", "settings", "create", "repair", "home", "settings"):
-        h.app.navigate(key)
-        platz = h.item(f"page_{key}")
-        # direkt nach dem Wechsel: dieselbe, fertig angeordnete Seite (kein Laden, kein Neuaufbau)
-        assert gleich(platz.property("item"), seiten[key]), key
-        assert platz.property("item").width() == platz.parentItem().width(), key
-        pump(0.3)
-        assert platz.isVisible() and platz.property("opacity") > 0.99, key
-    assert len(list(elemente(h.window.contentItem()))) == anzahl  # kein Element neu erzeugt
+    leiste = h.item("appTabs")
+
+    def ohne_leiste() -> int:
+        anzahl, stapel = 0, [h.window.contentItem()]
+        while stapel:
+            element = stapel.pop()
+            if not gleich(element, leiste):
+                anzahl += 1
+                stapel.extend(element.childItems())
+        return anzahl
+
+    anzahl = ohne_leiste()
+    gesamt = None
+    for runde in range(2):
+        for key in ("layout", "settings", "create", "repair", "home", "settings"):
+            h.app.navigate(key)
+            platz = h.item(f"page_{key}")
+            # direkt nach dem Wechsel: dieselbe, fertig angeordnete Seite (kein Laden, kein Neuaufbau)
+            assert gleich(platz.property("item"), seiten[key]), key
+            assert platz.property("item").width() == platz.parentItem().width(), key
+            pump(0.3)
+            assert platz.isVisible() and platz.property("opacity") > 0.99, key
+        assert ohne_leiste() == anzahl, runde  # kein Element neu erzeugt
+        if gesamt is not None:
+            assert len(list(elemente(h.window.contentItem()))) == gesamt  # jeder Tab entsteht nur einmal
+        gesamt = len(list(elemente(h.window.contentItem())))
 
 
 def test_resize_applies_breakpoints_immediately_without_animation(app) -> None:
-    """Während die Fenstergröße geändert wird, gelten Breakpoints sofort – ohne Animation der
-    Navigation und ohne Zwischenzustand der Spalten (wie in 2.6.1, auch mit Animationen)."""
+    """Während die Fenstergröße geändert wird, gelten die Spalten sofort – ohne Zwischenzustand (wie in 2.6.1,
+    auch mit Animationen). Die Seite hat die ganze Fensterbreite (keine Seitenleiste): zwei Spalten ab 804 px."""
     h = app
     h.navigate("create", 0.4)
-    shell = h.item("shell")
-    navigation = navigationsbereich(h)
     seite = h.item("createPage")
-    for breite, modus, spalten, navigationsbreite in ((1100, "wide", 2, 240), (900, "medium", 2, 48), (780, "compact", 1, 48), (1100, "wide", 2, 240)):
+    for breite, spalten in ((1100, 2), (810, 2), (790, 1), (1100, 2)):
         h.window.resize(breite, 700)
         pump(0.03)  # mitten im Ziehen: kürzer als jede Animation
-        assert shell.property("mode") == modus, breite
-        assert navigation.width() == navigationsbreite, (breite, navigation.width())  # keine Animation während des Resize
+        assert seite.width() == breite, (breite, seite.width())
         assert seite.property("columns") == spalten, (breite, seite.property("contentWidth"))
     pump(0.5)
 
