@@ -35,10 +35,11 @@ Request und jeden Stand von `main` vollständig – auf `windows-latest` in dies
 2. **Setup bauen** – `release_check.py` prüft danach Namen, Version, Prüfsumme und Release Notes.
 3. **Clean-Install-Test** der neuen Version: stille Installation, Prüfung, Programmstart, stille
    Deinstallation.
-4. **Upgrade-Test** nur von der unmittelbar vorherigen stabilen Version (z. B. **2.7.1 → 2.7.2**).
-   `windows-app/releases.py` bestimmt sie nach SemVer aus den veröffentlichten Releases (Betas und
-   Entwürfe zählen nie); das veröffentlichte Setup wird geladen, per SHA-256 geprüft und
-   zwischengespeichert – nie neu gebaut.
+4. **Upgrade-Test** nur von der unmittelbar vorherigen veröffentlichten Version: für eine stabile
+   Version die höchste stabile davor (z. B. **2.7.1 → 2.7.2**), für eine Beta die höchste Version
+   davor, auch eine Beta (z. B. **3.0.0-beta.2 → 3.1.0-beta.1**). `windows-app/releases.py` bestimmt
+   sie nach SemVer aus den veröffentlichten Releases (Entwürfe zählen nie); das veröffentlichte Setup
+   wird geladen, per SHA-256 geprüft und zwischengespeichert – nie neu gebaut.
 5. **Runtime-Smoke-Test** der eingebetteten Laufzeit (Module, Vertragsübersicht, Kundenakte, Vorschau,
    Stapel, Vertragsvergleich, PDF-Reparatur im Arbeitsprozess, Rohrekonstruktion, Updater).
 6. **QML-Smoke-Test** (Oberfläche aus der Ressource, Programmstart mit Fenster, Werkzeuge und Ansichten).
@@ -53,7 +54,9 @@ Request und jeden Stand von `main` vollständig – auf `windows-latest` in dies
 Veröffentlicht wird nur mit dem Workflow [`release.yml`](../.github/workflows/release.yml)
 („Release“, manuell auf `main`): Er lädt den Release Candidate des erfolgreichen main-Laufs für genau
 den Release-Commit und veröffentlicht ihn unverändert – ohne neuen Build und ohne erneute Tests.
-Einzelheiten und alle Prüfungen: [RELEASE.md](RELEASE.md).
+Ein Release, das jemand von Hand auf GitHub anlegt oder ändert, prüft der Workflow
+[`release-guard.yml`](../.github/workflows/release-guard.yml) („Release-Prüfung“) und setzt es bei
+einem Verstoß auf Entwurf zurück. Einzelheiten und alle Prüfungen: [RELEASE.md](RELEASE.md).
 
 Die vollständige historische Installer-Prüfung (Update vom Übersichten-Ersteller 2.2.0 und von
 PDF Tool 2.3.0, 2.4.0, 2.5.0, 2.6.0, 2.6.1, 2.7.0 mit Beispieldaten) läuft nur noch auf ausdrückliche
@@ -65,6 +68,10 @@ Nach dem Veröffentlichen einer Beta oder einer stabilen Version prüft der manu
 Anwender: veröffentlichte Vorversion installieren, Update-Kanal wählen; der Updater dieser Vorversion
 findet die neue Version bei GitHub, lädt und prüft sie (Stable bietet nie eine Beta an); danach
 Version, ein App-Eintrag, Programmstart, Kanal, Einstellungen und Vorlagen (`tests/smoke_update.py`).
+Ohne Angabe von `von` wählt `releases.py` die unmittelbar vorherige veröffentlichte Version – im
+Kanal Beta auch eine Beta, im Kanal Stable nur stabile Versionen. Der Laufname nennt Vorversion, Ziel
+und Kanal (`Update-Test 3.0.0-beta.2 → 3.1.0-beta.1 (beta)`); ein erfolgreicher Lauf auf eine Beta
+ist Voraussetzung für die stabile Version.
 
 ## Tests
 
@@ -134,6 +141,8 @@ und Logo der Downloadseite).
 
 ## Lizenzen
 
+PDF Tool steht unter der GPL-3.0-or-later; der Lizenztext liegt in [`LICENSE`](../LICENSE) und – wie
+`THIRD_PARTY_LICENSES.md` – im Programmordner des Setups (ohne Zustimmungsseite im Assistenten).
 PDF Tool nutzt ausschließlich Bibliotheken mit freien Lizenzen, darunter PySide6/Qt (LGPL-3.0,
 dynamisch geladen und ersetzbar), pikepdf (MPL-2.0) mit qpdf (Apache-2.0), pypdfium2
 (Apache-2.0/BSD-3-Clause) mit PDFium (BSD-3-Clause) und pypdf (BSD-3-Clause); die Symbole der
@@ -148,3 +157,9 @@ vorkompilierte EXE-/ZIP-Dateien werden nicht versioniert. Das Setup ist ohne Zer
 unsigniert; eine Signatur lässt sich über die Umgebungsvariable `SIGN_COMMAND` (z. B. `signtool`)
 im Build ergänzen. OAuth-Secrets gehören ausschließlich in Umgebungsvariablen und sind nicht im
 Repository enthalten.
+
+Dependabot ([`.github/dependabot.yml`](../.github/dependabot.yml)) schlägt Updates der GitHub Actions
+wöchentlich und der Laufzeitpakete (`windows-app/runtime-requirements.txt`) monatlich gebündelt in
+einem Pull Request vor; Sicherheitsupdates bleiben davon unberührt. Die übrigen festen
+Versionsangaben (Paketinstallation in den Workflows, `tests/smoke_runtime.py`,
+`THIRD_PARTY_LICENSES.md`) gehören im selben Pull Request angeglichen.

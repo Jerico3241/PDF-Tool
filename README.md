@@ -58,4 +58,5 @@ Das Repository enthält außerdem die Downloadseite (React, TanStack Start, Vite
 
 ## Lizenz
 
-GPL-3.0-or-later. Verwendete Bibliotheken und ihre Lizenzen: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+GPL-3.0-or-later – Lizenztext: [LICENSE](LICENSE). Verwendete Bibliotheken und ihre Lizenzen:
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

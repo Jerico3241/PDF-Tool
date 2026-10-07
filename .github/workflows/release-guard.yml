@@ -1,0 +1,90 @@
+name: Release-Prüfung
+
+# Prüft Releases, die von Hand auf GitHub erstellt oder geändert werden. Der Updater der App bietet
+# jedes veröffentlichte Release an, das kein Entwurf ist und passende Dateien hat – auch eines, das
+# nicht über den Workflow »Release« (release.yml) entstanden ist. Geprüft wird der aktuelle Stand des
+# Releases (windows-app/releases.py check-release):
+#   1. Tag vX.Y.Z oder vX.Y.Z-beta.N
+#   2. Beta-Tag ⇒ GitHub-Vorabversion (Prerelease)
+#   3. Stable-Tag ⇒ eine veröffentlichte Beta derselben Version, auf die ein Lauf von »Update-Test«
+#      (update-test.yml, main, Kanal beta) erfolgreich aktualisiert hat – wie im Workflow »Release«,
+#      aber ohne Hotfix-Ausnahme
+#   4. genau die Dateien PDF-Tool-Setup-<Version>.exe und PDF-Tool-Setup-<Version>.exe.sha256
+# Bei einem Verstoß wird das Release wieder zum Entwurf (Entwürfe bietet der Updater nie an) und der
+# Lauf schlägt mit der Begründung fehl – ebenso, wenn die Prüfung selbst nicht durchläuft.
+#
+# Releases, die »Release« (release.yml) mit GITHUB_TOKEN erstellt, lösen diesen Workflow nach
+# GitHub-Regel nicht aus (Ereignisse von GITHUB_TOKEN starten keine Workflows) – sie sind bereits
+# geprüft. Ändert jemand ein solches Release später von Hand, gelten die Regeln 1, 2 und 4; Regel 3
+# samt Hotfix-Regel hat »Release« beim Erstellen geprüft, solange Release und Dateien von
+# github-actions[bot] stammen.
+# GitHub startet diesen Workflow in der Fassung des Commits, auf den der Tag zeigt: Releases auf
+# Commits vor seiner Einführung prüft er nicht.
+
+on:
+  release:
+    types: [published, edited, prereleased, released]
+
+permissions: {}
+
+# Mehrere Ereignisse zu einem Release (z. B. »published« und »released«) nacheinander prüfen
+concurrency:
+  group: release-guard-${{ github.event.release.id }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: "Release ${{ github.event.release.tag_name }} prüfen"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # bei einem Verstoß das Release wieder zum Entwurf machen
+      actions: read # Läufe von »Update-Test« lesen
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Release prüfen (Tag, Vorabversion, Beta vor Stable mit Update-Test, Dateien)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: |
+          set -euo pipefail
+          # aktueller Stand des Releases (nicht der des Ereignisses) und die Läufe von »Update-Test« – nur lesend
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" > release.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/update-test.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=100" > update-tests.json
+          if ! python3 windows-app/releases.py check-release --release release.json --runs update-tests.json --repo "${GITHUB_REPOSITORY}" 2> "${RUNNER_TEMP}/verstoesse.txt"; then
+            cat "${RUNNER_TEMP}/verstoesse.txt" >&2
+            exit 1
+          fi
+
+      - name: Verstoß – Release wieder zum Entwurf machen (der Updater bietet es nicht mehr an)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # aktueller Tag des Releases; ist er nicht lesbar, der Tag des Ereignisses
+          if ! tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" --jq .tag_name)" || [ -z "${tag}" ]; then
+            tag="${EVENT_TAG}"
+          fi
+          gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --draft=true
+          reasons="$(cat "${RUNNER_TEMP}/verstoesse.txt" 2>/dev/null || true)"
+          if [ -z "${reasons}" ]; then
+            reasons="Die Prüfung konnte nicht vollständig laufen (siehe vorherige Schritte) – das Release gilt bis zur Klärung als nicht geprüft."
+          fi
+          {
+            echo "### Release ${tag} ist wieder ein Entwurf"
+            echo "Es verstößt gegen die Release-Regeln (docs/RELEASE.md) und wird so keinem Update-Kanal angeboten:"
+            echo
+            echo '```'
+            echo "${reasons}"
+            echo '```'
+            echo "Veröffentlicht wird über den Workflow »Release« (release.yml). Ein Release von Hand erst nach Behebung erneut veröffentlichen – dann prüft dieser Workflow es wieder."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "Sicherheitsabbruch: Release ${tag} verstößt gegen die Release-Regeln und ist wieder ein Entwurf (der Updater bietet Entwürfe nie an)." >&2
+          echo "${reasons}" >&2
+          exit 1

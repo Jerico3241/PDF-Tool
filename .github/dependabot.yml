@@ -9,3 +9,15 @@ updates:
       github-actions:
         patterns:
           - "*"
+  # Pakete der Windows-Laufzeit (windows-app/runtime-requirements.txt, gepinnt mit SHA-256): einmal im
+  # Monat alle Versionsupdates gebündelt in einem Pull Request. Sicherheitsupdates bleiben möglich –
+  # Intervall, Gruppe und Limit gelten nur für Versionsupdates.
+  - package-ecosystem: "pip"
+    directory: "/windows-app"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      python-laufzeit:
+        patterns:
+          - "*"
