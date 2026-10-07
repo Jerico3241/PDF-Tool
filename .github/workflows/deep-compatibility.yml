@@ -2,8 +2,9 @@ name: Deep Compatibility Test
 
 # Vollständige historische Installer-Prüfung – NUR manuell und auf ausdrückliche Anforderung
 # (nie bei Commits, Pull Requests oder Releases). Der normale Workflow »Windows-Setup« prüft nur
-# Clean Install und das Update von der unmittelbar vorherigen stabilen Version; die Daten älterer
-# Versionen prüft er schnell über Fixtures (tests/test_config_migration.py).
+# Clean Install und das Update von der unmittelbar vorherigen veröffentlichten Version (bei einer Beta
+# auch einer Beta); die Daten älterer Versionen prüft er schnell über Fixtures
+# (tests/test_config_migration.py).
 #
 # Ablauf: das aktuelle Setup einmal bauen, dann je Vorversion ein frischer Windows-Rechner:
 # veröffentlichtes Setup der Vorversion laden (nie neu bauen), installieren, Benutzerdaten anlegen,

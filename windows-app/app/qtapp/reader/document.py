@@ -1170,7 +1170,7 @@ class DocumentController(Observable):
             scans, _revision = result
             self.scanHint = any(scan["needs"] for scan in scans)
 
-        self.run(lambda session: session.ocr_scan(pages), done, refresh=False, priority=BACKGROUND, failed=lambda exc: _log().info("Prüfung auf Scans fehlgeschlagen: %s", type(exc).__name__))
+        self.run(lambda session: session.ocr_scan(pages), done, refresh=False, priority=BACKGROUND, failed=lambda exc: _log("ocr").info("Prüfung auf Scans fehlgeschlagen: %s", type(exc).__name__))
 
     @Slot("QVariantList")
     def recognizeText(self, selected) -> None:  # noqa: N802
@@ -1260,7 +1260,7 @@ class DocumentController(Observable):
             if summary.get("state") is not None:
                 self.apply_state(summary["state"])
                 self._reload_tool()
-            _log().info("Texterkennung: %d Seiten, %d Wörter, %.0f %% Sicherheit, %d ms", summary["pages"], summary["words"], summary["confidence"], (time.monotonic() - started) * 1000)
+            _log("ocr").info("Texterkennung: %d Seiten, %d Wörter, %.0f %% Sicherheit, %d ms", summary["pages"], summary["words"], summary["confidence"], (time.monotonic() - started) * 1000)
             if summary["pages"] == 0:
                 reason = "Die gewählten Seiten haben bereits Text – sie sind schon durchsuchbar." if summary["withText"] else "Auf den gewählten Seiten wurde kein Text erkannt."
                 self.app.notify("reader", "info", reason, title="Text erkennen", auto_hide=9000)
@@ -1280,7 +1280,7 @@ class DocumentController(Observable):
                 self.app.notify("reader", "info", "Die Texterkennung wurde abgebrochen. Das Dokument ist unverändert.", title="Abgebrochen", auto_hide=8000)
                 return
             if isinstance(exc, EditorError):
-                _log().warning("Texterkennung fehlgeschlagen: %s", type(exc).__name__)
+                _log("ocr").warning("Texterkennung fehlgeschlagen: %s", type(exc).__name__)
                 self.app.notify("reader", "error", str(exc), title="Text erkennen nicht möglich")
                 return
             self.report(exc, details)
@@ -2006,7 +2006,7 @@ class DocumentController(Observable):
             else:
                 backup = " – Sicherung des vorherigen Stands angelegt" if result.get("backup") else ""
                 self.app.set_status(f"Gespeichert: {result['name']}{backup}", "success")
-                _log().info("Gespeichert (%s): %d KB, %d Seiten geprüft, Sicherung %s, %d ms", _where(result["path"]), max(1, result["size"] // 1024), result["checked"], "ja" if result.get("backup") else "nein", (time.monotonic() - started) * 1000)
+                _log("save").info("Gespeichert (%s): %d KB, %d Seiten geprüft, Sicherung %s, %d ms", _where(result["path"]), max(1, result["size"] // 1024), result["checked"], "ja" if result.get("backup") else "nein", (time.monotonic() - started) * 1000)
                 self.reader.remember_recent(result["path"])
             if then:
                 then(True)
@@ -2052,12 +2052,12 @@ class DocumentController(Observable):
         Angaben ins Protokoll – ohne Pfad und ohne Inhalte. Der ungespeicherte Stand bleibt."""
         where = _where(self.path)
         if isinstance(exc, SaveFailed):
-            _log().warning("Speichern fehlgeschlagen (%s): %s", where, exc.log_text())
+            _log("save").warning("Speichern fehlgeschlagen (%s): %s", where, exc.log_text())
             actions = [("Speichern unter …", self.saveDocumentAs)] if exc.save_as else []
             self.app.notify("reader", "error", str(exc), title="Speichern nicht möglich", actions=actions)
             return
         if isinstance(exc, (EditorError, OSError)):
-            _log().warning("Speichern fehlgeschlagen (%s): %s%s", where, type(exc).__name__, _os_codes(exc))
+            _log("save").warning("Speichern fehlgeschlagen (%s): %s%s", where, type(exc).__name__, _os_codes(exc))
             message = str(exc) if isinstance(exc, EditorError) else f"Die Datei konnte nicht geschrieben werden ({exc.strerror or 'Ein-/Ausgabefehler'}). Die Originaldatei ist unverändert."
             self.app.notify("reader", "error", message, title="Speichern nicht möglich", actions=[("Speichern unter …", self.saveDocumentAs)])
             return
@@ -2083,7 +2083,7 @@ class DocumentController(Observable):
 
     def _recovery_failed(self, exc: BaseException) -> None:
         # Die Sitzungssicherung ist Hintergrundarbeit: kein Hinweis, aber nie stillschweigend verloren
-        _log().warning("Sitzungssicherung fehlgeschlagen (%s): %s%s", _where(self.path), type(exc).__name__, _os_codes(exc))
+        _log("save").warning("Sitzungssicherung fehlgeschlagen (%s): %s%s", _where(self.path), type(exc).__name__, _os_codes(exc))
 
     # Drucken ------------------------------------------------------------------------------------------------------
     @Slot()
@@ -2197,10 +2197,11 @@ def _excerpts(session, page: int, query: str, match_case: bool, whole_word: bool
     return result
 
 
-def _log():
+def _log(category: str = "pdf"):
+    """Logger eines festen Protokollbereichs (``diagnostics.applog``: pdf, save, render, ocr …) – ohne Inhalte."""
     from diagnostics.applog import get
 
-    return get("reader")
+    return get(category)
 
 
 def _where(path: str | None) -> str:

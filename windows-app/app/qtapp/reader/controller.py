@@ -130,6 +130,7 @@ class ReaderController(Observable):
             try:
                 image = session.render(page, max(8, min(int(width), MAX_WIDTH)), kind, region)
             except Exception as exc:  # noqa: BLE001 - eine Seite ohne Bild statt Absturz
+                _log("render").warning("Seite %d ließ sich nicht darstellen (%s): %s", page + 1, kind, type(exc).__name__)
                 deliver(None, type(exc).__name__)
                 return None
             if image is not None:
@@ -662,7 +663,7 @@ class ReaderController(Observable):
             try:
                 board.dataChanged.disconnect(self._clipboard_changed)
             except (RuntimeError, TypeError) as exc:  # nicht (mehr) verbunden
-                _log().info("Zwischenablage war nicht verbunden: %s", type(exc).__name__)
+                _log("ui").info("Zwischenablage war nicht verbunden: %s", type(exc).__name__)
 
     def _release_clipboard(self) -> None:
         """Vor dem Beenden: Unsere Daten in der Zwischenablage (in Python angelegt) durch Qt-eigene ersetzen –
@@ -762,7 +763,7 @@ class ReaderController(Observable):
             self.ocrLanguages = [{"code": code, "label": ocr.language_label(code)} for code in engine.languages] if engine is not None else []
             self.ocrState = "bereit" if engine is not None else "fehlt"
             if engine is None:
-                _log().info("Texterkennung: keine Engine gefunden")
+                _log("ocr").info("Texterkennung: keine Engine gefunden")
 
         if _OCR_PROBE["done"]:
             found(_OCR_PROBE["engine"])
@@ -770,7 +771,7 @@ class ReaderController(Observable):
         self.ocrState = "pruefen"
 
         def failed(exc: BaseException, _details: str) -> None:
-            _log().warning("Texterkennung: Suche fehlgeschlagen (%s)", type(exc).__name__)
+            _log("ocr").warning("Texterkennung: Suche fehlgeschlagen (%s)", type(exc).__name__)
             self.ocrState = "fehlt"
 
         self.app.worker.run(ocr.find_engine, found, failed)
@@ -872,7 +873,8 @@ def _looks_like_pdf(path: str) -> bool:
         return False
 
 
-def _log():
+def _log(category: str = "pdf"):
+    """Logger eines festen Protokollbereichs (``diagnostics.applog``: pdf, render, ocr, ui …) – ohne Inhalte."""
     from diagnostics.applog import get
 
-    return get("pdf")
+    return get(category)

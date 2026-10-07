@@ -5,7 +5,8 @@ name: Windows-Setup
 #   1. Tests – Kernlogik, Vorlagen, Regelwerk, Sicherung/Wiederherstellung, Diagnose,
 #      Datenmigration älterer Einstellungen (Fixtures 2.2.0 … 2.7.2), PDF reparieren, Updater
 #      (lokaler Testserver, nie Live-GitHub), PDF Editor; die Qt-Oberflächentests laufen gleichzeitig
-#      in fünf eigenen Jobs (je ein eigener Rechner)
+#      in sechs eigenen Jobs (je ein eigener Rechner); Texterkennung mit echtem Tesseract prüft der
+#      Runtime-Smoke-Test am gebündelten Tesseract des Setups (Schritt 5)
 #   2. Setup bauen (prüft Setup, Prüfsumme, Version und Release Notes)
 #   3. Clean-Install-Test der neuen Version
 #   4. Upgrade-Test: unmittelbar vorherige veröffentlichte Version → neue Version (nach SemVer
@@ -68,8 +69,10 @@ jobs:
             dateien: customers batch caret
           - gruppe: Vorlagen, Regelwerk, Sicherung und Diagnose
             dateien: templates rules backup
-          - gruppe: PDF Reader & Editor
-            dateien: reader objects reader_layout reader_motion
+          - gruppe: PDF Reader – Ansicht, Seiten, Formulare
+            dateien: reader reader_layout reader_v31 pages_v31 forms_v31
+          - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
+            dateien: objects objects_v31 edit_v31 reader_motion ocr
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -171,8 +174,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest windows-app/tests/test_config_migration.py -v -p no:cacheprovider
 
-      - name: 1. Tests (PDF Editor – Kern, Speichern, Text bearbeiten, Seiten, Bilder, Anmerkungen, Formulare, Eigenschaften)
-        run: python -m pytest windows-app/tests/test_editor_core.py windows-app/tests/test_editor_save.py windows-app/tests/test_editor_text.py windows-app/tests/test_editor_objects.py windows-app/tests/test_editor_pages.py windows-app/tests/test_editor_images.py windows-app/tests/test_editor_annotations.py windows-app/tests/test_editor_forms.py windows-app/tests/test_editor_properties.py -q -p no:cacheprovider
+      - name: 1. Tests (PDF Editor – Kern, Speichern, Text, Objekte, Seiten, Bilder, Anmerkungen, Formulare ausfüllen und gestalten, Anhänge, Texterkennung, Eigenschaften)
+        run: python -m pytest windows-app/tests/test_editor_core.py windows-app/tests/test_editor_save.py windows-app/tests/test_editor_text.py windows-app/tests/test_editor_objects.py windows-app/tests/test_editor_pages.py windows-app/tests/test_editor_images.py windows-app/tests/test_editor_annotations.py windows-app/tests/test_editor_forms.py windows-app/tests/test_editor_formdesign.py windows-app/tests/test_editor_properties.py windows-app/tests/test_editor_objectops.py windows-app/tests/test_editor_attachments.py windows-app/tests/test_editor_ocr.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider

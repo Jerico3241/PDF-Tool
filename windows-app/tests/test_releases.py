@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -577,3 +578,20 @@ def test_license_ships_with_the_setup_like_third_party_licenses() -> None:
     assert "LicenseFile" not in iss.split("[Setup]", 1)[1].split("[Languages]", 1)[0]
     assert "](LICENSE)" in (repo / "README.md").read_text(encoding="utf-8")
     assert (WORKFLOWS / "windows-setup.yml").read_text(encoding="utf-8").count('- "LICENSE"') == 2  # Änderungen bauen und prüfen
+
+
+def test_every_test_file_runs_in_the_setup_workflow() -> None:
+    """Jede Testdatei läuft im Workflow »Windows-Setup« (Qt-Dateien über die Matrix) – keine wird vergessen."""
+    text = (WORKFLOWS / "windows-setup.yml").read_text(encoding="utf-8")
+    listed = set(re.findall(r"tests/(test_[a-z0-9_]+)\.py", text))
+    for line in re.findall(r"dateien: (.+)", text):
+        listed |= {f"test_qt_{name}" for name in line.split()}
+    files = {path.stem for path in (ROOT / "tests").glob("test_*.py")}
+    assert sorted(files - listed) == []
+
+
+def test_icon_count_in_third_party_licenses_matches_the_icons() -> None:
+    """Die Zahl der Fluent-Symbole in THIRD_PARTY_LICENSES.md stimmt mit den mitgelieferten Dateien überein."""
+    note = (ROOT.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    match = re.search(r"(\d+) SVG-Symbole aus \*\*Fluent UI System Icons\*\*", note)
+    assert match is not None and int(match.group(1)) == len(list((ROOT / "app" / "qml" / "icons").glob("*.svg")))

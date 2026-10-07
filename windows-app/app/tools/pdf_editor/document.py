@@ -127,7 +127,8 @@ class EditorDocument:
             raise DamagedDocument(type(exc).__name__ + ": " + str(exc)[:240]) from exc
         try:
             warnings = list(pdf.get_warnings())
-        except Exception:  # noqa: BLE001 - Warnungen sind nur ein Hinweis
+        except Exception as exc:  # noqa: BLE001 - Warnungen sind nur ein Hinweis
+            _noted("Warnungen von qpdf nicht lesbar", exc)
             warnings = []
         report.repaired = bool(warnings)
         report.warnings = [str(w)[:200] for w in warnings[:20]]
@@ -218,8 +219,8 @@ class EditorDocument:
         self._view = pdfium.PdfDocument(data, password=password or None)
         try:
             self._view.init_forms()  # Formularfelder mit ihren Werten darstellen (vor dem ersten Laden einer Seite)
-        except Exception:  # noqa: BLE001 - ohne Formularumgebung erscheinen nur die gespeicherten Erscheinungsbilder
-            pass
+        except Exception as exc:  # noqa: BLE001 - ohne Formularumgebung erscheinen nur die gespeicherten Erscheinungsbilder
+            _noted("Formularumgebung von PDFium nicht verfügbar", exc)
         self._view_bytes = data  # PDFium liest aus diesem Puffer – solange gültig halten
         self._view_revision = self.revision
         return self._view
@@ -267,14 +268,14 @@ class EditorDocument:
             try:
                 textpage.close()
                 page.close()
-            except Exception:  # noqa: BLE001 - schon geschlossen
-                pass
+            except Exception as exc:  # noqa: BLE001 - schon geschlossen
+                _noted("Seite der Darstellung schließen", exc, cleanup=True)
         self._textpages.clear()
         if self._view is not None:
             try:
                 self._view.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 - schon geschlossen
+                _noted("Darstellung schließen", exc, cleanup=True)
         self._view = None
         self._view_bytes = None
         self._view_revision = -1
@@ -292,13 +293,13 @@ class EditorDocument:
             self._close_view()
         try:
             self.pdf.close()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001 - schon geschlossen
+            _noted("Dokument schließen", exc, cleanup=True)
         for source in self._sources:
             try:
                 source.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 - schon geschlossen
+                _noted("Quelldokument schließen", exc, cleanup=True)
         self._sources.clear()
         self._data = None
         self.password = None
@@ -387,3 +388,12 @@ def _fields(fields, depth: int = 0):
         kids = item.get("/Kids")
         if kids is not None:
             yield from _fields(kids, depth + 1)
+
+
+def _noted(action: str, exc: BaseException, *, cleanup: bool = False) -> None:
+    """Fehler ohne Folgen für das Dokument (Hinweise, Aufräumen schon geschlossener Teile): kein Abbruch,
+    aber im Protokoll (Bereich »pdf«, nur die Art des Fehlers – nie Inhalte). Aufräumen nur auf Stufe DEBUG."""
+    from diagnostics.applog import PDF, get
+
+    log = get(PDF)
+    (log.debug if cleanup else log.info)("%s: %s", action, type(exc).__name__)

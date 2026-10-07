@@ -762,14 +762,18 @@ erhalten.
 
 Lizenzen
 --------
+PDF Tool steht unter der GPL-3.0-or-later; der Lizenztext liegt im
+Programmordner in LICENSE.
 PDF Tool nutzt freie Bibliotheken, u. a. Python (PSF), pikepdf (MPL-2.0)
 mit qpdf (Apache-2.0), pypdfium2 (Apache-2.0/BSD-3-Clause) mit PDFium
 (BSD-3-Clause), pypdf (BSD-3-Clause), ReportLab (BSD), pandas, NumPy,
-openpyxl, xlrd und Pillow.
+openpyxl, xlrd, Pillow und für die Texterkennung Tesseract (Apache-2.0)
+mit seinen Bibliotheken.
 Die Übersicht steht im Programmordner in THIRD_PARTY_LICENSES.md, die
-Lizenztexte unter runtime\LICENSE.txt und
-runtime\Lib\site-packages\<Paket>.dist-info. Portions of this software are
-copyright © The FreeType Project (www.freetype.org). All rights reserved.
+Lizenztexte unter runtime\LICENSE.txt,
+runtime\Lib\site-packages\<Paket>.dist-info und ocr\LICENSE.txt. Portions
+of this software are copyright © The FreeType Project (www.freetype.org).
+All rights reserved.
 
 
 Für Entwickler: Setup bauen

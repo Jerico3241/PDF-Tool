@@ -28,7 +28,7 @@ Die GitHub-Action [`windows-setup.yml`](../.github/workflows/windows-setup.yml) 
 Request und jeden Stand von `main` vollständig – auf `windows-latest` in dieser Reihenfolge:
 
 1. **Tests:** Kernlogik, Updater (SemVer, Kanäle, Prüfsummen, Download und Hilfsprozess gegen einen
-   lokalen Testserver – nie gegen das echte GitHub), Qt-Oberfläche (ohne Bildschirm; in drei
+   lokalen Testserver – nie gegen das echte GitHub), Qt-Oberfläche (ohne Bildschirm; in sechs
    gleichzeitig laufenden Jobs) und die **Datenmigration älterer Einstellungen** –
    `tests/test_config_migration.py` lädt Fixtures im Format von 2.2.0 bis 2.7.0 in die aktuelle
    Version. Dafür wird kein altes Setup installiert.
