@@ -440,6 +440,23 @@ andere geprüft (die Datei wird erst ersetzt, wenn die neue fehlerfrei geöffnet
   Zugeschnitten wird die CropBox – der Inhalt außerhalb bleibt in der Datei (zum Entfernen: Schwärzen);
   »Zuschnitt zurücksetzen« zeigt wieder die ganze Seite.
 
+## KI-Assistent (optional, seit 3.2)
+
+Rechte Seitenleiste `assistant` (`Reader/AssistantPanel.qml`), nur wenn der Assistent in den Einstellungen
+eingeschaltet ist; Streifen und Kopf zeigen dann ein drittes Symbol. Ausschalten schließt die Seitenleiste in
+allen Tabs (`ReaderController.close_right_panel`).
+
+- **Text:** `DocumentController.assistant_texts` liest die Seitentexte im Arbeitsthread (`Session.page_texts`,
+  höchstens 2 Mio. Zeichen) einmal je Dokumentstand; `assistant/text.py` teilt sie in Abschnitte je Seite und
+  sucht mit BM25 die passenden für eine Frage.
+- **Antwort:** `AssistantController` startet den KI-Prozess bei Bedarf (`assistant/runtime.py`), schickt
+  Auszüge mit Seitenzahl und streamt die Antwort in die Zeile des Gesprächs (`KeyedListModel`, höchstens etwa
+  zwölfmal pro Sekunde). Seitenangaben werden zu Verweisen `page:N` (nur vorhandene Seiten), alles andere
+  bleibt maskierter Text (`StyledText`).
+- **Gespräche** gehören zum Dokument-Tab, nur im Arbeitsspeicher; geschlossene Tabs verwerfen ihres, eine
+  laufende Antwort ihres Tabs wird abgebrochen.
+- **Ohne Text** (Scan): Hinweis auf »Text erkennen (OCR)«, kein KI-Prozess.
+
 ## Texterkennung (OCR)
 
 `tools/pdf_editor/ocr.py` legt über gescannte Seiten eine unsichtbare Textebene – vollständig lokal
@@ -542,6 +559,8 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
 - Links öffnen Webadressen nur nach Rückfrage; Skripte, Programme und Dateien aus Links werden nie gestartet.
 - Die letzte Sitzung (nur mit der Einstellung) enthält nur Pfade und Seiten, lokal in den Einstellungen; das
   Support-Paket nennt davon nur die Anzahl. »Per E-Mail senden« verschickt nichts selbst.
+- KI-Assistent (nur eingeschaltet): Texte, Fragen und Antworten bleiben im Arbeitsspeicher und gehen nur an den
+  lokalen KI-Prozess (127.0.0.1, zufälliger Schlüssel); protokolliert werden nur Fehlerarten.
 
 ## Tests
 
@@ -602,12 +621,19 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   CropBox, gemischt), Lage der Treffer, Darstellung, Rückgängig, Ersetzen, Speichern, Abbruch, fehlende
   Sprache. Tests mit Tesseract laufen nur, wenn eine Engine gefunden wird; die Textebene prüfen die
   übrigen auch ohne.
+- KI-Assistent: `tests/test_assistant.py` (Katalog, Ablage, Abschnitte, Suche, Seitenangaben, Maskierung,
+  Anweisungen, KI-Prozess und Anfragen mit der Attrappe `fixtures/fake_llama_server.py`) und
+  `tests/test_qt_assistant.py` (Einrichten, Download über einen lokalen Testserver mit Weiterleitung und
+  `Range`, Prüfsumme, Fragen mit Seitenverweisen, Zusammenfassen in Teilen, Abbrechen, Tabs, Ausschalten).
 - Laufzeit und Setup: `tests/smoke_runtime.py` (Text direkt ändern, Schrift-Teilmenge einbetten,
-  speichern, Texterkennung mit der gebündelten Engine) und `tests/smoke_installer.ps1` (»Öffnen mit«,
-  zweiter Start reicht die PDF weiter, Standard-App für PDF unverändert, Deinstallation entfernt die
-  Einträge).
+  speichern, Texterkennung mit der gebündelten Engine, gebündelter llama-server mit einem Testmodell) und
+  `tests/smoke_installer.ps1` (»Öffnen mit«, zweiter Start reicht die PDF weiter, Standard-App für PDF
+  unverändert, KI-Laufzeit vorhanden, Deinstallation entfernt die Einträge und geladene Sprachmodelle).
 
-## Bekannte Einschränkungen (3.2.0-beta.1)
+## Bekannte Einschränkungen (3.2.0-beta.2)
+
+- KI-Assistent: rechnet auf dem Prozessor; liest nur Text (keine Bilder); Fragen erhalten die passenden
+  Abschnitte bis etwa 9.000 Zeichen, Zusammenfassungen höchstens etwa 60.000 Zeichen.
 
 - Textauswahl innerhalb einer Seite (nicht über Seitengrenzen hinweg).
 - Per E-Mail senden: Den Anhang setzt nur ein E-Mail-Programm mit Simple MAPI (z. B. Outlook, Thunderbird);
