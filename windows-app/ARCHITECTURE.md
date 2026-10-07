@@ -126,8 +126,10 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
 - `tasks.Worker.run(func, on_done, on_error)` – Excel-Prüfung, PDF-Erzeugung, Vorschau, Stapel,
   Hashing in Threads. Ergebnisse, Fehler und Zwischenmeldungen kommen über ein Qt-Signal
   (queued) in den GUI-Thread. **Hintergrund-Threads berühren nie QML-Objekte.**
-- PDF reparieren läuft je Datei in einem eigenen Prozess (`tools/pdf_repair/process.py`); der
-  Controller fragt die Meldungen aller laufenden Prozesse alle 80 ms im GUI-Thread ab – höchstens
+- PDF reparieren läuft in eigenen Arbeitsprozessen (`tools/pdf_repair/process.py`). Ein Prozess
+  erledigt mehrere Dateien nacheinander (bis zu 25; nach einem Fehler, einem Absturz oder „Abbrechen“
+  folgt ein frischer); gestartet wird er in einem Hilfsthread, beim Öffnen der Seite einer im Voraus.
+  Der Controller fragt die Meldungen aller laufenden Aufträge alle 30 ms im GUI-Thread ab – höchstens
   zwei gleichzeitig (Analysen), repariert wird nacheinander. „Abbrechen“ beendet die Prozesse und
   lässt die noch nicht begonnenen Dateien aus. Die Zeilen (`Repair.items`, `KeyedListModel`) melden
   Fortschritt nur für die betroffene Zeile und Rolle.
@@ -151,9 +153,13 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
 | `PdfTool.Pages` | Seiten: Start, Einstellungen, Vertragsübersichten (Erstellen, Darstellung, Vorschau, Stapel, Vergleich, Kunden), PDF reparieren |
 | `PdfTool.Dialogs` | Inhalte der Dialoge (Kurzanleitung, Über, Neuerungen, Kunden wählen …) |
 
-Seiten entstehen je einmal (Loader); die Startseite im ersten Bild, die übrigen danach im
-Hintergrund. Ein Seitenwechsel blendet die alte Seite aus und die fertige neue ein – nichts wird
-neu aufgebaut. Im Setup kommt die Oberfläche aus der Qt-Ressource `qrc:/qml` (`qml_rc.py`, erzeugt
+Seiten entstehen je einmal (Loader): die erste – die Startseite, bei »Öffnen mit« der Reader –
+synchron beim Laden der Oberfläche (sie steht im ersten Bild), die übrigen danach im Hintergrund.
+Sind alle geladen, meldet `PageHost` das über `App.pagesLoaded`; dann lädt der Reader die PDF-Engine
+(pikepdf, PDFium) im Arbeitsthread vor – beim Start mit einer PDF schon vor dem ersten Bild. Der
+Dokumentbereich des Readers (Tabs, Leisten, Ansicht, Seitenleisten) entsteht ebenfalls im
+Hintergrund, wird vorher ein PDF geöffnet, sofort. Ein Seitenwechsel blendet die alte Seite aus und
+die fertige neue ein – nichts wird neu aufgebaut. Im Setup kommt die Oberfläche aus der Qt-Ressource `qrc:/qml` (`qml_rc.py`, erzeugt
 von `windows-app/qmlres.py`).
 
 **Qt 6.11 und das Laden im Hintergrund:** Mit der schrittweisen Speicherbereinigung der QML-Engine
