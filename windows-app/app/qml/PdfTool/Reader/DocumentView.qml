@@ -454,6 +454,10 @@ Flickable {
             event.accepted = true
             return
         }
+        if (view.doc.tool === "formDesign" && view.editing === null && view.fieldKey(event)) {
+            event.accepted = true
+            return
+        }
         var page = view.height * 0.9
         switch (event.key) {
         case Qt.Key_Down:
@@ -491,6 +495,31 @@ Flickable {
             return
         }
         event.accepted = true
+    }
+
+    // Formular gestalten: Pfeiltasten verschieben das gewählte Feld (1 pt, mit Umschalt 10 pt), Entf löscht,
+    // Strg+D dupliziert, Eingabe/F2 öffnet die Eigenschaften, Esc hebt Feldart bzw. Auswahl auf
+    function fieldKey(event) {
+        var d = view.doc
+        if (event.key === Qt.Key_Escape && d.formKind !== "") { d.setFormKind(""); return true }
+        if (d.fieldSelection.key === undefined) return false
+        var step = (event.modifiers & Qt.ShiftModifier) ? 10 : 1
+        switch (event.key) {
+        case Qt.Key_Left: d.nudgeField(-step, 0); return true
+        case Qt.Key_Right: d.nudgeField(step, 0); return true
+        case Qt.Key_Up: d.nudgeField(0, -step); return true
+        case Qt.Key_Down: d.nudgeField(0, step); return true
+        case Qt.Key_Delete: case Qt.Key_Backspace: d.deleteField(""); return true
+        case Qt.Key_Escape: d.selectField(""); return true
+        case Qt.Key_Return: case Qt.Key_Enter: case Qt.Key_F2:
+            Qt.callLater(function() { d.editFieldProperties("") })
+            return true
+        case Qt.Key_D:
+            if (!(event.modifiers & Qt.ControlModifier)) return false
+            d.duplicateField("")
+            return true
+        }
+        return false
     }
 
     // Objekt bearbeiten (nur mit dem Fokus in der Seite – Eingabefelder behalten ihre Tasten): Tab wählt

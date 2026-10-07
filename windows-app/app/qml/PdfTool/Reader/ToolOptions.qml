@@ -28,6 +28,21 @@ Item {
         return null
     }
     readonly property bool ownAnnotation: annotation !== null && annotation.ours === true
+    // Formular gestalten: gewähltes Feld und Art des nächsten Feldes
+    readonly property bool designTool: tool === "formDesign"
+    readonly property var chosenField: designTool && doc ? doc.fieldSelection : ({})
+    readonly property bool fieldChosen: chosenField.key !== undefined
+    readonly property string formKind: designTool && doc ? doc.formKind : ""
+    function kindName(kind) {
+        switch (kind) {
+        case "text": return "Textfeld"
+        case "checkbox": return "Kontrollkästchen"
+        case "radio": return "Optionsfeld"
+        case "combo": return "Dropdown"
+        case "list": return "Liste"
+        default: return "Feld"
+        }
+    }
     readonly property bool coloredTool: ["addText", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox"].indexOf(tool) >= 0
     readonly property bool strokeTool: ["ink", "rect", "ellipse", "line", "arrow"].indexOf(tool) >= 0
     readonly property bool sizeTool: tool === "addText" || tool === "textbox"
@@ -49,6 +64,10 @@ Item {
         case "rect": case "ellipse": return "Rahmen aufziehen."
         case "line": case "arrow": return "Von Anfang zu Ende ziehen."
         case "form": return root.doc && Object.keys(root.doc.fieldPages).length > 0 ? "Felder anklicken und ausfüllen. Skripte im PDF werden nicht ausgeführt." : "Dieses PDF enthält keine ausfüllbaren Felder."
+        case "formDesign":
+            if (root.formKind !== "") return root.kindName(root.formKind) + ": Rahmen aufziehen oder klicken."
+            if (root.fieldChosen) return "Ziehen verschiebt, die Ecken ändern die Größe; Doppelklick: Eigenschaften. Pfeiltasten, Entf, Strg+D."
+            return "Feldart wählen und auf der Seite aufziehen – oder ein Feld anklicken. Rechtsklick legt ein Feld genau dort an."
         case "select": return root.annotationSelected ? (root.ownAnnotation ? "Ziehen verschiebt; die Ecken ändern die Größe." : "Kommentar aus einem anderen Programm – Text und Farbe lassen sich ändern, Ziehen verschiebt.") : ""
         default: return ""
         }
@@ -220,6 +239,32 @@ Item {
             PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "chevron_up"; tip: "In den Vordergrund"; onClicked: root.doc.arrangeImage(root.selected.page, root.selected.index, true) }
             PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "chevron_down"; tip: "In den Hintergrund"; onClicked: root.doc.arrangeImage(root.selected.page, root.selected.index, false) }
             PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "delete"; tip: "Bild löschen (Entf)"; onClicked: root.doc.deleteImage(root.selected.page, root.selected.index) }
+
+            // Formular gestalten: Feldart wählen (dann Rahmen aufziehen) bzw. »Auswählen«; Befehle des gewählten Feldes
+            Repeater {
+                model: root.designTool ? [
+                    { "kind": "", "icon": "cursor", "tip": "Felder auswählen, verschieben und in der Größe ändern" },
+                    { "kind": "text", "icon": "textbox", "tip": "Textfeld anlegen" },
+                    { "kind": "checkbox", "icon": "checkbox_checked", "tip": "Kontrollkästchen anlegen" },
+                    { "kind": "radio", "icon": "radio_button", "tip": "Optionsfeld anlegen (eine Gruppe; weitere Optionen über »Option hinzufügen«)" },
+                    { "kind": "combo", "icon": "chevron_down", "tip": "Dropdown (Auswahlliste) anlegen" },
+                    { "kind": "list", "icon": "list", "tip": "Liste anlegen" }
+                ] : []
+                PIconButton {
+                    required property var modelData
+                    objectName: "readerFormKind_" + (modelData.kind !== "" ? modelData.kind : "select")
+                    iconName: modelData.icon
+                    tip: modelData.tip
+                    checkable: true
+                    checked: root.formKind === modelData.kind
+                    onClicked: root.doc.setFormKind(modelData.kind)
+                }
+            }
+            Rectangle { visible: root.designTool && root.fieldChosen; Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.divider }
+            PIconButton { objectName: "readerFieldProperties"; visible: root.designTool && root.fieldChosen; iconName: "text_box_settings"; tip: "Eigenschaften … (Doppelklick, Eingabetaste)"; onClicked: root.doc.editFieldProperties("") }
+            PIconButton { objectName: "readerFieldAddOption"; visible: root.designTool && root.chosenField.kind === "radio"; iconName: "add"; tip: "Option hinzufügen"; onClicked: root.doc.addFieldOption("") }
+            PIconButton { objectName: "readerFieldDuplicate"; visible: root.designTool && root.fieldChosen && root.chosenField.kind !== "signature" && root.chosenField.kind !== "button"; iconName: "document_copy"; tip: "Duplizieren (Strg+D)"; onClicked: root.doc.duplicateField("") }
+            PIconButton { objectName: "readerFieldDelete"; visible: root.designTool && root.fieldChosen; iconName: "delete"; tip: "Löschen (Entf)"; onClicked: root.doc.deleteField("") }
 
             PText {
                 Layout.fillWidth: true

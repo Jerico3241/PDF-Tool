@@ -31,7 +31,7 @@ ZOOM_MIN, ZOOM_MAX = 10.0, 800.0
 PAGE_GAP = 12  # Abstand der Seiten (geräteunabhängige Pixel)
 VIEW_MARGIN = 16
 VIEW_MODES = ("continuous", "single", "two", "continuousTwo")
-TOOLS = ("select", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form")
+TOOLS = ("select", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form", "formDesign")
 RECOVERY_DELAY_MS = 4000
 SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
 NUDGE_DELAY_MS = 350  # Pfeiltasten: so lange sammeln, dann ein Schritt (eine Änderung, ein Rückgängig)
@@ -99,6 +99,10 @@ class DocumentController(Observable):
     imagesPageChanged, imagesPage = prop(int, "imagesPage", -1)
     fieldsChanged, fields = prop(list, "fields", [])
     fieldPagesChanged, fieldPages = prop(dict, "fieldPages", {})  # Seite (Text) → Widgets der Felder
+    # Formular gestalten: Widgets je Seite (mit allen Eigenschaften), das gewählte, anzulegende Feldart
+    designPagesChanged, designPages = prop(dict, "designPages", {})
+    fieldSelectionChanged, fieldSelection = prop(dict, "fieldSelection", {})
+    formKindChanged, formKind = prop(str, "formKind", "")  # "" = auswählen, sonst text, checkbox, radio, combo, list
     annotationsChanged, annotations = prop(list, "annotations", [])
     annotationPagesChanged, annotationPages = prop(dict, "annotationPages", {})  # Seite (Text) → Kommentare
     selectedObjectChanged, selectedObject = prop(dict, "selectedObject", {})  # {kind: image|annotation, page, index|key, view}
@@ -150,6 +154,8 @@ class DocumentController(Observable):
         self._paste_select: dict[int, tuple[list[float], list]] = {}  # nach dem Einfügen: Bereich, Objekte davor
         self._ocr_cancel: threading.Event | None = None  # Abbrechen der laufenden Texterkennung
         self._nudge = [0.0, 0.0]  # gesammelte Pfeiltasten-Verschiebung (Anzeige-Punkte)
+        self._field_nudge = [0.0, 0.0]  # dasselbe für ein Formularfeld (Formular gestalten)
+        self._select_field = ""  # nach dem Neuladen auswählen (neu angelegtes oder dupliziertes Feld)
         self._failure_details = ""  # Traceback des zuletzt fehlgeschlagenen Auftrags (Protokoll)
         self._closing = False
         self.state: dict = {}
@@ -426,8 +432,13 @@ class DocumentController(Observable):
             return
         if tool != "objects" and self.objectSelection:
             self.objectSelection = []  # Objektmodus verlassen: keine alte Auswahl stehen lassen
+        if tool != "formDesign":
+            self.fieldSelection = {}
+            self.formKind = ""
         self.tool = tool
         self.selectedObject = {}
+        if tool == "formDesign":
+            self.loadDesign()
         if tool == "objects":
             self._load_visible_objects()
         if tool in ("editText",):
@@ -1566,6 +1577,155 @@ class DocumentController(Observable):
             return
         self.run(lambda session: session.set_field(key, value), lambda _result: self.loadFields(), busy="", failed=lambda exc: (self.report(exc), self.loadFields()))
 
+    # Formular gestalten --------------------------------------------------------------------------------------------
+    @Slot()
+    def loadDesign(self) -> None:  # noqa: N802
+        def done(items) -> None:
+            by_page: dict[str, list] = {}
+            for item in items:
+                by_page.setdefault(str(item["page"]), []).append(item)
+            self.designPages = by_page
+            wanted = self._select_field or self.fieldSelection.get("key", "")
+            self._select_field = ""
+            self.fieldSelection = next((item for item in items if item["key"] == wanted), {}) if wanted else {}
+
+        self.run(lambda session: session.design_widgets(), done, refresh=False, priority=VIEW, key="design")
+
+    @Slot(str)
+    def setFormKind(self, kind: str) -> None:  # noqa: N802
+        """Art des nächsten Feldes (Rahmen aufziehen oder klicken legt es an); »« = Felder auswählen."""
+        from tools.pdf_editor import formdesign
+
+        self.formKind = kind if kind in formdesign.KINDS else ""
+        if self.formKind:
+            self.fieldSelection = {}
+
+    @Slot(str)
+    def selectField(self, key: str) -> None:  # noqa: N802
+        self.fieldSelection = next((item for items in self.designPages.values() for item in items if item["key"] == key), {}) if key else {}
+
+    def _design_op(self, func, title: str, select: bool = False) -> None:
+        """Änderung am Formular: danach die Felder neu laden (``select``: das gelieferte Widget auswählen)."""
+        if not self.edit_allowed("edit"):
+            return
+        if not (self.permissions or {}).get("annotate", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben das nicht.", title="Nicht erlaubt")
+            return
+
+        def done(result) -> None:
+            if select and isinstance(result, str):
+                self._select_field = result
+            self.edited(title)
+            self.loadDesign()
+
+        self.run(func, done, busy="", failed=lambda exc: (self.report(exc), self.loadDesign()))
+
+    def _chosen_field(self, key: str = "") -> str:
+        return key or self.fieldSelection.get("key", "")
+
+    @Slot(int, "QVariantList")
+    def createField(self, page: int, rect: list) -> None:  # noqa: N802
+        """Feld der gewählten Art anlegen: im aufgezogenen Rahmen bzw. – bei einem Klick – in Standardgröße
+        ab dieser Stelle (Anzeige-Koordinaten). Danach ist es ausgewählt und »Auswählen« wieder aktiv."""
+        from tools.pdf_editor import formdesign
+
+        kind = self.formKind
+        if kind not in formdesign.KINDS or not 0 <= page < self.pageCount:
+            return
+        box = [float(v) for v in rect]
+        if box[2] - box[0] < 4 and box[3] - box[1] < 4:
+            width, height = formdesign.SIZES[kind]
+            box = [box[0], box[1], box[0] + width, box[1] + height]
+        self.formKind = ""
+        self._design_op(lambda session: session.create_field(page, kind, box), f"{formdesign.TITLES[kind]} hinzugefügt", select=True)
+
+    @Slot(str, str)
+    def createFieldAt(self, kind: str, at: str) -> None:  # noqa: N802
+        """Kontextmenü »… hier anlegen«: ``at`` = »Seite,u,v« (Anzeige-Koordinaten)."""
+        page, u, v = (float(part) for part in at.split(","))
+        self.setFormKind(kind)
+        self.createField(int(page), [u, v, u, v])
+
+    @Slot(str, float, float)
+    def moveField(self, key: str, du: float, dv: float) -> None:  # noqa: N802
+        key = self._chosen_field(key)
+        if not key or (abs(du) < 0.25 and abs(dv) < 0.25):
+            return
+        chosen = self.fieldSelection
+        if chosen.get("key") == key:  # Auswahl gleich an der neuen Stelle zeigen
+            view = chosen["view"]
+            self.fieldSelection = {**chosen, "view": [view[0] + du, view[1] + dv, view[2] + du, view[3] + dv]}
+        self._design_op(lambda session: session.move_field(key, du, dv), "Feld verschoben")
+
+    @Slot(float, float)
+    def nudgeField(self, du: float, dv: float) -> None:  # noqa: N802
+        """Pfeiltasten: Auswahl sofort mitbewegen, die Änderung gesammelt als ein Schritt."""
+        chosen = self.fieldSelection
+        if not chosen:
+            return
+        self._field_nudge[0] += du
+        self._field_nudge[1] += dv
+        view = chosen["view"]
+        self.fieldSelection = {**chosen, "view": [view[0] + du, view[1] + dv, view[2] + du, view[3] + dv]}
+        self.app.timers.later(f"reader:fieldnudge:{self.ident}", NUDGE_DELAY_MS, self._flush_field_nudge)
+
+    def _flush_field_nudge(self) -> None:
+        du, dv = self._field_nudge
+        self._field_nudge = [0.0, 0.0]
+        chosen = self.fieldSelection
+        if not chosen:
+            return
+        view = chosen["view"]
+        self.fieldSelection = {**chosen, "view": [view[0] - du, view[1] - dv, view[2] - du, view[3] - dv]}
+        self.moveField(chosen["key"], du, dv)
+
+    @Slot(str, "QVariantList")
+    def resizeField(self, key: str, rect: list) -> None:  # noqa: N802
+        key = self._chosen_field(key)
+        box = [float(v) for v in rect]
+        if not key:
+            return
+        if self.fieldSelection.get("key") == key:
+            self.fieldSelection = {**self.fieldSelection, "view": box}
+        self._design_op(lambda session: session.resize_field(key, box), "Feldgröße geändert")
+
+    @Slot(str)
+    def deleteField(self, key: str = "") -> None:  # noqa: N802
+        key = self._chosen_field(key)
+        if not key:
+            return
+        if self.fieldSelection.get("key") == key:
+            self.fieldSelection = {}
+        self._design_op(lambda session: session.delete_field(key), "Feld gelöscht")
+
+    @Slot(str)
+    def duplicateField(self, key: str = "") -> None:  # noqa: N802
+        key = self._chosen_field(key)
+        if key:
+            self._design_op(lambda session: session.duplicate_field(key), "Feld dupliziert", select=True)
+
+    @Slot(str)
+    def addFieldOption(self, key: str = "") -> None:  # noqa: N802
+        """Optionsgruppe: eine weitere Option (darunter bzw. daneben)."""
+        key = self._chosen_field(key)
+        if key:
+            self._design_op(lambda session: session.add_field_option(key), "Option hinzugefügt", select=True)
+
+    @Slot(str)
+    def editFieldProperties(self, key: str = "") -> None:  # noqa: N802
+        """Dialog »Feldeigenschaften«: geänderte Werte werden als ein Schritt übernommen."""
+        key = self._chosen_field(key)
+        item = next((entry for items in self.designPages.values() for entry in items if entry["key"] == key), None)
+        if item is None:
+            return
+        self.fieldSelection = item
+        answer, data = self.app.dialogs.ask("form_field", "Feldeigenschaften", primary="Übernehmen", close="Abbrechen", data={"field": dict(item)}, width=560)
+        if answer != "primary":
+            return
+        changes = field_changes(item, data or {})
+        if changes:
+            self._design_op(lambda session: session.field_properties(key, changes), "Feldeigenschaften geändert")
+
     # Seiten -----------------------------------------------------------------------------------------------------------
     def _page_op(self, func, title: str, done: Callable[[Any], None] | None = None) -> None:
         if not self.edit_allowed("assemble"):
@@ -1790,6 +1950,8 @@ class DocumentController(Observable):
             self.loadImages(self.imagesPage if self.imagesPage >= 0 else self.currentPage)
         elif self.tool == "form":
             self.loadFields()
+        elif self.tool == "formDesign":
+            self.loadDesign()
         self.loadAnnotations()
         self.loadAttachments()
 
@@ -1967,6 +2129,36 @@ class DocumentController(Observable):
 
         self.engine.submit(lambda: close(self.session), priority=EDIT, label="schließen")
         self.closed.emit()
+
+
+def field_changes(item: dict, data: dict) -> dict:
+    """Aus dem Dialog »Feldeigenschaften« nur die geänderten Werte (Namen wie ``formdesign.PROPERTIES``)."""
+    kind = item.get("kind", "")
+    wanted: dict = {"name": str(data.get("name", item["name"].rsplit(".", 1)[-1])), "tooltip": str(data.get("tooltip", item["tooltip"])),
+                    "required": bool(data.get("required", item["required"])), "readOnly": bool(data.get("readOnly", item["readOnly"])),
+                    "border": bool(data.get("border", item["border"])), "background": bool(data.get("background", item["background"]))}
+    current: dict = {"name": item["name"].rsplit(".", 1)[-1], "tooltip": item["tooltip"], "required": item["required"], "readOnly": item["readOnly"],
+                     "border": item["border"], "background": item["background"]}
+    if kind == "text":
+        wanted["multiline"], current["multiline"] = bool(data.get("multiline", item["multiline"])), item["multiline"]
+        try:
+            wanted["maxLength"] = max(0, int(str(data.get("maxLength", item["maxLength"])).strip() or 0))
+        except ValueError:
+            wanted["maxLength"] = item["maxLength"]
+        current["maxLength"] = item["maxLength"]
+    if kind in ("text", "combo", "list"):
+        wanted["fontSize"], current["fontSize"] = float(data.get("fontSize", item["fontSize"]) or 0), float(item["fontSize"])
+    if kind in ("text", "combo"):
+        wanted["align"], current["align"] = str(data.get("align", item["align"])), item["align"]
+    if kind in ("combo", "list"):
+        lines = data.get("options", item["options"])
+        if isinstance(lines, str):
+            lines = lines.splitlines()
+        wanted["options"] = [" ".join(str(line).split()) for line in lines if str(line).strip()]
+        current["options"] = list(item["options"])
+    if kind in ("checkbox", "radio"):
+        wanted["export"], current["export"] = str(data.get("export", item["export"])).strip(), item["export"]
+    return {name: value for name, value in wanted.items() if value != current[name]}
 
 
 def _size_label(size: int) -> str:

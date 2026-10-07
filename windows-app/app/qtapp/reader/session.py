@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, export, forms, images, metadata, objectops, ocr, outline, pages, recovery, render, save, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, export, formdesign, forms, images, metadata, objectops, ocr, outline, pages, recovery, render, save, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
@@ -539,6 +539,69 @@ class Session:
 
     def set_field(self, key: str, value) -> None:
         forms.set_value(self.document, self.history, key, value)
+
+    # Formulare gestalten (Koordinaten der Anzeige, je Seite) --------------------------------------------------
+    def design_widgets(self) -> list[dict]:
+        result = []
+        for item in formdesign.list_widgets(self.document):
+            geo = self.document.geometry(item.page)
+            result.append({
+                "key": item.key, "field": item.field, "name": item.name, "kind": item.kind, "page": item.page,
+                "view": [round(v, 2) for v in geo.rect_to_view(item.rect)], "export": item.export, "tooltip": item.tooltip,
+                "required": item.required, "readOnly": item.read_only, "multiline": item.multiline, "maxLength": item.max_length,
+                "fontSize": item.font_size, "align": item.align, "options": list(item.options), "border": item.border,
+                "background": item.background, "siblings": item.siblings, "ours": item.ours,
+            })
+        return result
+
+    def _page_rect(self, page: int, view_rect) -> tuple[float, float, float, float]:
+        return self.document.geometry(page).rect_to_page(normalize(tuple(float(v) for v in view_rect)))
+
+    def _free_spot(self, page: int, view_rect, gap: float = 8.0) -> list[float]:
+        """Platz für eine Kopie: darunter, sonst rechts daneben, sonst leicht versetzt (in der Anzeige)."""
+        geo = self.document.geometry(page)
+        u0, v0, u1, v1 = view_rect
+        width, height = u1 - u0, v1 - v0
+        if v1 + gap + height <= geo.height:
+            return [u0, v1 + gap, u1, v1 + gap + height]
+        if u1 + gap + width <= geo.width:
+            return [u1 + gap, v0, u1 + gap + width, v1]
+        return [u0 + 12, v0 + 12, u1 + 12, v1 + 12]
+
+    def _widget_view(self, key: str) -> tuple[int, list[float]]:
+        for item in formdesign.list_widgets(self.document):
+            if item.key == key:
+                return item.page, list(self.document.geometry(item.page).rect_to_view(item.rect))
+        raise EditorError("Das Formularfeld ist nicht mehr vorhanden.")
+
+    def create_field(self, page: int, kind: str, view_rect) -> str:
+        return formdesign.create(self.document, self.history, page, kind, self._page_rect(page, view_rect))
+
+    def move_field(self, key: str, du: float, dv: float) -> None:
+        page, view = self._widget_view(key)
+        moved = self._page_rect(page, [view[0] + du, view[1] + dv, view[2] + du, view[3] + dv])
+        current = self._page_rect(page, view)
+        formdesign.move(self.document, self.history, [key], moved[0] - current[0], moved[1] - current[1])
+
+    def resize_field(self, key: str, view_rect) -> None:
+        page, _view = self._widget_view(key)
+        formdesign.resize(self.document, self.history, key, self._page_rect(page, view_rect))
+
+    def delete_field(self, key: str) -> None:
+        formdesign.delete(self.document, self.history, [key])
+
+    def duplicate_field(self, key: str) -> str:
+        page, view = self._widget_view(key)
+        target = self._page_rect(page, self._free_spot(page, view))
+        current = self._page_rect(page, view)
+        return formdesign.duplicate(self.document, self.history, [key], target[0] - current[0], target[1] - current[1])[0]
+
+    def add_field_option(self, key: str) -> str:
+        page, view = self._widget_view(key)
+        return formdesign.add_option(self.document, self.history, key, self._page_rect(page, self._free_spot(page, view, 6.0)))
+
+    def field_properties(self, key: str, changes: dict) -> None:
+        formdesign.set_properties(self.document, self.history, key, changes)
 
     # Anhänge ------------------------------------------------------------------------------------------------------
     def attachments(self) -> list[dict]:

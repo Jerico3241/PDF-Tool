@@ -149,6 +149,7 @@ T.Popup {
                             case "password": return passwordContent
                             case "reader_properties": return readerPropertiesContent
                             case "ocr": return ocrContent
+                            case "form_field": return fieldPropertiesContent
                             default: return null
                             }
                         }
@@ -216,4 +217,5 @@ T.Popup {
     Component { id: passwordContent; PasswordContent {} }
     Component { id: readerPropertiesContent; ReaderPropertiesContent {} }
     Component { id: ocrContent; OcrContent {} }
+    Component { id: fieldPropertiesContent; FieldPropertiesContent {} }
 }

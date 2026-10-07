@@ -13,3 +13,4 @@ RestoreSummaryContent 1.0 RestoreSummaryContent.qml
 PasswordContent 1.0 PasswordContent.qml
 ReaderPropertiesContent 1.0 ReaderPropertiesContent.qml
 OcrContent 1.0 OcrContent.qml
+FieldPropertiesContent 1.0 FieldPropertiesContent.qml

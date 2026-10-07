@@ -292,6 +292,21 @@ Seitenstand (Revision), sonst wird neu analysiert.
   Erscheinungsbild wird neu erzeugt, damit der Wert in jedem Programm gleich aussieht.
   Schreibgeschützte, Passwort- und Signaturfelder werden nicht geändert; bei XFA wird nur der
   AcroForm-Teil bearbeitet. **PDF-JavaScript wird nie ausgeführt** (auch keine Berechnungen).
+- **Formulare gestalten** (Werkzeug »Formular gestalten«, Pfeil neben »Formular«; Engine
+  `formdesign.py`): Textfeld, Kontrollkästchen, Optionsfeld (Gruppe; weitere Optionen über »Option
+  hinzufügen«), Dropdown und Liste anlegen – Feldart wählen und einen Rahmen aufziehen, klicken
+  (Standardgröße) oder per Rechtsklick »… hier«. Felder ziehen verschiebt sie, die Ecken ändern die
+  Größe (frei, mit Umschalt im Seitenverhältnis), Pfeiltasten verschieben (1 pt, mit Umschalt 10 pt;
+  gesammelt als ein Schritt), Strg+D dupliziert (bei Optionsfeldern: neue Option derselben Gruppe), Entf
+  löscht. Doppelklick, Eingabetaste oder »Eigenschaften …« öffnet den Dialog »Feldeigenschaften«:
+  Name, Kurzinfo, Pflichtfeld, schreibgeschützt, mehrzeilig, Zeichenzahl, Schriftgröße, Ausrichtung,
+  Optionen, Exportwert, Rahmen und Hintergrund. Neue Felder sind gewöhnliche AcroForm-Felder mit
+  gezeichneten Erscheinungsbildern für jeden Zustand (ohne Schrift für Haken und Punkt) und
+  Standardschriften in den Formularressourcen – sie lassen sich in jedem Programm ausfüllen. Jede
+  Änderung ist ein Schritt für Rückgängig; Arrays und Dictionaries werden nie in place verändert.
+  Fremde Kästchen behalten ihr Aussehen, solange Rahmen und Hintergrund nicht geändert werden;
+  Signaturfelder und Schaltflächen lassen sich verschieben, skalieren und löschen, aber nicht
+  duplizieren. XFA-Formulare werden nicht umgestaltet (ein XFA-Programm zeigte neue Felder nicht).
 
 ## Texterkennung (OCR)
 
@@ -393,8 +408,12 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
 
 ## Tests
 
-- Engine: `tests/test_editor_*.py` (Kern, Text, Seiten, Bilder, Anmerkungen, Formulare,
-  Eigenschaften) mit künstlichen PDFs aus `tests/editorsamples.py`.
+- Engine: `tests/test_editor_*.py` (Kern, Text, Seiten, Bilder, Anmerkungen, Formulare ausfüllen und
+  gestalten, Eigenschaften) mit künstlichen PDFs aus `tests/editorsamples.py`.
+- Formulare gestalten: `tests/test_editor_formdesign.py` (alle Feldarten anlegen, ausfüllen, speichern,
+  neu öffnen; verschieben, Größe, duplizieren, löschen, Eigenschaften, Rückgängig, XFA, Berechtigungen)
+  und `tests/test_qt_forms_v31.py` (Werkzeugleiste, Rahmen aufziehen, Klick, Kontextmenü, Ziehen,
+  Ecken, Strg+D, Entf, Pfeiltasten, Dialog, danach ausfüllen und speichern).
 - Oberfläche: `tests/test_qt_reader.py` – Maus und Tastatur wie von Hand (Auswahl, Zoom mit
   Strg+Mausrad, Text ändern, Zeichnen, Bilder, Formulare, Seiten organisieren, Speichern, Passwort,
   beschädigte und signierte PDFs, »Öffnen mit«, Sitzungssicherung, Datenschutz).
