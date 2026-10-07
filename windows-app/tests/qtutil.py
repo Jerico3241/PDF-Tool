@@ -171,18 +171,12 @@ class Harness:
     PAGES = ("home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings")
 
     def wait_pages(self, timeout: float = 20.0) -> bool:
-        """Warten, bis alle verfügbaren Seiten im Hintergrund geladen sind (wie nach dem Start)."""
+        """Warten, bis alle verfügbaren Seiten im Hintergrund geladen sind (wie nach dem Start).
 
-        def loaded() -> bool:
-            for key in self.PAGES:
-                if key in self.app.unavailablePages:
-                    continue
-                slot = self.item(f"page_{key}")
-                if slot is None or slot.property("item") is None:  # Seite noch nicht fertig
-                    return False
-            return True
-
-        return wait_until(loaded, timeout)
+        Über ``App.pagesLoaded`` (meldet die Oberfläche) statt über den Elementbaum: Ihn alle 10 ms in
+        Python zu durchsuchen hielte fast durchgehend den GIL – das Laden der Seiten selbst (Bindungen an
+        die Python-Controller) dauerte damit ein Vielfaches."""
+        return wait_until(lambda: self.app.pagesLoaded, timeout)
 
     # Oberfläche ------------------------------------------------------------------------------
     def item(self, name: str):
