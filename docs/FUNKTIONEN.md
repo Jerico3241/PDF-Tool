@@ -24,7 +24,7 @@ reparieren“ werden PDFs zur Reparatur hinzugefügt. Der Reader erscheint mit d
 
 | Werkzeug | Zweck | Code |
 | --- | --- | --- |
-| **PDF Reader & Editor** (seit 3.0.0) | Öffnet PDFs in Tabs zum Lesen (Zoom, Ansichten, Miniaturen, Lesezeichen, Suche, Textauswahl, Drucken) und Bearbeiten: Text direkt im PDF ändern oder hinzufügen, Bilder, Seiten organisieren, Kommentare, Formulare, Eigenschaften – mit Rückgängig, sicherem Speichern und Sitzungssicherung. Details: [PDF-EDITOR.md](PDF-EDITOR.md) | Fachlogik: `app/tools/pdf_editor/` · Controller: `app/qtapp/reader/` · Seiten: `app/qml/PdfTool/Reader/` |
+| **PDF Reader & Editor** (seit 3.0.0) | Öffnet PDFs in Tabs zum Lesen (Zoom, Ansichten, Miniaturen, Lesezeichen, Suche, Textauswahl, Links, Drucken) und Bearbeiten: Text direkt im PDF ändern oder hinzufügen, Bilder, Seiten organisieren und zuschneiden, Kommentare, Stempel und Unterschrift, Formulare, Lesezeichen, Links, Eigenschaften; vor dem Weitergeben schwärzen, bereinigen, mit Kennwort schützen, reduzieren, verkleinern, mit Kopf-/Fußzeile, Seitenzahlen oder Wasserzeichen versehen (seit 3.2) – mit Rückgängig, sicherem Speichern und Sitzungssicherung. Details: [PDF-EDITOR.md](PDF-EDITOR.md) | Fachlogik: `app/tools/pdf_editor/` · Controller: `app/qtapp/reader/` · Seiten: `app/qml/PdfTool/Reader/` |
 | **Vertragsübersichten** | Erstellt professionelle Vertragsübersichten aus Excel-Dateien – einzeln oder als Stapel, mit Excel-Fettschrift, Vorlagen, Regelwerk, formatierten Kopf- und Fußzeilen, Textbausteinen, Zyklus-Regeln, Live-Vorschau, optionaler Kundenakte mit Wiedererkennung bekannter Kunden und Vertragsvergleich mit dem letzten Stand | Fachlogik: `app/tools/contract_overview/` (`overview.py`, `customers/` für die Kundenakte, `batch/` für den Stapel, `history/` für den Vertragsvergleich, `templates/` für Vorlagen, `rules/` für das Regelwerk), `app/engine.py`, `app/excelstyle.py`, `app/richtext.py`, `app/pdffonts.py` · Controller: `app/qtapp/contracts/` · Seiten: `app/qml/PdfTool/Pages/` |
 | **PDF reparieren** | Analysiert beschädigte PDF-Dateien – eine oder mehrere auf einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen, bis zur Rekonstruktion der Dokumentstruktur aus den noch vorhandenen Objekten; Ausgabenamen je Datei, nie wird eine vorhandene Datei überschrieben | Fachlogik: `app/tools/pdf_repair/` (`batch.py` für Liste, Zustände und Ausgabenamen, `recovery/` für die erweiterte Wiederherstellung) · Controller: `app/qtapp/repair.py` · Seiten: `app/qml/PdfTool/Pages/RepairPage.qml`, `RepairItem.qml` |
 
@@ -34,6 +34,57 @@ Logik; gemeinsam sind nur Fenster, Tab-Leiste, Design und Dialoge (`app/qtapp/ap
 unter `app/tools/` (Fachlogik ohne Oberfläche), einen Controller unter `app/qtapp/`, eine Seite
 unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – siehe
 [`windows-app/ARCHITECTURE.md`](../windows-app/ARCHITECTURE.md).
+
+## PDF Reader & Editor: Schützen und Weitergeben (seit 3.2)
+
+In der Werkzeugleiste des Readers stehen zwei neue Befehle: **Schützen** (Schild) und **Seiten gestalten**.
+Alles läuft lokal; jede Änderung lässt sich rückgängig machen, solange das Dokument offen ist, und wird beim
+Speichern geprüft. Technische Einzelheiten: [PDF-EDITOR.md](PDF-EDITOR.md#schützen-und-weitergeben-seit-32).
+
+- **Schwärzen:** Bereiche aufziehen oder Text markieren, rot umrandet vorgemerkt; »Schwärzen anwenden«
+  entfernt Text, Bildpunkte, Grafiken, Kommentare und Formularfelder im Bereich wirklich aus der Datei –
+  nicht nur abgedeckt. **Suchen und schwärzen** merkt IBANs (mit Prüfziffer), E-Mail-Adressen,
+  Telefonnummern, Datumsangaben und eigene Begriffe vor. Rechtsklick entfernt eine Markierung.
+- **Dokument bereinigen:** Metadaten, Skripte und Aktionen, Anhänge, versteckte Daten und auf Wunsch
+  Kommentare entfernen – vorher wird gezählt, was es gibt.
+- **Kennwortschutz:** Kennwort zum Öffnen und/oder Einschränkungen (Drucken, Kopieren, Ändern …) mit einem
+  eigenen Berechtigungskennwort; AES-256. Schutz ändern oder entfernen; bei eingeschränkten PDFs hebt das
+  Berechtigungskennwort die Einschränkungen auf.
+- **Reduzieren:** Formularfelder, Kommentare, Stempel und Unterschriften fest in die Seite übernehmen.
+- **PDF verkleinern:** Kopie mit neu berechneten Bildern (Klein, Ausgewogen, Hoch); das Original bleibt.
+- **Seiten gestalten:** Kopf- und Fußzeile mit Seitenzahl, Seitenanzahl, Datum, Dateiname und
+  Bates-Nummer; Wasserzeichen (Text, Farbe, Deckkraft, Winkel, über oder hinter dem Inhalt); beides
+  ersetzbar und wieder entfernbar. **Seiten zuschneiden** (Millimeter oder an den Inhalt angepasst),
+  **Lesezeichen** hinzufügen.
+- **Unterschreiben und Stempeln** (Werkzeug neben »Formular«): Unterschrift zeichnen oder aus einem Bild
+  einlesen, auf Wunsch nur auf diesem PC speichern (höchstens sechs, jederzeit löschbar); Stempel wie
+  GENEHMIGT, ENTWURF, VERTRAULICH oder eigener Text, mit Datum. Nach dem Setzen gleich verschieben und in
+  der Größe ändern. Eine sichtbare Unterschrift ist keine digitale Signatur.
+- **Links:** Mit »Auswählen« anklicken – Seiten springen, Webadressen öffnen nach Rückfrage. Werkzeug
+  »Links«: Bereich aufziehen und mit einer Seite oder Webadresse verknüpfen; ändern und entfernen.
+- **Lesezeichen bearbeiten:** in der Seitenleiste »Lesezeichen« über »Lesezeichen für Seite …« und das
+  Kontextmenü – hinzufügen, umbenennen (F2), auf die angezeigte Seite setzen, verschieben, ein- und
+  ausrücken, löschen (Entf).
+
+## PDF Reader: Komfort und »Per E-Mail senden« (seit 3.2)
+
+- **Tabs:** Rechtsklick auf einen Dokument-Tab – Schließen, Andere Tabs schließen, Tabs rechts schließen,
+  Pfad kopieren, Im Ordner anzeigen. Tabs mit der Maus an eine andere Stelle ziehen (oder Strg+Umschalt+←/→).
+  **Strg+Umschalt+T** öffnet das zuletzt geschlossene PDF wieder, auf der zuletzt gezeigten Seite.
+- **Letzte Sitzung:** Einstellungen → PDF Reader → »PDFs der letzten Sitzung beim Start wieder öffnen«
+  (standardmäßig aus). Gemerkt werden nur Pfade, Seiten und das aktive Dokument – in den Einstellungen auf
+  diesem PC; das Support-Paket enthält davon nur die Anzahl. Fehlende oder geschützte Dateien übergeht der
+  Start ohne Rückfrage.
+- **Nachtmodus:** Seiten dunkelgrau mit heller Schrift (Ansicht-Menü oder Einstellungen) – nur die Anzeige;
+  Datei, Drucken und Export bleiben unverändert.
+- **Schnellwerkzeuge auf der Startseite:** PDF verkleinern, Schwärzen, Kennwortschutz, Wasserzeichen,
+  Seitenzahlen, Dokument bereinigen, Unterschreiben, Zusammenführen – PDF wählen, sie öffnet sich im Reader,
+  und das Werkzeug startet.
+- **Per E-Mail senden** (Reader: »Weitere Befehle«; Vertragsübersichten: nach »PDF erstellen«; Stapel: Detail
+  eines Eintrags): Das E-Mail-Programm öffnet eine neue Nachricht mit der PDF als Anhang – bei
+  Vertragsübersichten an den Rechnungsempfänger, wenn seine Adresse bekannt ist. Gesendet wird nur dort,
+  nie von PDF Tool. Ohne eingerichtetes E-Mail-Programm (Simple MAPI): neue Nachricht ohne Anhang über
+  `mailto:`, die Datei ist im Explorer markiert. Code: `app/qtapp/mail.py`.
 
 ## Vertragsübersichten: Kundenakte und Kundenwiedererkennung
 

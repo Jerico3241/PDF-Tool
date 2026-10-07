@@ -139,8 +139,16 @@ Ausrichtung des Absatzes – Platzhalter, Einfügemarke und getippter Text begin
   als Hintergrundauftrag im App-Arbeitsthread (Tesseract als eigener Prozess, abbrechbar); Änderungen
   am Dokument warten, bis sie fertig ist. Einstellungen des Readers in `gui-config.json`:
   `reader_zoom_beim_oeffnen` (`last`, `width`, `page`, `100`), `reader_leiste_beim_oeffnen` (`last`,
-  `thumbs`, `outline`, `none`) – fehlt der Schlüssel oder ist der Wert unbekannt: `last` – und
-  `reader_ocr_sprachen` (zuletzt gewählte Sprachen der Texterkennung).
+  `thumbs`, `outline`, `none`) – fehlt der Schlüssel oder ist der Wert unbekannt: `last` –,
+  `reader_ocr_sprachen` (zuletzt gewählte Sprachen der Texterkennung), seit 3.2 `reader_nachtmodus`
+  (Seitenbilder mit `~n` hinter der Dokumentkennung, `engine.night_image`),
+  `reader_sitzung_wiederherstellen` (Standard aus) und – nur damit – `reader_sitzung` (Pfade, Seiten und
+  das aktive Dokument beim Beenden; ein Wert `None` entfernt den Schlüssel). Gespeicherte Unterschriften
+  liegen in `unterschriften.json` im Datenordner (`stamps.SignatureStore`), nicht in einem Sicherungsbereich.
+- Per E-Mail senden (`qtapp/mail.py`, seit 3.2): `send_file` öffnet im E-Mail-Programm eine neue Nachricht
+  mit Anhang – Simple MAPI mit `MAPI_DIALOG`, sonst `mailto:` und die Datei im Explorer; `send_and_report`
+  ruft es im App-Arbeitsthread auf und meldet das Ergebnis im angegebenen Bereich. Genutzt von Reader,
+  Vertragsübersicht und Stapel.
 - `timers.Timers` – benannte, abbrechbare Zeitgeber (verzögertes Speichern, Entprellen der Suche).
 
 ## QML-Oberfläche (`app/qml`)
@@ -312,7 +320,8 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
   `tests/test_qt_repair.py` (eine PDF wie bis 2.7.0, mehrere PDFs, Namen; bis zu 100 PDFs).
 - PDF Reader & Editor: `tests/test_editor_*.py` (Engine) und `tests/test_qt_reader.py`,
   `test_qt_reader_v31.py`, `test_qt_objects*.py`, `test_qt_pages_v31.py`, `test_qt_edit_v31.py`,
-  `test_qt_forms_v31.py`, `test_qt_ocr.py` (Oberfläche mit Maus und Tastatur); Messung:
+  `test_qt_forms_v31.py`, `test_qt_ocr.py`, `test_qt_protect.py`, `test_qt_comfort.py` (Oberfläche mit Maus
+  und Tastatur), `tests/test_mail.py` (Per E-Mail senden ohne E-Mail-Programm); Messung:
   `tests/bench_editor.py`.
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen
   (`tests/fixtures/config_v22.json` … `config_v272.json`, dazu Kundenakten und ein Vertragsstand)

@@ -36,8 +36,20 @@ Drei getrennte Ebenen:
    - PDF-Tabs zeigen den Namen ohne „.pdf“ (vollständiger Pfad im Tooltip).
    - Bei vielen Tabs werden die Werkzeug-Tabs schmaler, sobald die PDF-Tabs weniger als 200 px hätten;
      die PDF-Tabs werden wie in Edge schmaler (bis 144 px). Haben auch dann nicht alle Platz, zeigt die
-     Leiste nur ganze Tabs und ‹ › zum Blättern; Pfeile, Mausrad und Ziehen bewegen um genau einen Tab.
+     Leiste nur ganze Tabs und ‹ › zum Blättern; Pfeile und Mausrad bewegen um genau einen Tab.
      Der aktive bleibt ganz zu sehen.
+   - Seit 3.2: Ziehen ordnet einen PDF-Tab um (`Reader.moveTab`; die Nachbarn weichen weich aus, am Rand
+     blättert die Leiste weiter), ebenso Strg+Umschalt+←/→ im fokussierten Tab. Rechtsklick, die
+     Kontextmenü-Taste oder Umschalt+F10 öffnen das Menü des Tabs: Schließen, Andere Tabs schließen, Tabs
+     rechts schließen (je ungespeichertem Dokument die übliche Rückfrage), Pfad kopieren, Im Ordner
+     anzeigen, Geschlossenen Tab wieder öffnen.
+   - »Geschlossenen Tab wieder öffnen« (Strg+Umschalt+T, `Reader.reopenClosed`): die zehn zuletzt
+     geschlossenen Dokumente mit Pfad, jeweils auf der zuletzt gezeigten Seite.
+   - Letzte Sitzung (Einstellung »PDFs der letzten Sitzung beim Start wieder öffnen«, Standard aus): Das
+     Beenden merkt sich Pfade, Seiten und das aktive Dokument (`reader_sitzung` in `gui-config.json`); der
+     nächste Start öffnet sie nach der Frage zur Absturz-Wiederherstellung im Hintergrund – ohne
+     Rückfragen. Fehlende, geschützte oder beschädigte Dateien werden übergangen und in der Statuszeile
+     gezählt. Ausschalten entfernt die Liste.
 2. **Seitenleisten** links (Seiten, Lesezeichen, Suchen) und rechts (Kommentare, Eigenschaften):
    - Feste Breiten, gleich, welcher Inhalt gezeigt wird: links 256 px, rechts 280 px
      (`Metrics.readerLeftPanelWidth`, `readerRightPanelWidth`).
@@ -174,6 +186,37 @@ App mit Oberfläche (Qt offscreen, Fenster 1180 × 860, Seitenbreite):
 | 100 | 40 ms | 16 ms | 11,1 MB |
 | 500 | 123 ms | 27 ms | 11,1 MB |
 | 1000 | 228 ms | 41 ms | 11,1 MB |
+
+### Nachtmodus (seit 3.2)
+
+Ansicht-Menü oder Einstellungen → PDF Reader: Die Seitenbilder werden umgekehrt und abgemildert (Papier
+`#1E1E1E`, Schrift höchstens `#E0E0E0`; `engine.night_image`). Die Bildadresse trägt dann `~n` hinter der
+Dokumentkennung, der Zwischenspeicher führt die Bilder getrennt. Nur die Anzeige: Datei, Drucken und Export
+rendern ohne diesen Weg. Die Einstellung gilt für alle Tabs und bleibt nach einem Neustart
+(`reader_nachtmodus`).
+
+### Schnellwerkzeuge der Startseite (seit 3.2)
+
+In der Karte »Werkzeuge« der Startseite: PDF verkleinern, Schwärzen, Kennwortschutz, Wasserzeichen,
+Seitenzahlen, Dokument bereinigen, Unterschreiben, Zusammenführen (`Reader.quickTools`). Ein Klick wählt eine
+PDF; sie öffnet sich im Reader, und sobald das Dokument aktiv ist, startet das Werkzeug
+(`open_paths(…, then=…)`, `DocumentController.runAction`). Wird der Tab vorher geschlossen oder gewechselt,
+startet nichts.
+
+### Per E-Mail senden (seit 3.2)
+
+»Weitere Befehle« → »Per E-Mail senden …« (`Reader.sendByMail`, `app/qtapp/mail.py`): Das E-Mail-Programm
+öffnet eine neue Nachricht mit der PDF als Anhang – gesendet wird nur dort, nie von PDF Tool. Ungespeicherte
+Änderungen: vorher speichern oder den gespeicherten Stand senden; ein nie gespeichertes Dokument wird zuerst
+gespeichert.
+
+- Windows: Simple MAPI (`MAPISendMailW`, sonst `MAPISendMail`) mit `MAPI_DIALOG` – nur, wenn unter
+  `Software\Clients\Mail` ein E-Mail-Programm eingetragen ist. Ohne MAPI oder nach einem Fehler (nicht nach
+  einem Abbruch im E-Mail-Programm): `mailto:` mit Empfänger und Betreff, die Datei im Explorer markiert.
+- Im Hintergrund (MAPI wartet, bis die Nachricht gesendet oder verworfen ist), höchstens eine Nachricht
+  zugleich. Protokolliert werden nur Fehlercodes – nie Pfade, Adressen oder Inhalte.
+- Dieselbe Funktion haben »Übersicht erstellen« (nach »PDF erstellen«, an den Rechnungsempfänger wie in der
+  PDF) und der Stapel (Detail eines Eintrags).
 
 ## Text bearbeiten – drei ehrlich benannte Wege
 
@@ -330,6 +373,73 @@ Seitenstand (Revision), sonst wird neu analysiert.
   Signaturfelder und Schaltflächen lassen sich verschieben, skalieren und löschen, aber nicht
   duplizieren. XFA-Formulare werden nicht umgestaltet (ein XFA-Programm zeigte neue Felder nicht).
 
+## Schützen und Weitergeben (seit 3.2)
+
+Befehle in der Werkzeugleiste unter **Schützen** (Schild) und **Seiten gestalten**; Engine je Aufgabe ein
+Modul in `tools/pdf_editor/`. Jede Änderung ist ein Schritt für Rückgängig und wird beim Speichern wie jede
+andere geprüft (die Datei wird erst ersetzt, wenn die neue fehlerfrei geöffnet und gezeichnet wurde).
+
+- **Schwärzen** (`redact.py`, Werkzeug »Schwärzen«): Bereiche aufziehen oder Text markieren – vorgemerkte
+  Stellen sind rot umrandet, entfernt wird erst mit »Schwärzen anwenden« (Rückfrage). Im Bereich werden
+  Textzeichen aus dem Inhaltsstrom entfernt (TJ mit Abständen, der übrige Text bleibt an seiner Stelle),
+  Vektorpfade ganz im Bereich gelöscht, Bilder neu kodiert mit schwarzen Flächen (auch ihre weiche Maske),
+  Formular-XObjects als eigene Kopie bearbeitet (bis Tiefe 8), Kommentare, Links und Formularfelder im
+  Bereich entfernt, Vorschaubilder der Seite gelöscht, alternative Texte (`/ActualText`, `/Alt`, `/E`) und
+  passende Einträge des Strukturbaums geleert. Inline-Bilder, Masken, JBIG2 und unbekannte Schriften lassen
+  sich nicht sicher teilweise bearbeiten: Dann wird die ganze Seite mit 200 dpi als Bild geschwärzt (der
+  Hinweis nennt die Seite). Danach prüft PDFium jede Seite: Steht im Bereich noch ein Zeichen, wird die Seite
+  als Bild geschwärzt; bleibt auch dann etwas, wird alles zurückgenommen (Fehler statt halber Schwärzung).
+  **Suchen und schwärzen:** IBAN (mit Prüfziffer nach ISO 13616), E-Mail-Adressen, Telefonnummern (7–15
+  Ziffern), Datumsangaben und eigene Begriffe; Fundstellen werden nur vorgemerkt. Seitenänderungen
+  (drehen, löschen, verschieben, zuschneiden) verwerfen noch nicht angewendete Bereiche.
+- **Dokument bereinigen** (`sanitize.py`): zählt zuerst, was es gibt, und entfernt dann die gewählten Arten
+  – Metadaten (Info-Wörterbuch, XMP), Skripte und unsichere Aktionen (JavaScript, Launch, SubmitForm,
+  ImportData, Rendition, RichMediaExecute; auch an Feldern, Kommentaren, Lesezeichen und Seiten), Anhänge
+  (eingebettete Dateien, Dateianhang-Kommentare), versteckte Daten (Vorschaubilder, PieceInfo, unsichtbare
+  Kommentare) und auf Wunsch alle Kommentare. Ein Schritt für Rückgängig.
+- **Reduzieren** (`flatten.py`): Erscheinungsbilder von Formularfeldern und Kommentaren werden als
+  Formular-XObject in die Seite gezeichnet (Lage aus BBox, Matrix und Rect, Deckkraft über ExtGState),
+  danach werden die Anmerkungen und leere Formularstrukturen entfernt. Felder mit `NeedAppearances` bekommen
+  vorher frische Erscheinungsbilder; Signaturfelder und Anmerkungen ohne Erscheinungsbild bleiben.
+- **Kennwortschutz** (`protect.py`): Kennwort zum Öffnen und/oder Einschränkungen (Drucken, Kopieren,
+  Ändern, Kommentieren, Formulare, Seiten) mit eigenem Berechtigungskennwort – oder Schutz entfernen.
+  Gespeichert wird mit AES-256 (Revision 6); geprüft wird die neue Datei mit dem neuen Kennwort. Den Schutz
+  ändern darf nur, wer das Dokument uneingeschränkt geöffnet hat; »Einschränkungen aufheben …« fragt dazu
+  nach dem Berechtigungskennwort und prüft es an der Originaldatei (nichts wird geraten oder umgangen).
+- **PDF verkleinern** (`optimize.py`): immer als Kopie. Bilder, die mindestens 1,3-mal feiner sind als die
+  Stufe (110, 150 oder 220 dpi bezogen auf ihre größte Darstellung), werden als JPEG neu berechnet, wenn das
+  höchstens 90 % der bisherigen Größe ergibt; Ungenutztes wird entfernt, Objektströme werden komprimiert.
+  Kennwortschutz bleibt; die Kopie wird vor dem Schreiben geprüft. Gewinnt die Kopie nichts, entspricht sie
+  dem aktuellen Stand.
+- **Kopf- und Fußzeile, Seitenzahlen, Bates-Nummern, Wasserzeichen** (`pagemarks.py`): Texte in sechs
+  Positionen mit den Platzhaltern `{seite}`, `{seiten}`, `{datum}`, `{datei}`, `{bates}`; Wasserzeichen mit
+  Farbe, Deckkraft, Winkel und Größe über oder hinter dem Inhalt. Jeweils ein eigener, markierter
+  Inhaltsstrom je Seite (`/PDFToolMark`, als Artefakt gekennzeichnet) mit eigenen Schrift- und
+  Grafikzustand-Ressourcen – aufrecht auch auf gedrehten Seiten, ersetzbar und wieder entfernbar, ohne den
+  übrigen Inhalt anzufassen. Standardschriften mit WinAnsi; nicht darstellbare Zeichen werden durch »?«
+  ersetzt (der Hinweis nennt sie).
+- **Stempel und Unterschrift** (`stamps.py`): Anmerkung `/Stamp` mit eigenem Erscheinungsbild im eigenen
+  Raum (BBox = Größe in der Anzeige) und einer Matrix gegen die Seitendrehung – aufrecht auf jeder Seite.
+  Verschieben und Größe ändern ändern nur `/Rect` (jedes Programm bildet das Bild darauf ab; das
+  Seitenverhältnis bleibt, Umschalt: frei). Stempel: GENEHMIGT, GEPRÜFT, ERLEDIGT, BEZAHLT, EINGEGANGEN,
+  ENTWURF, KOPIE, VERTRAULICH, ABGELEHNT oder eigener Text, zweite Zeile mit `{datum}`/`{zeit}`.
+  Unterschrift: gezeichnet (Striche als Bézier-Kurven mit runden Enden) oder aus einem Bild (Papier wird
+  durchsichtig, die Tinte behält ihre Farbe; als Bild mit weicher Maske). Gespeicherte Unterschriften liegen
+  nur auf Wunsch in `%APPDATA%\PDF-Tool\unterschriften.json` (höchstens sechs, atomar geschrieben, löschbar);
+  sie gehören zu keinem Sicherungsbereich und nicht ins Support-Paket. Keine digitale Signatur.
+- **Links** (`links.py`): Links werden beim Zeigen mit »Auswählen« erkannt (Zeiger und Ziel als Hinweis);
+  ein Klick ohne Ziehen springt zur Zielseite, eine Webadresse öffnet erst nach Rückfrage. Andere Aktionen
+  (Programme, Dateien, Skripte) führt PDF Tool nie aus. Werkzeug »Links«: Bereich aufziehen und Ziel wählen
+  (Seite oder http/https/mailto), vorhandene Links ändern oder entfernen. Benannte Ziele werden aufgelöst.
+- **Lesezeichen bearbeiten** (`outline.py`): hinzufügen (zur angezeigten Seite, dahinter oder als
+  Unterpunkt), umbenennen (F2), auf die angezeigte Seite setzen, verschieben, ein- und ausrücken, löschen
+  (Entf; mit Unterpunkten nach Rückfrage). Jede Änderung schreibt einen neuen Lesezeichenbaum; Ziele und
+  Aktionen werden als Verweise übernommen, der alte Baum dient Rückgängig.
+- **Seiten zuschneiden** (`crop.py`): Ränder in Millimetern, wie man die Seite sieht (auch gedreht), oder an
+  den Inhalt angepasst (Ränder aus einem Seitenbild mit 500 px Breite); mindestens 36 pt bleiben sichtbar.
+  Zugeschnitten wird die CropBox – der Inhalt außerhalb bleibt in der Datei (zum Entfernen: Schwärzen);
+  »Zuschnitt zurücksetzen« zeigt wieder die ganze Seite.
+
 ## Texterkennung (OCR)
 
 `tools/pdf_editor/ocr.py` legt über gescannte Seiten eine unsichtbare Textebene – vollständig lokal
@@ -427,6 +537,11 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   Reader öffnen. Repariert wird nie automatisch, das Original bleibt unverändert.
 - Protokolle enthalten keine Texte aus PDFs; »Zuletzt geöffnet« enthält nur Pfade und lässt sich
   leeren.
+- Neue Kennwörter (Kennwortschutz) und gespeicherte Unterschriften werden nie protokolliert; Unterschriften
+  bleiben nur auf diesem PC und nur, wenn sie ausdrücklich gespeichert werden.
+- Links öffnen Webadressen nur nach Rückfrage; Skripte, Programme und Dateien aus Links werden nie gestartet.
+- Die letzte Sitzung (nur mit der Einstellung) enthält nur Pfade und Seiten, lokal in den Einstellungen; das
+  Support-Paket nennt davon nur die Anzahl. »Per E-Mail senden« verschickt nichts selbst.
 
 ## Tests
 
@@ -469,6 +584,20 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
     bleibt zu sehen
   - Beenden mit Werkzeug-Tabs und vielen PDFs ohne QML-Meldungen beim Abbau
   - kein Neuanordnen in jedem Bild (Animationsprofile „Vollständig“ und „Aus“)
+- Schützen und Weitergeben: `tests/test_editor_redact.py` (Text, TJ mit Abständen, CID-Schrift,
+  Formular-XObject, Scan mit Texterkennung, gedrehte Seite, Anmerkungen, Muster, Rückfall »Seite als Bild«;
+  geprüft mit PDFium, an den Rohdaten und an den Bildpunkten), `test_editor_cleanup.py` (Bereinigen,
+  Reduzieren), `test_editor_protect.py`, `test_editor_optimize.py`, `test_editor_pagemarks.py`,
+  `test_editor_stamps.py` (Stempel aufrecht auf gedrehten Seiten, Unterschrift aus Strichen und aus einem
+  Scan, gespeicherte Unterschriften), `test_editor_navigation.py` (Lesezeichen, Links, Zuschneiden) und
+  `tests/test_qt_protect.py` (Werkzeugleiste, Schwärzen mit der Maus und per Suche, Bereinigen,
+  Kennwortschutz, Reduzieren, Verkleinern, Kopf-/Fußzeile, Wasserzeichen, Zuschneiden, Stempel, Unterschrift,
+  Links, Lesezeichen, jeder neue Dialog ohne QML-Meldungen).
+- Komfort: `tests/test_qt_comfort.py` (Kontextmenü der Tabs, Schließen mit Rückfragen, Umordnen mit der Maus,
+  Strg+Umschalt+T, letzte Sitzung samt fehlender Dateien, »Öffnen mit« beim Start und dem aktiven Tab vor den
+  Rückfragen beim Beenden, Nachtmodus, Schnellwerkzeuge, Per E-Mail senden in Reader, Übersicht und Stapel) und
+  `tests/test_mail.py` (`mailto:`, Empfängerprüfung, Ergebnisse von `send_file`, Aufbau der MAPI-Strukturen
+  für 64-Bit-Windows – ohne echtes E-Mail-Programm).
 - Texterkennung: `tests/test_editor_ocr.py` – Scans aus `editorsamples.scanned` (aufrecht, `/Rotate`,
   CropBox, gemischt), Lage der Treffer, Darstellung, Rückgängig, Ersetzen, Speichern, Abbruch, fehlende
   Sprache. Tests mit Tesseract laufen nur, wenn eine Engine gefunden wird; die Textebene prüfen die
@@ -478,13 +607,16 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   zweiter Start reicht die PDF weiter, Standard-App für PDF unverändert, Deinstallation entfernt die
   Einträge).
 
-## Bekannte Einschränkungen (3.1.0-beta.1)
+## Bekannte Einschränkungen (3.2.0-beta.1)
 
 - Textauswahl innerhalb einer Seite (nicht über Seitengrenzen hinweg).
-- Keine Schwärzung: Eine echte Schwärzung (Entfernen von Text, Bildern und Vektoren eines
-  Bereichs) ist nicht enthalten. Die Überlagerung ist ausdrücklich keine Schwärzung.
-- Digitale Signaturen werden erkannt, aber nicht erstellt; eine sichtbare Unterschrift entsteht
-  mit dem Freihand-Werkzeug.
+- Per E-Mail senden: Den Anhang setzt nur ein E-Mail-Programm mit Simple MAPI (z. B. Outlook, Thunderbird);
+  sonst neue Nachricht ohne Anhang und die Datei im Explorer.
+- Schwärzen: Seiten mit Inline-Bildern, Masken, JBIG2-Bildern oder unbekannten Schriften im Bereich werden
+  ganz als Bild geschwärzt (dort ist danach kein Text mehr auswählbar). Text, der nur in Metadaten,
+  Anhängen oder Lesezeichen steht, entfernt »Dokument bereinigen«, nicht das Schwärzen.
+- Digitale Signaturen werden erkannt, aber noch nicht erstellt oder geprüft; Stempel und Unterschrift
+  sind sichtbare Anmerkungen.
 - XFA-Formulare: nur der AcroForm-Teil lässt sich ausfüllen, nicht gestalten; PDF-JavaScript
   (Berechnungen, Prüfungen) läuft nie.
 - Texterkennung: gebündelt sind nur Deutsch und Englisch; Seiten, die schon Text haben (auch die
