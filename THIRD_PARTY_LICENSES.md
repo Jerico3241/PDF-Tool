@@ -130,11 +130,12 @@ sie liegen unverändert in `%LOCALAPPDATA%\PDF-Tool\ai\LICENSES.txt`.
 
 | Komponente | Lizenz | Verwendet für | Quelle |
 | --- | --- | --- | --- |
-| llama.cpp und ggml (`llama-server.exe`, `llama*.dll`, `ggml*.dll`, `ggml-cpu-*.dll`, `mtmd.dll`) | MIT | lokales Sprachmodell (KI-Assistent) | https://github.com/ggml-org/llama.cpp |
+| llama.cpp und ggml (`llama-server.exe`, `llama-server-impl.dll`, `llama-common.dll`, `llama.dll`, `mtmd.dll`, `ggml.dll`, `ggml-base.dll` und die 14 Rechenwerke `ggml-cpu-*.dll`) | MIT | lokales Sprachmodell (KI-Assistent) | https://github.com/ggml-org/llama.cpp |
 | cpp-httplib (in llama.cpp eingebaut) | MIT | lokale Schnittstelle des KI-Prozesses (nur 127.0.0.1) | https://github.com/yhirose/cpp-httplib |
 | nlohmann/json (in llama.cpp eingebaut) | MIT | JSON | https://github.com/nlohmann/json |
 | BoringSSL (in llama.cpp eingebaut) | siehe `ai\LICENSES.txt` | TLS in llama.cpp (Modell-Downloads von llama.cpp selbst – PDF Tool nutzt sie nicht) | https://boringssl.googlesource.com/boringssl |
 | LLVM OpenMP (`libomp.dll`) | Apache-2.0 WITH LLVM-exception | parallele Berechnung | https://openmp.llvm.org |
+| Microsoft Visual C++ Runtime (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`) | Microsoft Redistributable | C++-Laufzeit von llama.cpp (weiterverteilbare Originaldateien) | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
 
 Die **Sprachmodelle** gehören nicht zum Setup: Sie werden nur auf ausdrücklichen Wunsch über HTTPS von
 Hugging Face geladen (feste Revision, SHA-256 geprüft, `windows-app/app/assistant/catalog.py`), liegen in
@@ -183,7 +184,7 @@ eigener Code von PDF Tool; das Ergebnis wird mit qpdf (pikepdf) normalisiert und
 - **GCC-Laufzeit in NumPy:** GPL-3.0 mit GCC Runtime Library Exception 3.1 – die Ausnahme erlaubt
   die Weitergabe zusammen mit Programmen unter beliebiger Lizenz.
 - **Microsoft Visual C++ Runtime:** von den jeweiligen Paketen als weiterverteilbare
-  Laufzeitdateien mitgeliefert.
+  Laufzeitdateien mitgeliefert; der KI-Ordner `ai\` enthält eigene Kopien für llama.cpp.
 
 Alle genannten Lizenzen erlauben die Weitergabe als Teil einer Anwendung. Die LGPL-3.0 von
 Qt/PySide6 verlangt die oben beschriebene Ersetzbarkeit der Qt-Bibliotheken und den Hinweis auf
