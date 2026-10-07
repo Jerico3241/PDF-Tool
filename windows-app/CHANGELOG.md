@@ -2,6 +2,15 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.1.0
+
+Freigegebene Version – getestet als Betas 3.0.0-beta.1 bis 3.1.0-beta.4, Funktionsumfang wie 3.1.0-beta.4.
+Für Anwender von 2.8 neu: das Werkzeug „PDF Reader & Editor“, die Tab-Leiste statt der Seitenleiste und die neue
+Startseite – im Einzelnen in den Abschnitten der Betas unten und in den [Release Notes](release-notes/3.1.0.md).
+
+- Version 3.1.0; README.txt, Neuerungen und Release Notes beschreiben 3.1 als freigegebene Version für Anwender
+  von 2.8. Der Programmcode ist gegenüber 3.1.0-beta.4 unverändert.
+
 # PDF Tool 3.1.0-beta.4
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Neuer App-Rahmen nach dem Vorbild von Adobe Acrobat: Tabs
