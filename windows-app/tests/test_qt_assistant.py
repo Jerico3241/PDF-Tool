@@ -347,6 +347,28 @@ def test_a_paused_download_resumes_where_it_stopped(app_ki, ki) -> None:
     assert ranges[0] == "" and ranges[-1] == f"bytes={kept}-"
 
 
+def test_switching_off_pauses_a_running_download_and_offers_the_other_model(app_ki, ki, monkeypatch) -> None:
+    """Ausschalten hält einen laufenden Download an (der Teil bleibt zum Fortsetzen) – »aus« lädt nichts. Mit einem
+    eingerichteten Modell wählt »Anderes Modell …« das noch fehlende vor."""
+    h = app_ki
+    assistant = a(h)
+    ki.server.delay = 0.05
+    assistant.download("standard")
+    assert wait_until(lambda: store.partial(ki.standard).exists() and store.partial(ki.standard).stat().st_size >= 32 * 1024, 20)
+    assistant.setEnabled(False)
+    pump(0.2)
+    assert assistant._transfer is None and assistant.state == "off" and assistant.partial == "standard"
+    assert 0 < store.partial_size(ki.standard) < ki.standard.size
+    assert assistant.statusText.startswith("Aus")
+    # Vorwahl im Dialog: eingerichtet ist »Kompakt« → vorgewählt »Genau«
+    ki.server.delay = 0.0
+    install(ki.compact)
+    seen = {}
+    monkeypatch.setattr(h.app.dialogs, "ask", lambda kind, title, message, **options: seen.update(options["data"]) or ("close", {}))
+    assistant.setup()
+    assert seen["choice"] == "standard" and [model["installed"] for model in seen["models"]] == [False, True]
+
+
 def test_a_server_without_ranges_restarts_and_a_wrong_checksum_is_discarded(app_ki, ki, monkeypatch) -> None:
     """Liefert der Server die Datei beim Fortsetzen von vorn, beginnt der Download neu (nie doppelt angehängt). Stimmt
     die Prüfsumme nicht, wird die Datei gelöscht – nie verwendet."""

@@ -147,6 +147,7 @@ class AssistantController(Observable):
         if not enabled:
             self.stop()
             self._stop_server()
+            self.cancelDownload()  # aus heißt: nichts wird geladen (der Teil bleibt zum Fortsetzen)
             if self.reader is not None:
                 self.reader.close_right_panel("assistant")
         self._refresh_state()
@@ -169,7 +170,10 @@ class AssistantController(Observable):
             }
             for model in catalog.MODELS
         ]
-        data = {"models": models, "ram": _gb(ram) if ram else "", "lowMemory": 0 < ram < catalog.MIN_RAM, "free": _gb(store.free_space()), "choice": recommended.key}
+        # vorgewählt: die Empfehlung – ist sie schon eingerichtet (»Anderes Modell …«), das andere Modell
+        missing = [model for model in catalog.MODELS if not store.installed(model)]
+        choice = recommended if recommended in missing or not missing else missing[0]
+        data = {"models": models, "ram": _gb(ram) if ram else "", "lowMemory": 0 < ram < catalog.MIN_RAM, "free": _gb(store.free_space()), "choice": choice.key}
         answer, result = self.app.dialogs.ask("assistant_setup", "KI-Assistent einrichten", "", primary="Herunterladen", close="Abbrechen", data=data, width=560)
         if answer != "primary":
             return
@@ -242,7 +246,7 @@ class AssistantController(Observable):
         self.state = "off"  # neu bewerten: Ist ein anderes Modell eingerichtet, bleibt der Assistent bereit
         self._refresh_state()
         if kind == "cancelled":
-            if self.state != "ready":
+            if self.state == "setup":
                 self.statusText = "Download angehalten – »Download fortsetzen« lädt den Rest." if self.partial else "Download abgebrochen."
             return
         texts = {
