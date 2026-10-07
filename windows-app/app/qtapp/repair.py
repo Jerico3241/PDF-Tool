@@ -49,7 +49,7 @@ from . import files
 from .base import Observable, Var, prop
 from .models import KeyedListModel
 
-POLL_MS = 80
+POLL_MS = 30  # Arbeitsprozesse abfragen: kurze Aufträge (kleine PDFs) dauern oft nur wenige Millisekunden
 CLEANUP_DELAY_MS = 3000  # alte Arbeitsordner erst nach dem Start im Hintergrund entfernen
 MAX_WORKERS = 2  # Arbeitsprozesse gleichzeitig (eine Reparatur und eine Analyse oder zwei Analysen)
 ANALYSIS_WORKERS = 2
@@ -493,6 +493,7 @@ class RepairController(Observable):
         self._poll.stop()
         for key in list(self.jobs):
             self._stop_job(key)
+        process.stop_workers()  # wartende Arbeitsprozesse
         for item in self.batch.items:
             item.password = None
 
@@ -1012,7 +1013,8 @@ class RepairTool:
         self.controller.drop(dropped)
 
     def page_prepare(self, page: str) -> None:
-        pass
+        # Einen Arbeitsprozess vorbereiten (im Hintergrund): Die erste Analyse wartet dann nicht auf seinen Start
+        process.prepare_worker()
 
     def page_left(self, page: str) -> None:
         pass
