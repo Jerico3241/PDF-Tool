@@ -670,11 +670,15 @@ def ui_probe(qt_application, full: bool) -> None:
         return controller.current is not None and controller.opening == 0 and controller.engine.idle()
 
     def reader() -> None:
-        app.openTool("reader")
-        shown["reader"] = app.currentPage
+        # Der Reader erscheint mit dem geöffneten Dokument; ohne Dokument fragt »PDF Reader & Editor« nach
+        # einer Datei (ein echter Dialog – hier nicht)
         controller.open_paths([str(sample)])
 
     def reader_edit() -> None:
+        shown["reader"] = app.currentPage
+        app.navigate("home")
+        app.openTool("reader")  # mit geöffnetem Dokument: zurück zum Reader
+        shown["reader_again"] = app.currentPage
         shown["reader_pages"] = controller.current.pageCount
         controller.current.addNote(0, 100, 100, "Smoke-Test")
 
@@ -733,7 +737,7 @@ def ui_probe(qt_application, full: bool) -> None:
         check(shown.get("preview") == "preview" and shown.get("batch") == "batch", "Ansichten »Stapel« und »Vorschau« lassen sich nicht öffnen")
         check(shown.get("records") is False and shown.get("customers_blocked") is True and shown.get("customers_off") == "preview", "Kundenakte ist nicht standardmäßig aus bzw. »Kunden« ohne Kundenakte erreichbar")
         check(shown.get("customers") == "customers" and shown.get("customers_after") != "customers", "Kundenakte lässt sich nicht ohne Neustart ein- und ausschalten")
-        check(shown.get("reader") == "reader" and shown.get("reader_pages") == 2, f"PDF Reader: Seite {shown.get('reader')}, {shown.get('reader_pages')} Seiten geöffnet")
+        check(shown.get("reader") == "reader" and shown.get("reader_again") == "reader" and shown.get("reader_pages") == 2, f"PDF Reader: Seite {shown.get('reader')}/{shown.get('reader_again')}, {shown.get('reader_pages')} Seiten geöffnet")
         check(shown.get("reader_dirty") is True and shown.get("reader_saved") is True and not shown.get("reader_error"), f"PDF Reader: Speichern fehlgeschlagen – {shown.get('reader_error')!r}")
         check(shown.get("reader_closed") is True and shown.get("reader_reopened") == 2 and shown.get("reader_note") is True, "PDF Reader: Änderung nach Schließen und erneutem Öffnen nicht vorhanden")
     config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
