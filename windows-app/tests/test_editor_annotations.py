@@ -236,3 +236,75 @@ def test_annotations_survive_saving(tmp_path: Path) -> None:
             assert pdf.check_pdf_syntax() == []
     finally:
         again.close()
+
+
+# --- 3.1: Eigenschaften nachträglich, Größe, Antworten ------------------------------------------------------------
+def test_restyle_own_annotation_width_fill_opacity_and_font_size(tmp_path: Path) -> None:
+    doc = EditorDocument.open(samples.standard_text(tmp_path / "s.pdf"))
+    history = commands.History()
+    key = notes.add_shape(doc, history, 0, "square", (100, 500, 200, 560), style=Style(color=(200, 0, 0), width=2))
+    notes.restyle(doc, history, key, width=5, fill=(0, 120, 0), opacity=0.5)
+    info = next(item for item in notes.list_annotations(doc, 0) if item.key == key)
+    assert info.width == 5 and info.fill == (0, 120, 0) and info.opacity == pytest.approx(0.5)
+    notes.restyle(doc, history, key, fill=None, opacity=1.0)
+    info = next(item for item in notes.list_annotations(doc, 0) if item.key == key)
+    assert info.fill is None and info.opacity == 1.0
+    box = notes.add_textbox(doc, history, 0, (100, 300, 300, 360), "Hinweis", style=Style(font_size=12))
+    notes.restyle(doc, history, box, font_size=18)
+    assert next(item for item in notes.list_annotations(doc, 0) if item.key == box).font_size == 18
+    with pytest.raises(UnsupportedEdit):
+        notes.restyle(doc, history, key, font_size=18)  # ein Rechteck hat keine Schrift
+    history.undo(doc)
+    assert next(item for item in notes.list_annotations(doc, 0) if item.key == box).font_size == 12
+    target = tmp_path / "gespeichert.pdf"
+    save.save(doc, target)
+    again = EditorDocument.open(target)
+    assert next(item for item in notes.list_annotations(again, 0) if item.subtype == "/Square").width == 5
+
+
+def test_foreign_annotations_keep_their_appearance(tmp_path: Path) -> None:
+    path = samples.standard_text(tmp_path / "f.pdf")
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        annot = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Square, Rect=[50, 50, 120, 90], C=[1, 0, 0]))
+        pdf.pages[0].Annots = pdf.make_indirect(pikepdf.Array([annot]))
+        pdf.save(path)
+    doc = EditorDocument.open(path)
+    key = notes.list_annotations(doc, 0)[0].key
+    with pytest.raises(UnsupportedEdit):
+        notes.restyle(doc, commands.History(), key, width=4)
+    with pytest.raises(UnsupportedEdit):
+        notes.resize(doc, commands.History(), key, (10, 10, 200, 200))
+
+
+def test_resize_scales_ink_and_rect(tmp_path: Path) -> None:
+    doc = EditorDocument.open(samples.standard_text(tmp_path / "s.pdf"))
+    history = commands.History()
+    key = notes.add_ink(doc, history, 0, [[(100, 100), (150, 150), (200, 100)]], style=Style(width=2))
+    old = next(item for item in notes.list_annotations(doc, 0) if item.key == key).rect
+    notes.resize(doc, history, key, (old[0], old[1], old[0] + 2 * (old[2] - old[0]), old[3]))
+    page, _position, annot = notes.find(doc, key)
+    xs = [float(v) for v in annot.InkList[0]][0::2]
+    assert max(xs) - min(xs) == pytest.approx(2 * 100, abs=6)  # doppelt so breit
+    history.undo(doc)
+    _page, _position, annot = notes.find(doc, key)
+    xs = [float(v) for v in annot.InkList[0]][0::2]
+    assert max(xs) - min(xs) == pytest.approx(100, abs=0.5)
+
+
+def test_reply_is_listed_under_its_comment_and_deleted_with_it(tmp_path: Path) -> None:
+    doc = EditorDocument.open(samples.standard_text(tmp_path / "s.pdf"))
+    history = commands.History()
+    note = notes.add_note(doc, history, 0, 100, 700, "Bitte prüfen")
+    reply = notes.add_reply(doc, history, note, "Erledigt")
+    items = notes.list_annotations(doc, 0)
+    answer = next(item for item in items if item.key == reply)
+    assert answer.reply_to == note and answer.contents == "Erledigt"
+    target = tmp_path / "antwort.pdf"
+    save.save(doc, target)
+    with pikepdf.open(target) as pdf:  # andere Programme sehen eine Antwort (IRT, RT /R)
+        replies = [item for item in pdf.pages[0].Annots if "/IRT" in item]
+        assert len(replies) == 1 and replies[0].RT == pikepdf.Name.R and str(replies[0].Contents) == "Erledigt"
+    notes.delete(doc, history, note)
+    assert notes.list_annotations(doc, 0) == []
+    history.undo(doc)
+    assert {item.key for item in notes.list_annotations(doc, 0)} == {note, reply}
