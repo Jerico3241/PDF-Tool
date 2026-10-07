@@ -10,8 +10,10 @@ from __future__ import annotations
 import hashlib
 import itertools
 import os
+import threading
 import time
 import traceback
+from collections import Counter
 from typing import Any, Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -33,6 +35,8 @@ TOOLS = ("select", "editText", "objects", "addText", "image", "highlight", "unde
 RECOVERY_DELAY_MS = 4000
 SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
 NUDGE_DELAY_MS = 350  # Pfeiltasten: so lange sammeln, dann ein Schritt (eine Änderung, ein Rückgängig)
+SCAN_CHECK_PAGES = 10  # nach dem Öffnen: so viele Seiten auf Scans ohne Text prüfen
+ANNOTATION_ROLES = ("key", "page", "label", "contents", "author", "modified", "color", "subtype", "replyTo", "depth", "ours", "width", "fill", "opacity", "fontSize", "resizable")
 SEARCH_LIMIT = 5000
 LISTED_HITS = 500
 _ids = itertools.count(1)
@@ -53,6 +57,12 @@ class DocumentController(Observable):
     signedChanged, signed = prop(int, "signed", 0)
     noticeChanged, notice = prop(str, "notice", "")  # Hinweis beim Öffnen (signiert, repariert, XFA …)
     noticeKindChanged, noticeKind = prop(str, "noticeKind", "info")
+    scanHintChanged, scanHint = prop(bool, "scanHint", False)  # gescannte Seiten ohne Text (Texterkennung anbieten)
+    # Texterkennung (OCR) im Hintergrund: läuft, erledigte und zu erkennende Seiten, Zustandstext
+    ocrRunningChanged, ocrRunning = prop(bool, "ocrRunning", False)
+    ocrDoneChanged, ocrDone = prop(int, "ocrDone", 0)
+    ocrTotalChanged, ocrTotal = prop(int, "ocrTotal", 0)
+    ocrStatusChanged, ocrStatus = prop(str, "ocrStatus", "")
     # Ansicht
     currentPageChanged, currentPage = prop(int, "currentPage", 0)
     zoomChanged, zoom = prop(float, "zoom", 100.0)  # Prozent
@@ -103,6 +113,7 @@ class DocumentController(Observable):
     strokeWidthChanged, strokeWidth = prop(float, "strokeWidth", 2.0)
     fontSizeChanged, fontSize = prop(float, "fontSize", 12.0)
     hasOutlineChanged, hasOutline = prop(bool, "hasOutline", False)
+    attachmentCountChanged, attachmentCount = prop(int, "attachmentCount", 0)
 
     # Aufträge an die Ansicht als Properties (QML reagiert mit eigenen Handlern, ohne »Connections«)
     revealTargetChanged, revealTarget = prop(dict, "revealTarget", {})  # {page, u, v, serial}: Stelle in den Blick holen
@@ -119,7 +130,10 @@ class DocumentController(Observable):
         self.session = None  # nur im Arbeitsthread benutzen
         self._outline = KeyedListModel(("key", "level", "title", "page", "hasChildren", "expanded", "visible"), key="key", parent=self)
         self._hits = KeyedListModel(("key", "page", "hit", "excerpt"), key="key", parent=self)
-        self._annotation_list = KeyedListModel(("key", "page", "label", "contents", "author", "modified", "color", "subtype"), key="key", parent=self)
+        self._annotation_list = KeyedListModel(ANNOTATION_ROLES, key="key", parent=self)
+        self._attachment_list = KeyedListModel(("key", "name", "description", "sizeText", "modified", "page", "openable"), key="key", parent=self)
+        # Seitenleisten und »Seiten organisieren« dieses Tabs (ReaderController übernimmt sie beim Wechsel)
+        self.panels: dict = {}
         self._outline_entries: list[dict] = []
         self._texts: dict[int, Any] = {}  # Seite → PageText (Zeichentabelle)
         self._text_requests: set[int] = set()
@@ -133,6 +147,8 @@ class DocumentController(Observable):
         self._save_next: dict | None = None  # Speicheranfrage während eines laufenden Speicherns
         self._object_requests: set[int] = set()
         self._reselect: dict[int, list[list[float]]] = {}  # nach einer Änderung: Auswahl an diesen Stellen wiederfinden
+        self._paste_select: dict[int, tuple[list[float], list]] = {}  # nach dem Einfügen: Bereich, Objekte davor
+        self._ocr_cancel: threading.Event | None = None  # Abbrechen der laufenden Texterkennung
         self._nudge = [0.0, 0.0]  # gesammelte Pfeiltasten-Verschiebung (Anzeige-Punkte)
         self._failure_details = ""  # Traceback des zuletzt fehlgeschlagenen Auftrags (Protokoll)
         self._closing = False
@@ -155,12 +171,16 @@ class DocumentController(Observable):
     def _annotations_model(self) -> KeyedListModel:
         return self._annotation_list
 
+    def _attachments_model(self) -> KeyedListModel:
+        return self._attachment_list
+
     _constant = Signal()
     pageGap = Property(int, _gap, notify=_constant)
     docId = Property(str, _ident, notify=_constant)
     outline = Property(QObject, _outline_model, notify=_constant)  # Lesezeichen (sichtbare Einträge)
     hits = Property(QObject, _hits_model, notify=_constant)  # Trefferliste der Suche
     annotationList = Property(QObject, _annotations_model, notify=_constant)  # Kommentare aller Seiten
+    attachmentList = Property(QObject, _attachments_model, notify=_constant)  # Anhänge (Dokument und Seiten)
 
     # Zustand aus dem Arbeitsthread -----------------------------------------------------------------------
     def apply_state(self, state: dict) -> None:
@@ -278,6 +298,9 @@ class DocumentController(Observable):
 
     def edit_allowed(self, what: str = "edit") -> bool:
         """Vor der ersten Änderung eines signierten Dokuments nachfragen."""
+        if self.ocrRunning:
+            self.app.notify("reader", "info", "Bitte warten, bis die Texterkennung fertig ist – oder sie abbrechen.", title="Texterkennung läuft", auto_hide=6000)
+            return False
         if self.readOnlyReason and what in ("edit", "assemble"):
             self.app.notify("reader", "warning", self.readOnlyReason, title="Nur lesen")
             return False
@@ -797,7 +820,7 @@ class DocumentController(Observable):
 
     def _object_items(self, page: int) -> list[dict]:
         data = self.objectPages.get(str(page)) or {}
-        return [*data.get("segments", []), *data.get("images", [])]
+        return [*data.get("segments", []), *data.get("images", []), *data.get("paths", [])]
 
     def _find_object(self, page: int, ident: str) -> dict | None:
         for item in self._object_items(page):
@@ -809,7 +832,16 @@ class DocumentController(Observable):
         return None
 
     def _restore_selection(self, page: int) -> None:
-        """Nach einer Änderung dieselben Stellen wieder auswählen (die Kennungen sind dann neu)."""
+        """Nach einer Änderung dieselben Stellen wieder auswählen (die Kennungen sind dann neu). Nach dem
+        Einfügen: alle Objekte im eingefügten Bereich, die es vorher nicht gab."""
+        pasted = self._paste_select.pop(page, None)
+        if pasted is not None:
+            self._reselect.pop(page, None)
+            area, before = pasted
+            known = {(kind, tuple(view)) for kind, view in before}
+            fresh = [{**item, "page": page} for item in self._object_items(page) if area and _overlap(item["view"], area) >= 0.6 and (item["kind"], tuple(round(value, 1) for value in item["view"])) not in known]
+            self.objectSelection = fresh
+            return
         wanted = self._reselect.pop(page, None)
         if not wanted:
             return
@@ -847,6 +879,15 @@ class DocumentController(Observable):
         known = {entry["id"] for entry in current}
         self.objectSelection = current + [item for item in found if item["id"] not in known]
 
+    @Slot(int)
+    def selectAllObjects(self, page: int) -> None:  # noqa: N802
+        """Strg+A im Objektmodus: alle Objekte der Seite (Segmente, Bilder)."""
+        items = self._object_items(page)
+        if items:
+            self.objectSelection = [{**item, "page": page} for item in items]
+        elif 0 <= page < self.pageCount:
+            self.loadObjects(page)
+
     @Slot()
     def clearObjectSelection(self) -> None:  # noqa: N802
         self.objectSelection = []
@@ -867,9 +908,17 @@ class DocumentController(Observable):
         chosen = [entry for entry in self.objectSelection if entry["kind"] in kinds]
         return (chosen[0]["page"] if chosen else -1), chosen
 
-    def _object_op(self, page: int, func: Callable[[Any], Any], title: str, reselect: list[list[float]] | None = None) -> None:
+    def _chosen(self) -> tuple[int, list[str], list[list[float]]]:
+        """Die ganze Auswahl (Text, Wörter, Bilder, Vektorobjekte einer Seite): Seite, Kennungen, Lagen."""
+        if not self.objectSelection:
+            return -1, [], []
+        page = self.objectSelection[0]["page"]
+        chosen = [entry for entry in self.objectSelection if entry["page"] == page]
+        return page, [entry["id"] for entry in chosen], [list(entry["view"]) for entry in chosen]
+
+    def _object_op(self, page: int, func: Callable[[Any], Any], title: str, reselect: list[list[float]] | None = None, after: Callable[[Any], None] | None = None) -> bool:
         if not self.edit_allowed():
-            return
+            return False
 
         def done(result) -> None:
             label = result.get("label", "") if isinstance(result, dict) else ""
@@ -879,9 +928,17 @@ class DocumentController(Observable):
             notes = result.get("notes") if isinstance(result, dict) else None
             if notes:
                 self.app.notify("reader", "info", " ".join(notes), title=title, auto_hide=9000)
-            self._reselect[page] = reselect if reselect is not None else ([result["view"]] if isinstance(result, dict) and result.get("view") else [])
+            if reselect is not None:
+                self._reselect[page] = reselect
+            elif isinstance(result, dict) and result.get("views"):
+                self._reselect[page] = result["views"]
+            else:
+                self._reselect[page] = [result["view"]] if isinstance(result, dict) and result.get("view") else []
+            if after is not None:
+                after(result)
 
         self.run(func, done, busy="Wird geändert und geprüft …")
+        return True
 
     @Slot(int, str, str)
     def editObject(self, page: int, ident: str, text: str) -> None:  # noqa: N802
@@ -889,35 +946,36 @@ class DocumentController(Observable):
 
     @Slot()
     def deleteObjects(self) -> None:  # noqa: N802
-        page, texts = self._selected()
-        images = [entry for entry in self.objectSelection if entry["kind"] == "image"]
-        if texts:
-            ids = [entry["id"] for entry in texts]
-            self._object_op(page, lambda session: session.object_delete(page, ids), "Gelöscht", reselect=[])
-        for image in sorted(images, key=lambda entry: -entry["index"]):
-            self.deleteImage(image["page"], image["index"])
-        self.objectSelection = []
+        """Auswahl löschen – Text, Bilder und Vektorobjekte zusammen in einem Schritt."""
+        page, ids, _views = self._chosen()
+        if ids and self._object_op(page, lambda session: session.object_delete(page, ids), "Gelöscht", reselect=[]):
+            self.objectSelection = []
 
     @Slot(float, float)
     def moveObjects(self, du: float, dv: float) -> None:  # noqa: N802
-        """Auswahl um (du, dv) Anzeige-Punkte verschieben – Text nativ, Bilder wie im Bildwerkzeug."""
+        """Auswahl um (du, dv) Anzeige-Punkte verschieben – ein Schritt, auch für gemischte Auswahlen."""
         if abs(du) < 0.01 and abs(dv) < 0.01:
             return
-        page, texts = self._selected()
-        images = [entry for entry in self.objectSelection if entry["kind"] == "image"]
-        moved = [[entry["view"][0] + du, entry["view"][1] + dv, entry["view"][2] + du, entry["view"][3] + dv] for entry in self.objectSelection]
-        if texts:
-            ids = [entry["id"] for entry in texts]
-            self._object_op(page, lambda session: session.object_move(page, ids, du, dv), "Verschoben", reselect=moved)
-        for image in images:
-            self.moveImage(image["page"], image["index"], du, dv)
-            self._reselect[image["page"]] = moved
+        page, ids, views = self._chosen()
+        if not ids:
+            return
+        moved = [[view[0] + du, view[1] + dv, view[2] + du, view[3] + dv] for view in views]
+        self._object_op(page, lambda session: session.object_move(page, ids, du, dv), "Verschoben", reselect=moved)
 
     @Slot(int, int, "QVariantList")
     def resizeObjectImage(self, page: int, index: int, rect) -> None:  # noqa: N802
         """Bild im Objektmodus skalieren – die Auswahl bleibt am Bild."""
         self._reselect[page] = [[float(value) for value in rect]]
         self.resizeImage(page, index, rect)
+
+    @Slot("QVariantList")
+    def resizeObjects(self, rect) -> None:  # noqa: N802
+        """Vektorobjekte (bzw. Bilder und Vektorobjekte zusammen) auf einen neuen Bereich bringen."""
+        page, ids, _views = self._chosen()
+        if not ids:
+            return
+        target = [float(value) for value in rect]
+        self._object_op(page, lambda session: session.object_resize(page, ids, target), "Größe geändert", reselect=[target] if len(ids) == 1 else None)
 
     @Slot(float, float)
     def nudgeObjects(self, du: float, dv: float) -> None:  # noqa: N802
@@ -938,43 +996,307 @@ class DocumentController(Observable):
 
     @Slot(str, "QVariant")
     def styleObjects(self, name: str, value) -> None:  # noqa: N802
-        page, texts = self._selected()
-        if not texts:
+        """Eine Eigenschaft der Auswahl: Text (size, spacing, color, family, bold, italic), Vektorobjekte
+        (stroke, fill, width) und für alle die Deckkraft (opacity, 0–1)."""
+        page, ids, views = self._chosen()
+        if not ids:
             return
-        ids = [entry["id"] for entry in texts]
-        keep = [entry["view"] for entry in texts]
-        self._object_op(page, lambda session: session.object_style(page, ids, name, value), "Formatiert", reselect=keep)
+        if hasattr(value, "name") and callable(value.name):  # QColor aus QML
+            value = value.name()
+        self._object_op(page, lambda session: session.object_style(page, ids, name, value), "Formatiert", reselect=views)
 
     @Slot()
     def duplicateObject(self) -> None:  # noqa: N802
-        page, texts = self._selected()
-        if len(texts) != 1:
+        """Auswahl duplizieren (Strg+D) – die Kopie liegt versetzt daneben und ist danach ausgewählt."""
+        page, ids, views = self._chosen()
+        if not ids:
             return
-        ident = texts[0]["id"]
-        self._object_op(page, lambda session: session.object_duplicate(page, ident), "Dupliziert")
+        shifted = [[view[0] + 12, view[1] + 12, view[2] + 12, view[3] + 12] for view in views]
+        self._object_op(page, lambda session: session.object_duplicate(page, ids), "Dupliziert", reselect=shifted if len(ids) > 1 else None)
 
     @Slot(str)
     def alignObjects(self, how: str) -> None:  # noqa: N802
-        page, texts = self._selected()
-        if len(texts) < 2:
+        """Ausrichten (left, hcenter, right, top, vcenter, bottom) bzw. verteilen (hspace, vspace)."""
+        page, ids, _views = self._chosen()
+        if len(ids) < (3 if how in ("hspace", "vspace") else 2):
             return
-        ids = [entry["id"] for entry in texts]
-        self._object_op(page, lambda session: session.object_align(page, ids, how), "Ausgerichtet", reselect=[])
+        title = "Verteilt" if how in ("hspace", "vspace") else "Ausgerichtet"
+        self._object_op(page, lambda session: session.object_align(page, ids, how), title)
+
+    @Slot(float)
+    def rotateObjects(self, degrees: float) -> None:  # noqa: N802
+        """Auswahl um ihre Mitte drehen (Grad im Uhrzeigersinn)."""
+        page, ids, _views = self._chosen()
+        if not ids or abs(float(degrees)) < 0.01:
+            return
+        self._object_op(page, lambda session: session.object_rotate(page, ids, float(degrees)), "Gedreht")
+
+    @Slot(bool)
+    def arrangeObjects(self, front: bool) -> None:  # noqa: N802
+        """Bilder und Vektorobjekte ganz nach vorn bzw. ganz nach hinten legen."""
+        page, ids, views = self._chosen()
+        if not ids:
+            return
+        self._object_op(page, lambda session: session.object_arrange(page, ids, bool(front)), "In den Vordergrund" if front else "In den Hintergrund", reselect=views)
+
+    # Zwischenablage -------------------------------------------------------------------------------------------
+    def _may_copy(self) -> bool:
+        if not (self.permissions or {}).get("copy", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Inhalten.", title="Kopieren nicht erlaubt")
+            return False
+        return True
+
+    def _copy(self, page: int, ids: list[str], done: Callable[[Any], None], *, cut: bool = False) -> None:
+        def work(session):
+            return session.object_copy(page, ids), session.object_picture(page, ids)
+
+        def copied(result) -> None:
+            clip, picture = result
+            self.reader.set_clip(clip, picture, cut=cut)
+            done(clip)
+
+        self.run(work, copied, refresh=False, priority=VIEW)
 
     @Slot()
     def copyObjects(self) -> None:  # noqa: N802
-        page, texts = self._selected()
-        if not texts:
-            return
-        if not (self.permissions or {}).get("copy", True):
-            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Text.", title="Kopieren nicht erlaubt")
-            return
-        self.app.copy_text("\n".join(entry.get("text", "") for entry in texts), "Text kopiert.")
+        """Auswahl kopieren: Objekte für Strg+V (auch in andere Tabs), Text bzw. Bild für andere Programme."""
+        page, ids, _views = self._chosen()
+        if ids and self._may_copy():
+            self._copy(page, ids, lambda _clip: None)
 
     @Slot()
     def cutObjects(self) -> None:  # noqa: N802
-        self.copyObjects()
-        self.deleteObjects()
+        """Ausschneiden: erst kopieren – nur wenn das gelungen ist, wird gelöscht."""
+        page, ids, _views = self._chosen()
+        if not ids or not self._may_copy() or not self.edit_allowed():
+            return
+
+        def remove(_clip) -> None:
+            if self._object_op(page, lambda session: session.object_delete(page, ids), "Ausgeschnitten", reselect=[]):
+                self.objectSelection = []
+
+        self._copy(page, ids, remove, cut=True)
+
+    @Slot()
+    def pasteObjects(self) -> None:  # noqa: N802
+        """Strg+V: kopierte Objekte an derselben Stelle (wiederholt versetzt), sonst Bild oder Text der
+        Zwischenablage auf der aktuellen Seite."""
+        page = self.objectSelection[0]["page"] if self.objectSelection else self.currentPage
+        self._paste(page, None)
+
+    @Slot(int, float, float)
+    def pasteObjectsAt(self, page: int, u: float, v: float) -> None:  # noqa: N802
+        """»Hier einfügen«: obere linke Ecke an dieser Stelle."""
+        self._paste(page, (float(u), float(v)))
+
+    def _paste(self, page: int, at: tuple[float, float] | None) -> None:
+        if not 0 <= page < self.pageCount or not self.edit_allowed():
+            return
+        kind, data = self.reader.paste_source()
+        if kind == "clip":
+            nudge = 0 if at is not None else self.reader.paste_nudge(self.ident, page, data)
+            before = [(item["kind"], [round(value, 1) for value in item["view"]]) for item in self._object_items(page)]
+
+            def placed(result) -> None:
+                self._paste_select[page] = (result.get("view") or [], before)  # die neuen Objekte auswählen
+
+            self._object_op(page, lambda session: session.object_paste(page, data, at, nudge), "Eingefügt", reselect=[], after=placed)
+            return
+        if kind == "image":
+            self._paste_image(page, data, at)
+            return
+        if kind == "text":
+            width, height = self.pageSizes[page] if page < len(self.pageSizes) else (595.0, 842.0)
+            u, v = at if at is not None else (width * 0.1, height * 0.1)
+            text = data.replace("\r\n", "\n").strip("\n")
+            self.run(lambda session: session.add_text(page, u, v, text, {"size": self.fontSize}, None), lambda _outcome: self.edited("Text eingefügt"), busy="Text wird eingefügt …")
+            return
+        self.app.notify("reader", "info", "Die Zwischenablage enthält nichts, was sich hier einfügen lässt.", title="Einfügen", auto_hide=6000)
+
+    def _paste_image(self, page: int, image, at: tuple[float, float] | None) -> None:
+        import tempfile
+
+        handle, path = tempfile.mkstemp(prefix="pdf-tool-einfuegen-", suffix=".png")
+        os.close(handle)
+        if not image.save(path, "PNG"):
+            os.remove(path)
+            self.app.notify("reader", "error", "Das Bild aus der Zwischenablage ließ sich nicht übernehmen.", title="Einfügen")
+            return
+        width, height = self.pageSizes[page] if page < len(self.pageSizes) else (595.0, 842.0)
+        # In Punkten wie bei 96 dpi, höchstens halb so groß wie die Seite
+        w, h = image.width() * 0.75, image.height() * 0.75
+        shrink = min(1.0, width * 0.5 / max(1.0, w), height * 0.5 / max(1.0, h))
+        w, h = w * shrink, h * shrink
+        u0, v0 = at if at is not None else ((width - w) / 2, (height - h) / 2)
+        rect = [u0, v0, u0 + w, v0 + h]
+
+        def cleanup(_result=None) -> None:
+            try:
+                os.remove(path)
+            except OSError as exc:
+                _log().info("Temporäres Bild ließ sich nicht entfernen: %s", type(exc).__name__)
+
+        def done(_index) -> None:
+            cleanup()
+            self.edited("Bild eingefügt")
+            self._reselect[page] = [rect]
+
+        def failed(exc: BaseException) -> None:
+            cleanup()
+            self.report(exc)
+
+        self.run(lambda session: session.insert_image(page, path, rect), done, busy="Bild wird eingefügt …", failed=failed)
+
+    # Texterkennung (OCR) -------------------------------------------------------------------------------------
+    def check_scanned(self) -> None:
+        """Nach dem Öffnen im Hintergrund: Bestehen die ersten Seiten aus Scans ohne Text? Dann bietet ein
+        Hinweis die Texterkennung an (nur lesen, ohne Tesseract)."""
+        pages = list(range(min(self.pageCount, SCAN_CHECK_PAGES)))
+        if not pages:
+            return
+
+        def done(result) -> None:
+            scans, _revision = result
+            self.scanHint = any(scan["needs"] for scan in scans)
+
+        self.run(lambda session: session.ocr_scan(pages), done, refresh=False, priority=BACKGROUND, failed=lambda exc: _log().info("Prüfung auf Scans fehlgeschlagen: %s", type(exc).__name__))
+
+    @Slot("QVariantList")
+    def recognizeText(self, selected) -> None:  # noqa: N802
+        """»Text erkennen (OCR)«: Seiten (alle, aktuelle oder ausgewählte) und Sprachen wählen, dann läuft die
+        Erkennung im Hintergrund – Seite für Seite, abbrechbar, am Ende ein Schritt für Rückgängig."""
+        if self.ocrRunning or self.pageCount == 0 or not self.edit_allowed():
+            return
+        reader = self.reader
+        if reader.ocrState == "fehlt":
+            self.app.notify("reader", "error", "Die Texterkennung (Tesseract) wurde nicht gefunden. Bitte PDF Tool neu installieren.", title="Texterkennung nicht verfügbar")
+            return
+        reader.probe_ocr()
+        chosen = sorted({int(page) for page in (selected or []) if 0 <= int(page) < self.pageCount})
+        data = {"pageCount": self.pageCount, "current": self.currentPage, "selected": chosen, "languages": reader.ocr_languages(), "scope": "selected" if chosen else "all"}
+        answer, result = self.app.dialogs.ask("ocr", "Text erkennen (OCR)", "", primary="Erkennen", data=data, width=520)
+        if answer != "primary" or self.session is None:
+            return
+        installed = [entry["code"] for entry in reader.ocrLanguages]
+        languages = [code for code in result.get("languages", []) if code in installed]
+        if not languages or reader.ocr_engine() is None:
+            self.app.notify("reader", "error", "Keine Sprache für die Texterkennung gewählt bzw. verfügbar.", title="Texterkennung nicht möglich")
+            return
+        scope = result.get("scope", "all")
+        pages = chosen if scope == "selected" and chosen else ([self.currentPage] if scope == "current" else list(range(self.pageCount)))
+        reader.remember_ocr_languages(languages)
+        self._start_ocr(pages, languages, bool(result.get("redo")))
+
+    def _on_worker(self, func: Callable[[Any], Any]) -> Any:
+        """Aus dem Thread der Texterkennung: ``func(session)`` im Arbeitsthread ausführen und warten."""
+        task = self.engine.submit(lambda: func(self.session), priority=BACKGROUND, label="texterkennung")
+        result = self.engine.wait(task, timeout=600)
+        if task.cancelled:
+            from tools.pdf_editor import ocr
+
+            raise ocr.OcrCancelled()
+        return result
+
+    def _start_ocr(self, pages: list[int], languages: list[str], redo: bool) -> None:
+        from tools.pdf_editor import ocr
+
+        engine = self.reader.ocr_engine()
+        cancel = threading.Event()
+        self._ocr_cancel = cancel
+        self.ocrRunning = True
+        self.ocrDone = 0
+        self.ocrTotal = 0
+        self.ocrStatus = "Seiten werden geprüft …"
+        post = self.app.worker.post
+        started = time.monotonic()
+
+        def progress(done: int, total: int, page: int) -> None:
+            self.ocrDone, self.ocrTotal = done, total
+            self.ocrStatus = f"Seite {page + 1} wird erkannt ({done + 1} von {total})" if done < total else "Erkannter Text wird übernommen und geprüft …"
+
+        def job() -> dict:
+            scans, revision = self._on_worker(lambda session: session.ocr_scan(pages))
+            todo = [scan["page"] for scan in scans if scan["needs"] or (redo and scan["layer"])]
+            with_text = sum(1 for scan in scans if not scan["needs"] and not scan["layer"])
+            if not todo:
+                return {"pages": 0, "skipped": len(scans), "withText": with_text, "words": 0, "confidence": 0.0, "language": ""}
+            results = []
+            for number, page in enumerate(todo):
+                if cancel.is_set():
+                    raise ocr.OcrCancelled()
+                post(progress, number, len(todo), page)
+                png, dpi, now = self._on_worker(lambda session, page=page: session.ocr_image(page))
+                if now != revision:
+                    raise ocr.OcrError("Das Dokument wurde während der Texterkennung geändert. Bitte den Text erneut erkennen.")
+                results.append(ocr.recognize(engine, page, png, languages, dpi, cancel=cancel))
+                del png
+            if cancel.is_set():
+                raise ocr.OcrCancelled()
+            post(progress, len(todo), len(todo), todo[-1])
+            changed, state = self._on_worker(lambda session: (session.ocr_apply(results, revision), session.state()))
+            words = sum(result.words for result in results)
+            weighted = sum(result.confidence * result.words for result in results) / words if words else 0.0
+            found = Counter(result.language for result in results if result.language).most_common(1)
+            return {"pages": changed, "skipped": len(scans) - len(todo), "withText": with_text, "words": words, "confidence": weighted, "language": found[0][0] if found else "", "state": state}
+
+        def finished() -> None:
+            self.ocrRunning = False
+            self.ocrStatus = ""
+            self._ocr_cancel = None
+
+        def done(summary: dict) -> None:
+            finished()
+            if summary.get("state") is not None:
+                self.apply_state(summary["state"])
+                self._reload_tool()
+            _log().info("Texterkennung: %d Seiten, %d Wörter, %.0f %% Sicherheit, %d ms", summary["pages"], summary["words"], summary["confidence"], (time.monotonic() - started) * 1000)
+            if summary["pages"] == 0:
+                reason = "Die gewählten Seiten haben bereits Text – sie sind schon durchsuchbar." if summary["withText"] else "Auf den gewählten Seiten wurde kein Text erkannt."
+                self.app.notify("reader", "info", reason, title="Text erkennen", auto_hide=9000)
+                return
+            self.scanHint = False
+            pages_text = "1 Seite" if summary["pages"] == 1 else f"{summary['pages']} Seiten"
+            message = f"{pages_text} durchsuchbar gemacht – {summary['words']} Wörter, Sicherheit im Mittel {round(summary['confidence'])} %."
+            if summary["skipped"]:
+                message += f" {summary['skipped']} Seite(n) übersprungen (bereits mit Text)."
+            message += " Das Aussehen der Seiten ist unverändert; Rückgängig nimmt die Erkennung zurück."
+            self.edited("Text erkannt")
+            self.app.notify("reader", "success", message, title="Text erkannt", auto_hide=12000)
+
+        def failed(exc: BaseException, details: str) -> None:
+            finished()
+            if isinstance(exc, ocr.OcrCancelled):
+                self.app.notify("reader", "info", "Die Texterkennung wurde abgebrochen. Das Dokument ist unverändert.", title="Abgebrochen", auto_hide=8000)
+                return
+            if isinstance(exc, EditorError):
+                _log().warning("Texterkennung fehlgeschlagen: %s", type(exc).__name__)
+                self.app.notify("reader", "error", str(exc), title="Text erkennen nicht möglich")
+                return
+            self.report(exc, details)
+
+        self.app.worker.run(job, done, failed)
+
+    @Slot()
+    def cancelOcr(self) -> None:  # noqa: N802
+        if self._ocr_cancel is not None:
+            self._ocr_cancel.set()
+            self.ocrStatus = "Wird abgebrochen …"
+
+    @Slot("QVariantList")
+    def removeRecognizedText(self, selected) -> None:  # noqa: N802
+        """Von PDF Tool erkannten Text (Textebenen) wieder entfernen – alle bzw. die ausgewählten Seiten."""
+        if not self.edit_allowed():
+            return
+        pages = sorted({int(page) for page in (selected or []) if 0 <= int(page) < self.pageCount}) or list(range(self.pageCount))
+
+        def done(count: int) -> None:
+            if count:
+                self.edited("Erkannten Text entfernt")
+                self.app.notify("reader", "success", f"Erkannter Text von {count} Seite(n) entfernt.", title="Erkannten Text entfernen", auto_hide=8000)
+            else:
+                self.app.notify("reader", "info", "Auf diesen Seiten gibt es keinen von PDF Tool erkannten Text.", title="Erkannten Text entfernen", auto_hide=8000)
+
+        self.run(lambda session: session.ocr_remove(pages), done, busy="Erkannter Text wird entfernt …")
 
     # Bilder --------------------------------------------------------------------------------------------------
     @Slot(int)
@@ -1061,9 +1383,21 @@ class DocumentController(Observable):
             self.annotations = items
             by_page: dict[str, list] = {}
             for item in items:
-                by_page.setdefault(str(item["page"]), []).append(item)
+                if not item.get("replyTo"):  # Antworten haben kein eigenes Bild auf der Seite
+                    by_page.setdefault(str(item["page"]), []).append(item)
             self.annotationPages = by_page
-            self.annotationList.set_items([{key: item[key] for key in ("key", "page", "label", "contents", "author", "modified", "color", "subtype")} for item in items])
+            # Antworten stehen im Verlauf direkt unter ihrem Kommentar (eingerückt)
+            order = [item for item in items if not item.get("replyTo")]
+            replies: dict[str, list] = {}
+            for item in items:
+                if item.get("replyTo"):
+                    replies.setdefault(item["replyTo"], []).append(item)
+            listed = []
+            for item in order:
+                listed.append({**item, "depth": 0})
+                listed += [{**reply, "depth": 1} for reply in replies.pop(item["key"], [])]
+            listed += [{**reply, "depth": 1} for group in replies.values() for reply in group]  # Kommentar fehlt
+            self.annotationList.set_items([{key: item[key] for key in ANNOTATION_ROLES} for item in listed])
 
         self.run(lambda session: session.annotations(None), done, refresh=False, priority=VIEW, key="annotations")
 
@@ -1119,6 +1453,93 @@ class DocumentController(Observable):
     def deleteAnnotation(self, key: str) -> None:  # noqa: N802
         self.selectedObject = {}
         self._annot_op(lambda session: session.delete_annotation(key), "Kommentar gelöscht")
+
+    @Slot(str, str, "QVariant")
+    def styleAnnotation(self, key: str, name: str, value) -> None:  # noqa: N802
+        """Linienstärke, Füllung, Deckkraft oder Schriftgröße eines Kommentars aus PDF Tool ändern."""
+        if hasattr(value, "name") and callable(value.name):  # QColor aus QML
+            value = value.name()
+        self._annot_op(lambda session: session.restyle_annotation(key, name, value), "Kommentar formatiert")
+
+    @Slot(str, "QVariantList")
+    def resizeAnnotation(self, key: str, rect) -> None:  # noqa: N802
+        box = [float(v) for v in rect]
+        selected = dict(self.selectedObject)
+        if selected.get("key") == key:
+            self.selectedObject = {**selected, "view": box}
+        self._annot_op(lambda session: session.resize_annotation(key, box), "Kommentargröße geändert")
+
+    @Slot(str, str)
+    def replyAnnotation(self, key: str, text: str) -> None:  # noqa: N802
+        """Antwort auf einen Kommentar – erscheint im Verlauf unter ihm."""
+        if text.strip():
+            self._annot_op(lambda session: session.reply_annotation(key, text), "Antwort hinzugefügt")
+
+    # Anhänge --------------------------------------------------------------------------------------------------------
+    @Slot()
+    def loadAttachments(self) -> None:  # noqa: N802
+        def done(items) -> None:
+            self.attachmentList.set_items([{**{key: item[key] for key in ("key", "name", "description", "modified", "page", "openable")}, "sizeText": _size_label(item["size"])} for item in items])
+            self.attachmentCount = len(items)
+
+        def failed(exc: BaseException) -> None:
+            self.attachmentList.set_items([])
+            self.attachmentCount = 0
+            self.report(exc)
+
+        self.run(lambda session: session.attachments(), done, refresh=False, priority=BACKGROUND, key="attachments", failed=failed)
+
+    def _attachment(self, key: str) -> dict:
+        return next((item for item in self.attachmentList.items() if item["key"] == key), {})
+
+    @Slot(str)
+    def saveAttachment(self, key: str) -> None:  # noqa: N802
+        item = self._attachment(key)
+        if not item:
+            return
+        target = self.reader.pick_save_file(item["name"], "Anhang speichern")
+        if not target:
+            return
+        self.run(lambda session: session.save_attachment(key, target), lambda path: self.app.set_status(f"Anhang gespeichert: {path}", "success"), refresh=False, busy="Anhang wird gespeichert …")
+
+    @Slot(str)
+    def openAttachment(self, key: str) -> None:  # noqa: N802
+        item = self._attachment(key)
+        if not item:
+            return
+        if not item["openable"]:
+            self.app.notify("reader", "warning", f"»{item['name']}« wird aus Sicherheitsgründen nicht geöffnet – Programme und Skripte aus PDFs werden nie ausgeführt. Mit »Speichern unter …« lässt sich die Datei speichern.", title="Anhang nicht geöffnet")
+            return
+        if not self.app.dialogs.confirm(f"»{item['name']}« öffnen?", "Anhänge können schädliche Inhalte enthalten. Öffnen Sie nur Dateien aus Quellen, denen Sie vertrauen. Die Datei wird mit dem zugeordneten Programm geöffnet.", "Öffnen", danger=False):
+            return
+        folder = self.reader.attachment_dir()
+
+        def done(path: str) -> None:
+            from .. import files
+
+            try:
+                files.open_path(path)
+            except OSError as exc:
+                self.app.notify("reader", "error", f"Für diesen Dateityp ist kein Programm zugeordnet ({exc.strerror or 'nicht möglich'}).", title="Öffnen nicht möglich")
+
+        self.run(lambda session: session.open_attachment(key, folder), done, refresh=False, busy="Anhang wird geöffnet …")
+
+    @Slot()
+    def addAttachment(self) -> None:  # noqa: N802
+        if not self.edit_allowed():
+            return
+        path = self.reader.pick_file("Datei anhängen")
+        if path:
+            self.run(lambda session: session.add_attachment(path, ""), lambda _key: (self.edited("Anhang hinzugefügt"), self.loadAttachments()), busy="Anhang wird hinzugefügt …")
+
+    @Slot(str)
+    def removeAttachment(self, key: str) -> None:  # noqa: N802
+        item = self._attachment(key)
+        if not item or not self.edit_allowed():
+            return
+        if not self.app.dialogs.confirm(f"»{item['name']}« entfernen?", "Der Anhang wird aus dem Dokument entfernt. Mit »Rückgängig« (Strg+Z) lässt er sich zurückholen, solange das Dokument offen ist.", "Entfernen"):
+            return
+        self.run(lambda session: session.remove_attachment(key), lambda _result: (self.edited("Anhang entfernt"), self.loadAttachments()), busy="")
 
     # Formulare ------------------------------------------------------------------------------------------------------
     @Slot()
@@ -1198,6 +1619,7 @@ class DocumentController(Observable):
             self._insert_file(index, path, None)
 
     def _insert_file(self, index: int, path: str, password: str | None) -> None:
+        """Seiten einer anderen PDF einfügen – alle oder nur ausgewählte (z. B. »1-3, 5«)."""
         if not self.edit_allowed("assemble"):
             return
 
@@ -1209,12 +1631,74 @@ class DocumentController(Observable):
                 return
             self.report(exc)
 
-        def done(notes) -> None:
-            self.edited("Seiten eingefügt")
-            if notes:
-                self.app.notify("reader", "info", " ".join(notes), title="Seiten eingefügt", auto_hide=10000)
+        def counted(count: int) -> None:
+            from tools.pdf_editor import pages as page_ops
 
-        self.run(lambda session: session.insert_file(index, path, password), done, busy="Seiten werden eingefügt …", failed=failed)
+            chosen = None
+            if count > 1:
+                name = os.path.basename(path)
+                answer, data = self.app.dialogs.ask(
+                    "text_input", "Seiten aus PDF einfügen", f"»{name}« hat {count} Seiten. Welche sollen eingefügt werden?",
+                    primary="Einfügen", close="Abbrechen",
+                    data={"label": "Seiten", "value": f"1-{count}", "placeholder": "z. B. 1-3, 5", "hint": "Leer oder »1-" + str(count) + "« fügt alle Seiten ein; einzelne Seiten mit Komma, Bereiche mit Bindestrich."},
+                )
+                if answer != "primary":
+                    return
+                spec = str(data.get("value", "")).strip()
+                if spec:
+                    try:
+                        chosen = page_ops.parse_pages(spec, count)
+                    except ValueError as exc:
+                        self.app.notify("reader", "warning", str(exc), title="Seiten einfügen")
+                        return
+                    if chosen == list(range(count)):
+                        chosen = None
+
+            def done(notes) -> None:
+                self.edited("Seiten eingefügt")
+                if notes:
+                    self.app.notify("reader", "info", " ".join(notes), title="Seiten eingefügt", auto_hide=10000)
+
+            self.run(lambda session: session.insert_file(index, path, password, chosen), done, busy="Seiten werden eingefügt …", failed=failed)
+
+        self.run(lambda session: session.source_pages(path, password), counted, refresh=False, failed=failed, priority=VIEW)
+
+    # Seiten über die Zwischenablage (auch in andere Tabs) ------------------------------------------------------
+    @Slot("QVariantList")
+    def copyPages(self, indexes: list) -> None:  # noqa: N802
+        chosen = sorted({int(i) for i in indexes if 0 <= int(i) < self.pageCount}) or [self.currentPage]
+        if not (self.permissions or {}).get("copy", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Seiten.", title="Kopieren nicht erlaubt")
+            return
+        self.run(lambda session: session.copy_pages(chosen), lambda data: self.reader.set_page_clip(data, len(chosen)), refresh=False, priority=VIEW, busy="Seiten werden kopiert …")
+
+    @Slot("QVariantList")
+    def cutPages(self, indexes: list) -> None:  # noqa: N802
+        """Ausschneiden: erst kopieren – nur wenn das gelungen ist, werden die Seiten entfernt."""
+        chosen = sorted({int(i) for i in indexes if 0 <= int(i) < self.pageCount}) or [self.currentPage]
+        if len(chosen) >= self.pageCount:
+            self.app.notify("reader", "warning", "Mindestens eine Seite muss im Dokument bleiben.", title="Nicht möglich")
+            return
+        if not (self.permissions or {}).get("copy", True) or not self.edit_allowed("assemble"):
+            if not (self.permissions or {}).get("copy", True):
+                self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Seiten.", title="Kopieren nicht erlaubt")
+            return
+
+        def copied(data: bytes) -> None:
+            self.reader.set_page_clip(data, len(chosen))
+            self._page_op(lambda session: session.delete_pages(chosen, cut=True), "Seiten ausgeschnitten" if len(chosen) > 1 else "Seite ausgeschnitten")
+
+        self.run(lambda session: session.copy_pages(chosen), copied, refresh=False, priority=VIEW, busy="Seiten werden kopiert …")
+
+    @Slot(int)
+    def pastePages(self, index: int) -> None:  # noqa: N802
+        """Kopierte Seiten an Position ``index`` einfügen (0 = vor die erste Seite, Seitenzahl = ans Ende)."""
+        data = self.reader.page_clip()
+        if not data:
+            self.app.notify("reader", "info", "Es wurden noch keine Seiten kopiert.", title="Seiten einfügen", auto_hide=6000)
+            return
+        target = max(0, min(int(index), self.pageCount))
+        self._page_op(lambda session: session.paste_pages(target, data), "Seiten eingefügt", lambda _notes: self.goTo(target))
 
     @Slot()
     def mergeFiles(self) -> None:  # noqa: N802
@@ -1291,12 +1775,12 @@ class DocumentController(Observable):
     # Rückgängig, Speichern ------------------------------------------------------------------------------------------
     @Slot()
     def undo(self) -> None:
-        if self.undoText:
+        if self.undoText and not self.ocrRunning:
             self.run(lambda session: session.undo(), lambda title: (self.edited(f"Rückgängig: {title}" if title else ""), self._reload_tool()))
 
     @Slot()
     def redo(self) -> None:
-        if self.redoText:
+        if self.redoText and not self.ocrRunning:
             self.run(lambda session: session.redo(), lambda title: (self.edited(f"Wiederholt: {title}" if title else ""), self._reload_tool()))
 
     def _reload_tool(self) -> None:
@@ -1307,6 +1791,7 @@ class DocumentController(Observable):
         elif self.tool == "form":
             self.loadFields()
         self.loadAnnotations()
+        self.loadAttachments()
 
     def save(self, target: str | None = None, *, force: bool = False, then: Callable[[bool], None] | None = None) -> None:
         """Speichern (``target`` = Speichern unter). ``then(erfolgreich)`` danach.
@@ -1441,12 +1926,17 @@ class DocumentController(Observable):
     # Drucken ------------------------------------------------------------------------------------------------------
     @Slot()
     def printDocument(self) -> None:  # noqa: N802
+        self.printPages([])
+
+    @Slot("QVariantList")
+    def printPages(self, pages: list) -> None:  # noqa: N802
+        """Drucken – ``pages``: ausgewählte Seiten (im Dialog als »Auswahl« vorgewählt), leer: wie üblich."""
         if not (self.permissions or {}).get("print", True):
             self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Drucken.", title="Drucken nicht erlaubt")
             return
         from .printing import print_document
 
-        print_document(self)
+        print_document(self, [int(page) for page in pages or []])
 
     @Slot()
     def previewPrint(self) -> None:  # noqa: N802
@@ -1461,7 +1951,10 @@ class DocumentController(Observable):
     def shutdown(self, discard_recovery: bool) -> None:
         self._closing = True
         self.cancel_search()
-        self.app.timers.cancel(f"reader:recovery:{self.ident}")
+        if self._ocr_cancel is not None:
+            self._ocr_cancel.set()  # beendet einen laufenden Tesseract-Prozess
+        for timer in ("recovery", "nudge", "saved"):
+            self.app.timers.cancel(f"reader:{timer}:{self.ident}")
         for task in self._pending.values():
             task.cancel()
 
@@ -1474,6 +1967,14 @@ class DocumentController(Observable):
 
         self.engine.submit(lambda: close(self.session), priority=EDIT, label="schließen")
         self.closed.emit()
+
+
+def _size_label(size: int) -> str:
+    if size < 0:
+        return ""
+    if size >= 1024 * 1024:
+        return f"{size / 1024 / 1024:.1f} MB".replace(".", ",")
+    return f"{max(1, round(size / 1024))} KB" if size else "0 KB"
 
 
 def _line_rects(boxes: list) -> list[list[float]]:

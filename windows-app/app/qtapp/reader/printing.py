@@ -2,6 +2,10 @@
 Seitenanpassung und Vorschau. Gerendert wird jede Seite im Arbeitsthread in Druckerauflösung
 (höchstens 300 dpi); gezeichnet wird im GUI-Thread.
 
+* Bereich: alle Seiten, aktuelle Seite, ausgewählte Seiten (Auswahl in »Seiten organisieren«) oder
+  Seitenbereiche wie »1-3, 5«.
+* Kopien: übernimmt der Druckertreiber; kann er keine Kopien, druckt PDF Tool sie selbst (sortiert
+  bzw. unsortiert wie gewählt).
 * Ausrichtung: wie im Dialog gewählt; ohne Änderung im Dialog je Seite wie das Dokument
   (Querformat-Seiten quer).
 * Anpassung: Originalgröße, wenn die Seite auf das Papier passt – sonst verkleinert auf den
@@ -13,27 +17,33 @@ from __future__ import annotations
 PRINT_DPI_MAX = 300
 
 
-def print_document(doc) -> None:
+def print_document(doc, selection: list[int] | None = None) -> None:
+    """Druckdialog; ``selection``: ausgewählte Seiten (dann ist »Auswahl« vorgewählt)."""
     from PySide6.QtCore import QRectF
     from PySide6.QtPrintSupport import QAbstractPrintDialog, QPrintDialog, QPrinter
 
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
     printer.setDocName(doc.name or "PDF")
     printer.setFromTo(1, max(1, doc.pageCount))
+    selection = sorted({page for page in (selection or []) if 0 <= page < doc.pageCount})
     before = printer.pageLayout().orientation()
     dialog = QPrintDialog(printer)
     dialog.setWindowTitle("Drucken")
-    dialog.setOptions(
+    options = (
         QAbstractPrintDialog.PrintDialogOption.PrintPageRange
         | QAbstractPrintDialog.PrintDialogOption.PrintCurrentPage
         | QAbstractPrintDialog.PrintDialogOption.PrintCollateCopies
         | QAbstractPrintDialog.PrintDialogOption.PrintShowPageSize
     )
+    if selection:
+        options |= QAbstractPrintDialog.PrintDialogOption.PrintSelection
+        printer.setPrintRange(QPrinter.PrintRange.Selection)
+    dialog.setOptions(options)
     if dialog.exec() != QPrintDialog.DialogCode.Accepted:
         return
-    pages = _chosen_pages(printer, doc)
+    pages = chosen_pages(printer, doc.pageCount, doc.currentPage, selection)
     chosen = printer.pageLayout().orientation()
-    _paint(printer, doc, pages, QRectF, fixed=chosen if chosen != before else None)
+    _paint(printer, doc, copies(pages, printer), QRectF, fixed=chosen if chosen != before else None)
 
 
 def preview_document(doc) -> None:
@@ -49,16 +59,36 @@ def preview_document(doc) -> None:
     dialog.exec()
 
 
-def _chosen_pages(printer, doc) -> list[int]:
+def chosen_pages(printer, count: int, current: int, selection: list[int]) -> list[int]:
+    """Zu druckende Seiten (0-basiert) nach dem Bereich im Druckdialog."""
     from PySide6.QtPrintSupport import QPrinter
 
     mode = printer.printRange()
     if mode == QPrinter.PrintRange.CurrentPage:
-        return [doc.currentPage]
+        return [current] if 0 <= current < count else []
+    if mode == QPrinter.PrintRange.Selection and selection:
+        return list(selection)
     if mode == QPrinter.PrintRange.PageRange:
-        first, last = max(1, printer.fromPage()), min(doc.pageCount, printer.toPage() or doc.pageCount)
+        ranges = printer.pageRanges()
+        pages: list[int] = []
+        if not ranges.isEmpty():
+            for item in ranges.toRangeList():  # mehrere Bereiche wie »1-3, 5«
+                pages += [page - 1 for page in range(max(1, item.from_), min(count, item.to) + 1)]
+            return pages
+        first, last = max(1, printer.fromPage()), min(count, printer.toPage() or count)
         return list(range(first - 1, last))
-    return list(range(doc.pageCount))
+    return list(range(count))
+
+
+def copies(pages: list[int], printer) -> list[int]:
+    """Kopien, die der Treiber nicht selbst druckt: Seitenfolge vervielfachen (sortiert: 1 2 3 1 2 3,
+    unsortiert: 1 1 2 2 3 3). Kann der Treiber Kopien, bleibt es bei einer Folge."""
+    count = max(1, printer.copyCount())
+    if count == 1 or printer.supportsMultipleCopies():
+        return pages
+    if printer.collateCopies():
+        return pages * count
+    return [page for page in pages for _copy in range(count)]
 
 
 def _paint(printer, doc, pages: list[int], QRectF, preview: bool = False, fixed=None) -> None:  # noqa: N803

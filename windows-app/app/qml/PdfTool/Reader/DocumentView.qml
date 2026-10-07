@@ -316,7 +316,12 @@ Flickable {
         rememberAnchor()
         scrollSerial += 1
     }
+    // Lage je Tab (Seite und Stelle in der Mitte der Ansicht): zurück im Tab steht die Ansicht wieder dort
+    property var shownDoc: null
+    property var tabAnchors: ({})
     onDocChanged: {
+        if (shownDoc && viewAnchor) tabAnchors[shownDoc.docId] = viewAnchor
+        shownDoc = doc
         slotPages = []
         editing = null
         takeRevealTarget()  // nur merken: ein neuer Tab zeigt seine aktuelle Seite
@@ -327,7 +332,25 @@ Flickable {
         contentX = clampX((contentWidth - width) / 2)
         contentY = 0
         restoring = false
-        reveal(doc.currentPage, -1, -1)
+        var saved = tabAnchors[doc.docId]
+        if (saved) {
+            // Seitengrößen und Maßstab des Tabs kommen über Bindungen evtl. erst nach diesem Handler an:
+            // die Stelle als Anker setzen (gilt auch für onSizesChanged/onZoomScaleChanged) und danach
+            // noch einmal genau anfahren
+            var anchor = { page: saved.page, u: saved.u, v: saved.v, x: width / 2, y: height / 2 }
+            var key = doc.docId
+            viewAnchor = anchor
+            restorePoint(anchor)
+            Qt.callLater(function() {
+                if (!view.doc || view.doc.docId !== key) return
+                view.relayout()
+                view.restorePoint({ page: anchor.page, u: anchor.u, v: anchor.v, x: view.width / 2, y: view.height / 2 })
+                view.rememberAnchor()
+                view.updateSlots()
+            })
+        } else {
+            reveal(doc.currentPage, -1, -1)
+        }
     }
     Component.onCompleted: {
         contentItem.transform = [zoomTransform]
@@ -460,6 +483,7 @@ Flickable {
         case Qt.Key_Escape:
             if (view.doc.selectionPage >= 0) view.doc.clearSelection()
             else if (view.doc.tool !== "select") view.doc.setTool("select")
+            else if (Reader.fullScreen) Reader.leaveFullScreen()
             else { event.accepted = false; return }
             break
         default:
@@ -471,16 +495,23 @@ Flickable {
 
     // Objekt bearbeiten (nur mit dem Fokus in der Seite – Eingabefelder behalten ihre Tasten): Tab wählt
     // das nächste Objekt, Pfeiltasten verschieben die Auswahl (1 pt, mit Umschalt 10 pt), Entf löscht,
-    // Eingabe/F2 bearbeitet, Strg+C/X/D kopiert, schneidet aus, dupliziert, Esc hebt die Auswahl auf
+    // Eingabe/F2 bearbeitet, Strg+C/X/V/D kopiert, schneidet aus, fügt ein, dupliziert, Strg+Umschalt+]/[
+    // legt nach vorn bzw. hinten, Esc hebt die Auswahl auf
     function objectKey(event) {
         var d = view.doc
         if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ControlModifier)) { d.selectNextObject(1); return true }
         if (event.key === Qt.Key_Backtab) { d.selectNextObject(-1); return true }
+        if (event.matches(StandardKey.Paste)) { d.pasteObjects(); return true }
         var chosen = d.objectSelection
         if (chosen.length === 0) return false
         var step = (event.modifiers & Qt.ShiftModifier) ? 10 : 1
         if (event.matches(StandardKey.Copy)) { d.copyObjects(); return true }
         if (event.matches(StandardKey.Cut)) { d.cutObjects(); return true }
+        if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_BracketRight || event.key === Qt.Key_BracketLeft)) {
+            var text = chosen.some(function(item) { return item.kind === "text" || item.kind === "word" })
+            if (!text) d.arrangeObjects(event.key === Qt.Key_BracketRight)
+            return true
+        }
         switch (event.key) {
         case Qt.Key_Left: d.nudgeObjects(-step, 0); return true
         case Qt.Key_Right: d.nudgeObjects(step, 0); return true
@@ -494,7 +525,7 @@ Flickable {
             return true
         case Qt.Key_Return: case Qt.Key_Enter: case Qt.Key_F2: {
             var item = chosen[0]
-            if (chosen.length !== 1 || item.kind === "image") return false
+            if (chosen.length !== 1 || (item.kind !== "text" && item.kind !== "word")) return false
             view.openEditor({ kind: "object", page: item.page, rect: item.view, text: item.text, object: item, caret: item.text.length })
             return true
         }

@@ -35,16 +35,33 @@ Item {
     property string color: "#000000"
     property string family: "Helvetica"
     property string align: "left"
+    property bool underline: false   // Linie unter bzw. durch den Text (wird beim Übernehmen gezeichnet)
+    property bool strike: false
     property bool styleTouched: false
+    property bool familyTouched: false  // die Schrift wird nur geschickt, wenn sie gewählt wurde
 
     visible: open
-    x: pageArea.x + (request ? request.rect[0] * s : 0) - 4
+    // An der Stelle in der Seite – die Leiste bleibt aber ganz im sichtbaren Bereich (breite Leiste, Text am
+    // rechten Rand)
+    readonly property real wantedX: pageArea.x + (request ? request.rect[0] * s : 0) - 4
+    x: host ? Math.max(host.contentX + 8, Math.min(wantedX, host.contentX + host.width - width - 8)) : wantedX
     y: pageArea.y + (request ? request.rect[1] * s : 0) - 4 - bar.height - 6
-    width: Math.max(box.width + 8, bar.implicitWidth)
+    width: Math.max(box.width + 8, bar.wanted)
     height: column.implicitHeight
 
     onRequestChanged: if (request) setup(request)
 
+    // Breite aller sichtbaren Elemente in einer Zeile (Wiederholer selbst haben keine Breite)
+    function rowWidth(container) {
+        var total = 0, count = 0
+        for (var i = 0; i < container.children.length; ++i) {
+            var item = container.children[i]
+            if (!item.visible || item.width <= 0) continue
+            total += item.width
+            count += 1
+        }
+        return total + Math.max(0, count - 1) * container.spacing
+    }
     function displayFamily(name) {
         var lower = String(name).toLowerCase()
         if (lower.indexOf("times") >= 0 || lower.indexOf("serif") >= 0 && lower.indexOf("sans") < 0) return "Times New Roman"
@@ -53,6 +70,9 @@ Item {
     }
     function setup(r) {
         styleTouched = false
+        familyTouched = false
+        underline = false
+        strike = false
         if (r.kind === "block") {
             var b = r.block
             size = b.size
@@ -101,10 +121,14 @@ Item {
                 if (bold !== block.bold) style.bold = bold
                 if (italic !== block.italic) style.italic = italic
                 if (color.toUpperCase() !== String(block.color).toUpperCase()) style.color = color
+                if (familyTouched) style.family = family
+                if (align !== (block.align || "left")) style.align = align
+                if (underline) style.underline = true
+                if (strike) style.strike = true
             }
             if (text !== block.text || Object.keys(style).length > 0) doc.editBlock(r.page, block.id, text, style)
         } else if (r.kind === "text") {
-            if (text.trim() !== "") doc.addText(r.page, r.rect[0], r.rect[1], text, { "family": family, "size": size, "bold": bold, "italic": italic, "color": color, "align": align })
+            if (text.trim() !== "") doc.addText(r.page, r.rect[0], r.rect[1], text, { "family": family, "size": size, "bold": bold, "italic": italic, "color": color, "align": align, "underline": underline, "strike": strike })
         } else if (r.kind === "note") {
             if (text.trim() !== "") doc.addNote(r.page, r.rect[0], r.rect[1], text)
         } else if (r.kind === "textbox") {
@@ -128,25 +152,33 @@ Item {
         // Leiste: Stil (Text ändern/hinzufügen), Abbrechen, Übernehmen
         Rectangle {
             id: bar
-            Layout.preferredWidth: barRow.implicitWidth + 12
-            Layout.preferredHeight: Metrics.controlHeight + 12
+            // So breit wie nötig, höchstens so breit wie die sichtbare Ansicht – dann bricht die Leiste um
+            readonly property real room: root.host ? Math.max(200, root.host.width - 16) : 100000
+            readonly property real wanted: Math.min(root.rowWidth(barRow) + 12, room)
+            Layout.preferredWidth: wanted
+            Layout.preferredHeight: barRow.height + 12
             color: Theme.flyout
             border.color: Theme.flyoutStroke
             radius: Metrics.radiusOverlay
             PShadow { radius: Metrics.radiusOverlay }
-            RowLayout {
+            Flow {
                 id: barRow
-                anchors.centerIn: parent
+                x: 6
+                y: 6
+                width: bar.width - 12
                 spacing: 4
                 PComboBox {
-                    visible: root.kind === "text"
+                    objectName: "readerEditorFamily"
+                    visible: root.styled
                     preferredWidth: 190
                     label: "Schriftart"
                     model: Reader.fontFamilies
                     textRole: "label"
                     valueRole: "value"
+                    // Ein bestehender Block zeigt seine Schrift, solange keine andere gewählt ist
+                    displayText: root.kind === "block" && !root.familyTouched ? String(root.family).split("+").pop() : currentText
                     currentIndex: Math.max(0, indexOfValue(root.family))
-                    onActivated: (index) => { root.family = Reader.fontFamilies[index].value; root.styleTouched = true }
+                    onActivated: (index) => { root.family = Reader.fontFamilies[index].value; root.familyTouched = true; root.styleTouched = true }
                 }
                 PTextField {
                     visible: root.styled
@@ -177,6 +209,37 @@ Item {
                     onClicked: { root.italic = !root.italic; root.styleTouched = true }
                 }
                 PIconButton {
+                    objectName: "readerEditorUnderline"
+                    visible: root.styled
+                    iconName: "text_underline"
+                    tip: "Unterstreichen (zeichnet eine Linie in der Textfarbe)"
+                    checkable: true
+                    checked: root.underline
+                    onClicked: { root.underline = !root.underline; root.styleTouched = true }
+                }
+                PIconButton {
+                    objectName: "readerEditorStrike"
+                    visible: root.styled
+                    iconName: "text_strikethrough"
+                    tip: "Durchstreichen (zeichnet eine Linie in der Textfarbe)"
+                    checkable: true
+                    checked: root.strike
+                    onClicked: { root.strike = !root.strike; root.styleTouched = true }
+                }
+                Rectangle { visible: root.styled; width: 1; height: Metrics.controlHeight; color: Theme.divider }
+                Repeater {
+                    model: root.styled ? [{ value: "left", icon: "text_align_left", tip: "Linksbündig" }, { value: "center", icon: "text_align_center", tip: "Zentriert" }, { value: "right", icon: "text_align_right", tip: "Rechtsbündig" }] : []
+                    PIconButton {
+                        required property var modelData
+                        objectName: "readerEditorAlign_" + modelData.value
+                        iconName: modelData.icon
+                        tip: modelData.tip
+                        checkable: true
+                        checked: root.align === modelData.value
+                        onClicked: { root.align = modelData.value; root.styleTouched = true }
+                    }
+                }
+                PIconButton {
                     id: colorButton
                     visible: root.styled
                     iconName: "text_color"
@@ -197,7 +260,7 @@ Item {
                         onPicked: (value) => { root.color = value; root.styleTouched = true }
                     }
                 }
-                Rectangle { visible: root.styled; Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.divider }
+                Rectangle { visible: root.styled; width: 1; height: Metrics.controlHeight; color: Theme.divider }
                 PButton {
                     text: "Abbrechen"
                     onClicked: root.cancel()
@@ -231,6 +294,8 @@ Item {
                 font.pixelSize: Math.max(6, root.size * root.s)
                 font.bold: root.bold
                 font.italic: root.italic
+                font.underline: root.underline
+                font.strikeout: root.strike
                 horizontalAlignment: root.align === "center" ? TextEdit.AlignHCenter : (root.align === "right" ? TextEdit.AlignRight : TextEdit.AlignLeft)
                 wrapMode: TextEdit.NoWrap
                 selectByMouse: true

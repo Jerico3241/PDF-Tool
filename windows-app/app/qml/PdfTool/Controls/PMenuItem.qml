@@ -7,6 +7,7 @@ T.MenuItem {
     property string iconName: ""
     implicitWidth: Math.max(160, contentItem.implicitWidth + leftPadding + rightPadding)
     implicitHeight: 34
+    height: visible ? implicitHeight : 0  // ausgeblendete Einträge nehmen im Menü keinen Platz ein
     leftPadding: 12
     rightPadding: 16
     hoverEnabled: true

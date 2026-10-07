@@ -30,6 +30,8 @@ FocusScope {
         documentExpanded = false
     }
     readonly property bool paneExpanded: documentFocus ? documentExpanded : (App.navCompact ? false : (mode === "wide" ? true : userExpanded))
+    // Vollbild (F11 im Reader): nur das Dokument – Navigation, Hinweisleiste und Statuszeile ausgeblendet
+    readonly property bool fullScreen: Reader.fullScreen
 
     function modeFor(w) {
         var hysteresis = Metrics.breakpointHysteresis
@@ -113,6 +115,7 @@ FocusScope {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.left: parent.left
+            visible: !shell.fullScreen
             expanded: shell.paneExpanded
             animated: shell.paneAnimated
             onToggleRequested: shell.togglePane()
@@ -123,13 +126,14 @@ FocusScope {
         // an – sie werden einmal neu angeordnet, nicht in jedem Bild der Animation (wie 2.6.1).
         Rectangle {
             id: layer
-            x: nav.width
+            readonly property real navSpace: shell.fullScreen ? 0 : nav.targetWidth
+            x: shell.fullScreen ? 0 : nav.width
             y: 0
             width: parent.width - x + radius
             height: parent.height + radius
-            radius: Metrics.radiusCard
+            radius: shell.fullScreen ? 0 : Metrics.radiusCard
             color: Theme.layer
-            border.width: 1
+            border.width: shell.fullScreen ? 0 : 1
             border.color: Theme.layerStroke
 
             // Hinweisleiste für Updates über den Seiten (die Seiten rücken einmal um ihre Höhe)
@@ -137,21 +141,24 @@ FocusScope {
                 id: updateBanner
                 x: 1
                 y: 1
-                width: shell.width - nav.targetWidth - 1
+                width: shell.width - layer.navSpace - 1
                 height: implicitHeight
+                suppressed: shell.fullScreen
             }
             PageHost {
                 id: host
                 x: 1
                 y: 1 + updateBanner.height
-                width: shell.width - nav.targetWidth - 1
+                width: shell.width - layer.navSpace - 1
                 height: shell.height - 1 - status.height - updateBanner.height
             }
             StatusBar {
                 id: status
                 x: 1
                 y: shell.height - height
-                width: shell.width - nav.targetWidth - 1
+                width: shell.width - layer.navSpace - 1
+                height: shell.fullScreen ? 0 : implicitHeight
+                visible: !shell.fullScreen
             }
         }
     }

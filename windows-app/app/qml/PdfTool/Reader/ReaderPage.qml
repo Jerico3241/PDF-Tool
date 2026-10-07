@@ -18,6 +18,7 @@ FocusScope {
     readonly property bool active: App.currentPage === "reader" && !Dialogs.open
     readonly property bool editing: doc !== null && doc !== undefined
     property var dismissedNotices: ({})
+    property var dismissedScans: ({})  // Hinweis »Gescannte Seiten« je Tab geschlossen
     // Objektmodus: die Eigenschaften öffnen sich mit dem Modus (nicht erst mit der ersten Auswahl – sonst
     // verschöbe sich die Seite unter dem Mauszeiger) und gehen beim Verlassen wieder zu, wenn sie dafür
     // geöffnet wurden. In schmalen Fenstern nie von selbst (dort überdecken sie die Seite).
@@ -50,9 +51,9 @@ FocusScope {
         visible: Reader.hasDocument
         spacing: 0
 
-        ReaderTabs { Layout.fillWidth: true }
-        ReaderToolbar { Layout.fillWidth: true; doc: page.doc }
-        ToolOptions { Layout.fillWidth: true; doc: page.doc }
+        // Im Vollbild (F11) nur das Dokument mit den schwebenden Leisten
+        ReaderTabs { Layout.fillWidth: true; visible: !Reader.fullScreen }
+        ReaderToolbar { Layout.fillWidth: true; doc: page.doc; visible: !Reader.fullScreen }
 
         Item {
             id: workspace
@@ -63,10 +64,10 @@ FocusScope {
             // Inhalt) – geschlossen ein schmaler Streifen mit ihren Symbolen –, dazwischen die
             // Dokumentfläche. Öffnen/Schließen: die Leiste gleitet über ihren Streifen herein bzw. hinaus
             // (»Reduziert«: blendet, »Aus«: sofort). Die Dokumentfläche nimmt ihre neue Breite einmal an.
-            readonly property bool leftOpen: Reader.leftPanel !== ""
-            readonly property bool rightOpen: Reader.rightPanel !== ""
-            readonly property int leftSpace: page.narrow || !leftOpen ? Metrics.readerRailWidth : Metrics.readerLeftPanelWidth
-            readonly property int rightSpace: page.narrow || !rightOpen ? Metrics.readerRailWidth : Metrics.readerRightPanelWidth
+            readonly property bool leftOpen: Reader.leftPanel !== "" && !Reader.fullScreen
+            readonly property bool rightOpen: Reader.rightPanel !== "" && !Reader.fullScreen
+            readonly property int leftSpace: Reader.fullScreen ? 0 : (page.narrow || !leftOpen ? Metrics.readerRailWidth : Metrics.readerLeftPanelWidth)
+            readonly property int rightSpace: Reader.fullScreen ? 0 : (page.narrow || !rightOpen ? Metrics.readerRailWidth : Metrics.readerRightPanelWidth)
             property real leftShown: leftOpen ? 1 : 0   // 0…1: wie weit die Leiste zu sehen ist
             property real rightShown: rightOpen ? 1 : 0
             Behavior on leftShown { enabled: Motion.enabled; NumberAnimation { duration: Motion.moves ? Motion.pane : Motion.fade; easing.type: Motion.decelerate } }
@@ -93,6 +94,7 @@ FocusScope {
                     onLoaded: item.forceActiveFocus()
                 }
                 ViewControls {
+                    id: controls
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 16
@@ -100,7 +102,8 @@ FocusScope {
                     view: view
                     visible: !Reader.organize && page.doc !== null
                 }
-                // Hinweise: Meldungen des Readers und Hinweis zum Dokument (signiert, repariert, XFA …)
+                // Schwebend über der Seite: Leiste des Werkzeugs, Meldungen des Readers und Hinweis zum Dokument
+                // (signiert, repariert, XFA …) – untereinander, ohne die Seiten zu verschieben
                 ColumnLayout {
                     anchors.left: parent.left
                     anchors.right: parent.right
@@ -108,6 +111,12 @@ FocusScope {
                     anchors.leftMargin: 16
                     anchors.rightMargin: 24
                     spacing: 0
+                    ToolOptions {
+                        Layout.fillWidth: true
+                        doc: page.doc
+                        suppressed: Reader.fullScreen || Reader.organize
+                    }
+                    OcrProgress { Layout.fillWidth: true; doc: page.doc }
                     PInfoBar { Layout.fillWidth: true; notice: Notices.area("reader") }
                     PInfoBar {
                         objectName: "readerObjectNotice"
@@ -116,6 +125,22 @@ FocusScope {
                         severity: "info"
                         message: page.doc ? page.doc.objectMessage : ""
                         closable: false
+                    }
+                    // Gescanntes Dokument (Seiten ohne Text): Texterkennung anbieten – je Tab einmal schließbar
+                    PInfoBar {
+                        objectName: "readerScanNotice"
+                        Layout.fillWidth: true
+                        shown: page.doc !== null && page.doc.scanHint && !page.doc.ocrRunning && !page.dismissedScans[page.doc.docId] && !Reader.fullScreen
+                        severity: "info"
+                        title: "Gescannte Seiten"
+                        message: "Dieses PDF enthält Seiten ohne erkannten Text – Suchen und Kopieren finden darauf nichts."
+                        actions: ["Text erkennen …"]
+                        onActionTriggered: page.doc.recognizeText([])
+                        onClosed: {
+                            var next = Object.assign({}, page.dismissedScans)
+                            next[page.doc.docId] = true
+                            page.dismissedScans = next
+                        }
                     }
                     PInfoBar {
                         objectName: "readerDocumentNotice"
@@ -168,13 +193,15 @@ FocusScope {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: workspace.leftSpace
+                visible: !Reader.fullScreen
                 z: 1
                 side: "left"
                 collapsed: !workspace.leftOpen
                 items: [
                     { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerRailThumbs" },
                     { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerRailOutline" },
-                    { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerRailSearch" }
+                    { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerRailSearch" },
+                    { key: "attachments", icon: "attach", tip: "Anhänge", name: "readerRailAttachments" }
                 ]
                 onSelected: (key) => page.showLeft(key)
             }
@@ -184,6 +211,7 @@ FocusScope {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: workspace.rightSpace
+                visible: !Reader.fullScreen
                 z: 1
                 side: "right"
                 collapsed: !workspace.rightOpen
@@ -226,6 +254,16 @@ FocusScope {
     Shortcut { sequences: [StandardKey.Undo]; enabled: page.active && page.editing && view.editing === null; onActivated: page.doc.undo() }
     Shortcut { sequences: ["Ctrl+Y", "Ctrl+Shift+Z"]; enabled: page.active && page.editing && view.editing === null; onActivated: page.doc.redo() }
     Shortcut { sequence: "Ctrl+W"; enabled: page.active && Reader.hasDocument; onActivated: Reader.closeCurrent() }
+    Shortcut { sequences: ["F11"]; enabled: page.active && page.editing; onActivated: Reader.toggleFullScreen() }
+    Shortcut { sequence: "Ctrl+G"; enabled: page.active && page.editing && !Reader.organize; onActivated: controls.focusPage() }
+    Shortcut {
+        sequences: [StandardKey.SelectAll]
+        enabled: page.active && page.editing && !Reader.organize && view.editing === null
+        onActivated: {
+            if (page.doc.tool === "objects") page.doc.selectAllObjects(page.doc.currentPage)
+            else page.doc.selectAll(page.doc.currentPage)
+        }
+    }
     Shortcut { sequence: "Ctrl+Tab"; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
     Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomIn() }) }

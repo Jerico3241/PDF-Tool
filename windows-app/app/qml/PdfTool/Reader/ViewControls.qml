@@ -4,9 +4,9 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Schwebende Leiste unten in der Ansicht: Seite (vor, zurück, Nummer eingeben) und Zoom
-// (25–400 % in Stufen, frei per Strg+Mausrad, Seitenbreite, ganze Seite, Originalgröße). Zoom über
-// diese Leiste gleitet kurz (DocumentView.smoothly).
+// Schwebende Leiste unten in der Ansicht: Seite (erste, vorherige, Nummer eingeben, nächste, letzte) und
+// Zoom (Stufen 25–400 %, eigener Wert 10–800 % zum Eintippen, frei per Strg+Mausrad, Seitenbreite, ganze
+// Seite, Originalgröße). Zoom über diese Leiste gleitet kurz (DocumentView.smoothly).
 Rectangle {
     id: root
     objectName: "readerViewControls"
@@ -16,6 +16,12 @@ Rectangle {
         if (view) view.smoothly(action)
         else action()
     }
+    // Strg+G: Seitennummer eingeben
+    function focusPage() {
+        pageField.forceActiveFocus(Qt.ShortcutFocusReason)
+        pageField.selectAll()
+    }
+    function zoomText() { return doc ? Math.round(doc.zoom) + " %" : "" }
     implicitWidth: row.implicitWidth + 12
     implicitHeight: Metrics.controlHeight + 12
     radius: Metrics.radiusOverlay
@@ -27,6 +33,7 @@ Rectangle {
         id: row
         anchors.centerIn: parent
         spacing: 2
+        PIconButton { objectName: "readerFirstPage"; iconName: "arrow_previous"; tip: "Erste Seite (Pos1)"; enabled: root.doc !== null && root.doc.currentPage > 0; onClicked: root.doc.goTo(0) }
         PIconButton { iconName: "chevron_left"; tip: "Vorherige Seite (Bild ↑)"; enabled: root.doc !== null && root.doc.currentPage > 0; onClicked: root.doc.step(-1) }
         PTextField {
             id: pageField
@@ -44,20 +51,48 @@ Rectangle {
         }
         PText { text: root.doc ? "/ " + root.doc.pageCount : ""; tone: "secondary"; Layout.rightMargin: 4 }
         PIconButton { iconName: "chevron_right"; tip: "Nächste Seite (Bild ↓)"; enabled: root.doc !== null && root.doc.currentPage < root.doc.pageCount - 1; onClicked: root.doc.step(1) }
+        PIconButton { objectName: "readerLastPage"; iconName: "arrow_next"; tip: "Letzte Seite (Ende)"; enabled: root.doc !== null && root.doc.currentPage < root.doc.pageCount - 1; onClicked: root.doc.goTo(root.doc.pageCount - 1) }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 4; Layout.rightMargin: 4; color: Theme.divider }
         PIconButton { objectName: "readerZoomOut"; iconName: "zoom_out"; tip: "Verkleinern (Strg+−)"; onClicked: root.zoom(function() { root.doc.zoomOut() }) }
-        PButton {
+        // Zoom: eigenen Wert eintippen (Eingabetaste) oder eine Stufe aus dem Menü wählen
+        PTextField {
+            id: zoomField
+            objectName: "readerZoomField"
+            preferredWidth: 64
+            horizontalAlignment: TextInput.AlignHCenter
+            label: "Zoom in Prozent"
+            text: root.zoomText()
+            validator: RegularExpressionValidator { regularExpression: /^\s*\d{1,3}([,.]\d)?\s*%?\s*$/ }
+            onAccepted: {
+                var value = parseFloat(text.replace(",", ".").replace("%", ""))
+                if (!isNaN(value) && root.doc) root.zoom(function() { root.doc.setZoom(value) })
+                text = Qt.binding(root.zoomText)
+                root.view.forceActiveFocus()
+            }
+            onActiveFocusChanged: {
+                if (activeFocus) selectAll()
+                else text = Qt.binding(root.zoomText)
+            }
+            Keys.onEscapePressed: { text = Qt.binding(root.zoomText); root.view.forceActiveFocus() }
+        }
+        PIconButton {
             id: zoomButton
             objectName: "readerZoom"
-            kind: "subtle"
-            minimumWidth: 72
-            text: root.doc ? Math.round(root.doc.zoom) + " %" : ""
+            implicitWidth: 24
+            iconName: "chevron_down"
             tip: "Zoomstufe wählen"
             onClicked: zoomMenu.popup(zoomButton, 0, -zoomMenu.implicitHeight - 4)
         }
         PIconButton { objectName: "readerZoomIn"; iconName: "zoom_in"; tip: "Vergrößern (Strg++)"; onClicked: root.zoom(function() { root.doc.zoomIn() }) }
         PIconButton { objectName: "readerFitWidth"; iconName: "arrow_autofit_width"; tip: "Seitenbreite"; checkable: true; checked: root.doc !== null && root.doc.fit === "width"; onClicked: root.zoom(function() { root.doc.fitWidth() }) }
         PIconButton { objectName: "readerFitPage"; iconName: "page_fit"; tip: "Ganze Seite (Strg+0)"; checkable: true; checked: root.doc !== null && root.doc.fit === "page"; onClicked: root.zoom(function() { root.doc.fitPage() }) }
+        Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 4; Layout.rightMargin: 4; color: Theme.divider }
+        PIconButton {
+            objectName: "readerFullScreen"
+            iconName: Reader.fullScreen ? "full_screen_minimize" : "full_screen_maximize"
+            tip: Reader.fullScreen ? "Vollbild beenden (F11, Esc)" : "Vollbild (F11)"
+            onClicked: Reader.toggleFullScreen()
+        }
     }
     PMenu {
         id: zoomMenu

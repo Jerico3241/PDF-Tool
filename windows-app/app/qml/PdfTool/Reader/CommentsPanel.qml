@@ -6,14 +6,16 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // Kommentare des Dokuments (alle Seiten): Art, Seite, Text, Verfasser und Datum. Klick springt zur
-// Stelle; der Text lässt sich ändern, ein Kommentar löschen. Vorhandene Kommentare anderer
-// Programme bleiben erhalten, solange sie nicht ausdrücklich geändert oder gelöscht werden.
+// Stelle; der Text lässt sich ändern, ein Kommentar löschen oder beantworten (Antworten stehen eingerückt
+// darunter – wie in Acrobat, auch dort sichtbar). Vorhandene Kommentare anderer Programme bleiben erhalten,
+// solange sie nicht ausdrücklich geändert oder gelöscht werden.
 // Kopf (Titel, Anzahl, Schließen) und Breite kommen von der rechten Seitenleiste (RightPanel).
 ColumnLayout {
     id: root
     objectName: "readerCommentsPanel"
     property var doc: null
     property string editingKey: ""
+    property string replyingKey: ""  // Kommentar, auf den gerade geantwortet wird
     spacing: 0
 
     PEmptyState {
@@ -50,7 +52,10 @@ ColumnLayout {
             required property string modified
             required property string color
             required property string subtype
+            required property string replyTo
+            required property int depth
             readonly property bool editing: root.editingKey === key
+            readonly property bool replying: root.replyingKey === key
             readonly property bool chosen: root.doc !== null && root.doc.selectedObject.key === key
             width: list.width
             height: body.implicitHeight + 16
@@ -78,7 +83,7 @@ ColumnLayout {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.leftMargin: 14
+                anchors.leftMargin: 14 + row.depth * 20  // Antworten eingerückt
                 anchors.rightMargin: 8
                 anchors.topMargin: 8
                 spacing: 4
@@ -86,7 +91,8 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
                     Rectangle { Layout.preferredWidth: 10; Layout.preferredHeight: 10; radius: 5; color: row.color !== "" ? row.color : Theme.neutral; border.color: Theme.border }
-                    PText { text: row.label + " · Seite " + (row.page + 1); textStyle: "caption"; tone: "secondary"; Layout.fillWidth: true }
+                    PText { text: row.depth > 0 ? "Antwort" : row.label + " · Seite " + (row.page + 1); textStyle: "caption"; tone: "secondary"; Layout.fillWidth: true }
+                    PIconButton { objectName: "readerCommentReply"; implicitWidth: 28; implicitHeight: 28; iconName: "comment"; tip: "Antworten"; visible: row.depth === 0 && !row.editing && !row.replying && row.subtype !== "/Link"; onClicked: { root.replyingKey = row.key; replyEditor.text = ""; replyEditor.area.forceActiveFocus() } }
                     PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "edit"; tip: "Text ändern"; visible: !row.editing && row.subtype !== "/Link"; onClicked: { root.editingKey = row.key; editor.text = row.contents; editor.area.forceActiveFocus() } }
                     PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "delete"; tip: "Kommentar löschen"; visible: !row.editing; onClicked: root.doc.deleteAnnotation(row.key) }
                 }
@@ -111,6 +117,21 @@ ColumnLayout {
                     Layout.alignment: Qt.AlignRight
                     PButton { text: "Abbrechen"; onClicked: root.editingKey = "" }
                     PButton { kind: "accent"; text: "Speichern"; onClicked: { root.doc.updateAnnotation(row.key, editor.text, ""); root.editingKey = "" } }
+                }
+                PTextArea {
+                    id: replyEditor
+                    objectName: "readerCommentReplyText"
+                    Layout.fillWidth: true
+                    visible: row.replying
+                    minLines: 2
+                    maxLines: 6
+                    label: "Antwort"
+                }
+                RowLayout {
+                    visible: row.replying
+                    Layout.alignment: Qt.AlignRight
+                    PButton { text: "Abbrechen"; onClicked: root.replyingKey = "" }
+                    PButton { objectName: "readerCommentReplySend"; kind: "accent"; text: "Antworten"; enabled: replyEditor.text.trim() !== ""; onClicked: { root.doc.replyAnnotation(row.key, replyEditor.text); root.replyingKey = "" } }
                 }
                 PText {
                     Layout.fillWidth: true

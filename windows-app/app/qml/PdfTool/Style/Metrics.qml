@@ -57,7 +57,7 @@ QtObject {
     readonly property int readerTabMaxWidth: 220
     readonly property int readerToolbarHeight: 48
     // Seitenleisten: feste Breiten je Seite – gleich, welcher Inhalt gezeigt wird (kein Springen)
-    readonly property int readerLeftPanelWidth: 256
+    readonly property int readerLeftPanelWidth: 300  // Platz für vier Umschalter (Seiten, Lesezeichen, Suche, Anhänge) und den ganzen Titel
     readonly property int readerRightPanelWidth: 280
     readonly property int readerPanelHeaderHeight: 44
     readonly property int readerPanelTab: 28      // Umschalter und Schließen im Kopf einer Seitenleiste

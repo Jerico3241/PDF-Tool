@@ -17,8 +17,10 @@ Item {
     readonly property bool working: phase === "downloading" || phase === "verifying" || phase === "installing"
     readonly property real columnWidth: Math.max(0, Math.min(Metrics.pageMaxWidth, width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight))
     readonly property real columnX: Metrics.pagePaddingLeft + Math.max(0, (width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight - Metrics.pageMaxWidth) / 2)
+    // Vollbild im Reader: keine Leiste (der Hinweis kommt danach wieder, solange er gilt)
+    property bool suppressed: false
     // Beim Ausblenden bleibt der Platz, bis die Leiste verschwunden ist – erst dann rücken die Seiten
-    readonly property bool occupied: shown || fadeAnim.running
+    readonly property bool occupied: (shown || fadeAnim.running) && !suppressed
     implicitHeight: occupied ? bar.height + 16 : 0
     visible: occupied
     Accessible.role: Accessible.AlertMessage

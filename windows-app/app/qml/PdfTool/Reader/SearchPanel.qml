@@ -23,9 +23,16 @@ ColumnLayout {
     }
     readonly property int focusSerial: doc ? doc.searchFocusSerial : 0
     onFocusSerialChanged: focusField()
-    onDocChanged: field.text = doc ? doc.searchText : ""
+    // Begriff und Optionen gehören zum Dokument (jeder Tab behält seine eigene Suche)
+    onDocChanged: {
+        field.text = doc ? doc.searchText : ""
+        caseBox.checked = doc ? doc.searchCase : false
+        wordBox.checked = doc ? doc.searchWords : false
+    }
     Component.onCompleted: {
         field.text = doc ? doc.searchText : ""
+        caseBox.checked = doc ? doc.searchCase : false
+        wordBox.checked = doc ? doc.searchWords : false
         focusField()
     }
 

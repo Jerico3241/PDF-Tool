@@ -252,7 +252,7 @@ Item {
 
     // --- Objekt bearbeiten: Objekte dieser Seite, Auswahl, Treffer -----------------------------------------
     readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (doc.objectPages[key] || null) : null
-    readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images) : []
+    readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images, objectsHere.paths || []) : []
     // Räumlicher Index: Objekte je waagerechtem Band von 24 pt (Anzeige-Punkte, einmal je Seitenstand) –
     // beim Bewegen der Maus wird nur das Band unter dem Zeiger geprüft, nicht jedes Objekt der Seite
     readonly property real objectBand: 24
@@ -312,8 +312,9 @@ Item {
         }
         return item.text.length
     }
+    function isText(item) { return item !== null && item !== undefined && (item.kind === "text" || item.kind === "word") }
     function editObject(item, u) {
-        if (!item || item.kind === "image" || !host) return
+        if (!isText(item) || !host) return
         host.openEditor({ kind: "object", page: page, rect: item.view, text: item.text, object: item, caret: u === undefined ? item.text.length : caretAt(item, u) })
     }
     function editParagraph(item) {
@@ -334,19 +335,39 @@ Item {
     Repeater {
         model: root.tool === "select" ? root.annotationsHere : []
         Rectangle {
+            id: annotationBox
             required property var modelData
             readonly property bool chosen: root.selectedHere && root.selected.kind === "annotation" && root.selected.key === modelData.key
             readonly property bool moving: chosen && pointer.action === "moveAnnotation"
-            x: (modelData.view[0] + (moving ? pointer.du : 0)) * root.s - 2
-            y: (modelData.view[1] + (moving ? pointer.dv : 0)) * root.s - 2
-            width: (modelData.view[2] - modelData.view[0]) * root.s + 4
-            height: (modelData.view[3] - modelData.view[1]) * root.s + 4
+            readonly property bool resizing: chosen && pointer.action === "resizeAnnotation" && pointer.preview !== null
+            readonly property var r: resizing ? pointer.preview : modelData.view
+            objectName: "readerAnnotationBox"
+            x: (r[0] + (moving ? pointer.du : 0)) * root.s - 2
+            y: (r[1] + (moving ? pointer.dv : 0)) * root.s - 2
+            width: (r[2] - r[0]) * root.s + 4
+            height: (r[3] - r[1]) * root.s + 4
             color: "transparent"
             radius: 2
             border.width: chosen ? 2 : 1
             border.color: Theme.accent
             opacity: chosen ? 1 : (pointer.hoverKey === modelData.key ? 0.8 : 0)
             Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
+            // Anfasser an den Ecken: Größe ändern (Kommentare aus PDF Tool; Umschalt: Seitenverhältnis halten)
+            Repeater {
+                model: annotationBox.chosen && annotationBox.modelData.resizable ? 4 : 0
+                Rectangle {
+                    required property int index
+                    objectName: "readerAnnotationHandle"
+                    width: Metrics.readerHandle
+                    height: Metrics.readerHandle
+                    radius: 2
+                    x: (index % 2 === 0 ? 2 : annotationBox.width - 2) - width / 2
+                    y: (index < 2 ? 2 : annotationBox.height - 2) - height / 2
+                    color: Theme.surface
+                    border.width: 2
+                    border.color: Theme.accent
+                }
+            }
         }
     }
 
@@ -442,7 +463,7 @@ Item {
             id: chosenBox
             required property var modelData
             readonly property bool moving: pointer.action === "moveObjects"
-            readonly property bool resizing: modelData.kind === "image" && pointer.action === "resizeImage" && pointer.preview !== null
+            readonly property bool resizing: (modelData.kind === "image" || modelData.kind === "path") && pointer.action === "resizeImage" && pointer.preview !== null
             readonly property var r: resizing ? pointer.preview : modelData.view
             objectName: "readerObjectSelection"
             x: (r[0] + (moving ? pointer.du : 0)) * root.s - 3
@@ -483,7 +504,7 @@ Item {
             }
             // Anfasser an den Ecken (Bilder: Größe ändern; Seitenverhältnis bleibt, Umschalt: frei)
             Repeater {
-                model: chosenBox.modelData.kind === "image" && chosenBox.modelData.editable && root.objectSelected.length === 1 ? 4 : 0
+                model: (chosenBox.modelData.kind === "image" || chosenBox.modelData.kind === "path") && chosenBox.modelData.editable && root.objectSelected.length === 1 ? 4 : 0
                 Rectangle {
                     required property int index
                     width: Metrics.readerHandle
@@ -601,8 +622,12 @@ Item {
         hoverEnabled: root.tool === "select" || root.tool === "editText" || root.tool === "image" || root.tool === "objects"
         cursorShape: {
             switch (root.tool) {
-            case "objects": return hoverCorner ? Qt.SizeFDiagCursor : (hoverItem ? (hoverItem.native === false && hoverItem.kind !== "image" ? Qt.PointingHandCursor : Qt.SizeAllCursor) : Qt.ArrowCursor)
-            case "select": return hoverKey !== "" ? Qt.SizeAllCursor : Qt.IBeamCursor
+            case "objects":
+                if (hoverCorner) return Qt.SizeFDiagCursor
+                if (!hoverItem) return Qt.ArrowCursor
+                if (root.isText(hoverItem)) return hoverItem.native === false ? Qt.PointingHandCursor : Qt.SizeAllCursor
+                return hoverItem.editable ? Qt.SizeAllCursor : Qt.ArrowCursor
+            case "select": return hoverCorner ? Qt.SizeFDiagCursor : (hoverKey !== "" ? Qt.SizeAllCursor : Qt.IBeamCursor)
             case "highlight": case "underline": case "strikeout": return Qt.IBeamCursor
             case "editText": return hoverKey !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
             case "image": return hoverKey !== "" ? Qt.SizeAllCursor : Qt.CrossCursor
@@ -667,6 +692,7 @@ Item {
         function updateHover(p) {
             var hit = null
             if (root.tool === "select") {
+                hoverCorner = root.selectedCorner(p) >= 0
                 hit = root.smallestAt(root.annotationsHere, p.u, p.v, 2)
                 hoverKey = hit ? hit.key : ""
             } else if (root.tool === "editText") {
@@ -704,11 +730,16 @@ Item {
                     } else if (!isChosen(target.id)) {
                         doc.selectObject(page, target.id, false)
                     }
-                    var menu = target.kind === "image" ? imageObjectMenu : textObjectMenu
-                    menu.u = p.u
-                    menu.popup(pointer, mouse.x, mouse.y)
+                    objectMenu.u = p.u
+                    objectMenu.popup(pointer, mouse.x, mouse.y)
                     return
                 }
+                // Freie Stelle: Einfügen (auch genau hier), alles auswählen
+                doc.clearObjectSelection()
+                objectPageMenu.u = p.u
+                objectPageMenu.v = p.v
+                objectPageMenu.popup(pointer, mouse.x, mouse.y)
+                return
             }
             contextMenu.u = p.u
             contextMenu.v = p.v
@@ -717,6 +748,13 @@ Item {
         }
         switch (tool) {
         case "select": {
+            var grip = selectedCorner(p)
+            if (grip >= 0) {
+                pointer.corner = grip
+                pointer.target = selectedAnnotation()
+                pointer.action = "resizeAnnotation"
+                return
+            }
             var annotation = smallestAt(annotationsHere, p.u, p.v, 2)
             if (annotation) {
                 doc.selectedObject = { kind: "annotation", page: page, key: annotation.key, view: annotation.view }
@@ -758,8 +796,8 @@ Item {
                 pointer.action = "marquee"
                 return
             }
-            if (mouse.modifiers & Qt.ControlModifier) {
-                doc.selectObject(page, hit.id, true)  // Strg+Klick: hinzufügen bzw. entfernen
+            if (mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) {
+                doc.selectObject(page, hit.id, true)  // Strg- bzw. Umschalt+Klick: hinzufügen bzw. entfernen
                 return
             }
             var single = objectSelected.length === 1 ? objectSelected[0] : null
@@ -812,16 +850,24 @@ Item {
         }
     }
     function selectedImage() {
+        // Im Objektmodus: genau ein Bild oder Vektorobjekt (beide mit Anfassern an den Ecken)
         if (tool === "objects")
-            return objectSelected.length === 1 && objectSelected[0].kind === "image" ? objectSelected[0] : null
+            return objectSelected.length === 1 && (objectSelected[0].kind === "image" || objectSelected[0].kind === "path") ? objectSelected[0] : null
         if (!(selectedHere && selected.kind === "image")) return null
         for (var i = 0; i < imagesHere.length; ++i)
             if (imagesHere[i].index === selected.index) return imagesHere[i]
         return null
     }
+    // Gewählter Kommentar (Werkzeug »Auswählen«), dessen Größe sich ändern lässt
+    function selectedAnnotation() {
+        if (tool !== "select" || !(selectedHere && selected.kind === "annotation")) return null
+        for (var i = 0; i < annotationsHere.length; ++i)
+            if (annotationsHere[i].key === selected.key) return annotationsHere[i].resizable ? annotationsHere[i] : null
+        return null
+    }
     function selectedCorner(p) {
-        var image = selectedImage()
-        if (!image || !image.editable) return -1
+        var image = tool === "select" ? selectedAnnotation() : selectedImage()
+        if (!image || (tool !== "select" && !image.editable)) return -1
         var r = image.view, pad = Metrics.readerHandle / s
         var corners = [[r[0], r[1]], [r[2], r[1]], [r[0], r[3]], [r[2], r[3]]]
         for (var i = 0; i < 4; ++i)
@@ -842,13 +888,16 @@ Item {
             pointer.preview = [r[0] + pointer.du, r[1] + pointer.dv, r[2] + pointer.du, r[3] + pointer.dv]
             break
         }
-        case "resizeImage": {
+        case "resizeImage": case "resizeAnnotation": {
             var box = pointer.target.view.slice()
             var c = pointer.corner
             var fx = c % 2 === 0 ? 0 : 2, fy = c < 2 ? 1 : 3           // gezogene Ecke
             var ox = c % 2 === 0 ? 2 : 0, oy = c < 2 ? 3 : 1           // feste Ecke gegenüber
             var w = Math.max(4, Math.abs(p.u - box[ox])), h = Math.max(4, Math.abs(p.v - box[oy]))
-            if (!(mouse.modifiers & Qt.ShiftModifier)) {
+            // Bilder behalten ihr Seitenverhältnis (Umschalt: frei), Vektorobjekte umgekehrt
+            var free = (mouse.modifiers & Qt.ShiftModifier) !== 0
+            if (pointer.target.kind === "path" || pointer.action === "resizeAnnotation") free = !free
+            if (!free) {
                 var ratio = (box[2] - box[0]) / Math.max(0.01, box[3] - box[1])
                 if (w / h > ratio) h = w / ratio
                 else w = h * ratio
@@ -883,12 +932,16 @@ Item {
         case "moveAnnotation":
             if (moved) doc.moveAnnotation(selected.key, pointer.du, pointer.dv)
             break
+        case "resizeAnnotation":
+            if (pointer.preview) doc.resizeAnnotation(pointer.target.key, pointer.preview)
+            break
         case "moveImage":
             if (moved) doc.moveImage(page, pointer.target.index, pointer.du, pointer.dv)
             break
         case "resizeImage":
             if (pointer.preview) {
-                if (tool === "objects") doc.resizeObjectImage(page, pointer.target.index, pointer.preview)
+                if (tool === "objects" && pointer.target.kind === "path") doc.resizeObjects(pointer.preview)
+                else if (tool === "objects") doc.resizeObjectImage(page, pointer.target.index, pointer.preview)
                 else doc.resizeImage(page, pointer.target.index, pointer.preview)
             }
             break
@@ -932,39 +985,49 @@ Item {
         pointer.stroke = []
     }
 
-    // Kontextmenüs im Objektmodus (Text, Bild) – keine dauerhafte Leiste
+    // Kontextmenüs im Objektmodus – keine dauerhafte Leiste; angeboten wird, was zur Auswahl passt (Text,
+    // Bild, Vektorobjekt oder mehrere)
     PMenu {
-        id: textObjectMenu
+        id: objectMenu
         objectName: "readerObjectMenu"
         property real u: 0
         readonly property var chosen: root.objectSelected
         readonly property var first: chosen.length ? chosen[0] : null
+        readonly property bool oneText: chosen.length === 1 && root.isText(first)
+        readonly property bool oneImage: chosen.length === 1 && first !== null && first.kind === "image"
+        readonly property bool anyText: chosen.some(function(item) { return root.isText(item) })
+        // Text lässt sich immer ändern (sonst als Überlagerung); Bilder und Vektorobjekte nur, wenn sicher möglich
+        readonly property bool changeable: chosen.length > 0 && chosen.every(function(item) { return root.isText(item) || item.editable === true })
         PMenuItem {
             text: "Bearbeiten"
             iconName: "edit"
-            enabled: textObjectMenu.chosen.length === 1
+            visible: objectMenu.oneText
             onTriggered: {
-                var item = textObjectMenu.first, u = textObjectMenu.u
-                textObjectMenu.afterClose = function() { root.editObject(item, u) }
+                var item = objectMenu.first, u = objectMenu.u
+                objectMenu.afterClose = function() { root.editObject(item, u) }
             }
         }
-        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; enabled: textObjectMenu.chosen.length === 1; onTriggered: root.editParagraph(textObjectMenu.first) }
+        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; visible: objectMenu.oneText; onTriggered: root.editParagraph(objectMenu.first) }
+        PMenuItem { text: "Ersetzen …"; iconName: "image"; visible: objectMenu.oneImage; enabled: objectMenu.changeable; onTriggered: root.doc.replaceImage(root.page, objectMenu.first.index) }
         PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyObjects() }
-        PMenuItem { text: "Ausschneiden"; iconName: "document_dismiss"; onTriggered: root.doc.cutObjects() }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: textObjectMenu.chosen.length === 1; onTriggered: root.doc.duplicateObject() }
-        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: "Ausschneiden"; iconName: "cut"; enabled: objectMenu.changeable; onTriggered: root.doc.cutObjects() }
+        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; visible: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: objectMenu.changeable; onTriggered: root.doc.duplicateObject() }
+        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: objectMenu.changeable; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(90) }
+        PMenuItem { text: "Drehen (90° gegen den Uhrzeigersinn)"; iconName: "arrow_rotate_counterclockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(-90) }
+        PMenuItem { text: "In den Vordergrund"; iconName: "position_to_front"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(true) }
+        PMenuItem { text: "In den Hintergrund"; iconName: "position_to_back"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(false) }
         PMenuItem { text: "Eigenschaften"; iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
     }
     PMenu {
-        id: imageObjectMenu
-        objectName: "readerImageObjectMenu"
+        id: objectPageMenu
+        objectName: "readerObjectPageMenu"
         property real u: 0
-        readonly property var first: root.objectSelected.length ? root.objectSelected[0] : null
-        readonly property bool editable: first !== null && first.kind === "image" && first.editable === true
-        PMenuItem { text: "Ersetzen …"; iconName: "image"; enabled: imageObjectMenu.editable; onTriggered: root.doc.replaceImage(root.page, imageObjectMenu.first.index) }
-        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: imageObjectMenu.editable; onTriggered: root.doc.rotateImage(root.page, imageObjectMenu.first.index, true) }
-        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: imageObjectMenu.editable; onTriggered: root.doc.deleteObjects() }
-        PMenuItem { text: "Eigenschaften"; iconName: "image"; onTriggered: Reader.showRightPanel("properties") }
+        property real v: 0
+        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: "Hier einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
+        PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
     }
 
     // Kontextmenü der Seite

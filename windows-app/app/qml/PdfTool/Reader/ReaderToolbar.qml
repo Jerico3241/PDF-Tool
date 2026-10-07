@@ -211,6 +211,8 @@ Rectangle {
         PMenuItem { text: "Seiten als PNG exportieren (150 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "png", 150) }
         PMenuItem { text: "Seiten als PNG exportieren (300 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "png", 300) }
         PMenuItem { text: "Seiten als JPEG exportieren (150 dpi)"; iconName: "arrow_export"; enabled: root.doc !== null; onTriggered: root.doc.exportImages([], "jpeg", 150) }
+        PMenuItem { objectName: "readerMenuOcr"; text: "Text erkennen (OCR) …"; iconName: "document_search"; enabled: root.doc !== null && !root.doc.ocrRunning; onTriggered: root.doc.recognizeText([]) }
+        PMenuItem { text: "Erkannten Text entfernen"; iconName: "eraser"; enabled: root.doc !== null && !root.doc.ocrRunning; onTriggered: root.doc.removeRecognizedText([]) }
         PMenuItem { text: "PDFs anhängen …"; iconName: "merge"; enabled: root.doc !== null; onTriggered: root.doc.mergeFiles() }
         PMenuItem { text: "Dokument teilen …"; iconName: "document_landscape_split"; enabled: root.doc !== null; onTriggered: root.doc.splitDocument("") }
         PMenuItem { text: "Eigenschaften"; iconName: "info"; enabled: root.doc !== null; onTriggered: root.doc.showProperties() }

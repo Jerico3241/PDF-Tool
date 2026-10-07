@@ -148,6 +148,7 @@ T.Popup {
                             case "restore_summary": return restoreSummaryContent
                             case "password": return passwordContent
                             case "reader_properties": return readerPropertiesContent
+                            case "ocr": return ocrContent
                             default: return null
                             }
                         }
@@ -214,4 +215,5 @@ T.Popup {
     Component { id: restoreSummaryContent; RestoreSummaryContent {} }
     Component { id: passwordContent; PasswordContent {} }
     Component { id: readerPropertiesContent; ReaderPropertiesContent {} }
+    Component { id: ocrContent; OcrContent {} }
 }
