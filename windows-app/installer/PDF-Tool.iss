@@ -152,6 +152,8 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\assets"
 ; Texterkennung (Tesseract): DLLs einer älteren Tesseract-Version bleiben so nicht liegen
 Type: filesandordirs; Name: "{app}\ocr"
+; KI-Laufzeit (llama.cpp): ebenso – Sprachmodelle liegen nicht hier, sondern in {localappdata}\PDF-Tool-KI
+Type: filesandordirs; Name: "{app}\ai"
 ; Reste des selbst geschriebenen Installers bis 2.0.5 (bei Installation im selben Ordner)
 Type: files; Name: "{app}\Uebersichten-Ersteller.exe"
 Type: files; Name: "{app}\Uebersichten-Ersteller.exe.alt"
@@ -210,6 +212,7 @@ Type: filesandordirs; Name: "{app}\runtime"
 Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\assets"
 Type: filesandordirs; Name: "{app}\ocr"
+Type: filesandordirs; Name: "{app}\ai"
 Type: files; Name: "{app}\fehler.log"
 Type: files; Name: "{app}\start.log"
 Type: dirifempty; Name: "{app}"
@@ -218,6 +221,12 @@ Type: files; Name: "{localappdata}\PDF-Tool-Updates\PDF-Tool-Setup-*"
 Type: files; Name: "{localappdata}\PDF-Tool-Updates\releases.json"
 Type: files; Name: "{localappdata}\PDF-Tool-Updates\update-start.log"
 Type: dirifempty; Name: "{localappdata}\PDF-Tool-Updates"
+; Sprachmodelle des KI-Assistenten (seit 3.2, nur auf Wunsch geladen) – nur die eigenen Dateien
+Type: files; Name: "{localappdata}\PDF-Tool-KI\modelle\Qwen3.5-*.gguf"
+Type: files; Name: "{localappdata}\PDF-Tool-KI\modelle\Qwen3.5-*.gguf.part"
+Type: files; Name: "{localappdata}\PDF-Tool-KI\modelle\Qwen3.5-*.gguf.sha256"
+Type: dirifempty; Name: "{localappdata}\PDF-Tool-KI\modelle"
+Type: dirifempty; Name: "{localappdata}\PDF-Tool-KI"
 
 [Code]
 const

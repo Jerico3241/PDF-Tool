@@ -26,6 +26,8 @@ Geprüft wird:
    die Seite zeichnen – ohne lxml, das nicht zur Laufzeit gehört; Texterkennung mit der gebündelten
    Engine (``ocr\\tesseract.exe``): eine gescannte Seite ohne Text erkennen, unsichtbare Textebene
    übernehmen, speichern – der Text ist danach suchbar;
+   KI-Assistent mit der gebündelten Laufzeit (``ai\\llama-server.exe``) und einem winzigen Testmodell: starten,
+   gestreamte Antwort, beenden – und mit einem abrupt endenden Prozess mitbeenden (Job-Objekt);
    PDF reparieren: dieselbe PDF mit beschädigter Querverweistabelle im eigenen
    Arbeitsprozess analysieren und reparieren (wie in der App), Ausgabe prüfen – auch
    ohne »_repariert« (nummeriert, das Original bleibt);
@@ -495,6 +497,7 @@ def main() -> int:
         gelesen.close()
     check("Hottgenroth" in seite and "4711" in seite, "Texterkennung: erkannter Text nach dem Speichern nicht lesbar")
     print(f"Texterkennung: Tesseract {engine.version} (gebündelt, Sprachen {', '.join(engine.languages)}), {erkannt.words} Wörter, Sicherheit {erkannt.confidence:.0f} %, {dauer:.1f} s")
+    ai_check(app_dir, work)
 
     if args.part == "runtime":
         print("OK")
@@ -504,6 +507,73 @@ def main() -> int:
 
     print("OK")
     return 0
+
+
+# KI-Assistent: winziges Testmodell aus den Tests von llama.cpp (1,2 MB, ohne Sinn im Text) – nur für diese Prüfung
+AI_TEST_MODEL_URL = "https://huggingface.co/ggml-org/models-moved/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/tinyllamas/stories260K.gguf"
+AI_TEST_MODEL_SHA256 = "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d"
+
+
+def ai_check(app_dir: Path, work: Path) -> None:
+    """KI-Assistent mit der gebündelten Laufzeit (``ai\\llama-server.exe``): mit dem Testmodell starten (nur
+    127.0.0.1, Schlüssel über die Umgebung, Job-Objekt), eine Anfrage gestreamt beantworten lassen und beenden. Danach
+    in einem eigenen Prozess starten, der abrupt endet – der KI-Prozess muss mit ihm enden (kein verwaister Prozess mit
+    Gigabytes im Arbeitsspeicher)."""
+    import hashlib
+    import subprocess
+    import urllib.request
+
+    from assistant import runtime as ai_runtime
+    from assistant.client import Chat, health
+
+    server = ai_runtime.server_path()
+    check(server is not None and server.parent == (app_dir.parent / "ai").resolve(), f"KI-Assistent: nicht die gebündelte Laufzeit ({server})")
+    check(ai_runtime.platform_supported(), "KI-Assistent: Plattform nicht unterstützt")
+    model = work / "stories260K.gguf"
+    with urllib.request.urlopen(AI_TEST_MODEL_URL, timeout=60) as response:
+        model.write_bytes(response.read())
+    actual = hashlib.sha256(model.read_bytes()).hexdigest()
+    check(actual == AI_TEST_MODEL_SHA256, f"KI-Assistent: Testmodell mit unerwarteter Prüfsumme {actual}")
+    process = ai_runtime.Server(server, model)
+    start = time.monotonic()
+    endpoint = process.start()
+    loaded = time.monotonic() - start
+    try:
+        check(health(endpoint) == "ok", "KI-Assistent: Prozess nicht bereit")
+        check(endpoint.key not in " ".join(process._process.args), "KI-Assistent: Schlüssel in der Befehlszeile")
+        check(process._job is not None, "KI-Assistent: Prozess nicht an PDF Tool gebunden (Job-Objekt)")
+        pieces: list[str] = []
+        answer = Chat(endpoint, [{"role": "user", "content": "Hallo"}], max_tokens=8).run(pieces.append)
+        check(len(pieces) >= 1 and answer.text == "".join(pieces), f"KI-Assistent: keine gestreamte Antwort ({answer.finish!r})")
+    finally:
+        process.stop()
+    check(not process.running, "KI-Assistent: Prozess läuft nach dem Beenden weiter")
+    # Abrupt endender Prozess (wie ein Absturz von PDF Tool): der KI-Prozess endet mit ihm
+    code = (
+        "import os, sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from assistant import runtime; "
+        "server = runtime.Server(runtime.server_path(), Path(sys.argv[2])); server.start(); "
+        "print(server._process.pid, flush=True); os._exit(0)"
+    )
+    started = subprocess.run([sys.executable, "-s", "-c", code, str(app_dir), str(model)], capture_output=True, text=True, timeout=180)
+    check(started.returncode == 0 and started.stdout.strip(), f"KI-Assistent: Probe-Prozess fehlgeschlagen ({started.returncode}): {started.stderr[-500:]}")
+    pid = int(started.stdout.strip().splitlines()[-1])
+    check(process_ended(pid, 15), f"KI-Assistent: Prozess {pid} läuft nach dem Ende von PDF Tool weiter")
+    print(f"KI-Assistent: llama-server (gebündelt) mit Testmodell in {loaded:.1f} s bereit, {len(pieces)} Stücke gestreamt, beendet; endet mit PDF Tool")
+
+
+def process_ended(pid: int, timeout: float) -> bool:
+    """Windows: Ist der Prozess ``pid`` innerhalb von ``timeout`` Sekunden beendet (oder schon fort)?"""
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+    if not handle:
+        return True
+    try:
+        return kernel32.WaitForSingleObject(ctypes.c_void_p(handle), int(timeout * 1000)) == 0  # WAIT_OBJECT_0
+    finally:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
 
 
 XMP_PACKET = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>

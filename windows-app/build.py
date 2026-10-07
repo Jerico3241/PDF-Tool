@@ -110,6 +110,19 @@ TESSDATA = {
 }
 OCR = PAYLOAD / "ocr"  # passt zu tools/pdf_editor/ocr.py (BUNDLED_DIR)
 
+# KI-Assistent (optional, ab 3.2): llama.cpp (MIT, ggml-org) – das offizielle Paket für Windows auf dem Prozessor
+# (x64, alle CPU-Varianten). Ins Setup kommen nur llama-server.exe, die DLLs aus seinen Importtabellen und die
+# Rechenwerke ggml-cpu-*.dll (llama-server wählt je nach Prozessor selbst eines) – keine weiteren Programme, kein
+# RPC- oder GPU-Backend. Die Lizenztexte aller eingebauten Bestandteile (llama.cpp, cpp-httplib, BoringSSL, LLVM
+# OpenMP, nlohmann/json) gibt das Paket selbst aus (``llama.exe licenses``); sie kommen nach ai\LICENSES.txt.
+# Sprachmodelle gehören nicht ins Setup – sie werden nur auf Wunsch geladen (assistant/catalog.py).
+LLAMA_RELEASE = "b11476"  # ggml-org/llama.cpp, Commit 988190680d5a89fce97de3c20df2c2813731fd61
+LLAMA_ZIP = f"llama-{LLAMA_RELEASE}-bin-win-cpu-x64.zip"
+LLAMA_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_RELEASE}/{LLAMA_ZIP}"
+LLAMA_SHA256 = ""
+LLAMA_BACKENDS = "ggml-cpu-*.dll"  # lädt llama-server zur Laufzeit (nicht in den Importtabellen)
+AI = PAYLOAD / "ai"  # passt zu assistant/runtime.py (BUNDLED_DIR)
+
 # Was die App zur Laufzeit nicht braucht – seit 2.7.0 auch kein tkinter/Tcl/Tk mehr (Qt-Oberfläche)
 RUNTIME_REMOVE = [
     "include", "libs", "Scripts", "Doc", "Tools", "__install__.json",
@@ -243,6 +256,10 @@ REQUIRED_PAYLOAD = [
     "ocr/tessdata/deu.traineddata",
     "ocr/tessdata/eng.traineddata",
     "ocr/tessdata/osd.traineddata",
+    "app/assistant/runtime.py",
+    "app/qtapp/assistant.py",
+    "ai/llama-server.exe",
+    "ai/LICENSES.txt",
 ]
 # Native Bibliotheken der PDF-Engines (Dateinamen enthalten eine Prüfsumme)
 REQUIRED_NATIVE = [
@@ -257,6 +274,8 @@ def log(text: str) -> None:
 
 
 def fail(text: str) -> None:
+    if os.environ.get("GITHUB_ACTIONS") == "true":  # in der CI auch als Fehlermeldung am Lauf
+        print("::error title=build.py::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"), flush=True)
     raise SystemExit(f"FEHLER: {text}")
 
 
@@ -290,9 +309,10 @@ def download(url: str, dest: Path, expected: str) -> Path:
     with urllib.request.urlopen(url) as response, part.open("wb") as out:
         shutil.copyfileobj(response, out)
     part.replace(dest)
-    if sha256(dest) != expected:
+    actual = sha256(dest)
+    if actual != expected:
         dest.unlink()
-        fail(f"Prüfsumme stimmt nicht: {dest.name}")
+        fail(f"Prüfsumme stimmt nicht: {dest.name} – erwartet {expected or '(keine eingetragen)'}, geladen {actual}")
     return dest
 
 
@@ -419,11 +439,11 @@ def find_7zip() -> str:
     return ""
 
 
-def unpacked_file(folder: Path, name: str) -> Path:
-    """Genau eine Datei dieses Namens im entpackten Installer (NSIS-Plugins zählen nicht)."""
+def unpacked_file(folder: Path, name: str, source: str = "Tesseract-Installer") -> Path:
+    """Genau eine Datei dieses Namens im entpackten Paket (NSIS-Plugins zählen nicht)."""
     found = [path for path in folder.rglob(name) if path.is_file() and "$PLUGINSDIR" not in path.parts]
     if len(found) != 1:
-        fail(f"Im Tesseract-Installer {'fehlt' if not found else 'mehrfach'}: {name}")
+        fail(f"Im {source} {'fehlt' if not found else 'mehrfach'}: {name}")
     return found[0]
 
 
@@ -457,6 +477,48 @@ def prepare_ocr(target: Path) -> None:
     remove(unpacked)
 
 
+def prepare_ai(target: Path, search: list[Path]) -> None:
+    """llama.cpp nach ``target`` (``ai\\``): llama-server.exe, die DLLs aus seinen Importtabellen (aus dem Paket, die
+    Laufzeit von Microsoft Visual C++ notfalls aus ``search`` – dieselben Dateien wie die von Python und PySide6),
+    alle Rechenwerke ``ggml-cpu-*.dll`` und die Lizenztexte. Original-Dateien, unverändert; das Paket mit SHA-256
+    geprüft."""
+    archive = download(LLAMA_URL, CACHE / LLAMA_ZIP, LLAMA_SHA256)
+    unpacked = BUILD / "llama"
+    remove(unpacked)
+    log(f"Entpacke llama.cpp {LLAMA_RELEASE} …")
+    with zipfile.ZipFile(archive) as bundle:
+        bundle.extractall(unpacked)
+    server = unpacked_file(unpacked, "llama-server.exe", "Paket von llama.cpp")
+    folder = server.parent
+    backends = sorted(folder.glob(LLAMA_BACKENDS))
+    if not backends:
+        fail(f"Im Paket von llama.cpp fehlen die Rechenwerke {LLAMA_BACKENDS}")
+    needed = qtruntime.dependency_closure([server, *backends], [folder, *search])
+    target.mkdir(parents=True)
+    for path in [server, *backends, *sorted(needed)]:
+        shutil.copy2(path, target / path.name)
+    problems = release_check.check_ai(PAYLOAD)
+    problems = [problem for problem in problems if "LICENSES.txt" not in problem]
+    if problems:
+        fail("KI-Laufzeit unvollständig: " + "; ".join(problems))
+    # Lizenzen aller eingebauten Bestandteile – vom Programm des Pakets selbst ausgegeben
+    app = folder / "llama.exe"
+    if not app.is_file():
+        fail("Im Paket von llama.cpp fehlt llama.exe (gibt die Lizenzen aus)")
+    texts = subprocess.run([str(app), "licenses"], cwd=str(folder), capture_output=True, timeout=120, check=False)
+    licenses = texts.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
+    if texts.returncode != 0 or "License for llama.cpp" not in licenses or "MIT License" not in licenses:
+        fail(f"Die Lizenzen von llama.cpp ließen sich nicht ausgeben (Code {texts.returncode})")
+    (target / "LICENSES.txt").write_text(licenses.strip() + "\n", encoding="utf-8")
+    names = [line.removeprefix("License for ").strip() for line in licenses.splitlines() if line.startswith("License for ")]
+    size = sum(path.stat().st_size for path in target.iterdir() if path.is_file())
+    log(f"KI-Laufzeit: llama-server.exe, {len(backends)} Rechenwerke, {len(needed)} DLLs, Lizenzen: {', '.join(names)} ({size / 1e6:.1f} MB)")
+    if os.environ.get("GITHUB_ACTIONS") == "true":  # Inhalt am Lauf vermerken (Abgleich mit THIRD_PARTY_LICENSES.md)
+        files = ", ".join(f"{path.name} ({path.stat().st_size // 1024} KB)" for path in sorted(target.iterdir()))
+        print(f"::notice title=KI-Laufzeit im Setup::{files} · Lizenzen: {', '.join(names)}", flush=True)
+    remove(unpacked)
+
+
 def prepare_payload(version: str, compile_pyc: bool) -> None:
     runtime = PAYLOAD / "runtime"
     runtime.mkdir(parents=True)
@@ -486,6 +548,7 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von PDF Tool, ohne Zustimmungsseite im Setup
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
     prepare_ocr(OCR)
+    prepare_ai(AI, [runtime, site / "PySide6"])
 
     if compile_pyc:
         python = python_for_runtime()
@@ -506,6 +569,9 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     problems = release_check.check_ocr(PAYLOAD)
     if problems:
         fail("Texterkennung im Paket unvollständig: " + "; ".join(problems))
+    problems = release_check.check_ai(PAYLOAD)
+    if problems:
+        fail("KI-Laufzeit im Paket unvollständig: " + "; ".join(problems))
 
 
 # --- Assistentenbilder -------------------------------------------------------------

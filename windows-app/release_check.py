@@ -44,8 +44,15 @@ OCR_LANGUAGES = ("deu", "eng", "osd")
 OCR_FILES = ("LICENSE.txt", "tessdata/pdf.ttf")
 OCR_MIN_LANGUAGE_SIZE = 500_000  # kleinere Sprachdaten sind abgeschnitten (tessdata_fast: deu 1,5 MB)
 # DLLs, die Windows selbst mitbringt (System32) – alle anderen, die tesseract.exe lädt, müssen in ocr\ liegen
-WINDOWS_DLLS = frozenset({"advapi32.dll", "bcrypt.dll", "crypt32.dll", "gdi32.dll", "iphlpapi.dll", "kernel32.dll", "msvcrt.dll", "secur32.dll", "user32.dll", "wldap32.dll", "ws2_32.dll"})
+WINDOWS_DLLS = frozenset({
+    "advapi32.dll", "bcrypt.dll", "crypt32.dll", "dbghelp.dll", "gdi32.dll", "iphlpapi.dll", "kernel32.dll", "msvcrt.dll",
+    "ntdll.dll", "ole32.dll", "oleaut32.dll", "psapi.dll", "rpcrt4.dll", "secur32.dll", "shell32.dll", "shlwapi.dll",
+    "ucrtbase.dll", "user32.dll", "userenv.dll", "version.dll", "winmm.dll", "wldap32.dll", "ws2_32.dll",
+})
 PE_MACHINE_X64 = 0x8664
+AI_DIR = "ai"  # KI-Assistent: llama.cpp (assistant/runtime.py)
+AI_SERVER = "llama-server.exe"
+AI_BACKENDS = "ggml-cpu-*.dll"  # Rechenwerke, die llama-server zur Laufzeit lädt
 
 
 def parse(version: str) -> Version | None:
@@ -197,6 +204,53 @@ def check_ocr(payload: Path) -> list[str]:
     for rel in OCR_FILES:
         if not (folder / rel).is_file():
             problems.append(f"Im Paket fehlt: {OCR_DIR}/{rel}")
+    return problems
+
+
+def check_ai(payload: Path) -> list[str]:
+    """Probleme der KI-Laufzeit im Paket (leer = in Ordnung): ``ai\\llama-server.exe`` für 64 Bit, mindestens ein
+    Rechenwerk ``ggml-cpu-*.dll``, jede DLL, die beide direkt oder indirekt laden, liegt daneben oder gehört zu
+    Windows, keine weiteren Programme oder DLLs (auch kein RPC- oder GPU-Backend) und die Lizenztexte."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    from qtruntime import pe_imports
+
+    folder = Path(payload) / AI_DIR
+    executable = folder / AI_SERVER
+    if not executable.is_file():
+        return [f"KI-Laufzeit fehlt im Paket: {AI_DIR}/{AI_SERVER}"]
+    problems: list[str] = []
+    if pe_machine(executable) != PE_MACHINE_X64:
+        problems.append(f"{AI_DIR}/{AI_SERVER} ist keine Windows-Programmdatei für 64 Bit")
+    backends = sorted(folder.glob(AI_BACKENDS))
+    if not backends:
+        problems.append(f"Keine Rechenwerke in {AI_DIR}/ ({AI_BACKENDS})")
+    present = {path.name.lower(): path for path in folder.glob("*.dll")}
+    missing: set[str] = set()
+    seen: set[Path] = set()
+    queue = [executable, *backends]
+    while queue:
+        current = queue.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        for name in pe_imports(current):
+            key = name.lower()
+            if key in present:
+                queue.append(present[key])
+            elif key not in WINDOWS_DLLS and not key.startswith(("api-ms-win-", "ext-ms-win-")):
+                missing.add(name)
+    if missing:
+        problems.append(f"Für die KI-Laufzeit fehlen DLLs in {AI_DIR}/: " + ", ".join(sorted(missing, key=str.lower)))
+    unused = sorted(path.name for path in present.values() if path not in seen)
+    if unused:
+        problems.append(f"Nicht benötigte DLLs in {AI_DIR}/: " + ", ".join(unused))
+    programs = sorted(path.name for path in folder.glob("*.exe") if path.name.lower() != AI_SERVER)
+    if programs:
+        problems.append(f"Weitere Programme in {AI_DIR}/: " + ", ".join(programs))
+    licenses = folder / "LICENSES.txt"
+    if not licenses.is_file() or "License for llama.cpp" not in licenses.read_text(encoding="utf-8", errors="replace"):
+        problems.append(f"Im Paket fehlen die Lizenzen der KI-Laufzeit: {AI_DIR}/LICENSES.txt")
     return problems
 
 

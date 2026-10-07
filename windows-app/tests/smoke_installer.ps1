@@ -85,8 +85,12 @@ $pdfKeyBefore = Test-Path "HKCU:\Software\Classes\.pdf"
 $env:UE_DATA_DIR = $null
 $env:UE_CONFIG_FILE = $null
 
+# Sprachmodelle des KI-Assistenten (seit 3.2, nur auf Wunsch geladen): eigener Ordner, nicht im Datenordner
+$ki = Join-Path $env:LOCALAPPDATA "PDF-Tool-KI"
+$kiNew = -not (Test-Path $ki)
+
 # Ordner, die vor dem Test nicht existierten, werden am Ende entfernt (nie vorhandene Benutzerdaten).
-$created = @($target, $data, $oldTarget, $oldData, $updates) | Where-Object { -not (Test-Path $_) }
+$created = @($target, $data, $oldTarget, $oldData, $updates, $ki) | Where-Object { -not (Test-Path $_) }
 
 function Install([string]$file, [string]$name) {
     $log = Join-Path $temp "setup-$name.log"
@@ -193,6 +197,12 @@ if (-not (Get-ChildItem (Join-Path $target "runtime\Lib\site-packages\pikepdf.li
 foreach ($file in "ocr\tesseract.exe", "ocr\libtesseract-5.dll", "ocr\libleptonica-6.dll", "ocr\tessdata\deu.traineddata", "ocr\tessdata\eng.traineddata", "ocr\tessdata\osd.traineddata", "ocr\LICENSE.txt", "LICENSE", "THIRD_PARTY_LICENSES.md") {
     if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
 }
+# KI-Assistent: Laufzeit (llama.cpp) mit Rechenwerken und Lizenzen im eigenen Ordner – Sprachmodelle nicht im Setup
+foreach ($file in "ai\llama-server.exe", "ai\LICENSES.txt") {
+    if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
+}
+if (-not (Get-ChildItem (Join-Path $target "ai") -Filter "ggml-cpu-*.dll")) { throw "Rechenwerke der KI-Laufzeit fehlen (ai\ggml-cpu-*.dll)" }
+if (Get-ChildItem $target -Recurse -Filter "*.gguf" -ErrorAction SilentlyContinue) { throw "Ein Sprachmodell liegt im Programmordner (gehoert nicht ins Setup)" }
 if (-not (Test-Path $shortcut)) { throw "Startmenue-Verknuepfung fehlt: $shortcut" }
 $version = (Get-Content (Join-Path $target "VERSION") -Raw).Trim()
 $entries = AppEntries
@@ -383,6 +393,16 @@ if ($Previous -and $previousKind -eq "2.4") {
     Write-Host "   Kundenakte, Vorlagen, Textbausteine, Regeln, formatierte Kopfzeile und Reparatur-Einstellungen erhalten"
 }
 
+# Geladene Sprachmodelle (hier Attrappen) entfernt die Deinstallation – fremde Dateien im Ordner bleiben
+if ($kiNew) {
+    $models = Join-Path $ki "modelle"
+    New-Item -ItemType Directory -Force -Path $models | Out-Null
+    foreach ($name in "Qwen3.5-2B-Q4_K_M.gguf", "Qwen3.5-2B-Q4_K_M.gguf.sha256", "Qwen3.5-4B-Q4_K_M.gguf.part") {
+        Set-Content -Path (Join-Path $models $name) -Value "Testattrappe" -Encoding ascii
+    }
+    Set-Content -Path (Join-Path $models "eigene-notiz.txt") -Value "nicht von PDF Tool" -Encoding ascii
+}
+
 Write-Host "5. Stille Deinstallation"
 $uninstall = Start-Process -FilePath (Join-Path $target "unins000.exe") -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
 if ($uninstall.ExitCode -ne 0) { throw "Deinstallation fehlgeschlagen (Code $($uninstall.ExitCode))" }
@@ -399,6 +419,11 @@ if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Standard-App fuer PDF-Dateien n
 if (-not $pdfKeyBefore -and (Test-Path "HKCU:\Software\Classes\.pdf")) { throw "Der vom Setup angelegte Schluessel .pdf ist nach der Deinstallation noch vorhanden" }
 if ($Previous -and -not (Test-Path (Join-Path $data "gui-config.json"))) { throw "Stille Deinstallation hat Benutzerdaten geloescht" }
 if (Get-ChildItem $updates -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "PDF-Tool-Setup-*" -or $_.Name -eq "releases.json" }) { throw "Heruntergeladene Updates sind nach der Deinstallation noch vorhanden" }
+if (Test-Path (Join-Path $target "ai")) { throw "KI-Laufzeit ist nach der Deinstallation noch vorhanden" }
+if ($kiNew) {
+    if (Get-ChildItem $ki -Recurse -Filter "Qwen3.5-*" -ErrorAction SilentlyContinue) { throw "Sprachmodelle sind nach der Deinstallation noch vorhanden" }
+    if (-not (Test-Path (Join-Path $ki "modelle\eigene-notiz.txt"))) { throw "Die Deinstallation hat eine fremde Datei im Ordner der Sprachmodelle geloescht" }
+}
 
 # Aufraeumen: nur, was dieser Test angelegt hat
 foreach ($dir in $created) { if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue } }

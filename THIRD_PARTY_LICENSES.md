@@ -1,7 +1,8 @@
 # Lizenzen von Drittanbietern
 
-PDF Tool (Windows-App) wird mit einer eingebetteten Python-Laufzeit, den folgenden Paketen und der
-Texterkennung Tesseract ([eigener Abschnitt](#texterkennung-ocr-tesseract-und-seine-bibliotheken))
+PDF Tool (Windows-App) wird mit einer eingebetteten Python-Laufzeit, den folgenden Paketen, der
+Texterkennung Tesseract ([eigener Abschnitt](#texterkennung-ocr-tesseract-und-seine-bibliotheken)) und der
+Laufzeit des optionalen KI-Assistenten ([eigener Abschnitt](#ki-assistent-optional-llamacpp-und-sprachmodelle))
 ausgeliefert. Die Versionen und SHA-256-Prüfsummen stehen in
 [`windows-app/runtime-requirements.txt`](windows-app/runtime-requirements.txt) bzw. in
 [`windows-app/build.py`](windows-app/build.py) (Python, Tesseract, Sprachdaten). Alle Pakete werden
@@ -17,6 +18,7 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
   pypdfium2 `…\pypdfium2-5.13.0.dist-info\licenses\`)
 - Texterkennung: `%LOCALAPPDATA%\PDF-Tool\ocr\LICENSE.txt` (Apache-2.0 – Tesseract und Sprachdaten);
   die Lizenzen der übrigen Bibliotheken nennt der Abschnitt zur Texterkennung
+- KI-Assistent: `%LOCALAPPDATA%\PDF-Tool\ai\LICENSES.txt` (alle in llama.cpp eingebauten Bestandteile)
 
 ## Laufzeit und Pakete
 
@@ -114,6 +116,35 @@ JBIG-KIT (GPL-2.0-or-later, von LibTIFF gebunden) ist nur unter einer GPL nutzba
 liegen als eigene DLLs neben `tesseract.exe` und lassen sich durch kompatible Fassungen ersetzen; ihr
 Quellcode (wie der von JBIG-KIT und der GCC-Laufzeit) ist unter den genannten Adressen erhältlich.
 
+## KI-Assistent (optional): llama.cpp und Sprachmodelle
+
+Der KI-Assistent (seit 3.2, standardmäßig aus) rechnet lokal mit llama.cpp im Programmordner
+(`%LOCALAPPDATA%\PDF-Tool\ai\`). Quelle ist das offizielle Windows-Paket für den Prozessor aus dem Release
+b11476 von ggml-org/llama.cpp
+(`https://github.com/ggml-org/llama.cpp/releases/download/b11476/llama-b11476-bin-win-cpu-x64.zip`,
+SHA-256 in `windows-app/build.py`, `LLAMA_SHA256`). Übernommen werden unverändert nur `llama-server.exe`, die
+DLLs, die es laut Importtabellen direkt oder indirekt lädt, und die Rechenwerke `ggml-cpu-*.dll` (eines je
+Prozessorgeneration; llama-server wählt selbst) – keine weiteren Programme, kein RPC- und kein GPU-Backend.
+Die vollständigen Lizenztexte aller eingebauten Bestandteile gibt das Paket selbst aus (`llama.exe licenses`);
+sie liegen unverändert in `%LOCALAPPDATA%\PDF-Tool\ai\LICENSES.txt`.
+
+| Komponente | Lizenz | Verwendet für | Quelle |
+| --- | --- | --- | --- |
+| llama.cpp und ggml (`llama-server.exe`, `llama*.dll`, `ggml*.dll`, `ggml-cpu-*.dll`, `mtmd.dll`) | MIT | lokales Sprachmodell (KI-Assistent) | https://github.com/ggml-org/llama.cpp |
+| cpp-httplib (in llama.cpp eingebaut) | MIT | lokale Schnittstelle des KI-Prozesses (nur 127.0.0.1) | https://github.com/yhirose/cpp-httplib |
+| nlohmann/json (in llama.cpp eingebaut) | MIT | JSON | https://github.com/nlohmann/json |
+| BoringSSL (in llama.cpp eingebaut) | siehe `ai\LICENSES.txt` | TLS in llama.cpp (Modell-Downloads von llama.cpp selbst – PDF Tool nutzt sie nicht) | https://boringssl.googlesource.com/boringssl |
+| LLVM OpenMP (`libomp.dll`) | Apache-2.0 WITH LLVM-exception | parallele Berechnung | https://openmp.llvm.org |
+
+Die **Sprachmodelle** gehören nicht zum Setup: Sie werden nur auf ausdrücklichen Wunsch über HTTPS von
+Hugging Face geladen (feste Revision, SHA-256 geprüft, `windows-app/app/assistant/catalog.py`), liegen in
+`%LOCALAPPDATA%\PDF-Tool-KI\modelle\` und lassen sich jederzeit entfernen (auch die Deinstallation entfernt sie).
+
+| Modell (Datei) | Lizenz | Quelle |
+| --- | --- | --- |
+| Qwen3.5 4B, GGUF Q4_K_M (`Qwen3.5-4B-Q4_K_M.gguf`, »Genau«) | Apache-2.0 | https://huggingface.co/unsloth/Qwen3.5-4B-GGUF (Basis: https://huggingface.co/Qwen/Qwen3.5-4B) |
+| Qwen3.5 2B, GGUF Q4_K_M (`Qwen3.5-2B-Q4_K_M.gguf`, »Kompakt«) | Apache-2.0 | https://huggingface.co/unsloth/Qwen3.5-2B-GGUF (Basis: https://huggingface.co/Qwen/Qwen3.5-2B) |
+
 ## Geprüfte, aber nicht verwendete Engines (erweiterte PDF-Wiederherstellung, 2.6.0)
 
 Für die dritte, tolerante Engine wurden Lizenz und Eignung geprüft:
@@ -167,7 +198,7 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
   kein Bestandteil des App-Brandings.
 - **Schriften der Oberfläche** (Segoe UI Variable, Segoe UI) werden nicht mitgeliefert, sondern aus
   Windows verwendet.
-- **Symbole der Oberfläche** (seit 2.7.0): 171 SVG-Symbole aus **Fluent UI System Icons** von
+- **Symbole der Oberfläche** (seit 2.7.0): 175 SVG-Symbole aus **Fluent UI System Icons** von
   Microsoft (Paket `@fluentui/svg-icons` 1.1.343, https://github.com/microsoft/fluentui-system-icons),
   unverändert unter `windows-app/app/qml/icons/`, im Setup als Teil der QML-Ressource. Lizenz: MIT.
 
