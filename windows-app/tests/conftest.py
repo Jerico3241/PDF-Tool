@@ -118,7 +118,9 @@ def pytest_runtest_logreport(report) -> None:
         return
     text = str(report.longreprtext or "")[-1500:]
     message = f"{report.nodeid} ({report.when}): {text}".replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-    print(f"\n::error title=Test fehlgeschlagen::{message}", flush=True)
+    sys.stdout.flush()
+    sys.stdout.buffer.write(f"\n::error title=Test fehlgeschlagen::{message}\n".encode("utf-8"))  # UTF-8, auch unter cp1252
+    sys.stdout.buffer.flush()
 
 
 @pytest.fixture(autouse=True)

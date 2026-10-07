@@ -122,7 +122,7 @@ Der KI-Assistent (seit 3.2, standardmäßig aus) rechnet lokal mit llama.cpp im 
 (`%LOCALAPPDATA%\PDF-Tool\ai\`). Quelle ist das offizielle Windows-Paket für den Prozessor aus dem Release
 b11476 von ggml-org/llama.cpp
 (`https://github.com/ggml-org/llama.cpp/releases/download/b11476/llama-b11476-bin-win-cpu-x64.zip`,
-SHA-256 in `windows-app/build.py`, `LLAMA_SHA256`). Übernommen werden unverändert nur `llama-server.exe`, die
+SHA-256 `a23e548c6b3525c38bcfeceaff919786ae06741857043cb670279b70100e5483`). Übernommen werden unverändert nur `llama-server.exe`, die
 DLLs, die es laut Importtabellen direkt oder indirekt lädt, und die Rechenwerke `ggml-cpu-*.dll` (eines je
 Prozessorgeneration; llama-server wählt selbst) – keine weiteren Programme, kein RPC- und kein GPU-Backend.
 Die vollständigen Lizenztexte aller eingebauten Bestandteile gibt das Paket selbst aus (`llama.exe licenses`);

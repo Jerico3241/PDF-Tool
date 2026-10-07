@@ -119,7 +119,7 @@ OCR = PAYLOAD / "ocr"  # passt zu tools/pdf_editor/ocr.py (BUNDLED_DIR)
 LLAMA_RELEASE = "b11476"  # ggml-org/llama.cpp, Commit 988190680d5a89fce97de3c20df2c2813731fd61
 LLAMA_ZIP = f"llama-{LLAMA_RELEASE}-bin-win-cpu-x64.zip"
 LLAMA_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_RELEASE}/{LLAMA_ZIP}"
-LLAMA_SHA256 = ""
+LLAMA_SHA256 = "a23e548c6b3525c38bcfeceaff919786ae06741857043cb670279b70100e5483"  # Datei des Releases, über HTTPS von github.com
 LLAMA_BACKENDS = "ggml-cpu-*.dll"  # lädt llama-server zur Laufzeit (nicht in den Importtabellen)
 AI = PAYLOAD / "ai"  # passt zu assistant/runtime.py (BUNDLED_DIR)
 
@@ -273,9 +273,19 @@ def log(text: str) -> None:
     print(text, flush=True)
 
 
+def annotate(kind: str, title: str, text: str) -> None:
+    """In der CI (GitHub Actions) eine Meldung am Lauf (``error`` oder ``notice``) – als UTF-8, auch wenn die Konsole
+    eine andere Codepage hat."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    message = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    sys.stdout.flush()
+    sys.stdout.buffer.write(f"::{kind} title={title}::{message}\n".encode("utf-8"))
+    sys.stdout.buffer.flush()
+
+
 def fail(text: str) -> None:
-    if os.environ.get("GITHUB_ACTIONS") == "true":  # in der CI auch als Fehlermeldung am Lauf
-        print("::error title=build.py::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"), flush=True)
+    annotate("error", "build.py", text)
     raise SystemExit(f"FEHLER: {text}")
 
 
@@ -513,9 +523,8 @@ def prepare_ai(target: Path, search: list[Path]) -> None:
     names = [line.removeprefix("License for ").strip() for line in licenses.splitlines() if line.startswith("License for ")]
     size = sum(path.stat().st_size for path in target.iterdir() if path.is_file())
     log(f"KI-Laufzeit: llama-server.exe, {len(backends)} Rechenwerke, {len(needed)} DLLs, Lizenzen: {', '.join(names)} ({size / 1e6:.1f} MB)")
-    if os.environ.get("GITHUB_ACTIONS") == "true":  # Inhalt am Lauf vermerken (Abgleich mit THIRD_PARTY_LICENSES.md)
-        files = ", ".join(f"{path.name} ({path.stat().st_size // 1024} KB)" for path in sorted(target.iterdir()))
-        print(f"::notice title=KI-Laufzeit im Setup::{files} · Lizenzen: {', '.join(names)}", flush=True)
+    files = ", ".join(f"{path.name} ({path.stat().st_size // 1024} KB)" for path in sorted(target.iterdir()))
+    annotate("notice", "KI-Laufzeit im Setup", f"{files} · Lizenzen: {', '.join(names)}")  # Abgleich mit THIRD_PARTY_LICENSES.md
     remove(unpacked)
 
 
