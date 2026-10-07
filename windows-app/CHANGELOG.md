@@ -2,6 +2,66 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.1.0-beta.1
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Bringt Formulare gestalten, die lokale
+Texterkennung (OCR), Vektorobjekte und die Zwischenablage in „Objekt bearbeiten“, Seiten über Tabs
+hinweg und einen erweiterten Reader.
+
+## Neu
+
+- Formulare gestalten: Textfeld, Kontrollkästchen, Optionsfeld (Gruppe, „Option hinzufügen“),
+  Dropdown und Liste anlegen (Rahmen aufziehen, Klick, Rechtsklick „… hier“); verschieben (Ziehen,
+  Pfeiltasten), Größe an den Ecken, duplizieren (Strg+D), löschen (Entf); Dialog „Feldeigenschaften“
+  (Name, Kurzinfo, Pflichtfeld, schreibgeschützt, mehrzeilig, Zeichenzahl, Schriftgröße, Ausrichtung,
+  Optionen, Exportwert, Rahmen, Hintergrund). Erscheinungsbilder für jeden Zustand, Rückgängig je
+  Schritt; XFA-Formulare werden nicht umgestaltet.
+- Texterkennung (OCR) mit Tesseract 5.5.3 im Setup (Deutsch, Englisch, Lageerkennung): Hinweis bei
+  gescannten Seiten, Dialog (alle, aktuelle, ausgewählte Seiten; Sprachen; erneut erkennen),
+  Erkennung im Hintergrund mit Fortschritt und Abbrechen, unsichtbare Textebene, ein Schritt für
+  Rückgängig, „Erkannten Text entfernen“.
+- Objekt bearbeiten: Vektorobjekte (Linien, Rahmen, Pfade) mit Kontur, Füllung und Linienstärke;
+  gemischte Auswahl aus Text, Bildern und Grafiken; Drehen, Ausrichten und Verteilen, Vorder- und
+  Hintergrund, Deckkraft; Ausschneiden, Kopieren, Einfügen und „Hier einfügen“ – auch über Tabs und aus
+  anderen Programmen.
+- Seiten: Rahmenauswahl in „Seiten organisieren“, Seiten kopieren, ausschneiden und einfügen (auch in
+  einen anderen Tab), nur ausgewählte Seiten aus einer PDF einfügen, Kontextmenü der Miniaturen,
+  gewählte Seiten drucken.
+- Kommentare: Linienstärke, Füllung, Deckkraft und Schriftgröße nachträglich, Größe an den Ecken,
+  Antworten in der Seitenleiste.
+- Text: Schriftart, unterstrichen, durchgestrichen, Ausrichtung, eigene Farben (Hex-Wert).
+- Reader: Vollbild (F11), Seitenleiste „Anhänge“, Seitenleisten, Suche und Lage je Tab, erste/letzte
+  Seite, „Gehe zu Seite“ (Strg+G), freie Zoomeingabe, Strg+A für den Text der Seite, Drucken mit
+  Bereichen, Auswahl und Kopien; Einstellungen → PDF Reader: Ansicht neu geöffneter PDFs.
+- PDF reparieren: fremde Daten vor bzw. nach dem PDF-Inhalt werden zuerst entfernt; beschädigte
+  Datenströme so weit wie möglich gerettet.
+- Einstellungen → Updates: Schalter „Beta-Versionen erhalten“ (Standard aus); Fenstertitel einer Beta
+  „PDF Tool 3.1.0 Beta“ und Hinweis in „Über“.
+
+## Geändert
+
+- Updater: Angeboten werden nur Tags vX.Y.Z (Stable) und als Vorabversion markierte vX.Y.Z-beta.N
+  (Beta); Entwicklerstände und andere Kennungen nie.
+- Werkzeughinweise schweben über der Seite und blenden weich ein und aus wie die übrigen Meldungen.
+- Startseite: drei gleich breite Werkzeugkarten, symmetrisch.
+- Vertragsübersichten: Die Statusleiste nennt nur das Ergebnis der Excel-Prüfung.
+- Linke Seitenleiste 300 px breit (Platz für vier Umschalter).
+- Protokoll mit festen Bereichen (pdf, save, render, repair, ocr, ui, update, installer), ohne Inhalte.
+- Setup: Texterkennung im Unterordner „ocr“, Lizenztext LICENSE (GPL-3.0) im Programmordner.
+
+## Behoben
+
+- „Zuletzt verwendet“ (Ansicht beim Öffnen) stellte die zuletzt benutzte Ansicht nicht wieder her.
+- Die Leiste des Texteditors ragte in schmalen Fenstern über den Rand.
+- Beim Beenden ging ein in PDF Tool kopierter Text in der Zwischenablage verloren.
+
+## Intern
+
+- Workflow „Release-Prüfung“: von Hand angelegte oder geänderte Releases werden geprüft.
+- Upgrade- und Update-Test von der unmittelbar vorherigen veröffentlichten Version (bei einer Beta auch
+  einer Beta).
+- Dependabot bündelt Updates; die Qt-Tests laufen in sechs Jobs, jede Testdatei läuft in der CI.
+
 # PDF Tool 3.0.0-beta.2
 
 Beta zum Testen (Kanal „Beta“). Behebt den Fehler beim Speichern von PDFs mit XMP-Metadaten aus

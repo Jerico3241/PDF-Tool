@@ -2,13 +2,14 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.0.0-beta.2 (Beta zum Testen)
+Version 3.1.0-beta.1 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
-  und zum Bearbeiten – Text direkt im PDF ändern oder hinzufügen, Bilder,
-  Seiten organisieren, Kommentare, Formulare ausfüllen – mit Rückgängig und
-  sicherem Speichern.
+  und zum Bearbeiten – Text und einzelne Objekte direkt im PDF ändern oder
+  hinzufügen, Bilder und Grafiken, Seiten organisieren, Kommentare,
+  Formulare ausfüllen und gestalten, Texterkennung (OCR) für gescannte
+  Seiten – mit Rückgängig und sicherem Speichern.
 - Vertragsübersichten: erstellt professionelle Vertragsübersichten aus
   Excel-Listen und speichert sie als PDF – einzeln oder als Stapel aus
   vielen Excel-Dateien, mit Live-Vorschau, optionalen Kundenakten, die
@@ -26,17 +27,48 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.0.0-beta.2.exe
+PDF-Tool-Setup-3.1.0-beta.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
-qpdf, pypdfium2 mit PDFium, pypdf, fontTools). Eine eigene Python-Installation, qpdf, Ghostscript oder
-andere Zusatzprogramme sind nicht nötig.
+qpdf, pypdfium2 mit PDFium, pypdf, fontTools) und die Texterkennung
+Tesseract mit deutschen und englischen Sprachdaten. Eine eigene
+Python-Installation, qpdf, Ghostscript, Tesseract oder andere
+Zusatzprogramme sind nicht nötig.
 
+
+Neu in Version 3.1 (Beta 1) – Formulare, Texterkennung, Objekte, Seiten
+------------------------------------------------------------------------
+Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
+(Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.1.0 Beta“.
+- Formulare gestalten: Textfelder, Kontrollkästchen, Optionsfelder,
+  Dropdowns und Listen anlegen (Rahmen aufziehen oder klicken), verschieben,
+  in der Größe ändern, duplizieren, löschen und ihre Eigenschaften ändern
+  (Name, Kurzinfo, Pflichtfeld, Schreibschutz, Schriftgröße, Optionen …).
+- Texterkennung (OCR) für gescannte PDFs – vollständig lokal, im Setup
+  enthalten (Deutsch, Englisch): Der Text wird durchsuchbar und kopierbar,
+  das Aussehen der Seiten bleibt gleich. Läuft im Hintergrund mit
+  Fortschritt und „Abbrechen“; Rückgängig nimmt sie vollständig zurück.
+- Objekt bearbeiten: auch Linien, Rahmen und Grafiken; gemischte Auswahl
+  aus Text, Bildern und Grafiken; Drehen, Ausrichten und Verteilen, Vorder-
+  und Hintergrund, Deckkraft; Ausschneiden, Kopieren und Einfügen – auch in
+  einem anderen Tab und aus anderen Programmen (Text, Bilder).
+- Text: Schriftart, unterstrichen, durchgestrichen, Ausrichtung und eigene
+  Farben.
+- Seiten: Rahmenauswahl in „Seiten organisieren“, Seiten kopieren und in
+  einem anderen Tab einfügen, nur ausgewählte Seiten aus einer PDF
+  einfügen („2, 4-5“), Kontextmenü der Miniaturen, gewählte Seiten drucken.
+- Kommentare: Linienstärke, Füllung, Deckkraft und Schriftgröße
+  nachträglich ändern, Größe an den Ecken, Antworten in der Seitenleiste.
+- Reader: Vollbild (F11), Seitenleiste „Anhänge“, Seitenleisten und Suche
+  je Tab, „Gehe zu Seite“ (Strg+G), freie Zoomeingabe, Ansicht beim Öffnen
+  einstellbar (Einstellungen → PDF Reader).
+- PDF reparieren: rettet PDFs mit fremden Daten vor oder nach dem
+  PDF-Inhalt (z. B. aus E-Mail- oder Webseiten-Exporten) und beschädigte
+  Datenströme so weit wie möglich.
 
 Neu in Version 3.0 (Beta 2) – PDF Reader & Editor
 -------------------------------------------------
-Beta-Version zum Testen: Sie erscheint nur im Update-Kanal „Beta“.
 Neu in Beta 2:
 - Speichern repariert: PDFs mit XMP-Metadaten (die meisten PDFs aus
   Office-Programmen, Acrobat oder Scannern) lassen sich wieder speichern;
@@ -276,21 +308,25 @@ Prüfung. „Herunterladen“ und danach „Jetzt installieren“ – PDF Tool b
 sich, das Setup startet und aktualisiert die vorhandene Installation. Am
 Ende kann PDF Tool direkt wieder gestartet werden.
 
-Update-Kanal: „Stable“ (Standard) erhält nur freigegebene Versionen. „Beta“
-erhält zusätzlich Vorabversionen zum Testen – Beta-Versionen können Fehler
-enthalten und sind nicht vollständig freigegeben. Ein Wechsel von Beta zurück
-zu Stable installiert nie eine ältere Version; er wirkt, sobald eine neuere
-stabile Version erscheint.
+Beta-Versionen erhalten (Einstellungen → Updates; Standard: aus): Aus
+erhält PDF Tool nur freigegebene Versionen (Kanal „Stable“). Eingeschaltet
+erhält es zusätzlich Vorabversionen zum Testen (Kanal „Beta“) –
+Beta-Versionen können Fehler enthalten und sind nicht vollständig
+freigegeben. Entwicklerstände werden nie angeboten. Ausschalten installiert
+nie eine ältere Version; es wirkt, sobald eine neuere stabile Version
+erscheint.
 
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 3.0.0-beta.1 auf 3.0.0-beta.2 (Kanal „Beta“): Das Setup
-ersetzt nur die Programmdateien. Alle Einstellungen und Daten bleiben
-unverändert.
+Update von PDF Tool 3.0.0-beta.2 auf 3.1.0-beta.1 (Kanal „Beta“): Das Setup
+ersetzt nur die Programmdateien und legt die Texterkennung im Unterordner
+„ocr“ an. Alle Einstellungen und Daten bleiben unverändert; der gewählte
+Kanal „Beta“ erscheint als eingeschalteter Schalter „Beta-Versionen
+erhalten“.
 
-Update von PDF Tool 2.8 auf 3.0.0-beta.2 (Kanal „Beta“): Das Setup ersetzt
+Update von PDF Tool 2.8 auf 3.1.0-beta.1 (Kanal „Beta“): Das Setup ersetzt
 nur die Programmdateien und trägt PDF Tool unter „Öffnen mit“ für
 PDF-Dateien ein (die Standard-App für PDF bleibt unverändert). Alle
 Einstellungen und Daten bleiben unverändert. Der Kanal „Stable“ erhält diese

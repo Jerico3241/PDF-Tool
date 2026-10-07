@@ -452,16 +452,18 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   zweiter Start reicht die PDF weiter, Standard-App für PDF unverändert, Deinstallation entfernt die
   Einträge).
 
-## Bekannte Einschränkungen (3.0.0-beta.2)
+## Bekannte Einschränkungen (3.1.0-beta.1)
 
 - Textauswahl innerhalb einer Seite (nicht über Seitengrenzen hinweg).
 - Keine Schwärzung: Eine echte Schwärzung (Entfernen von Text, Bildern und Vektoren eines
   Bereichs) ist nicht enthalten. Die Überlagerung ist ausdrücklich keine Schwärzung.
 - Digitale Signaturen werden erkannt, aber nicht erstellt; eine sichtbare Unterschrift entsteht
   mit dem Freihand-Werkzeug.
-- XFA-Formulare: nur der AcroForm-Teil; PDF-JavaScript (Berechnungen, Prüfungen) läuft nie.
-- Texterkennung: gebündelt sind nur Deutsch und Englisch; eine Textebene anderer Programme wird
-  nicht ersetzt, sondern ergänzt.
+- XFA-Formulare: nur der AcroForm-Teil lässt sich ausfüllen, nicht gestalten; PDF-JavaScript
+  (Berechnungen, Prüfungen) läuft nie.
+- Texterkennung: gebündelt sind nur Deutsch und Englisch; Seiten, die schon Text haben (auch die
+  Textebene eines anderen Programms), werden nicht erkannt – ersetzt oder entfernt werden nur
+  Textebenen von PDF Tool.
 - Text in Type3-Schriften und mit anderen CMaps als Identity-H/V wird nicht direkt geändert (neu
   gesetzt oder überlagert – der Hinweis nennt den Weg).
 - Objekt bearbeiten:
@@ -470,8 +472,7 @@ PDFs bleiben auch in der Sicherung verschlüsselt (das Passwort wird nie gespeic
   - **Nur überlagert** werden Text in Formular-XObjects, senkrechter Text (Identity-V),
     Type3-Schriften und Seiten mit unklarer Struktur. Diese Texte lassen sich weder verschieben
     noch formatieren.
-  - **Schrift** und **Drehung** werden angezeigt, aber nicht geändert.
-  - **Noch nicht enthalten:** Vektorobjekte (Linien, Rechtecke, Pfade), Einrasten beim Ziehen und
-    manuelles Gruppieren.
+  - **Drehen** in 90°-Schritten (Schaltflächen, Kontextmenü); beliebige Winkel nicht.
+  - **Noch nicht enthalten:** Einrasten beim Ziehen und manuelles Gruppieren.
   - **Bilder** wie im Bildwerkzeug: Bilder in Formular-XObjects und Inline-Bilder werden nur
     geändert, wo das sicher möglich ist.
