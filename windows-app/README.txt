@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0-beta.2 (Beta zum Testen)
+Version 3.2.0-beta.3 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -31,7 +31,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0-beta.2.exe
+PDF-Tool-Setup-3.2.0-beta.3.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -386,6 +386,14 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
+Update von PDF Tool 3.2.0-beta.2, 3.2.0-beta.1 oder 3.1.0 auf 3.2.0-beta.3
+(Kanal „Beta“): Das Setup ersetzt die Programmdateien und legt das
+Startprogramm „PDF-Tool.exe“ an. Verknüpfungen und „Öffnen mit“ zeigen
+danach Symbol und Namen von PDF Tool, und PDF Tool erscheint unter
+Einstellungen → Apps → Standard-Apps (die Standard-App für PDF ändert das
+Setup nicht – das entscheiden Sie). Alle Einstellungen und Daten bleiben
+unverändert.
+
 Update von PDF Tool 3.2.0-beta.1 oder 3.1.0 auf 3.2.0-beta.2 (Kanal
 „Beta“): Das Setup ersetzt nur die Programmdateien und legt die Laufzeit
 des KI-Assistenten im Unterordner „ai“ an. Alle Einstellungen und Daten
@@ -530,6 +538,10 @@ Kundenakte – „Kunden“.
    zusätzliche Angaben: der Rechnungsempfänger (bei mehreren „3 erkannt“
    mit Auswahl daneben) und Hinweise. Kundennummer und Firmenname aus der
    Datei werden übernommen, sofern sie darin stehen.
+   Der Schalter „Gekündigte und abgelaufene Verträge mit aufführen“ unter
+   der Excel-Liste nimmt auch Verträge mit dem Anwenderstatus „Gekündigt“
+   oder „Abgelaufen“ in die Übersicht auf; in der PDF steht ihr Status rot
+   unter der Vertragsnummer. Der Schalter gilt auch für den Stapel.
 2. Firmenname und Kundennummer eintragen, sofern sie nicht aus der Excel
    stammen. Mit eingeschalteter Kundenakte: Ist ein Rechnungsempfänger als
    Kunde bekannt, erscheint „Bekannter Kunde gefunden“: „Übernehmen“ füllt

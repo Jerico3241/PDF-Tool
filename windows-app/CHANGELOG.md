@@ -2,6 +2,40 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.2.0-beta.3
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Gekündigte und abgelaufene Verträge wahlweise in der
+Vertragsübersicht, eigenes Startprogramm mit Symbol für „Öffnen mit“ und die Standard-Apps, Startzeit-Messung
+unter Windows in der CI. Details in den [Release Notes](release-notes/3.2.0-beta.3.md).
+
+## Vertragsübersichten
+
+- `engine.py`: `BEENDET` (»Gekündigt«, »Abgelaufen«), `nur_aktive(df, beendete)`, `zahl_beendete`,
+  `Vertragsdaten.status`; `pruefe_excel(…, beendete)` meldet `beendet`; `PdfAuftrag.beendete` – in der PDF
+  steht der Status rot unter der Vertragsnummer (`_status_hinweis`).
+- `ExcelAnalysis.ended`, `contract_summary(…, ended=…)`, `excel_issues` und `usable` zählen beendete Verträge
+  nur mit Schalter; `pdf_fields(…, beendete=…)`.
+- Oberfläche: Schalter `createEndedContracts` unter „Excel-Liste“ (Einstellung `vertraege_beendete`, Standard
+  aus); Umschalten prüft die Excel und den Stapel neu (`BatchController.ended_changed`,
+  `AnalysisCache.beendete`/`clear`, `resolver.Defaults.beendete`).
+- Tests: `test_ended_contracts.py`, `test_qt_contracts::test_switch_lists_cancelled_and_expired_contracts_too`.
+
+## Windows-Integration
+
+- `installer/launcher`: Startprogramm `PDF-Tool.exe` (C, Symbol, Versionsangaben, Manifest) – startet
+  `runtime\pythonw.exe -s -OO app\start.py` mit den unveränderten Argumenten und endet; `build.py` baut es
+  (`build_launcher`: Visual C++ über vswhere, sonst MinGW-w64).
+- Setup: Verknüpfungen, `[Run]`, ProgID-Befehl und -Symbol auf `PDF-Tool.exe`; `Applications\PDF-Tool.exe`
+  (FriendlyAppName, DefaultIcon, SupportedTypes); `Software\PDF-Tool\Capabilities` und
+  `RegisteredApplications` für die Standard-Apps. Die Standard-App für .pdf bleibt unverändert.
+- `smoke_installer.ps1`: Versionsangaben, Registrierung, Start über `PDF-Tool.exe`, Entfernen.
+
+## CI
+
+- Neuer Schritt „Startzeit unter Windows messen“: Vorversion und neue Version still installieren, den
+  Programmstart mit der eigenen Laufzeit messen (`tests/bench_windows.ps1`, `tests/bench_compare.py`), Mediane
+  in der Zusammenfassung und als Meldung am Lauf. Nur Messung, hält den Lauf nicht an.
+
 # PDF Tool 3.2.0-beta.2
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Optionaler KI-Assistent: Fragen zum geöffneten PDF und
