@@ -129,6 +129,9 @@ class AppController(Observable):
         self._tools: dict[str, ToolHooks] = {}
         self._config_parts: list[Callable[[], dict]] = []
         self.restart_requested = False  # nach dem Beenden neu starten (Wiederherstellung)
+        self.background = None  # Background: Symbol im Infobereich, Start mit Windows
+        self.quit_wanted = False  # ganz beenden (Infobereich »Beenden«, Update) – nicht nur das Fenster schließen
+        self.presenter: Callable[[], None] | None = None  # zeigt das Fenster (verdeckt bis zum ersten Bild)
         self._at_shutdown: list[Callable[[], None]] = []
         self._last_page: dict[str, str] = {}
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
@@ -556,14 +559,82 @@ class AppController(Observable):
 
     @Slot(result=bool)
     def requestClose(self) -> bool:  # noqa: N802
-        """Fenster soll schließen: Werkzeuge dürfen nachfragen (z. B. laufender Stapel)."""
+        """Fenster soll schließen: Werkzeuge dürfen nachfragen (z. B. laufender Stapel).
+
+        Mit »Im Hintergrund bereithalten« schließt das Kreuz nur das Fenster (``False``: das Fenster bleibt
+        bestehen und wird versteckt) – außer PDF Tool soll ganz enden (Infobereich »Beenden«, Update, Neustart)."""
         if self.closing:
             return True
+        if self.background is not None and self.background.active and not self.quit_wanted and not self.restart_requested:
+            self.hide_window()
+            return False
         for hooks in self._tools.values():
             if not hooks.confirm_close():
                 return False
         self.shutdown()
+        if self.background is not None:
+            self.background.finished()
         return True
+
+    def hide_window(self) -> bool:
+        """Fenster verstecken, PDF Tool bleibt im Infobereich. Dokumente schließen wie beim Beenden (Rückfrage bei
+        ungespeicherten Änderungen); laufende Arbeit (Stapel, Reparatur) geht im Hintergrund weiter."""
+        for hooks in self._tools.values():
+            release = getattr(hooks, "release", None)
+            if release is not None and not release():
+                return False
+        if self.window is not None:
+            self.window.hide()
+        self.navigate(HOME)
+        self.persist()
+        if self.background is not None:
+            self.background.hidden()
+        from diagnostics.applog import get as get_log
+
+        get_log("app").info("Fenster geschlossen – PDF Tool bleibt im Hintergrund")
+        return True
+
+    @Slot()
+    def present_window(self) -> None:
+        """Fenster zeigen (Infobereich, weiterer Start, »Öffnen mit«) und nach vorn holen."""
+        if self.closing:
+            return
+        window = self.window
+        if window is None:
+            return
+        if self.presenter is not None and not window.isVisible():
+            self.presenter()
+            for hooks in self._tools.values():
+                shown = getattr(hooks, "shown", None)
+                if shown is not None:
+                    shown()
+            return
+        if window.visibility() == window.Visibility.Minimized:
+            window.showNormal()
+        window.raise_()
+        window.requestActivate()
+
+    @Slot()
+    def quit_app(self) -> None:
+        """PDF Tool ganz beenden (Infobereich »Beenden«). Rückfragen der Werkzeuge erscheinen im Fenster."""
+        if self.closing:
+            return
+        self.quit_wanted = True
+        window = self.window
+        if window is None:
+            if not self.requestClose():
+                self.quit_wanted = False
+            return
+        if not window.isVisible():
+            if not self.running_work():
+                # Versteckt sind alle Dokumente schon geschlossen – es gibt nichts zu fragen
+                if not self.requestClose():
+                    self.quit_wanted = False
+                return
+            self.present_window()  # Rückfragen (z. B. laufender Stapel) brauchen ein sichtbares Fenster
+        window.close()
+        if not self.closing:
+            self.quit_wanted = False
 
     def shutdown(self) -> None:
         if self.closing:

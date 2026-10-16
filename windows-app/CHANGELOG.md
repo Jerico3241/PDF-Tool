@@ -2,6 +2,33 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.2.0-beta.4
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). „Im Hintergrund bereithalten“ (Standard: an): Start mit
+Windows ohne Fenster, Symbol im Infobereich, das Schließen-Kreuz versteckt nur das Fenster. Details in den
+[Release Notes](release-notes/3.2.0-beta.4.md).
+
+## Hintergrundbetrieb
+
+- `qtapp/background.py`: Einstellung `hintergrund` (fehlt: an), `QSystemTrayIcon` mit „PDF Tool öffnen“ und
+  „Beenden“, Hinweis beim ersten Verstecken (`hintergrund_hinweis`), Autostart-Eintrag
+  `HKCU\…\Run\PDF Tool` = `"…\PDF-Tool.exe" --hintergrund` (nur installiert, nur bei Abweichung geschrieben;
+  `winsys.run_entry`/`set_run_entry`). Ohne Infobereich bleibt das alte Verhalten.
+- `AppController`: `requestClose` versteckt das Fenster bei aktivem Hintergrundbetrieb (`hide_window`: Werkzeuge
+  geben ihre Dokumente frei – `ReaderTool.release` mit Rückfrage „Das Fenster wird geschlossen.“, laufendes
+  Speichern bleibt offen); `present_window` (verdeckt bis zum ersten Bild, Reader öffnet die gemerkte Sitzung
+  wieder), `quit_app` (Infobereich), `quit_wanted` für Update (`UpdatesController._quit_app`), Neustart und
+  „Beenden“. `commitDataRequest` speichert beim Abmelden von Windows.
+- `show_window(…, visible=False)` für den Start mit `--hintergrund`; der Start endet sofort, wenn die
+  Einstellung aus ist (und entfernt den Eintrag) oder PDF Tool schon läuft.
+- Weiterer Start: `handoff.early_forward` (ohne Qt, direkt über die Named Pipe) in `start.py`; Nachricht mit
+  `show` – ohne Pfade zeigt die laufende App ihr Fenster (`instance.received`). Gemeinsame Teile
+  (`server_name`, `pdf_arguments`) in `handoff.py`.
+- Einstellungen → Verhalten: Karte `backgroundCard` mit `backgroundToggle` (`Settings.setBackground`).
+- Setup: Deinstallation entfernt den Autostart-Eintrag. `smoke_installer.ps1` 4c: Eintrag, Start mit
+  `--hintergrund` ohne Fenster und nur einmal, weiterer Start zeigt das Fenster (Zeit als Meldung am Lauf).
+- Tests: `test_qt_background.py`.
+
 # PDF Tool 3.2.0-beta.3
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Gekündigte und abgelaufene Verträge wahlweise in der

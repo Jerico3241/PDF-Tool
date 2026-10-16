@@ -113,6 +113,29 @@ PPage {
         }
     }
 
+    // Im Hintergrund bereithalten (Standard: an) – Start mit Windows ohne Fenster, Schließen-Kreuz versteckt nur
+    PSettingsCard {
+        objectName: "backgroundCard"
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        iconName: "desktop"
+        title: Settings.texts.backgroundTitle
+        description: Settings.texts.backgroundText
+        expandable: true
+        PToggle {
+            objectName: "backgroundToggle"
+            label: Settings.texts.backgroundTitle
+            checked: Settings.background
+            onToggled: Settings.setBackground(checked)
+        }
+        extra: RowLayout {
+            width: parent ? parent.width - 68 : 300
+            spacing: 8
+            PIcon { name: "info"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
+            PText { text: Settings.texts.backgroundNote; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+        }
+    }
+
     // Ansicht neu geöffneter PDFs – »Zuletzt verwendet« (Standard) wie bisher
     PSectionTitle { text: "PDF Reader" }
 

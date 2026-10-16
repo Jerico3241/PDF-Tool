@@ -61,6 +61,16 @@ def prepare_env() -> None:
 
 def main() -> None:
     prepare_env()
+    # Läuft PDF Tool schon (z. B. im Hintergrund): nur Bescheid geben und enden – ohne Qt zu laden
+    try:
+        from handoff import early_forward
+
+        if early_forward(sys.argv[1:]):
+            raise SystemExit(0)
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001 - dann wie bisher über Qt
+        pass
     try:
         from PySide6 import QtCore, QtQml, QtQuick  # noqa: F401
     except Exception:

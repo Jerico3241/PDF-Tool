@@ -141,8 +141,9 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Vertragsübersichten: Neuer Schalter »Gekündigte und abgelaufene Verträge mit aufführen« unter der Excel-Liste – solche Verträge stehen dann mit ihrem Status in Rot unter der Vertragsnummer in der PDF.",
-    "Windows: PDF Tool erscheint in »Öffnen mit« und unter Einstellungen → Apps → Standard-Apps mit eigenem Symbol und Namen (statt Python).",
+    "Schneller Start: PDF Tool startet mit Windows unsichtbar und öffnet sich danach sofort – auch beim ersten Mal nach dem Hochfahren. Ausschalten unter Einstellungen → Verhalten → »Im Hintergrund bereithalten«.",
+    "Das Schließen-Kreuz schließt nur das Fenster; PDF Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts unten). Ganz beenden: Rechtsklick auf das Symbol → »Beenden«.",
+    "Seit Beta 3: Schalter »Gekündigte und abgelaufene Verträge mit aufführen« in den Vertragsübersichten; PDF Tool erscheint in »Öffnen mit« und bei den Standard-Apps mit eigenem Symbol.",
     "KI-Assistent (seit Beta 2, optional und standardmäßig aus): Fragen zum geöffneten PDF und Zusammenfassungen mit Seitenangaben, vollständig auf diesem PC. Das Sprachmodell lädt PDF Tool nur auf Wunsch und entfernt es jederzeit wieder.",
     "Schützen und Weitergeben (seit Beta 1): Schwärzen, Bereinigen, Kennwortschutz, Verkleinern, Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Stempel und Unterschrift.",
     "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite.",

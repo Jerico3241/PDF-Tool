@@ -958,7 +958,7 @@ class ReaderController(Observable):
         self.engine.submit(find, done, failed, label="wiederherstellung", priority=3)
 
     # Beenden -----------------------------------------------------------------------------------------------------
-    def confirm_close(self) -> bool:
+    def confirm_close(self, reason: str = "PDF Tool wird beendet.") -> bool:
         # Aktiver Tab vor den Rückfragen (sie zeigen das jeweilige Dokument) – für die letzte Sitzung
         self._quit_active = self.currentKey
         for controller in list(self._docs.values()):
@@ -966,7 +966,7 @@ class ReaderController(Observable):
                 continue
             self.activate(controller.ident)
             answer, _data = self.app.dialogs.ask(
-                "confirm", f"Änderungen an »{controller.name}« speichern?", "PDF Tool wird beendet. Ohne Speichern gehen die Änderungen verloren.",
+                "confirm", f"Änderungen an »{controller.name}« speichern?", f"{reason} Ohne Speichern gehen die Änderungen verloren.",
                 primary="Speichern", secondary="Nicht speichern", close="Abbrechen",
             )
             if answer == "primary":
@@ -992,6 +992,27 @@ class ReaderController(Observable):
 
     def running_work(self) -> str:
         return "PDF speichern" if any(controller.busy or controller.saving for controller in self._docs.values()) else ""
+
+    def release_documents(self) -> bool:
+        """Fenster schließt, PDF Tool bleibt im Hintergrund: wie beim Beenden nach ungespeicherten Änderungen fragen und
+        alle Dokumente schließen (die Engine bleibt geladen). Mit »letzte Sitzung« öffnet das nächste Zeigen sie wieder.
+        Wird gerade gespeichert, bleiben die Dokumente offen (nichts wird abgebrochen)."""
+        if self.running_work():
+            return True
+        if not self.confirm_close("Das Fenster wird geschlossen."):
+            return False
+        if self._docs and self._restore_wanted() and self._session_pending is None and not self._restoring:
+            self._session = self._session_snapshot()
+            self._session_pending = self._session
+        for key in list(self._docs):
+            self._finish_close(key, discard_recovery=True, remember=False)
+        self._quit_active = ""
+        return True
+
+    def window_shown(self) -> None:
+        """Fenster nach dem Verstecken wieder gezeigt: die beim Schließen gemerkten PDFs wieder öffnen (Einstellung)."""
+        if self.app.ready and self._session_pending is not None and not self._docs:
+            self._restore_session()
 
     def close_all(self) -> None:
         # Vor dem Schließen: die PDFs dieser Sitzung (nur Pfade und Seiten) – beendet, bevor die letzte Sitzung wieder
@@ -1245,6 +1266,12 @@ class ReaderTool:
 
     def close(self) -> None:
         self.controller.close_all()
+
+    def release(self) -> bool:
+        return self.controller.release_documents()
+
+    def shown(self) -> None:
+        self.controller.window_shown()
 
 
 def _same(a: str, b: str) -> bool:

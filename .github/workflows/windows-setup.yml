@@ -63,7 +63,7 @@ jobs:
       matrix:
         include:
           - gruppe: Start, Navigation, Einstellungen, Updates, Verlauf, optionale Kundenakte
-            dateien: resources bridge shell history optional updates
+            dateien: resources bridge shell history optional updates background
           - gruppe: Vertragsübersichten, Kopf- und Fußzeile, PDF reparieren
             dateien: contracts richtext repair
           - gruppe: Kundenakte, Stapel, Einfügemarke

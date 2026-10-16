@@ -85,6 +85,12 @@ class Runtime(QObject):
         self.settings = SettingsController(self.app, self.theme, self)
         self.app.settings = self.settings
         self.app.register_config(self.theme.config)
+        # Im Hintergrund bereithalten (Infobereich, Start mit Windows) – eingerichtet erst von ``main``
+        from .background import Background
+
+        self.background = Background(self.app, cfg, self)
+        self.app.background = self.background
+        self.settings.attach_background(self.background)
         self.singletons: dict[str, QObject] = {
             "ThemeBackend": self.theme,
             "App": self.app,
@@ -238,8 +244,11 @@ def finish_incubation(engine: QQmlEngine | None, timeout: float = 2.0) -> None:
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
-def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow:
-    """Fenster verdeckt zeigen und nach dem ersten fertigen Bild aufdecken."""
+def show_window(runtime: Runtime, engine: QQmlApplicationEngine, visible: bool = True) -> QQuickWindow:
+    """Fenster verdeckt zeigen und nach dem ersten fertigen Bild aufdecken.
+
+    ``visible=False`` (Start mit Windows im Hintergrund): Oberfläche fertig aufbauen, das Fenster aber erst
+    zeigen, wenn es gebraucht wird (``App.present_window``) – dann ebenso verdeckt bis zum ersten Bild."""
     roots = engine.rootObjects()
     if not roots:
         raise RuntimeError("Die Oberfläche konnte nicht geladen werden:\n" + "\n".join(MESSAGES[-10:]))
@@ -254,30 +263,46 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow
     app.apply_chrome()
     runtime.theme.darkChanged.connect(app.apply_chrome)
     runtime.theme.revisionChanged.connect(app.apply_chrome)
-    cloaked = native_windows() and winsys.can_cloak() and winsys.set_cloak(hwnd, True)
-
-    shown = False
+    started = False
+    cloaked = False
+    waiting = False  # auf das erste Bild nach dem Zeigen
 
     def first_frame() -> None:
         # Mehrere Bilder können schon eingereiht sein (QueuedConnection) – nur das erste zählt.
-        nonlocal shown
-        if shown:
+        nonlocal started, cloaked, waiting
+        if not waiting:
             return
-        shown = True
+        waiting = False
         window.frameSwapped.disconnect(first_frame)
         if cloaked:
             winsys.set_cloak(hwnd, False)
+            cloaked = False
+        if started:
+            return
+        started = True
         from diagnostics.applog import UI
         from diagnostics.applog import get as get_log
 
         get_log(UI).info("Oberfläche bereit: Fenster %d × %d, Skalierung %d %%", window.width(), window.height(), round(window.devicePixelRatio() * 100))
         app.after_start()
 
-    window.frameSwapped.connect(first_frame, Qt.ConnectionType.QueuedConnection)
-    if placement.maximized:
-        window.showMaximized()
-    else:
-        window.show()
+    def present() -> None:
+        nonlocal cloaked, waiting
+        if not waiting:
+            waiting = True
+            window.frameSwapped.connect(first_frame, Qt.ConnectionType.QueuedConnection)
+        cloaked = native_windows() and winsys.can_cloak() and winsys.set_cloak(hwnd, True)
+        if state.maximized:
+            window.showMaximized()
+        else:
+            window.show()
+        if started:  # wieder gezeigt (Infobereich, weiterer Start): nach vorn holen
+            window.raise_()
+            window.requestActivate()
+
+    app.presenter = present
+    if visible:
+        present()
     return window
 
 
@@ -336,10 +361,22 @@ def main(argv: list[str] | None = None) -> int:
     # »Öffnen mit«: PDFs aus der Befehlszeile – läuft PDF Tool schon, öffnet die laufende App sie
     from . import instance
 
-    paths = instance.pdf_arguments((argv if argv is not None else sys.argv)[1:])
-    if paths:
+    from . import background
+
+    arguments = (argv if argv is not None else sys.argv)[1:]
+    paths = instance.pdf_arguments(arguments)
+    hidden = background.ARGUMENT in arguments and not paths
+    if hidden:
+        # Start mit Windows: nur mit eingeschalteter Einstellung und nur, wenn PDF Tool noch nicht läuft
+        if not background.enabled_in(cfg):
+            background.sync_autostart(False)
+            return 0
+        if instance.forward([], show=False):
+            return 0
+    else:
+        # Läuft PDF Tool schon (sichtbar oder im Hintergrund), zeigt die laufende App ihr Fenster bzw. öffnet die PDFs
         winsys.allow_foreground()
-        if instance.forward(paths):
+        if instance.forward(paths, show=True):
             return 0
     runtime = Runtime(cfg)
     if paths:
@@ -353,15 +390,18 @@ def main(argv: list[str] | None = None) -> int:
 
     sys.excepthook = report
     engine = create_engine(runtime)
-    window = show_window(runtime, engine)
+    window = show_window(runtime, engine, visible=False) if hidden else show_window(runtime, engine)
     reader = runtime.reader.controller
+    runtime.background.attach(qt_app)
+    # Abmelden oder Herunterfahren von Windows: Einstellungen sichern, bevor Windows den Prozess beendet
+    qt_app.commitDataRequest.connect(lambda _manager: runtime.app.persist() if not runtime.app.closing else None)
 
     def open_received(received: list[str]) -> None:
-        if window.visibility() == window.Visibility.Minimized:
-            window.showNormal()
-        window.raise_()
-        window.requestActivate()
-        reader.open_external(received)
+        if not received and runtime.app.closing:
+            return
+        runtime.app.present_window()
+        if received:
+            reader.open_external(received)
 
     server = instance.InstanceServer(open_received, runtime)
     runtime.app.at_shutdown(server.close)
