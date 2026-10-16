@@ -179,6 +179,24 @@ PPage {
                 PButton { text: "Durchsuchen"; iconName: "folder_open"; tip: "Excel-Datei wählen (Strg+O)"; onClicked: Contracts.pickExcel() }
                 PIconButton { iconName: "copy"; tip: "Pfad der Excel-Datei kopieren"; onClicked: Contracts.copyExcelPath() }
             }
+            // Gekündigte und abgelaufene Verträge (Anwenderstatus) mit aufführen – in der PDF mit Status-Hinweis
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                PText {
+                    Layout.fillWidth: true
+                    text: "Gekündigte und abgelaufene Verträge mit aufführen"
+                    wrapMode: Text.WordWrap
+                }
+                PToggle {
+                    objectName: "createEndedContracts"
+                    showState: false
+                    label: "Gekündigte und abgelaufene Verträge mit aufführen"
+                    tip: "Verträge mit dem Anwenderstatus »Gekündigt« oder »Abgelaufen« stehen mit in der Übersicht – mit dem Status unter der Vertragsnummer"
+                    checked: Contracts.beendete
+                    onToggled: Contracts.beendete = checked
+                }
+            }
             // Status der Prüfung: die einzige Stelle mit den Vertragszahlen (die Statusleiste unten
             // nennt nur das Ergebnis, z. B. »Excel geprüft.«)
             PInfoBar { Layout.fillWidth: true; notice: Notices.area("info_excel"); closable: false }

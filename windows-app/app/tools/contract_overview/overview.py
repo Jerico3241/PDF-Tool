@@ -29,6 +29,7 @@ class ExcelAnalysis:
     error: str = ""
     active: int = 0
     inactive: int = 0
+    ended: int = 0  # gekündigte und abgelaufene Verträge, die mit in der Übersicht stehen (Schalter)
     emails: tuple[str, ...] = ()
     numbers: tuple[str, ...] = ()
     companies: tuple[str, ...] = ()
@@ -53,6 +54,7 @@ class ExcelAnalysis:
             error="" if ok else str(result.get("text") or "Die Datei konnte nicht gelesen werden."),
             active=int(result.get("aktiv", 0) or 0),
             inactive=int(result.get("inaktiv", 0) or 0),
+            ended=int(result.get("beendet", 0) or 0),
             emails=texts("mails"),
             numbers=texts("kunden"),
             companies=texts("firmen"),
@@ -65,18 +67,21 @@ class ExcelAnalysis:
     @property
     def usable(self) -> bool:
         """Lässt sich daraus eine PDF erstellen (gelesen, alle Spalten, aktive Verträge)?"""
-        return self.ok and not self.missing and self.active > 0
+        return self.ok and not self.missing and (self.active + self.ended) > 0
 
 
-def contract_summary(active: int, inactive: int = 0, short: bool = False) -> str:
+def contract_summary(active: int, inactive: int = 0, short: bool = False, ended: int = 0) -> str:
     """»5 aktive Verträge · 3 inaktiv ausgeblendet«, »1 aktiver Vertrag« – ohne »0 inaktiv«.
 
     ``short``: kompakte Form für Listen, z. B. »5 aktive · 3 inaktiv ausgeblendet«.
+    ``ended``: gekündigte und abgelaufene Verträge, die mit in der Übersicht stehen.
     """
     if short:
         text = f"{active} aktiver" if active == 1 else f"{active} aktive"
     else:
         text = "1 aktiver Vertrag" if active == 1 else f"{active} aktive Verträge"
+    if ended:
+        text += f" · {ended} gekündigt/abgelaufen"
     if inactive:
         text += f" · {inactive} inaktiv ausgeblendet"
     return text
@@ -109,7 +114,7 @@ def excel_issues(excel: str, analysis: ExcelAnalysis | None) -> list[Issue]:
         missing = analysis.missing
         text = f"Spalte »{missing[0]}« fehlt in der Excel" if len(missing) == 1 else f"{len(missing)} Spalten fehlen in der Excel"
         return [Issue("excel", "columns_missing", text)]
-    if not analysis.active:
+    if not analysis.active and not analysis.ended:
         return [Issue("excel", "no_active", "Keine aktiven Verträge in der Excel")]
     return []
 
@@ -149,6 +154,7 @@ def pdf_fields(
     footer: RichText,
     regeln: list[dict],
     regelwerk: dict | None = None,
+    beendete: bool = False,
 ) -> dict:
     """Auftrag für ``engine.erstelle_pdf`` (ohne Zielordner) – für PDF, Vorschau und Stapel gleich.
 
@@ -171,6 +177,7 @@ def pdf_fields(
         kopfzeile_format=header.to_dict(),
         regeln=[dict(eintrag) for eintrag in regeln],
         regelwerk=regelwerk,
+        beendete=bool(beendete),
     )
 
 

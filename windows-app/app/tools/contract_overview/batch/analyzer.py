@@ -23,7 +23,7 @@ from .models import FileStamp, path_key
 NOT_FOUND = "Datei nicht gefunden."
 
 
-def analyze_file(path) -> tuple[ExcelAnalysis, FileStamp | None]:
+def analyze_file(path, beendete: bool = False) -> tuple[ExcelAnalysis, FileStamp | None]:
     """Excel-Datei prüfen. Liefert das Ergebnis und den Stand der Datei *vor* dem Lesen.
 
     Ändert sich die Datei während des Lesens, passt der Stand später nicht mehr – sie wird
@@ -35,7 +35,7 @@ def analyze_file(path) -> tuple[ExcelAnalysis, FileStamp | None]:
     from engine import pruefe_excel
 
     try:
-        result = pruefe_excel(Path(path), None)
+        result = pruefe_excel(Path(path), None, beendete)
     except Exception as exc:  # noqa: BLE001 - pruefe_excel meldet Lesefehler selbst; das hier ist der Rest
         text = str(exc).strip() or exc.__class__.__name__
         return ExcelAnalysis(ok=False, error=f"Die Datei konnte nicht geprüft werden ({text})."), stamp
@@ -48,6 +48,11 @@ class AnalysisCache:
     def __init__(self) -> None:
         self._entries: dict[str, tuple[FileStamp, ExcelAnalysis]] = {}
         self._lock = threading.Lock()
+        self.beendete = False  # gekündigte und abgelaufene Verträge mitzählen (Schalter der Vertragsübersicht)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
 
     def get(self, path) -> tuple[ExcelAnalysis, FileStamp] | None:
         stamp = FileStamp.of(path)
@@ -83,7 +88,7 @@ def analyze_cached(path, cache: AnalysisCache | None) -> tuple[ExcelAnalysis, Fi
         cached = cache.get(path)
         if cached is not None:
             return cached
-    analysis, stamp = analyze_file(path)
+    analysis, stamp = analyze_file(path, bool(getattr(cache, "beendete", False)))
     if cache is not None and analysis.ok:
         cache.put(path, stamp, analysis)
     return analysis, stamp

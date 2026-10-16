@@ -139,8 +139,8 @@ def facts_line(item: BatchItem, changes: str = "") -> str:
     analysis = item.analysis
     if analysis is None or not analysis.ok:
         return ""
-    if analysis.active:
-        parts = [contract_summary(analysis.active, analysis.inactive, short=True)]
+    if analysis.active or analysis.ended:
+        parts = [contract_summary(analysis.active, analysis.inactive, short=True, ended=analysis.ended)]
     else:
         parts = [f"{analysis.inactive} inaktiv ausgeblendet"] if analysis.inactive else []  # »Keine aktiven Verträge« steht als Status
     if len(analysis.emails) == 1:
@@ -283,6 +283,7 @@ class BatchController(Observable):
         self.items: list[BatchItem] = []
         self.by_id: dict[str, BatchItem] = {}
         self.cache = AnalysisCache()
+        self.cache.beendete = cfg.get("vertraege_beendete") is True  # wie der Schalter der Vertragsübersicht
         self.analyzer: Analyzer | None = None
         self.runner: BatchRunner | None = None
         self.summary: RunSummary | None = None  # Ergebnis des letzten Durchlaufs
@@ -512,6 +513,7 @@ class BatchController(Observable):
             regelwerk=c.rule_set_dict(),
             regelwerk_name=c.ruleSetLabel,
             vorlage_standard=c.defaultTemplate,
+            beendete=bool(c.beendete),
         )
 
     def resolve(self, item: BatchItem, for_preview: bool = False) -> resolver.Resolution:
@@ -539,6 +541,20 @@ class BatchController(Observable):
             return res
         item.status = resolver.status_for(res.issues)
         return res
+
+    def ended_changed(self, enabled: bool) -> None:
+        """Schalter »Gekündigte und abgelaufene Verträge mit aufführen«: alle Dateien neu prüfen."""
+        self.cache.beendete = bool(enabled)
+        self.cache.clear()
+        waiting = []
+        for item in self.items:
+            if item.status in DONE:
+                continue
+            item.analysis, item.stamp = None, None
+            item.status = ItemStatus.ANALYZING
+            waiting.append((item.id, item.path))
+        self._changed()
+        self._submit(waiting)
 
     def refresh_all(self) -> None:
         """Nach Änderungen an Kundenakten, Vorlagen, Darstellung oder Stapel-Einstellungen."""
@@ -1525,10 +1541,10 @@ class BatchController(Observable):
         elif analysis.missing:
             spalten = ", ".join(f"»{name}«" for name in analysis.missing)
             self.app.notify("batch_excel", "error", f"Für die PDF fehlt {'die Spalte' if len(analysis.missing) == 1 else 'die Spalten'} {spalten}.", title="Spalten fehlen", status=False, animate=False)
-        elif not analysis.active:
+        elif not analysis.active and not analysis.ended:
             self.app.notify("batch_excel", "warning", "In der Datei steht kein aktiver Vertrag." + (f" {analysis.inactive} inaktive wurden ausgeblendet." if analysis.inactive else ""), title="Keine aktiven Verträge", status=False, animate=False)
         else:
-            self.app.notify("batch_excel", "success", contract_summary(analysis.active, analysis.inactive), title="Excel geprüft", status=False, animate=False)
+            self.app.notify("batch_excel", "success", contract_summary(analysis.active, analysis.inactive, ended=analysis.ended), title="Excel geprüft", status=False, animate=False)
             if len(analysis.numbers) > 1:
                 facts.append({"label": "Kundennummer", "value": f"{len(analysis.numbers)} verschiedene in der Datei: " + ", ".join(analysis.numbers), "tone": "caution"})
             if len(analysis.companies) > 1:

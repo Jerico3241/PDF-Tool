@@ -1073,6 +1073,37 @@ def test_excel_analysis_shows_only_real_values(ui_app, tmp_path: Path) -> None:
     assert empfaenger and empfaenger[0].isVisible()
 
 
+def test_switch_lists_cancelled_and_expired_contracts_too(ui_app, tmp_path: Path, config_file: Path) -> None:
+    """Schalter »Gekündigte und abgelaufene Verträge mit aufführen«: Prüfung, Bereitschaft und Einstellung."""
+    h = ui_app
+    o = h.overview
+    pfad = write_excel(
+        tmp_path / "status.xlsx",
+        [
+            ["V-1", datetime(2023, 1, 1), "jährlich", 10.0, "Sofort", "Eins", "a@b.de", 7, "Firma", "Gekündigt"],
+            ["V-2", datetime(2022, 1, 1), "jährlich", 20.0, "Sofort", "Zwei", "a@b.de", 7, "Firma", "Abgelaufen"],
+            ["V-3", datetime(2021, 1, 1), "jährlich", 30.0, "Sofort", "Drei", "a@b.de", 7, "Firma", "Inaktiv"],
+        ],
+    )
+    h.navigate("create", 0.3)
+    schalter = h.item("createEndedContracts")
+    assert schalter.isVisible() and not schalter.property("checked")
+    o.use_excel(str(pfad))
+    info = hinweis(h, "info_excel")
+    assert wait_until(lambda: info.severity == "warning", 60)  # aus: nur Gekündigte und Abgelaufene – keine aktiven
+    assert "kein aktiver Vertrag" in info.message
+    o.beendete = True  # wie ein Klick auf den Schalter
+    assert wait_until(lambda: info.severity == "success", 60)
+    assert info.message == "0 aktive Verträge · 2 gekündigt/abgelaufen · 1 inaktiv ausgeblendet"
+    assert schalter.property("checked")
+    pump(0.3)
+    assert "Keine aktiven" not in o.readyText
+    h.app.persist()
+    assert json.loads(config_file.read_text(encoding="utf-8"))["vertraege_beendete"] is True
+    o.beendete = False
+    assert wait_until(lambda: info.severity == "warning", 60)
+
+
 def test_missing_columns_are_reported(ui_app, tmp_path: Path) -> None:
     h = ui_app
     o = h.overview
