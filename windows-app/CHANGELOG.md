@@ -27,6 +27,8 @@ Windows ohne Fenster, Symbol im Infobereich, das Schließen-Kreuz versteckt nur 
 - Einstellungen → Verhalten: Karte `backgroundCard` mit `backgroundToggle` (`Settings.setBackground`).
 - Setup: Deinstallation entfernt den Autostart-Eintrag. `smoke_installer.ps1` 4c: Eintrag, Start mit
   `--hintergrund` ohne Fenster und nur einmal, weiterer Start zeigt das Fenster (Zeit als Meldung am Lauf).
+- Übergabe über Qt (`instance.forward`): die laufende App trennt nach ihrem »ok« nicht mehr selbst; der weitere
+  Start wertet eine schon angekommene Antwort auch dann aus, wenn Windows die Verbindung bereits als getrennt meldet.
 - Tests: `test_qt_background.py`.
 
 # PDF Tool 3.2.0-beta.3
