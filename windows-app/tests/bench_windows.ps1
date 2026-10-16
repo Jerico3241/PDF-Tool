@@ -35,7 +35,7 @@ function Measure-Setup([string]$file, [string]$name) {
         # Jeder Teil für sich: scheitert einer, bleiben die anderen Werte erhalten
         foreach ($scenario in "start") {  # »reader« und »oeffnen_mit« laufen auf den CI-Rechnern nicht zuverlässig durch
             $errors = Join-Path $out "$name-$scenario.err"
-            & (Join-Path $target "runtime\python.exe") -s $bench $scenario --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name-$scenario.json") 2> $errors | Tee-Object -FilePath (Join-Path $out "$name.md") -Append
+            & (Join-Path $target "runtime\python.exe") -s $bench $scenario --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name-$scenario.json") 2> $errors | Tee-Object -FilePath (Join-Path $out "$name.md") -Append | Out-Host
             if ($LASTEXITCODE -ne 0) {
                 $text = ((Get-Content $errors -Raw -ErrorAction SilentlyContinue) -replace "[\r\n]+", " ")
                 if ($text.Length -gt 800) { $text = $text.Substring($text.Length - 800) }
