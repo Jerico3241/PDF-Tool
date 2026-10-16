@@ -1,0 +1,43 @@
+// PDF Tool – Symbol, Versionsangaben und Manifest des Startprogramms PDF-Tool.exe.
+// build.py schreibt version.h mit PDFTOOL_VERSION_NUM (z. B. 3,2,0,0) und PDFTOOL_VERSION_STR (z. B. "3.2.0-beta.3").
+#include <winver.h>
+#include "version.h"
+
+#ifndef PDFTOOL_VERSION_NUM
+#define PDFTOOL_VERSION_NUM 0,0,0,0
+#endif
+#ifndef PDFTOOL_VERSION_STR
+#define PDFTOOL_VERSION_STR "0.0.0"
+#endif
+
+1 ICON "icon.ico"
+1 24 "launcher.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION PDFTOOL_VERSION_NUM
+ PRODUCTVERSION PDFTOOL_VERSION_NUM
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040704b0"
+        BEGIN
+            VALUE "CompanyName", "Jerico"
+            VALUE "FileDescription", "PDF Tool"
+            VALUE "FileVersion", PDFTOOL_VERSION_STR
+            VALUE "InternalName", "PDF-Tool"
+            VALUE "LegalCopyright", "Jerico"
+            VALUE "OriginalFilename", "PDF-Tool.exe"
+            VALUE "ProductName", "PDF Tool"
+            VALUE "ProductVersion", PDFTOOL_VERSION_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x407, 1200
+    END
+END

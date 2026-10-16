@@ -66,6 +66,9 @@ $uninstallRoot = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
 $appKey = Join-Path $uninstallRoot "{59C40061-D5E5-446D-ACB4-E077D3C71E1A}_is1"
 # »Oeffnen mit« (seit 3.0.0): eigene ProgID; die Standard-App fuer .pdf bleibt unveraendert
 $progIdKey = "HKCU:\Software\Classes\PDFTool.Dokument"
+$appExeKey = "HKCU:\Software\Classes\Applications\PDF-Tool.exe"
+$capabilitiesKey = "HKCU:\Software\PDF-Tool\Capabilities"
+$registeredKey = "HKCU:\Software\RegisteredApplications"
 $openWithKey = "HKCU:\Software\Classes\.pdf\OpenWithProgids"
 function RegValue([string]$path, [string]$name) {
     if (-not (Test-Path $path)) { return "<keiner>" }
@@ -213,8 +216,20 @@ if ($entry.DisplayVersion -ne $version) { throw "Version unter 'Installierte App
 if ((($entry."Inno Setup: App Path") -replace '\\$', '') -ne $target) { throw "Installationsort laut Registrierung: $($entry.'Inno Setup: App Path')" }
 Write-Host "   installiert: $($entry.DisplayName) $version in $target"
 # »Oeffnen mit«: ProgID mit Befehl, Eintrag unter .pdf\OpenWithProgids, Standard-App unveraendert
+$launcher = Join-Path $target "PDF-Tool.exe"
+if (-not (Test-Path $launcher)) { throw "Startprogramm PDF-Tool.exe fehlt" }
+$info = (Get-Item $launcher).VersionInfo
+if ($info.FileDescription -ne $appName -or $info.ProductName -ne $appName) { throw "Versionsangaben von PDF-Tool.exe: $($info.FileDescription) / $($info.ProductName)" }
+if ($info.ProductVersion -ne $version) { throw "Version von PDF-Tool.exe: $($info.ProductVersion) statt $version" }
 $command = (Get-Item -LiteralPath (Join-Path $progIdKey "shell\open\command")).GetValue("")
-if ($command -notlike "*$(Join-Path $target 'app\start.py')*" -or $command -notlike '*"%1"*') { throw "Befehl fuer 'Oeffnen mit': $command" }
+if ($command -ne "`"$launcher`" `"%1`"") { throw "Befehl fuer 'Oeffnen mit': $command" }
+if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",0") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
+if ((Get-Item -LiteralPath $appExeKey).GetValue("FriendlyAppName") -ne $appName) { throw "Name von PDF-Tool.exe in 'Oeffnen mit' fehlt" }
+if ((Get-Item -LiteralPath $capabilitiesKey).GetValue("ApplicationName") -ne $appName) { throw "Anmeldung fuer die Standard-Apps fehlt (Capabilities)" }
+if ((Get-Item -LiteralPath (Join-Path $capabilitiesKey "FileAssociations")).GetValue(".pdf") -ne "PDFTool.Dokument") { throw "Standard-Apps: .pdf ist nicht PDF Tool zugeordnet" }
+if ((Get-Item -LiteralPath $registeredKey).GetValue($appName) -ne "Software\PDF-Tool\Capabilities") { throw "PDF Tool fehlt unter RegisteredApplications" }
+$link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+if ($link.TargetPath -ne $launcher) { throw "Startmenue-Verknuepfung zeigt auf $($link.TargetPath) statt auf PDF-Tool.exe" }
 if ((Get-Item -LiteralPath (Join-Path $progIdKey "shell\open")).GetValue("FriendlyAppName") -ne $appName) { throw "Name in 'Oeffnen mit' fehlt" }
 if ($null -eq (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument")) { throw "PDF Tool fehlt unter .pdf\OpenWithProgids" }
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Das Setup hat die Standard-App fuer PDF-Dateien veraendert: $(PdfDefault) statt $pdfDefaultBefore" }
@@ -271,14 +286,24 @@ Write-Host "3. Installierte Laufzeit: Module, Vertragsuebersicht, PDF-Reparatur,
 & (Join-Path $target "runtime\python.exe") -s (Join-Path $PSScriptRoot "smoke_runtime.py") --app (Join-Path $target "app") --ui
 if ($LASTEXITCODE -ne 0) { throw "Pruefung der installierten Laufzeit fehlgeschlagen (Code $LASTEXITCODE)" }
 
-Write-Host "4. Start wie ueber die Verknuepfung"
+Write-Host "4. Start wie ueber die Verknuepfung (PDF-Tool.exe startet die App und endet)"
 $errorLog = Join-Path $data "fehler.log"
 Remove-Item $errorLog -ErrorAction SilentlyContinue
-$app = Start-Process -FilePath (Join-Path $target "runtime\pythonw.exe") -ArgumentList "-s", "-OO", "`"$(Join-Path $target 'app\start.py')`"" -WorkingDirectory (Join-Path $target "app") -PassThru
+$started = Start-Process -FilePath $launcher -WorkingDirectory $target -PassThru
+$null = $started.Handle
+if (-not $started.WaitForExit(30000)) { throw "PDF-Tool.exe endet nicht nach dem Start der App" }
+if ($started.ExitCode -ne 0) { throw "PDF-Tool.exe endete mit Code $($started.ExitCode)" }
+$runtimeExe = Join-Path $target "runtime\pythonw.exe"
+$app = $null
+for ($i = 0; $i -lt 30 -and -not $app; $i++) {
+    $app = Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" | Where-Object { $_.ExecutablePath -eq $runtimeExe -and $_.CommandLine -like "*app\start.py*" } | Select-Object -First 1
+    if (-not $app) { Start-Sleep -Seconds 1 }
+}
+if (-not $app) { throw "PDF-Tool.exe hat die App nicht gestartet" }
 Start-Sleep -Seconds 15
-if ($app.HasExited) { throw "Die App hat sich beim Start beendet (Code $($app.ExitCode))" }
+if (-not (Get-Process -Id $app.ProcessId -ErrorAction SilentlyContinue)) { throw "Die App hat sich beim Start beendet" }
 if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Raw)" }
-Stop-Process -Id $app.Id -Force
+Stop-Process -Id $app.ProcessId -Force
 Start-Sleep -Seconds 2
 Write-Host "   App lief ohne Fehler"
 Write-Host "4b. 'Oeffnen mit': Start mit einer PDF, zweiter Start reicht seine PDF weiter"
@@ -414,6 +439,10 @@ if (Test-Path (Join-Path $target "runtime")) { throw "Laufzeit ist nach der Dein
 if (Test-Path $shortcut) { throw "Verknuepfung ist nach der Deinstallation noch vorhanden" }
 if ((AppEntries).Count -ne 0) { throw "Eintrag unter 'Installierte Apps' ist nach der Deinstallation noch vorhanden" }
 if (Test-Path $progIdKey) { throw "Eintrag fuer 'Oeffnen mit' ist nach der Deinstallation noch vorhanden" }
+if (Test-Path $appExeKey) { throw "Eintrag fuer PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
+if (Test-Path $capabilitiesKey) { throw "Anmeldung fuer die Standard-Apps ist nach der Deinstallation noch vorhanden" }
+if ((Test-Path $registeredKey) -and ($null -ne (Get-Item -LiteralPath $registeredKey).GetValue($appName))) { throw "RegisteredApplications enthaelt nach der Deinstallation noch PDF Tool" }
+if (Test-Path (Join-Path $target "PDF-Tool.exe")) { throw "PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
 if ((Test-Path $openWithKey) -and ($null -ne (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))) { throw ".pdf\OpenWithProgids enthaelt nach der Deinstallation noch PDF Tool" }
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Standard-App fuer PDF-Dateien nach der Deinstallation veraendert" }
 if (-not $pdfKeyBefore -and (Test-Path "HKCU:\Software\Classes\.pdf")) { throw "Der vom Setup angelegte Schluessel .pdf ist nach der Deinstallation noch vorhanden" }

@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -122,6 +123,9 @@ LLAMA_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_REL
 LLAMA_SHA256 = "a23e548c6b3525c38bcfeceaff919786ae06741857043cb670279b70100e5483"  # Datei des Releases, über HTTPS von github.com
 LLAMA_BACKENDS = "ggml-cpu-*.dll"  # lädt llama-server zur Laufzeit (nicht in den Importtabellen)
 AI = PAYLOAD / "ai"  # passt zu assistant/runtime.py (BUNDLED_DIR)
+# Startprogramm PDF-Tool.exe (Symbol und Name von PDF Tool in »Öffnen mit«, bei den Standard-Apps und im Startmenü)
+LAUNCHER_SOURCE = ROOT / "installer" / "launcher"
+LAUNCHER = PAYLOAD / "PDF-Tool.exe"
 
 # Was die App zur Laufzeit nicht braucht – seit 2.7.0 auch kein tkinter/Tcl/Tk mehr (Qt-Oberfläche)
 RUNTIME_REMOVE = [
@@ -145,6 +149,7 @@ SITE_REMOVE_SUFFIXES = {".pyi", ".pxd", ".pyx", ".c", ".h", ".cpp", ".lib", ".a"
 # Diese Dateien müssen im fertigen Paket liegen
 REQUIRED_PAYLOAD = [
     "VERSION",
+    "PDF-Tool.exe",
     "README.txt",
     "THIRD_PARTY_LICENSES.md",
     "LICENSE",
@@ -528,6 +533,62 @@ def prepare_ai(target: Path, search: list[Path]) -> None:
     remove(unpacked)
 
 
+def _vcvars() -> Path | None:
+    """vcvars64.bat von Visual Studio (Build Tools) über vswhere – unter Windows."""
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    if not vswhere.is_file():
+        return None
+    found = subprocess.run(
+        [str(vswhere), "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-find", r"VC\Auxiliary\Build\vcvars64.bat"],
+        capture_output=True, text=True, check=False,
+    ).stdout.strip().splitlines()
+    return Path(found[0]) if found and Path(found[0]).is_file() else None
+
+
+def build_launcher(target: Path, version: str) -> None:
+    """``PDF-Tool.exe`` aus ``installer/launcher`` bauen: startet ``runtime\\pythonw.exe -s -OO app\\start.py`` mit den
+    übergebenen Argumenten und trägt Symbol, Name und Version von PDF Tool. Windows: Visual C++ (vswhere), sonst
+    MinGW-w64 (``x86_64-w64-mingw32-gcc``/``windres``)."""
+    work = BUILD / "launcher"
+    remove(work)
+    shutil.copytree(LAUNCHER_SOURCE, work)
+    shutil.copy2(ASSETS / "icon.ico", work / "icon.ico")
+    numbers = [int(part) for part in re.findall(r"\d+", version.split("-")[0])[:3]] + [0, 0, 0]
+    number = ",".join(str(value) for value in numbers[:3] + [0])
+    # Version für die Ressourcen (launcher.rc bindet version.h ein) – keine Anführungszeichen auf der Befehlszeile
+    (work / "version.h").write_text(f'#define PDFTOOL_VERSION_NUM {number}\n#define PDFTOOL_VERSION_STR "{version}"\n', encoding="ascii")
+    log("Baue das Startprogramm PDF-Tool.exe …")
+    if sys.platform == "win32":
+        vcvars = _vcvars()
+        if vcvars is None:
+            fail("Visual C++ (Build Tools) nicht gefunden – nötig für PDF-Tool.exe (vswhere, Komponente VC.Tools.x86.x64).")
+        script = work / "build.cmd"
+        script.write_text(
+            "@echo off\r\n"
+            f'call "{vcvars}" >nul || exit /b 1\r\n'
+            "rc /nologo /fo launcher.res launcher.rc || exit /b 1\r\n"
+            "cl /nologo /O1 /MT /W4 /WX /DUNICODE /D_UNICODE launcher.c launcher.res /Fe:PDF-Tool.exe /link /SUBSYSTEM:WINDOWS user32.lib || exit /b 1\r\n",
+            encoding="ascii",
+        )
+        result = subprocess.run(["cmd", "/c", str(script)], cwd=str(work), capture_output=True, text=True, check=False)
+    else:
+        gcc, windres = shutil.which("x86_64-w64-mingw32-gcc"), shutil.which("x86_64-w64-mingw32-windres")
+        if not gcc or not windres:
+            fail("MinGW-w64 (x86_64-w64-mingw32-gcc und -windres) nicht gefunden – nötig für PDF-Tool.exe außerhalb von Windows.")
+        result = subprocess.run([windres, "-i", "launcher.rc", "-O", "coff", "-o", "launcher.res.o"], cwd=str(work), capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            result = subprocess.run(
+                [gcc, "-O2", "-Wall", "-Wextra", "-Werror", "-municode", "-mwindows", "-static", "-s", "launcher.c", "launcher.res.o", "-o", "PDF-Tool.exe"],
+                cwd=str(work), capture_output=True, text=True, check=False,
+            )
+    built = work / "PDF-Tool.exe"
+    if result.returncode != 0 or not built.is_file():
+        fail("PDF-Tool.exe konnte nicht gebaut werden:\n" + (result.stdout + result.stderr)[-3000:])
+    shutil.copy2(built, target)
+    log(f"  PDF-Tool.exe ({target.stat().st_size // 1024} KB)")
+    remove(work)
+
+
 def prepare_payload(version: str, compile_pyc: bool) -> None:
     runtime = PAYLOAD / "runtime"
     runtime.mkdir(parents=True)
@@ -556,6 +617,7 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copy2(ROOT.parent / "THIRD_PARTY_LICENSES.md", PAYLOAD / "THIRD_PARTY_LICENSES.md")
     shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von PDF Tool, ohne Zustimmungsseite im Setup
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
+    build_launcher(LAUNCHER, version)
     prepare_ocr(OCR)
     prepare_ai(AI, [runtime, site / "PySide6"])
 

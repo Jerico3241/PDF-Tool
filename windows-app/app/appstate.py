@@ -141,10 +141,10 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "KI-Assistent (optional, standardmäßig aus): Fragen zum geöffneten PDF stellen und Dokumente zusammenfassen – mit Seitenangaben zum Anklicken, vollständig auf diesem PC. Einschalten unter Einstellungen → KI-Assistent.",
-    "Das Sprachmodell lädt PDF Tool nur auf Ihren Wunsch (1,2 oder 2,6 GB, mit Prüfsumme) – und »Modell entfernen« gibt den Speicherplatz jederzeit wieder frei. Dokumente, Fragen und Antworten verlassen den PC nicht.",
-    "Schützen und Weitergeben (seit Beta 1): Schwärzen, Dokument bereinigen, Kennwortschutz mit AES-256, Reduzieren und PDF verkleinern – über die Schaltfläche »Schützen«.",
-    "Seiten gestalten, unterschreiben und stempeln: Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Zuschneiden, Lesezeichen und Links; Unterschrift zeichnen oder aus einem Bild einlesen.",
+    "Vertragsübersichten: Neuer Schalter »Gekündigte und abgelaufene Verträge mit aufführen« unter der Excel-Liste – solche Verträge stehen dann mit ihrem Status in Rot unter der Vertragsnummer in der PDF.",
+    "Windows: PDF Tool erscheint in »Öffnen mit« und unter Einstellungen → Apps → Standard-Apps mit eigenem Symbol und Namen (statt Python).",
+    "KI-Assistent (seit Beta 2, optional und standardmäßig aus): Fragen zum geöffneten PDF und Zusammenfassungen mit Seitenangaben, vollständig auf diesem PC. Das Sprachmodell lädt PDF Tool nur auf Wunsch und entfernt es jederzeit wieder.",
+    "Schützen und Weitergeben (seit Beta 1): Schwärzen, Bereinigen, Kennwortschutz, Verkleinern, Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Stempel und Unterschrift.",
     "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite.",
     "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
