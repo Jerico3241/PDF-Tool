@@ -267,6 +267,12 @@ jobs:
           Write-Host "Upgrade test: PDF Tool ${{ steps.versions.outputs.previous }} → PDF Tool ${{ steps.versions.outputs.current }}"
           ./windows-app/tests/smoke_installer.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
 
+      - name: "Startzeit unter Windows messen: PDF Tool ${{ steps.versions.outputs.previous }} → ${{ steps.versions.outputs.current }} (installiert, nur Messung)"
+        timeout-minutes: 15
+        continue-on-error: true # eine Messung, kein Test – das Ergebnis steht in der Zusammenfassung des Laufs
+        shell: pwsh
+        run: ./windows-app/tests/bench_windows.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
+
       - name: 5. Runtime-Smoke-Test (eingebettete Laufzeit – Module, PDF, Kundenakte, Vorschau, Stapel, Vergleich, Reparatur, Texterkennung, KI-Prozess)
         timeout-minutes: 10
         shell: pwsh

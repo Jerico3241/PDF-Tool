@@ -1,0 +1,68 @@
+# Startzeit unter Windows: installiertes PDF Tool der Vorversion und der neuen Version im Vergleich.
+#
+#   ./windows-app/tests/bench_windows.ps1 -Setup <neues Setup> -Previous <Setup der Vorversion> [-Runs 7]
+#
+# Beide Setups werden nacheinander still installiert, mit der eigenen Laufzeit des Programms gemessen
+# (tests/bench_app.py: Start und »Öffnen mit«, echtes Fenster mit der Windows-Plattform) und wieder
+# deinstalliert. Gemessen wird auf demselben Rechner im selben Lauf – nur so sind die Werte vergleichbar.
+# Die Tabellen gehen in die Zusammenfassung des Laufs. Kein Test: die Messung bricht den Lauf nicht ab,
+# solange sie Ergebnisse liefert. Einstellungen und Daten der Messung sind eigene (UE_CONFIG_FILE, UE_DATA_DIR).
+param(
+    [Parameter(Mandatory = $true)][string]$Setup,
+    [Parameter(Mandatory = $true)][string]$Previous,
+    [int]$Runs = 7
+)
+$ErrorActionPreference = "Stop"
+$target = Join-Path $env:LOCALAPPDATA "PDF-Tool"
+$bench = Join-Path $PSScriptRoot "bench_app.py"
+$out = Join-Path $env:RUNNER_TEMP "startzeit"
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+if (Test-Path $target) { throw "PDF Tool ist schon installiert ($target) – die Messung braucht einen leeren Rechner" }
+
+function Measure-Setup([string]$file, [string]$name) {
+    $log = Join-Path $out "setup-$name.log"
+    $run = Start-Process -FilePath $file -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"" -Wait -PassThru
+    if ($run.ExitCode -ne 0) { throw "Installation ($name) fehlgeschlagen (Code $($run.ExitCode))" }
+    $version = (Get-Content (Join-Path $target "VERSION") -Raw).Trim()
+    try {
+        $env:QT_QPA_PLATFORM = "windows"
+        & (Join-Path $target "runtime\python.exe") -s $bench start oeffnen_mit --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name.json") | Tee-Object -FilePath (Join-Path $out "$name.md")
+        if ($LASTEXITCODE -ne 0) { throw "Messung von PDF Tool $version fehlgeschlagen" }
+    } finally {
+        Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+        $uninstall = Start-Process -FilePath (Join-Path $target "unins000.exe") -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
+        if ($uninstall.ExitCode -ne 0) { throw "Deinstallation ($name) fehlgeschlagen" }
+        for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $target "runtime")); $i++) { Start-Sleep -Milliseconds 500 }
+    }
+    return $version
+}
+
+$old = Measure-Setup $Previous "vorversion"
+$new = Measure-Setup $Setup "neu"
+
+# Vergleich der Mediane: Zusammenfassung des Laufs und eine Meldung am Lauf
+$compare = & python -c @"
+import json, statistics, sys
+old, new = (json.load(open(p, encoding='utf-8')) for p in sys.argv[1:3])
+rows = ['| Messung (Median) | ' + old['version'] + ' | ' + new['version'] + ' | Unterschied |', '| --- | ---: | ---: | ---: |']
+brief = []
+for key in ('start.controller', 'start.erstes_bild', 'start.startseite', 'start.alle_seiten', 'start.rss', 'oeffnen_mit.erstes_bild', 'oeffnen_mit.seite'):
+    a, b = old['results'].get(key), new['results'].get(key)
+    if not a or not b:
+        continue
+    a, b = statistics.median(a), statistics.median(b)
+    unit = 'MB' if key.endswith('rss') else 'ms'
+    rows.append(f'| {key} | {a:.0f} {unit} | {b:.0f} {unit} | {b - a:+.0f} {unit} ({(b - a) / a * 100:+.0f} %) |')
+    if key in ('start.erstes_bild', 'oeffnen_mit.seite'):
+        brief.append(f'{key} {a:.0f} → {b:.0f} {unit}')
+print('\n'.join(rows))
+print('BRIEF ' + ' · '.join(brief))
+"@ (Join-Path $out "vorversion.json") (Join-Path $out "neu.json")
+if ($LASTEXITCODE -ne 0) { throw "Vergleich fehlgeschlagen" }
+$brief = ($compare | Where-Object { $_ -like "BRIEF *" }) -replace "^BRIEF ", ""
+$table = $compare | Where-Object { $_ -notlike "BRIEF *" }
+Write-Host "::notice title=Startzeit unter Windows ($old → $new)::$brief"
+if ($env:GITHUB_STEP_SUMMARY) {
+    @("### Startzeit unter Windows: PDF Tool $old → $new", "", "Installiertes Programm, je $Runs Starts, Median.", "") + $table + @("", "<details><summary>Einzelwerte</summary>", "") + (Get-Content (Join-Path $out "vorversion.md")) + @("") + (Get-Content (Join-Path $out "neu.md")) + @("", "</details>") |
+        Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+}
