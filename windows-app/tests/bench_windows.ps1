@@ -32,9 +32,16 @@ function Measure-Setup([string]$file, [string]$name) {
     $version = (Get-Content (Join-Path $target "VERSION") -Raw).Trim()
     try {
         $env:QT_QPA_PLATFORM = "windows"
-        $errors = Join-Path $out "$name.err"
-        & (Join-Path $target "runtime\python.exe") -s $bench start oeffnen_mit --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name.json") 2> $errors | Tee-Object -FilePath (Join-Path $out "$name.md")
-        if ($LASTEXITCODE -ne 0) { throw "Messung von PDF Tool $version fehlgeschlagen: $((Get-Content $errors -Raw -ErrorAction SilentlyContinue) -replace '[\r\n]+', ' ' | ForEach-Object { if ($_.Length -gt 1500) { $_.Substring($_.Length - 1500) } else { $_ } })" }
+        # Jeder Teil für sich: scheitert einer, bleiben die anderen Werte erhalten
+        foreach ($scenario in "start", "reader", "oeffnen_mit") {
+            $errors = Join-Path $out "$name-$scenario.err"
+            & (Join-Path $target "runtime\python.exe") -s $bench $scenario --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name-$scenario.json") 2> $errors | Tee-Object -FilePath (Join-Path $out "$name.md") -Append
+            if ($LASTEXITCODE -ne 0) {
+                $text = ((Get-Content $errors -Raw -ErrorAction SilentlyContinue) -replace "[\r\n]+", " ")
+                if ($text.Length -gt 800) { $text = $text.Substring($text.Length - 800) }
+                Write-Host "::warning title=Startzeit-Messung ($version, $scenario)::$text"
+            }
+        }
     } finally {
         Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
         $uninstall = Start-Process -FilePath (Join-Path $target "unins000.exe") -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
@@ -50,21 +57,28 @@ $new = Measure-Setup $Setup "neu"
 # Vergleich der Mediane: Zusammenfassung des Laufs und eine Meldung am Lauf
 $compare = & python -c @"
 import json, statistics, sys
-old, new = (json.load(open(p, encoding='utf-8')) for p in sys.argv[1:3])
+import glob
+def load(prefix):
+    data = {'version': '?', 'results': {}}
+    for path in sorted(glob.glob(prefix + '-*.json')):
+        part = json.load(open(path, encoding='utf-8'))
+        data['version'] = part['version']
+        data['results'].update(part['results'])
+    return data
+old, new = load(sys.argv[1]), load(sys.argv[2])
 rows = ['| Messung (Median) | ' + old['version'] + ' | ' + new['version'] + ' | Unterschied |', '| --- | ---: | ---: | ---: |']
 brief = []
-for key in ('start.controller', 'start.erstes_bild', 'start.startseite', 'start.alle_seiten', 'start.rss', 'oeffnen_mit.erstes_bild', 'oeffnen_mit.seite'):
+for key in ('start.imports', 'start.controller', 'start.qml', 'start.erstes_bild', 'start.startseite', 'start.alle_seiten', 'reader.klein', 'reader.gross', 'oeffnen_mit.erstes_bild', 'oeffnen_mit.seite'):
     a, b = old['results'].get(key), new['results'].get(key)
     if not a or not b:
         continue
     a, b = statistics.median(a), statistics.median(b)
-    unit = 'MB' if key.endswith('rss') else 'ms'
+    unit = 'ms'
     rows.append(f'| {key} | {a:.0f} {unit} | {b:.0f} {unit} | {b - a:+.0f} {unit} ({(b - a) / a * 100:+.0f} %) |')
-    if key in ('start.erstes_bild', 'oeffnen_mit.seite'):
-        brief.append(f'{key} {a:.0f} → {b:.0f} {unit}')
+    brief.append(f'{key} {a:.0f} → {b:.0f} {unit}')
 print('\n'.join(rows))
 print('BRIEF ' + ' · '.join(brief))
-"@ (Join-Path $out "vorversion.json") (Join-Path $out "neu.json")
+"@ (Join-Path $out "vorversion") (Join-Path $out "neu")
 if ($LASTEXITCODE -ne 0) { throw "Vergleich fehlgeschlagen" }
 $brief = ($compare | Where-Object { $_ -like "BRIEF *" }) -replace "^BRIEF ", ""
 $table = $compare | Where-Object { $_ -notlike "BRIEF *" }
