@@ -43,7 +43,9 @@ def forward(paths: list[str], name: str | None = None, show: bool = True) -> boo
         if socket.bytesToWrite() > 0 and not socket.waitForBytesWritten(TIMEOUT_MS):
             return False
         # Erst nach der Bestätigung enden – sonst ginge die Anfrage bei einem Absturz verloren
-        if not socket.waitForReadyRead(TIMEOUT_MS):
+        # Die laufende App trennt gleich nach ihrem »ok«. Unter Windows meldet waitForReadyRead dann mitunter False,
+        # obwohl die Antwort schon gelesen im Puffer liegt – entscheidend ist, was ankam.
+        if not socket.waitForReadyRead(TIMEOUT_MS) and socket.bytesAvailable() == 0:
             return False
         return bytes(socket.readAll().data()).startswith(b"ok")
     finally:
@@ -115,7 +117,7 @@ class InstanceServer(QObject):
         self._buffers[socket] = b""
         socket.write(b"ok\n")
         socket.flush()
-        socket.disconnectFromServer()
+        # Trennen übernimmt der weitere Start, sobald er das »ok« gelesen hat (sonst könnte es unter Windows verloren gehen)
         if paths or show:
             self._on_paths(paths)
 
