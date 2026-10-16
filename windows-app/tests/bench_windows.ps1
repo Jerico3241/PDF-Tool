@@ -13,6 +13,12 @@ param(
     [int]$Runs = 7
 )
 $ErrorActionPreference = "Stop"
+trap {
+    # Fehler als Meldung am Lauf (die Protokolle sind nicht immer zugänglich)
+    $text = ($_.Exception.Message + " " + $_.InvocationInfo.PositionMessage) -replace "[\r\n]+", " "
+    Write-Host "::warning title=Startzeit-Messung fehlgeschlagen::$text"
+    exit 1
+}
 $target = Join-Path $env:LOCALAPPDATA "PDF-Tool"
 $bench = Join-Path $PSScriptRoot "bench_app.py"
 $out = Join-Path $env:RUNNER_TEMP "startzeit"
@@ -26,8 +32,9 @@ function Measure-Setup([string]$file, [string]$name) {
     $version = (Get-Content (Join-Path $target "VERSION") -Raw).Trim()
     try {
         $env:QT_QPA_PLATFORM = "windows"
-        & (Join-Path $target "runtime\python.exe") -s $bench start oeffnen_mit --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name.json") | Tee-Object -FilePath (Join-Path $out "$name.md")
-        if ($LASTEXITCODE -ne 0) { throw "Messung von PDF Tool $version fehlgeschlagen" }
+        $errors = Join-Path $out "$name.err"
+        & (Join-Path $target "runtime\python.exe") -s $bench start oeffnen_mit --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name.json") 2> $errors | Tee-Object -FilePath (Join-Path $out "$name.md")
+        if ($LASTEXITCODE -ne 0) { throw "Messung von PDF Tool $version fehlgeschlagen: $((Get-Content $errors -Raw -ErrorAction SilentlyContinue) -replace '[\r\n]+', ' ' | ForEach-Object { if ($_.Length -gt 1500) { $_.Substring($_.Length - 1500) } else { $_ } })" }
     } finally {
         Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
         $uninstall = Start-Process -FilePath (Join-Path $target "unins000.exe") -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru

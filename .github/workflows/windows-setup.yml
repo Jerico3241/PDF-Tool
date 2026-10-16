@@ -160,8 +160,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
-      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern, Per E-Mail senden, KI-Assistent mit Attrappe des KI-Prozesses)
-        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py windows-app/tests/test_mail.py windows-app/tests/test_assistant.py -q -p no:cacheprovider
+      - name: 1. Tests (Kernlogik, Excel-Fettschrift, Rich Text, Datenübernahme, Kundenakte, Stapel, Vertragsvergleich, Versionswahl, Release-Prüfung, Updater-Kern, Per E-Mail senden, KI-Assistent mit Attrappe des KI-Prozesses, gekündigte und abgelaufene Verträge)
+        run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py windows-app/tests/test_mail.py windows-app/tests/test_assistant.py windows-app/tests/test_ended_contracts.py -q -p no:cacheprovider
 
       - name: 1. Tests (Vorlagen 2.0, Regelwerk 2.0 samt PDF-Pipeline, Sicherung und Wiederherstellung, Diagnose und Support-Paket)
         run: python -m pytest windows-app/tests/test_templates.py windows-app/tests/test_rules.py windows-app/tests/test_rules_pipeline.py windows-app/tests/test_backup.py windows-app/tests/test_diagnostics.py -v -p no:cacheprovider
