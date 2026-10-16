@@ -3,7 +3,7 @@
 #   ./windows-app/tests/bench_windows.ps1 -Setup <neues Setup> -Previous <Setup der Vorversion> [-Runs 7]
 #
 # Beide Setups werden nacheinander still installiert, mit der eigenen Laufzeit des Programms gemessen
-# (tests/bench_app.py: Start und »Öffnen mit«, echtes Fenster mit der Windows-Plattform) und wieder
+# (tests/bench_app.py: Programmstart bis zur Startseite, echtes Fenster mit der Windows-Plattform) und wieder
 # deinstalliert. Gemessen wird auf demselben Rechner im selben Lauf – nur so sind die Werte vergleichbar.
 # Die Tabellen gehen in die Zusammenfassung des Laufs. Kein Test: die Messung bricht den Lauf nicht ab,
 # solange sie Ergebnisse liefert. Einstellungen und Daten der Messung sind eigene (UE_CONFIG_FILE, UE_DATA_DIR).
@@ -33,7 +33,7 @@ function Measure-Setup([string]$file, [string]$name) {
     try {
         $env:QT_QPA_PLATFORM = "windows"
         # Jeder Teil für sich: scheitert einer, bleiben die anderen Werte erhalten
-        foreach ($scenario in "start", "reader", "oeffnen_mit") {
+        foreach ($scenario in "start") {  # »reader« und »oeffnen_mit« laufen auf den CI-Rechnern nicht zuverlässig durch
             $errors = Join-Path $out "$name-$scenario.err"
             & (Join-Path $target "runtime\python.exe") -s $bench $scenario --runs $Runs --app (Join-Path $target "app") --label $version --json (Join-Path $out "$name-$scenario.json") 2> $errors | Tee-Object -FilePath (Join-Path $out "$name.md") -Append
             if ($LASTEXITCODE -ne 0) {
@@ -55,34 +55,12 @@ $old = Measure-Setup $Previous "vorversion"
 $new = Measure-Setup $Setup "neu"
 
 # Vergleich der Mediane: Zusammenfassung des Laufs und eine Meldung am Lauf
-$compare = & python -c @"
-import json, statistics, sys
-import glob
-def load(prefix):
-    data = {'version': '?', 'results': {}}
-    for path in sorted(glob.glob(prefix + '-*.json')):
-        part = json.load(open(path, encoding='utf-8'))
-        data['version'] = part['version']
-        data['results'].update(part['results'])
-    return data
-old, new = load(sys.argv[1]), load(sys.argv[2])
-rows = ['| Messung (Median) | ' + old['version'] + ' | ' + new['version'] + ' | Unterschied |', '| --- | ---: | ---: | ---: |']
-brief = []
-for key in ('start.imports', 'start.controller', 'start.qml', 'start.erstes_bild', 'start.startseite', 'start.alle_seiten', 'reader.klein', 'reader.gross', 'oeffnen_mit.erstes_bild', 'oeffnen_mit.seite'):
-    a, b = old['results'].get(key), new['results'].get(key)
-    if not a or not b:
-        continue
-    a, b = statistics.median(a), statistics.median(b)
-    unit = 'ms'
-    rows.append(f'| {key} | {a:.0f} {unit} | {b:.0f} {unit} | {b - a:+.0f} {unit} ({(b - a) / a * 100:+.0f} %) |')
-    brief.append(f'{key} {a:.0f} → {b:.0f} {unit}')
-print('\n'.join(rows))
-print('BRIEF ' + ' · '.join(brief))
-"@ (Join-Path $out "vorversion") (Join-Path $out "neu")
+$env:PYTHONIOENCODING = "utf-8"
+$compare = & python (Join-Path $PSScriptRoot "bench_compare.py") (Join-Path $out "vorversion") (Join-Path $out "neu")
 if ($LASTEXITCODE -ne 0) { throw "Vergleich fehlgeschlagen" }
 $brief = ($compare | Where-Object { $_ -like "BRIEF *" }) -replace "^BRIEF ", ""
 $table = $compare | Where-Object { $_ -notlike "BRIEF *" }
-Write-Host "::notice title=Startzeit unter Windows ($old → $new)::$brief"
+Write-Host "::notice title=Startzeit unter Windows ($old -> $new)::$brief"
 if ($env:GITHUB_STEP_SUMMARY) {
     @("### Startzeit unter Windows: PDF Tool $old → $new", "", "Installiertes Programm, je $Runs Starts, Median.", "") + $table + @("", "<details><summary>Einzelwerte</summary>", "") + (Get-Content (Join-Path $out "vorversion.md")) + @("") + (Get-Content (Join-Path $out "neu.md")) + @("", "</details>") |
         Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
