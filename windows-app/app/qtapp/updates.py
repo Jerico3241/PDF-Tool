@@ -378,11 +378,17 @@ class UpdatesController(Observable):
 
     def _quit_app(self) -> bool:
         """Wie über das Schließen-Kreuz: Werkzeuge räumen auf, Einstellungen werden gespeichert."""
+        # Ganz beenden – auch wenn das Schließen-Kreuz PDF Tool sonst im Hintergrund hält
+        self.app.quit_wanted = True
         window = self.app.window
         if window is not None:
             window.close()
-            return bool(self.app.closing)
-        return self.app.requestClose()
+            closed = bool(self.app.closing)
+        else:
+            closed = self.app.requestClose()
+        if not closed:
+            self.app.quit_wanted = False
+        return closed
 
     def shutdown(self) -> None:
         self._periodic.stop()

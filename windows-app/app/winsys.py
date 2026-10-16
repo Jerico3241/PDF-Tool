@@ -317,6 +317,36 @@ def allow_foreground() -> bool:
     return bool(ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY))
 
 
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"  # Start mit Windows (nur dieser Benutzer)
+
+
+@_safe(None)
+def run_entry(name: str) -> str | None:
+    """Befehl eines Eintrags unter »Start mit Windows« (HKCU\\…\\Run), ``None`` ohne Eintrag."""
+    try:
+        value = _registry_value(RUN_KEY, name)
+    except OSError:
+        return None
+    return str(value)
+
+
+@_safe(False)
+def set_run_entry(name: str, command: str | None) -> bool:
+    """Eintrag unter »Start mit Windows« setzen (``command``) bzw. entfernen (``None``). True bei Erfolg."""
+    import winreg
+
+    if command is None:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.DeleteValue(key, name)
+        except FileNotFoundError:
+            pass
+        return True
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, name, 0, winreg.REG_SZ, command)
+    return True
+
+
 def open_path(path: str | Path) -> None:
     """Datei oder Ordner mit der Standardanwendung öffnen. Löst OSError aus."""
     import os

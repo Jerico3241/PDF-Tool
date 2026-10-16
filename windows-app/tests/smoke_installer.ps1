@@ -25,7 +25,9 @@
 #      Kundenakte aus, Kundenakten unveraendert und fuer die App lesbar
 #   4b. »Oeffnen mit« (seit 3.0.0): Eintrag fuer PDF-Dateien vorhanden, die Standard-App fuer .pdf
 #      unveraendert; Start mit einer PDF, ein zweiter Start reicht seine PDF an die laufende App weiter
-#   5. still deinstallieren (auch die Eintraege fuer »Oeffnen mit« sind danach entfernt)
+#   4c. »Im Hintergrund bereithalten« (seit 3.2.0-beta.4): Start mit Windows eingetragen, Start mit
+#      --hintergrund ohne Fenster und nur einmal, ein weiterer Start zeigt das Fenster der laufenden App
+#   5. still deinstallieren (auch die Eintraege fuer »Oeffnen mit« und »Start mit Windows« sind danach entfernt)
 #
 # Aufruf:
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup windows-app\dist\PDF-Tool-Setup-<Version>.exe
@@ -188,7 +190,7 @@ if ($Previous) {
 
 Write-Host "1. Stille Installation: $Setup"
 $log = Install $Setup "installation"
-foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "runtime\Lib\site-packages\PySide6\QtPrintSupport.pyd", "runtime\Lib\site-packages\PySide6\Qt6PrintSupport.dll", "runtime\Lib\site-packages\fontTools\__init__.py", "app\qtapp\instance.py", "app\qtapp\reader\controller.py", "app\qtapp\reader\document.py", "app\tools\pdf_editor\textedit.py", "app\tools\pdf_editor\save.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
+foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\handoff.py", "app\qtapp\background.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "runtime\Lib\site-packages\PySide6\QtPrintSupport.pyd", "runtime\Lib\site-packages\PySide6\Qt6PrintSupport.dll", "runtime\Lib\site-packages\fontTools\__init__.py", "app\qtapp\instance.py", "app\qtapp\reader\controller.py", "app\qtapp\reader\document.py", "app\tools\pdf_editor\textedit.py", "app\tools\pdf_editor\save.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
     if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
 }
 # Seit 2.7.0 ohne Tk-Oberflaeche: auch bei einem Update bleiben keine alten Programmteile zurueck
@@ -303,9 +305,12 @@ if (-not $app) { throw "PDF-Tool.exe hat die App nicht gestartet" }
 Start-Sleep -Seconds 15
 if (-not (Get-Process -Id $app.ProcessId -ErrorAction SilentlyContinue)) { throw "Die App hat sich beim Start beendet" }
 if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Raw)" }
+$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$autostart = (Get-Item -LiteralPath $runKey -ErrorAction SilentlyContinue).GetValue($appName)
+if ($autostart -ne "`"$launcher`" --hintergrund") { throw "Start mit Windows: '$autostart' statt PDF-Tool.exe --hintergrund" }
 Stop-Process -Id $app.ProcessId -Force
 Start-Sleep -Seconds 2
-Write-Host "   App lief ohne Fehler"
+Write-Host "   App lief ohne Fehler; Start mit Windows eingetragen ($autostart)"
 Write-Host "4b. 'Oeffnen mit': Start mit einer PDF, zweiter Start reicht seine PDF weiter"
 $pdfDir = Join-Path $temp "pdf-tool-oeffnen-mit"
 New-Item -ItemType Directory -Force -Path $pdfDir | Out-Null
@@ -327,6 +332,45 @@ Stop-Process -Id $first.Id -Force
 Start-Sleep -Seconds 2
 Remove-Item $pdfDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "   App startete mit der PDF, der zweite Start endete nach dem Weiterreichen"
+
+Write-Host "4c. Start mit Windows (ohne Fenster), danach zeigt ein weiterer Start das Fenster der laufenden App"
+function AppProcesses { @(Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" | Where-Object { $_.ExecutablePath -eq $runtimeExe -and $_.CommandLine -like "*app\start.py*" }) }
+Remove-Item $errorLog -ErrorAction SilentlyContinue
+$hidden = Start-Process -FilePath $launcher -ArgumentList "--hintergrund" -WorkingDirectory $target -PassThru
+$null = $hidden.Handle
+if (-not $hidden.WaitForExit(30000) -or $hidden.ExitCode -ne 0) { throw "PDF-Tool.exe --hintergrund endete nicht bzw. mit Fehler" }
+$resident = $null
+for ($i = 0; $i -lt 30 -and -not $resident; $i++) { $resident = AppProcesses | Select-Object -First 1; if (-not $resident) { Start-Sleep -Seconds 1 } }
+if (-not $resident) { throw "Start mit Windows hat die App nicht gestartet" }
+Start-Sleep -Seconds 15
+$process = Get-Process -Id $resident.ProcessId -ErrorAction SilentlyContinue
+if (-not $process) { throw "Die App hat sich nach dem Start mit Windows beendet" }
+if ($process.MainWindowHandle -ne 0) { throw "Start mit Windows hat ein Fenster gezeigt" }
+# Ein zweiter Start mit Windows (z. B. erneute Anmeldung) startet keine zweite App
+$again = Start-Process -FilePath $launcher -ArgumentList "--hintergrund" -WorkingDirectory $target -PassThru
+$null = $again.Handle
+if (-not $again.WaitForExit(30000)) { throw "Zweiter Start mit Windows endet nicht" }
+Start-Sleep -Seconds 3
+if ((AppProcesses).Count -ne 1) { throw "Zweiter Start mit Windows hat eine weitere App gestartet" }
+# Weiterer Start wie ueber das Startmenue: das Fenster der laufenden App erscheint
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$open = Start-Process -FilePath $launcher -WorkingDirectory $target -PassThru
+$null = $open.Handle
+$shown = $false
+while (-not $shown -and $watch.Elapsed.TotalSeconds -lt 30) {
+    $process = Get-Process -Id $resident.ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) { throw "Die App hat sich beim Zeigen des Fensters beendet" }
+    if ($process.MainWindowHandle -ne 0) { $shown = $true } else { Start-Sleep -Milliseconds 25 }
+}
+$elapsed = $watch.ElapsedMilliseconds
+if (-not $shown) { throw "Das Fenster der App im Hintergrund erschien nicht" }
+Start-Sleep -Seconds 3
+if ((AppProcesses).Count -ne 1) { throw "Der weitere Start hat eine zweite App gestartet statt das Fenster zu zeigen" }
+if (Test-Path $errorLog) { throw "Fehler im Hintergrundbetrieb: $(Get-Content $errorLog -Raw)" }
+Write-Host "   Fenster aus dem Hintergrund nach $elapsed ms (ab Start von PDF-Tool.exe)"
+if ($env:GITHUB_ACTIONS) { Write-Host "::notice title=Fenster aus dem Hintergrund::PDF Tool $version - $elapsed ms vom Start von PDF-Tool.exe bis zum sichtbaren Fenster" }
+Stop-Process -Id $resident.ProcessId -Force
+Start-Sleep -Seconds 2
 # Die automatische Update-Pruefung laeuft wenige Sekunden nach dem Start im Hintergrund (nur lesend).
 # Offline oder bei einem Anfragelimit bleibt sie still - das ist nur ein Hinweis, kein Fehler.
 if (Test-Path (Join-Path $updates "releases.json")) {
@@ -443,6 +487,7 @@ if (Test-Path $appExeKey) { throw "Eintrag fuer PDF-Tool.exe ist nach der Deinst
 if (Test-Path $capabilitiesKey) { throw "Anmeldung fuer die Standard-Apps ist nach der Deinstallation noch vorhanden" }
 if ((Test-Path $registeredKey) -and ($null -ne (Get-Item -LiteralPath $registeredKey).GetValue($appName))) { throw "RegisteredApplications enthaelt nach der Deinstallation noch PDF Tool" }
 if (Test-Path (Join-Path $target "PDF-Tool.exe")) { throw "PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
+if ($null -ne (Get-Item -LiteralPath $runKey -ErrorAction SilentlyContinue).GetValue($appName)) { throw "Start mit Windows ist nach der Deinstallation noch eingetragen" }
 if ((Test-Path $openWithKey) -and ($null -ne (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))) { throw ".pdf\OpenWithProgids enthaelt nach der Deinstallation noch PDF Tool" }
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Standard-App fuer PDF-Dateien nach der Deinstallation veraendert" }
 if (-not $pdfKeyBefore -and (Test-Path "HKCU:\Software\Classes\.pdf")) { throw "Der vom Setup angelegte Schluessel .pdf ist nach der Deinstallation noch vorhanden" }

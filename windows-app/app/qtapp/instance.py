@@ -3,8 +3,8 @@
 Startet Windows PDF Tool mit einer PDF (``start.py "C:\\…\\datei.pdf"``) und läuft die App schon,
 reicht der neue Prozess die Pfade über eine lokale Verbindung (Named Pipe, nur für diesen
 Benutzer) an die laufende App weiter und endet – die PDF öffnet sich dort als neuer Tab. Läuft
-keine App, startet PDF Tool normal und öffnet die PDF selbst. Ohne Pfade startet PDF Tool wie
-bisher (auch mehrfach).
+keine App, startet PDF Tool normal und öffnet die PDF selbst. Ein weiterer Start ohne Pfade (z. B. über das
+Startmenü, während PDF Tool im Hintergrund bereitsteht) zeigt das Fenster der laufenden App.
 
 Übertragen werden nur Dateipfade (keine Inhalte); die laufende App prüft jeden Pfad (vorhandene
 Datei, höchstens ``MAX_PATHS``) und öffnet PDFs nur zum Lesen – geändert wird nichts ohne den
@@ -13,40 +13,23 @@ Benutzer. Der Name der Verbindung enthält keine Benutzerdaten (Prüfsumme).
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QObject
 
-PREFIX = "PDFTool-Oeffnen-"
-MAX_PATHS = 50
+from handoff import MAX_PATHS, PREFIX, message, pdf_arguments, server_name  # noqa: F401 - auch für Aufrufer
+
 MAX_BYTES = 256 * 1024
 TIMEOUT_MS = 2000
 
 
-def server_name() -> str:
-    """Name der Verbindung – je Benutzer verschieden, ohne Benutzernamen im Klartext."""
-    ident = "|".join((os.environ.get("USERDOMAIN", ""), os.environ.get("USERNAME", ""), str(Path.home())))
-    return PREFIX + hashlib.sha256(ident.encode("utf-8", "replace")).hexdigest()[:20]
+def forward(paths: list[str], name: str | None = None, show: bool = True) -> bool:
+    """Pfade an eine laufende App senden. ``True``: angenommen – dieser Prozess kann enden.
 
-
-def pdf_arguments(argv: list[str]) -> list[str]:
-    """Dateipfade aus der Befehlszeile (Optionen wie ``-OO`` sind schon entfernt)."""
-    paths = []
-    for arg in argv:
-        if not arg or arg.startswith("-"):
-            continue
-        path = Path(arg)
-        if path.suffix.lower() == ".pdf" or path.is_file():
-            paths.append(str(path.resolve()) if path.exists() else str(path))
-    return paths[:MAX_PATHS]
-
-
-def forward(paths: list[str], name: str | None = None) -> bool:
-    """Pfade an eine laufende App senden. ``True``: angenommen – dieser Prozess kann enden."""
+    Ohne Pfade: ``show=True`` – die laufende App zeigt ihr Fenster (weiterer Start über das Startmenü);
+    ``show=False`` – nur prüfen, ob PDF Tool schon läuft (Start mit Windows)."""
     from PySide6.QtNetwork import QLocalSocket
 
     socket = QLocalSocket()
@@ -54,7 +37,7 @@ def forward(paths: list[str], name: str | None = None) -> bool:
     if not socket.waitForConnected(TIMEOUT_MS):
         return False
     try:
-        socket.write(json.dumps({"open": paths[:MAX_PATHS]}).encode("utf-8") + b"\n")
+        socket.write(message(paths, show))
         socket.flush()
         # (liefert False, wenn schon alles geschrieben ist – entscheidend ist die Bestätigung)
         if socket.bytesToWrite() > 0 and not socket.waitForBytesWritten(TIMEOUT_MS):
@@ -69,18 +52,25 @@ def forward(paths: list[str], name: str | None = None) -> bool:
 
 def received_paths(data: bytes) -> list[str]:
     """Nachricht einer zweiten Instanz prüfen: nur vorhandene Dateien, begrenzte Anzahl."""
+    return received(data)[0]
+
+
+def received(data: bytes) -> tuple[list[str], bool]:
+    """Nachricht einer zweiten Instanz: (geprüfte Pfade, Fenster zeigen)."""
     try:
         message = json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return []
-    items = message.get("open") if isinstance(message, dict) else None
-    if not isinstance(items, list):
-        return []
-    return [str(item) for item in items[:MAX_PATHS] if isinstance(item, str) and len(item) < 4096 and Path(item).is_file()]
+        return [], False
+    if not isinstance(message, dict):
+        return [], False
+    items = message.get("open")
+    paths = [str(item) for item in items[:MAX_PATHS] if isinstance(item, str) and len(item) < 4096 and Path(item).is_file()] if isinstance(items, list) else []
+    return paths, message.get("show") is True
 
 
 class InstanceServer(QObject):
-    """Nimmt Pfade weiterer Starts an (``on_paths(pfade)`` im GUI-Thread)."""
+    """Nimmt Pfade weiterer Starts an (``on_paths(pfade)`` im GUI-Thread). Ein weiterer Start ohne Pfade ruft
+    ``on_paths([])`` – die App zeigt dann ihr Fenster."""
 
     def __init__(self, on_paths: Callable[[list[str]], None], parent: QObject | None = None, name: str | None = None) -> None:
         super().__init__(parent)
@@ -121,12 +111,12 @@ class InstanceServer(QObject):
         self._buffers[socket] = data
         if b"\n" not in data:
             return
-        paths = received_paths(data.split(b"\n", 1)[0])
+        paths, show = received(data.split(b"\n", 1)[0])
         self._buffers[socket] = b""
         socket.write(b"ok\n")
         socket.flush()
         socket.disconnectFromServer()
-        if paths:
+        if paths or show:
             self._on_paths(paths)
 
     def _drop(self, socket) -> None:

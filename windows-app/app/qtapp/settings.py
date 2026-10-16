@@ -45,6 +45,7 @@ class SettingsController(Observable):
     readerZoomChanged, readerZoom = prop(str, "readerZoom", "last")  # Standardzoom beim Öffnen
     readerPanelChanged, readerPanel = prop(str, "readerPanel", "last")  # Seitenleiste beim Öffnen
     readerRestoreSessionChanged, readerRestoreSession = prop(bool, "readerRestoreSession", False)  # letzte Sitzung beim Start
+    backgroundChanged, background = prop(bool, "background", True)  # im Hintergrund bereithalten (Infobereich, Autostart)
 
     def __init__(self, app, theme: ThemeController, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -55,6 +56,26 @@ class SettingsController(Observable):
         self.set_quietly("readerPanel", _choice(app.cfg.get(READER_PANEL_KEY), READER_PANELS))
         self.set_quietly("readerRestoreSession", app.cfg.get(READER_SESSION_KEY) is True)
         app.register_config(self.config)
+
+    def attach_background(self, background) -> None:
+        self._background = background
+        self.set_quietly("background", bool(background.enabled))
+
+    @Slot(bool)
+    def setBackground(self, enabled: bool) -> None:  # noqa: N802
+        """Im Hintergrund bereithalten: Symbol im Infobereich und Start mit Windows (wirkt sofort)."""
+        enabled = bool(enabled)
+        background = getattr(self, "_background", None)
+        if background is None or enabled == self.background:
+            return
+        background.set_enabled(enabled)
+        self.background = enabled
+        self.app.persist()
+        self.app.set_status(
+            "PDF Tool startet mit Windows und bleibt nach dem Schließen im Infobereich bereit." if enabled
+            else "PDF Tool startet nicht mehr mit Windows; das Schließen-Kreuz beendet es wieder.",
+            "success",
+        )
 
     def attach_customers(self, customers) -> None:
         self.customers = customers
@@ -81,7 +102,9 @@ class SettingsController(Observable):
     readerPanels = Property(list, _reader_panels, notify=_constant)
 
     def _texts(self) -> dict:
-        return {"customerTitle": CUSTOMER_RECORDS_TITLE, "customerText": CUSTOMER_RECORDS_TEXT, "customerNote": CUSTOMER_RECORDS_NOTE}
+        from .background import NOTE, TEXT, TITLE
+
+        return {"backgroundTitle": TITLE, "backgroundText": TEXT, "backgroundNote": NOTE, "customerTitle": CUSTOMER_RECORDS_TITLE, "customerText": CUSTOMER_RECORDS_TEXT, "customerNote": CUSTOMER_RECORDS_NOTE}
 
     texts = Property("QVariantMap", _texts, notify=_constant)
 

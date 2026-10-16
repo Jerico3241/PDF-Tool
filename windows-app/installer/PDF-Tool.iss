@@ -35,6 +35,7 @@
 #define AppExe         "PDF-Tool.exe"
 ; Anmeldung als Programm für PDF-Dateien (Einstellungen → Apps → Standard-Apps), nur für diesen Benutzer
 #define CapabilitiesKey "Software\PDF-Tool\Capabilities"
+#define RunKey         "Software\Microsoft\Windows\CurrentVersion\Run"
 ; Name, Ordner und Mutex bis Version 2.2 (»Übersichten-Ersteller«)
 #define OldAppName     "Übersichten-Ersteller"
 #define OldAppFolder   "Uebersichten-Ersteller"
@@ -443,6 +444,9 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir, OldDataDir: String;
 begin
+  if CurUninstallStep = usUninstall then
+    { »Im Hintergrund bereithalten«: den Eintrag unter »Start mit Windows« setzt die App selbst }
+    RegDeleteValue(HKCU, '{#RunKey}', '{#AppName}');
   if CurUninstallStep = usPostUninstall then
   begin
     DataDir := ExpandConstant('{userappdata}\' + DataFolder);

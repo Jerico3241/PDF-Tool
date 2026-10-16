@@ -364,6 +364,20 @@ Ein **Regelwerk** passt Werte der Übersicht nach festen Regeln an – „WENN d
   „Automatisch“ (Regelwerk der Vorlage, sonst der Darstellung), „Kein Regelwerk“ oder ein bestimmtes.
   Ein fehlendes Regelwerk wird nie still ersetzt.
 
+## Im Hintergrund bereithalten (seit 3.2.0-beta.4)
+
+Einstellungen → Verhalten → „Im Hintergrund bereithalten“ (Standard: an). PDF Tool startet mit Windows ohne
+Fenster (`PDF-Tool.exe --hintergrund`, Eintrag „PDF Tool“ unter „Start mit Windows“ – nur für diesen
+Benutzer) und baut seine Oberfläche dabei auf. Ein weiterer Start (Startmenü, Desktop, Doppelklick auf eine
+PDF) übergibt nur an die laufende App und endet – das Fenster erscheint ohne erneutes Laden.
+
+Das Schließen-Kreuz schließt dann nur das Fenster: Dokumente werden wie beim Beenden geschlossen (Rückfrage
+bei ungespeicherten Änderungen; mit „PDFs der letzten Sitzung“ öffnet das nächste Zeigen sie wieder), laufende
+Stapel oder Reparaturen gehen weiter. PDF Tool bleibt mit Symbol im Infobereich: Klick öffnet das Fenster,
+Rechtsklick → „Beenden“ beendet ganz. Updates, Neustart nach einer Wiederherstellung und das Abmelden von
+Windows beenden PDF Tool immer ganz. Ausgeschaltet: kein Symbol, kein Autostart, das Kreuz beendet wie
+bisher. Die Deinstallation entfernt den Autostart-Eintrag.
+
 ## Sicherung und Wiederherstellung (seit 2.8)
 
 Einstellungen → „Sicherung & Wiederherstellung“. Code: `app/backup/`, `app/qtapp/backups.py`.

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0-beta.3 (Beta zum Testen)
+Version 3.2.0-beta.4 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -31,7 +31,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0-beta.3.exe
+PDF-Tool-Setup-3.2.0-beta.4.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -41,6 +41,24 @@ optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
 qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 3.2 (Beta 4) – Im Hintergrund bereithalten
+---------------------------------------------------------
+Der erste Start nach dem Hochfahren des PCs war langsam, weil Windows die
+App erst von der Festplatte laden muss. Jetzt (Einstellungen → Verhalten →
+„Im Hintergrund bereithalten“, standardmäßig an):
+- PDF Tool startet mit Windows unsichtbar und baut sich dabei schon auf.
+  Öffnen Sie es danach (Startmenü, Desktop oder Doppelklick auf eine PDF),
+  erscheint das Fenster sofort.
+- Das Schließen-Kreuz schließt nur das Fenster: Ihre PDFs werden wie
+  gewohnt geschlossen (mit Rückfrage bei ungespeicherten Änderungen), PDF
+  Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts
+  unten, ggf. hinter dem Pfeil „^“). Klick auf das Symbol öffnet das
+  Fenster wieder.
+- Ganz beenden: Rechtsklick auf das Symbol → „Beenden“.
+- Ausgeschaltet verhält sich PDF Tool wie bisher: kein Symbol, kein Start
+  mit Windows, das Kreuz beendet die App.
 
 
 Neu in Version 3.2 (Beta 2) – KI-Assistent (optional)
@@ -385,6 +403,13 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 3.2.0-beta.3, 3.2.0-beta.2, 3.2.0-beta.1 oder 3.1.0
+auf 3.2.0-beta.4 (Kanal „Beta“): Das Setup ersetzt die Programmdateien.
+Beim ersten Start trägt PDF Tool sich unter „Start mit Windows“ ein
+(Einstellung „Im Hintergrund bereithalten“, standardmäßig an; im
+Task-Manager unter „Autostart-Apps“ als „PDF Tool“). Alle Einstellungen
+und Daten bleiben unverändert.
 
 Update von PDF Tool 3.2.0-beta.2, 3.2.0-beta.1 oder 3.1.0 auf 3.2.0-beta.3
 (Kanal „Beta“): Das Setup ersetzt die Programmdateien und legt das
@@ -845,7 +870,9 @@ Einstellungen
 -------------
 Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
 (Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen
-(Vollständig, Reduziert, Aus), Kundenakte und Informationen zur App.
+(Vollständig, Reduziert, Aus), „Im Hintergrund bereithalten“ (Start mit
+Windows und Symbol im Infobereich, standardmäßig an), Kundenakte und
+Informationen zur App.
 Einstellungen der Werkzeuge stehen im jeweiligen Werkzeug.
 
 
@@ -872,7 +899,9 @@ Deinstallation
 --------------
 Einstellungen → Apps → Installierte Apps → „PDF Tool“ → Deinstallieren.
 
-Entfernt werden Programmdateien, Verknüpfungen und der Eintrag in den
+Läuft PDF Tool im Hintergrund, zuerst über das Symbol im Infobereich →
+„Beenden“ schließen. Entfernt werden Programmdateien, Verknüpfungen, der
+Eintrag unter „Start mit Windows“ und der Eintrag in den
 Windows-Einstellungen. Anschließend fragt die Deinstallation, ob auch Ihre
 gespeicherten Einstellungen gelöscht werden sollen (Standard: Nein) – dazu
 gehören Kundenakten, Vertragsstände, der gespeicherte Stapel und die bei
