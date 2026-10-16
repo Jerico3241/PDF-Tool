@@ -30,6 +30,11 @@
 #define AppMutexName   "Jerico.PDFTool.Instanz"
 ; »Öffnen mit« für PDF-Dateien (seit 3.0.0): eigene ProgID, nur für diesen Benutzer
 #define PdfProgId      "PDFTool.Dokument"
+; Startprogramm mit Symbol und Namen von PDF Tool (seit 3.2.0-beta.3, installer/launcher): startet
+; runtime\pythonw.exe -s -OO app\start.py – Windows zeigt sonst in »Öffnen mit« und bei den Standard-Apps Python
+#define AppExe         "PDF-Tool.exe"
+; Anmeldung als Programm für PDF-Dateien (Einstellungen → Apps → Standard-Apps), nur für diesen Benutzer
+#define CapabilitiesKey "Software\PDF-Tool\Capabilities"
 ; Name, Ordner und Mutex bis Version 2.2 (»Übersichten-Ersteller«)
 #define OldAppName     "Übersichten-Ersteller"
 #define OldAppFolder   "Uebersichten-Ersteller"
@@ -185,26 +190,39 @@ Type: filesandordirs; Name: "{localappdata}\VertragDesk"
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-; pythonw.exe startet ohne Konsolenfenster
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\runtime\pythonw.exe"; Parameters: "-s -OO ""{app}\app\start.py"""; WorkingDir: "{app}\app"; IconFilename: "{app}\assets\icon.ico"; Comment: "{#AppExeComment}"; AppUserModelID: "{#AppUserModelID}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\runtime\pythonw.exe"; Parameters: "-s -OO ""{app}\app\start.py"""; WorkingDir: "{app}\app"; IconFilename: "{app}\assets\icon.ico"; Comment: "{#AppExeComment}"; AppUserModelID: "{#AppUserModelID}"; Tasks: desktopicon
+; PDF-Tool.exe startet pythonw.exe ohne Konsolenfenster (Symbol und Name von PDF Tool)
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExe}"; Comment: "{#AppExeComment}"; AppUserModelID: "{#AppUserModelID}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExe}"; Comment: "{#AppExeComment}"; AppUserModelID: "{#AppUserModelID}"; Tasks: desktopicon
 
 [Registry]
 ; »Öffnen mit« → »PDF Tool« für PDF-Dateien (HKCU, keine Administratorrechte). PDF Tool wird dabei NICHT
-; zur Standard-App: Die bisherige Zuordnung von .pdf bleibt unverändert; der Eintrag erscheint nur in
-; der Liste »Öffnen mit«. Die Deinstallation entfernt genau diese Einträge.
+; zur Standard-App: Die bisherige Zuordnung von .pdf bleibt unverändert; der Eintrag erscheint in der
+; Liste »Öffnen mit« und unter Einstellungen → Apps → Standard-Apps – auswählen kann ihn nur der Benutzer.
+; Die Deinstallation entfernt genau diese Einträge.
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueName: ""; ValueData: "PDF-Dokument"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "PDF-Dokument"
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppUserModelID}"
-Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\assets\icon.ico"""
+Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
-Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\runtime\pythonw.exe"" -s -OO ""{app}\app\start.py"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+; Das Programm selbst: Name und Symbol in »Öffnen mit« (Windows liest sie sonst aus der EXE)
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+; Standard-Apps: PDF Tool als Programm für .pdf anmelden (Capabilities + RegisteredApplications)
+Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{#AppExeComment}"
+Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#PdfProgId}"
+Root: HKCU; Subkey: "Software\PDF-Tool"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppName}"; ValueData: "{#CapabilitiesKey}"; Flags: uninsdeletevalue
 ; .pdf und .pdf\OpenWithProgids nur entfernen, wenn sie danach leer sind (Einträge anderer Programme bleiben)
 Root: HKCU; Subkey: "Software\Classes\.pdf"; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#PdfProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
-Filename: "{app}\runtime\pythonw.exe"; Parameters: "-s -OO ""{app}\app\start.py"""; WorkingDir: "{app}\app"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; Zur Laufzeit entstandene Dateien im Programmordner
