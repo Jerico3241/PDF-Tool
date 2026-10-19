@@ -192,12 +192,14 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
 
 ## Grafiken und Schriften
 
-- **App-Symbol von PDF Tool** (seit 4.0.0-beta.1): Symbol »PDF« (Blatt mit Smiley und Abzeichen »PDF«,
-  Stil »lineal color«) von **Flaticon** (https://www.flaticon.com/), Vorlage
-  `windows-app/assets/icon-source.png`. Daraus erzeugt `windows-app/scripts/make_icons.py` das
+- **App-Symbol von PDF Tool** (seit 4.0.0-beta.1): Symbol »Pdf« (Blatt mit Smiley und Abzeichen »PDF«,
+  Stil »lineal color«) von **Magnific** auf **Flaticon**
+  (https://www.flaticon.es/icono-gratis/pdf_10389560, Ersteller: https://www.flaticon.es/autores/magnific),
+  Vorlage `windows-app/assets/icon-source.png`. Daraus erzeugt `windows-app/scripts/make_icons.py` das
   Windows-Symbol (`icon.ico`, 16–256 px; App, Taskleiste, Setup, Deinstallation) und die Favicons.
-  Lizenz: Flaticon-Lizenz – bei kostenloser Nutzung mit Namensnennung (»Icon von Flaticon«), mit
-  Premium-Lizenz ohne. Bis 3.2.0 war das Symbol eine eigene Grafik aus einfachen Formen.
+  Lizenz: Flaticon-Lizenz für kostenlose Nutzung mit Namensnennung. Die Namensnennung steht hier und im
+  Fenster »Über« der App: »App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)«. Bis 3.2.0 war das
+  Symbol eine eigene Grafik aus einfachen Formen.
 - **Logo in den erzeugten Vertragsübersichten** (`windows-app/assets/hott_logo_final.png`):
   Dokument-Branding der Vertragsübersichten, unverändert aus den bisherigen Versionen übernommen;
   kein Bestandteil des App-Brandings.

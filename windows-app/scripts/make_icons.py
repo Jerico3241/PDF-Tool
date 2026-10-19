@@ -1,9 +1,9 @@
 """Erzeugt das App-Symbol von PDF Tool (Windows-Symbol, Favicons, Logo der Downloadseite).
 
 Motiv (seit 4.0): ein Blatt mit Smiley und Textzeilen, darauf ein blau-violettes Abzeichen »PDF«.
-Vorlage ist ``windows-app/assets/icon-source.png`` (512 × 512, Flaticon, Stil »lineal color«,
-siehe THIRD_PARTY_LICENSES.md). Jede Größe wird mit LANCZOS aus der Vorlage verkleinert und
-leicht nachgeschärft, damit die Linien auch in Taskleiste und Explorer (16–24 px) erkennbar bleiben.
+Vorlage ist ``windows-app/assets/icon-source.png`` (512 × 512, »Pdf« von Magnific auf Flaticon, Stil
+»lineal color«, Namensnennung nötig – siehe THIRD_PARTY_LICENSES.md). Jede Größe wird mit LANCZOS aus
+der Vorlage verkleinert und leicht nachgeschärft, damit die Linien auch in Taskleiste und Explorer (16–24 px) erkennbar bleiben.
 
 Aufruf (aus dem Repository-Hauptordner):
     python windows-app/scripts/make_icons.py

@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
 
-// »Über«: Symbol, Name, Version, Entwickler, Beschreibung und Zitat.
+// »Über«: Symbol, Name, Version, Entwickler, Beschreibung, Zitat und Namensnennung des Symbols.
 ColumnLayout {
     id: root
     property var request: ({})
@@ -55,5 +55,14 @@ ColumnLayout {
             PText { text: root.data_.quote || ""; tone: "secondary"; wrap: true; Layout.fillWidth: true }
             PText { text: root.data_.author || ""; textStyle: "caption"; tone: "tertiary" }
         }
+    }
+    // Namensnennung des App-Symbols, von der Flaticon-Lizenz verlangt (siehe THIRD_PARTY_LICENSES.md)
+    PText {
+        objectName: "aboutIconCredit"
+        text: "App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)"
+        textStyle: "caption"
+        tone: "tertiary"
+        wrap: true
+        Layout.fillWidth: true
     }
 }
