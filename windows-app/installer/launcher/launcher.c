@@ -77,8 +77,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR arguments, int
      */
     /*
      * Outlook löscht seine Kopie eines Anhangs, sobald das gestartete Programm (und sein Job) endet. Dieses
-     * Startprogramm wartet deshalb, bis die App die Datei gesichert hat (start.py setzt dieses Ereignis), höchstens
-     * START_WAIT_MS – oder bis die App endet (Übergabe an die schon laufende App).
+     * Startprogramm wartet deshalb, bis der gestartete Prozess endet (Übergabe an die schon laufende App erledigt)
+     * oder – startet die App selbst – bis start.py dieses Ereignis setzt, höchstens START_WAIT_MS.
      */
     wchar_t event_name[64];
     swprintf(event_name, 64, L"Local\\PDFTool-Start-%lu", GetCurrentProcessId());

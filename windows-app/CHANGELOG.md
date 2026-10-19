@@ -2,6 +2,20 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.4
+
+Beta zum Testen, ohne neue Funktionen. Details in den [Release Notes](release-notes/4.0.0-beta.4.md).
+
+- Outlook-Anhänge: `start.py` setzt das Ereignis für `PDF-Tool.exe` (`signal_started`) erst, wenn die App selbst
+  startet; bei einer Übergabe endet `PDF-Tool.exe` mit dem Übergabe-Prozess, also danach. Vorher endete es schon
+  vor der Übergabe. `handoff.note` schreibt `uebergabe.log` (Art des Ordners, gesichert, angenommen – keine
+  Dateinamen), das Support-Paket enthält es.
+- Taskleiste: `winsys.set_window_identity` setzt AppUserModel-ID, Neustart-Befehl, Symbol und Namen am Fenster;
+  `restart_app` startet über `PDF-Tool.exe`.
+- App-Symbol: 16, 20 und 24 px pixelgenau gezeichnet (`scripts/make_icons.py`).
+- CI: Ein-Klick-Update auf echtem Windows (`tests/smoke_one_click.ps1`: Vorversion läuft im Hintergrund, ihr
+  Hilfsprozess installiert still) und Outlook-Anhang bei laufender App (`smoke_installer.ps1`, 4d).
+
 # PDF Tool 4.0.0-beta.3
 
 Beta zum Testen. Aufräum-Beta ohne neue Funktionen: Fehler, Abstürze und langsame Stellen. Details in den
