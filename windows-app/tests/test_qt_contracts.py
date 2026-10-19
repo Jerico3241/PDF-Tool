@@ -1074,7 +1074,8 @@ def test_excel_analysis_shows_only_real_values(ui_app, tmp_path: Path) -> None:
 
 
 def test_switch_lists_cancelled_and_expired_contracts_too(ui_app, tmp_path: Path, config_file: Path) -> None:
-    """Schalter »Gekündigte und abgelaufene Verträge mit aufführen«: Prüfung, Bereitschaft und Einstellung."""
+    """Schalter »Gekündigte …« und »Abgelaufene Verträge mit aufführen« (je einzeln oder beide): Prüfung, Bereitschaft
+    und Einstellung."""
     h = ui_app
     o = h.overview
     pfad = write_excel(
@@ -1086,21 +1087,27 @@ def test_switch_lists_cancelled_and_expired_contracts_too(ui_app, tmp_path: Path
         ],
     )
     h.navigate("create", 0.3)
-    schalter = h.item("createEndedContracts")
-    assert schalter.isVisible() and not schalter.property("checked")
+    gekuendigt, abgelaufen = h.item("createCancelledContracts"), h.item("createExpiredContracts")
+    assert gekuendigt.isVisible() and abgelaufen.isVisible()
+    assert not gekuendigt.property("checked") and not abgelaufen.property("checked")
     o.use_excel(str(pfad))
     info = hinweis(h, "info_excel")
     assert wait_until(lambda: info.severity == "warning", 60)  # aus: nur Gekündigte und Abgelaufene – keine aktiven
     assert "kein aktiver Vertrag" in info.message
-    o.beendete = True  # wie ein Klick auf den Schalter
-    assert wait_until(lambda: info.severity == "success", 60)
-    assert info.message == "0 aktive Verträge · 2 gekündigt/abgelaufen · 1 inaktiv ausgeblendet"
-    assert schalter.property("checked")
+    o.gekuendigt = True  # wie ein Klick auf den Schalter »Gekündigte …«
+    assert wait_until(lambda: info.severity == "success" and "gekündigt" in info.message, 60)
+    assert info.message == "0 aktive Verträge · 1 gekündigt · 2 inaktiv ausgeblendet"
+    assert gekuendigt.property("checked") and not abgelaufen.property("checked")
+    o.gekuendigt, o.abgelaufen = False, True  # nur »Abgelaufene …«
+    assert wait_until(lambda: info.message == "0 aktive Verträge · 1 abgelaufen · 2 inaktiv ausgeblendet", 60), info.message
+    o.gekuendigt = True  # beide
+    assert wait_until(lambda: info.message == "0 aktive Verträge · 2 gekündigt/abgelaufen · 1 inaktiv ausgeblendet", 60), info.message
     pump(0.3)
     assert "Keine aktiven" not in o.readyText
     h.app.persist()
-    assert json.loads(config_file.read_text(encoding="utf-8"))["vertraege_beendete"] is True
-    o.beendete = False
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert data["vertraege_gekuendigt"] is True and data["vertraege_abgelaufen"] is True and "vertraege_beendete" not in data
+    o.gekuendigt = o.abgelaufen = False
     assert wait_until(lambda: info.severity == "warning", 60)
 
 

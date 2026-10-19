@@ -23,7 +23,7 @@ from .models import FileStamp, path_key
 NOT_FOUND = "Datei nicht gefunden."
 
 
-def analyze_file(path, beendete: bool = False) -> tuple[ExcelAnalysis, FileStamp | None]:
+def analyze_file(path, beendete=()) -> tuple[ExcelAnalysis, FileStamp | None]:
     """Excel-Datei prüfen. Liefert das Ergebnis und den Stand der Datei *vor* dem Lesen.
 
     Ändert sich die Datei während des Lesens, passt der Stand später nicht mehr – sie wird
@@ -48,7 +48,7 @@ class AnalysisCache:
     def __init__(self) -> None:
         self._entries: dict[str, tuple[FileStamp, ExcelAnalysis]] = {}
         self._lock = threading.Lock()
-        self.beendete = False  # gekündigte und abgelaufene Verträge mitzählen (Schalter der Vertragsübersicht)
+        self.beendete: tuple[str, ...] = ()  # mitgezählte beendete Verträge: »Gekündigt«, »Abgelaufen« (Schalter der Vertragsübersicht)
 
     def clear(self) -> None:
         with self._lock:
@@ -88,7 +88,7 @@ def analyze_cached(path, cache: AnalysisCache | None) -> tuple[ExcelAnalysis, Fi
         cached = cache.get(path)
         if cached is not None:
             return cached
-    analysis, stamp = analyze_file(path, bool(getattr(cache, "beendete", False)))
+    analysis, stamp = analyze_file(path, getattr(cache, "beendete", ()))
     if cache is not None and analysis.ok:
         cache.put(path, stamp, analysis)
     return analysis, stamp

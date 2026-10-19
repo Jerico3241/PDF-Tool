@@ -179,22 +179,39 @@ PPage {
                 PButton { text: "Durchsuchen"; iconName: "folder_open"; tip: "Excel-Datei wählen (Strg+O)"; onClicked: Contracts.pickExcel() }
                 PIconButton { iconName: "copy"; tip: "Pfad der Excel-Datei kopieren"; onClicked: Contracts.copyExcelPath() }
             }
-            // Gekündigte und abgelaufene Verträge (Anwenderstatus) mit aufführen – in der PDF mit Status-Hinweis
+            // Gekündigte bzw. abgelaufene Verträge (Anwenderstatus) mit aufführen – je eigener Schalter, in der PDF mit Status
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 PText {
                     Layout.fillWidth: true
-                    text: "Gekündigte und abgelaufene Verträge mit aufführen"
+                    text: "Gekündigte Verträge mit aufführen"
                     wrapMode: Text.WordWrap
                 }
                 PToggle {
-                    objectName: "createEndedContracts"
+                    objectName: "createCancelledContracts"
                     showState: false
-                    label: "Gekündigte und abgelaufene Verträge mit aufführen"
-                    tip: "Verträge mit dem Anwenderstatus »Gekündigt« oder »Abgelaufen« stehen mit in der Übersicht – mit dem Status unter der Vertragsnummer"
-                    checked: Contracts.beendete
-                    onToggled: Contracts.beendete = checked
+                    label: "Gekündigte Verträge mit aufführen"
+                    tip: "Verträge mit dem Anwenderstatus »Gekündigt« stehen mit in der Übersicht – mit dem Status unter der Vertragsnummer"
+                    checked: Contracts.gekuendigt
+                    onToggled: Contracts.gekuendigt = checked
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                PText {
+                    Layout.fillWidth: true
+                    text: "Abgelaufene Verträge mit aufführen"
+                    wrapMode: Text.WordWrap
+                }
+                PToggle {
+                    objectName: "createExpiredContracts"
+                    showState: false
+                    label: "Abgelaufene Verträge mit aufführen"
+                    tip: "Verträge mit dem Anwenderstatus »Abgelaufen« stehen mit in der Übersicht – mit dem Status unter der Vertragsnummer"
+                    checked: Contracts.abgelaufen
+                    onToggled: Contracts.abgelaufen = checked
                 }
             }
             // Status der Prüfung: die einzige Stelle mit den Vertragszahlen (die Statusleiste unten

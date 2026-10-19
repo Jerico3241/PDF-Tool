@@ -267,7 +267,31 @@ jobs:
           Write-Host "Upgrade test: PDF Tool ${{ steps.versions.outputs.previous }} → PDF Tool ${{ steps.versions.outputs.current }}"
           ./windows-app/tests/smoke_installer.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
 
+      # Die Messung installiert zwei Versionen und kostet einige Minuten: nur, wenn ein Pull Request etwas am
+      # Programmstart ändert, oder bei einem manuellen Lauf. main-Läufe (vor einer Veröffentlichung) messen nicht
+      # erneut – die Zahlen stehen schon am Pull Request.
+      - name: Startzeit-Messung nötig?
+        id: startzeit
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          $noetig = "false"
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $noetig = "true"
+          } elseif ($env:GITHUB_EVENT_NAME -eq "pull_request" -and $env:BASE_SHA) {
+            git fetch --quiet --depth=1 origin $env:BASE_SHA
+            $geaendert = @(git diff --name-only $env:BASE_SHA HEAD)
+            if ($LASTEXITCODE -ne 0) { $noetig = "true" }  # unklar: lieber messen
+            $start = '^windows-app/(app/(start|handoff|appstate|winsys)\.py|app/qtapp/(application|app|background|tools|theme|system|instance)\.py|app/qml/Main\.qml|app/qml/PdfTool/(Shell|Style)/|app/qml/PdfTool/Pages/HomePage\.qml|build\.py|runtime-requirements\.txt|installer/|tests/bench_)'
+            $treffer = @($geaendert | Where-Object { $_ -match $start })
+            if ($treffer.Count -gt 0) { $noetig = "true"; Write-Host "Programmstart betroffen: $($treffer -join ', ')" }
+          }
+          if ($noetig -ne "true") { Write-Host "Keine Änderung am Programmstart – Messung entfällt." }
+          "noetig=$noetig" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - name: "Startzeit unter Windows messen: PDF Tool ${{ steps.versions.outputs.previous }} → ${{ steps.versions.outputs.current }} (installiert, nur Messung)"
+        if: steps.startzeit.outputs.noetig == 'true'
         timeout-minutes: 15
         continue-on-error: true # eine Messung, kein Test – das Ergebnis steht in der Zusammenfassung des Laufs
         shell: pwsh
