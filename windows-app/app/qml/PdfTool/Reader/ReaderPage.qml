@@ -22,7 +22,7 @@ FocusScope {
     property var dismissedNotices: ({})
     property var dismissedScans: ({})  // Hinweis »Gescannte Seiten« je Tab geschlossen
     // Hinweise zum Dokument (repariert, signiert, gescannt, Text nicht lesbar …) gehen nach 5 s von selbst zu
-    // (seit 4.0.0-beta.2); ein Objekt-Hinweis erst wieder, wenn er sich ändert
+    // (seit 4.0); ein Objekt-Hinweis erst wieder, wenn er sich ändert
     readonly property int noticeTime: 5000
     property string seenObjectMessage: ""
     // Objektmodus: die Eigenschaften öffnen sich mit dem Modus (nicht erst mit der ersten Auswahl – sonst

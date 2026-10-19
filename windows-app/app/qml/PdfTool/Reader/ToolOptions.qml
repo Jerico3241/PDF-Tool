@@ -6,7 +6,7 @@ import PdfTool.Controls
 
 // Schwebende Leiste oben über der Seite (wie die Hinweise): Einstellungen und Befehle des gewählten
 // Werkzeugs (Farbe, Strichstärke, Schriftgröße; Bild einfügen, drehen, ersetzen, Reihenfolge, löschen) – ohne
-// Bedienhinweise und ohne »Fertig« (seit 4.0.0-beta.2; Esc oder ein Klick auf das Werkzeug beendet es). Sie schiebt die Seiten nicht nach unten, blendet weich
+// Bedienhinweise und ohne »Fertig« (seit 4.0; Esc oder ein Klick auf das Werkzeug beendet es). Sie schiebt die Seiten nicht nach unten, blendet weich
 // ein und aus (»Aus«: sofort) und ist nur da, wenn es etwas zu sagen gibt; Hinweise darunter rücken nach.
 // Eine Textauswahl blendet hier nichts ein: Kopieren, Markieren, Unterstreichen und Durchstreichen
 // stehen im Kontextmenü der Seite (Rechtsklick), Strg+C kopiert.
@@ -49,7 +49,7 @@ Item {
     readonly property bool sizeTool: tool === "addText" || tool === "textbox"
     readonly property string toolColor: doc ? (tool === "highlight" ? doc.markColor : doc.toolColor) : "#000000"
 
-    // Seit 4.0.0-beta.2 keine Bedienhinweise mehr (das gewählte Werkzeug zeigt der Strich in den
+    // Seit 4.0 keine Bedienhinweise mehr (das gewählte Werkzeug zeigt der Strich in den
     // Schnellwerkzeugen, die Erklärung steht im Tooltip). Übrig bleiben Hinweise mit Inhalt: warum ein Bild
     // nicht änderbar ist, ein PDF ohne Felder, der Weg der letzten Textänderung.
     readonly property string hint: {
