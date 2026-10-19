@@ -25,7 +25,7 @@ from typing import Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from tools.pdf_editor import recovery
+from tools.pdf_editor import imagepdf, recovery
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
 from tools.registry import READER
 
@@ -46,6 +46,8 @@ SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einst
 # Beschreibung (Tooltip), Symbol
 QUICK_TOOLS = (
     ("optimize", "PDF verkleinern", "Verkleinerte Kopie speichern – das Original bleibt unverändert", "arrow_minimize"),
+    ("pdfa", "Als PDF/A speichern", "Archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften speichern", "library"),
+    ("images", "PDF aus Bildern", "Fotos und Scans (JPG, PNG, TIFF …) zu einer PDF zusammenfügen", "image_add"),
     ("redact", "Schwärzen", "Text und Bereiche dauerhaft unkenntlich machen", "eye_off"),
     ("protect", "Kennwortschutz", "Kennwort zum Öffnen oder Einschränkungen festlegen", "lock_closed"),
     ("watermark", "Wasserzeichen", "Wasserzeichen auf die Seiten legen", "layer"),
@@ -70,6 +72,7 @@ HELP_STEPS = (
     "Lesen: Seiten blättern (Bild ↑/↓), zoomen (Strg+Mausrad, Strg++ / Strg+−), Miniaturen und Lesezeichen links, Suchen mit Strg+F.",
     "Bearbeiten: Werkzeug oben wählen – Text ändern oder hinzufügen, Bilder, Kommentare, Formulare. Rückgängig mit Strg+Z.",
     "Speichern: Strg+S (die Datei wird erst nach erfolgreicher Prüfung ersetzt), Speichern unter: Strg+Umschalt+S. Drucken: Strg+P.",
+    "Archivieren und Umwandeln: »Schützen« → »Als PDF/A speichern …«; Bilder (Fotos, Scans) in das Fenster ziehen oder im Explorer über »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
 )
 HELP_NOTES = (
     "Textänderungen nennen ihren Weg: »Direkt im PDF geändert«, »Neu gesetzt« oder »Kompatibilitätsmodus« (Überlagerung – keine Schwärzung, der Originaltext bleibt in der Datei).",
@@ -131,6 +134,12 @@ class ReaderController(Observable):
         self._paste_counts: dict[tuple[str, int], int] = {}  # wie oft je Dokument und Seite eingefügt
         self._clipboard_watched = False
         self.source_dir = str(cfg.get("ordner_reader") or "")
+        images = cfg.get("reader_bilder") if isinstance(cfg.get("reader_bilder"), dict) else {}
+        self._image_options = {
+            "pageSize": images.get("seite") if images.get("seite") in ("auto", *imagepdf.PAGE_SIZES) else "auto",
+            "margin": images.get("rand") if images.get("rand") in imagepdf.MARGINS else "none",
+            "folder": str(images.get("ordner") or ""),
+        }
         self._external: list[str] = []
         self._preloaded = False  # PDF-Engine vorab geladen (bzw. angestoßen)
         self._opening_paths: list[str] = []  # Dateien, die gerade geöffnet werden
@@ -275,7 +284,13 @@ class ReaderController(Observable):
     def open_paths(self, paths: list[str], then: Callable[[DocumentController | None], None] | None = None) -> None:
         """PDFs öffnen (je Datei ein Tab; schon geöffnete werden aktiv). ``then(Dokument)``: sobald das jeweilige
         Dokument geöffnet und aktiv ist – ``then(None)``, wenn es sich nicht öffnen ließ."""
-        pdfs = [p for p in paths if p.lower().endswith(".pdf") or _looks_like_pdf(p)]
+        images = [p for p in paths if imagepdf.is_image(p)]
+        pdfs = [p for p in paths if p not in images and (p.lower().endswith(".pdf") or _looks_like_pdf(p))]
+        if images:
+            # Bilder (Ziehen, »Senden an« im Explorer): zu einer PDF zusammenfügen
+            self.images_to_pdf(images)
+            if not pdfs:
+                return
         if not pdfs:
             self.app.notify("reader", "warning", "Bitte eine PDF-Datei wählen.", title="Keine PDF")
             return
@@ -736,6 +751,7 @@ class ReaderController(Observable):
         return {
             "reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel},
             "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
+            "reader_bilder": {"seite": self._image_options["pageSize"], "rand": self._image_options["margin"], "ordner": self._image_options["folder"]},
         }
 
     # Nachtmodus --------------------------------------------------------------------------------------------------
@@ -757,6 +773,9 @@ class ReaderController(Observable):
         (»Zusammenführen«: danach die PDFs wählen, die angehängt werden)."""
         tool = next((entry for entry in QUICK_TOOLS if entry[0] == action), None)
         if tool is None:
+            return
+        if action == "images":
+            self.imagesToPdf()
             return
         path = self.pick_pdf(f"{tool[1]} – erste PDF wählen" if action == "merge" else f"{tool[1]} – PDF wählen")
         if not path:
@@ -780,6 +799,59 @@ class ReaderController(Observable):
 
         # Im nächsten Durchlauf: Tab und Reader stehen, bevor ein Dialog oder Werkzeug erscheint
         self.app.timers.later(f"reader:quick:{controller.ident}", 0, start)
+
+    # PDF aus Bildern -------------------------------------------------------------------------------------------------
+    @Slot()
+    def imagesToPdf(self) -> None:  # noqa: N802
+        self.images_to_pdf([])
+
+    def images_to_pdf(self, paths: list[str]) -> None:
+        """Bilder wählen (oder die gezogenen bzw. aus dem Explorer gesendeten), Reihenfolge, Seitengröße und Rand
+        festlegen, als neue PDF speichern und im Reader öffnen."""
+        if not paths:
+            paths = files.open_files("PDF aus Bildern – Bilder wählen", self.app.initial_dir("bilder", self._image_options["folder"] or self.source_dir), imagepdf.FILTER)
+        images = [str(p) for p in paths if imagepdf.is_image(p)][: imagepdf.MAX_IMAGES]
+        if not images:
+            if paths:
+                self.app.notify("reader", "warning", "Bitte Bilder wählen (JPG, PNG, TIFF, BMP, GIF oder WebP).", title="Keine Bilder")
+            return
+        self._image_options["folder"] = str(Path(images[0]).parent)
+        answer, data = self.app.dialogs.ask(
+            "images", "PDF aus Bildern", "", primary="PDF erstellen", close="Abbrechen", width=620,
+            data={"files": [{"name": Path(p).name, "path": p} for p in images], "pageSize": self._image_options["pageSize"], "margin": self._image_options["margin"]},
+        )
+        if answer != "primary":
+            return
+        data = data or {}
+        order = [str(p) for p in data.get("order") or [] if str(p) in images]
+        if not order:
+            return
+        page_size = data.get("pageSize") if data.get("pageSize") in ("auto", *imagepdf.PAGE_SIZES) else "auto"
+        margin = data.get("margin") if data.get("margin") in imagepdf.MARGINS else "none"
+        self._image_options.update(pageSize=page_size, margin=margin)
+        self.app.schedule_save()
+        name = f"{Path(order[0]).stem}.pdf" if len(order) == 1 else f"{Path(order[0]).parent.name or 'Bilder'}.pdf"
+        target = files.save_file("PDF aus Bildern speichern", str(Path(order[0]).parent / name), files.PDF_FILTER)
+        if not target:
+            return
+        if not target.lower().endswith(".pdf"):
+            target += ".pdf"
+        if any(_same(target, p) for p in order):
+            self.app.notify("reader", "warning", "Die PDF braucht einen eigenen Namen.", title="Nicht gespeichert")
+            return
+        self.app.set_status(f"PDF aus {len(order)} {'Bild' if len(order) == 1 else 'Bildern'} wird erstellt …", "busy")
+
+        def done(result) -> None:
+            skipped = f" Nicht lesbar und ausgelassen: {', '.join(result.skipped[:5])}{' …' if len(result.skipped) > 5 else ''}." if result.skipped else ""
+            pages = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'}."
+            self.app.notify("reader", "warning" if skipped else "success", pages + skipped, title="PDF aus Bildern erstellt", auto_hide=12000)
+            self.open_paths([str(result.path)])
+
+        def failed(exc: BaseException, _details: str) -> None:
+            message = str(exc) if isinstance(exc, EditorError) else "Die PDF ließ sich nicht erstellen."
+            self.app.notify("reader", "error", message, title="PDF aus Bildern")
+
+        self.engine.submit(lambda: imagepdf.create(order, target, page_size=page_size, margin=margin), done, failed, label="bilder")
 
     # Per E-Mail senden ---------------------------------------------------------------------------------------------
     @Slot()
@@ -856,7 +928,7 @@ class ReaderController(Observable):
                 return
             busy = {_key(doc.path) for doc in self._docs.values() if doc.path} | {_key(path) for path in self._opening_paths}
             entries = [entry for entry in existing if _key(entry["pfad"]) not in busy][: max(0, TAB_LIMIT - len(self._docs) - self.opening)]
-            state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": len(wanted) - len(existing), "failed": 0}
+            state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": sum(1 for entry in wanted if entry not in existing and not _temporary(entry["pfad"])), "failed": 0}
             if not entries:
                 self._restoring = False
                 if state["missing"]:
@@ -1232,7 +1304,7 @@ class ReaderTool:
         return HINT
 
     def accepts(self, paths: list[str], page: str) -> bool:
-        return any(p.lower().endswith(".pdf") for p in paths)
+        return any(p.lower().endswith(".pdf") or imagepdf.is_image(p) for p in paths)
 
     def drag_enter(self, accepted: bool, page: str) -> None:
         self.controller.dropHighlight = accepted
@@ -1362,3 +1434,9 @@ def opened_text(stamp: str, now: datetime | None = None) -> str:
     if when.date() == today - timedelta(days=1):
         return f"Gestern, {when:%H:%M}"
     return f"{when:%d.%m.%Y}"
+
+
+def _temporary(path: str) -> bool:
+    """Kopie eines Outlook-Anhangs (``INetCache\\Content.Outlook``). Outlook löscht seine Kopien später wieder; dass sie
+    in der letzten Sitzung fehlen, ist kein Fehler."""
+    return "\\content.outlook\\" in str(path).replace("/", "\\").lower()

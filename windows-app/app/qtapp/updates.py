@@ -10,9 +10,12 @@ sichtbaren Aktionen und die Verbindung zur App:
   Version, kein Dialog, der die Arbeit unterbricht; »Später« blendet sie für diese Sitzung aus.
 * Automatische Prüfung: höchstens alle 24 Stunden, erst nach dem Start im Hintergrund – der
   Programmstart wartet nie auf das Netzwerk; offline passiert still nichts.
+* Seit 4.0 lädt die automatische Prüfung ein gefundenes Update gleich im Hintergrund herunter – die
+  Hinweisleiste bietet danach nur noch »Jetzt installieren« an.
 * »Jetzt installieren«: nicht während einer Verarbeitung (Hinweis statt Abbruch). Sonst: Setup
   erneut prüfen, Hilfsprozess starten, App beenden wie über das Schließen-Kreuz (Einstellungen
-  werden gespeichert) – das Setup startet erst danach.
+  werden gespeichert) – das Setup läuft danach still (nur ein Fortschrittsfenster) und PDF Tool
+  startet neu.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from .base import Observable, prop
 S = UpdateState
 START_DELAY_MS = 4000  # automatische Prüfung erst einige Sekunden nach dem ersten Bild
 PERIODIC_MS = 60 * 60 * 1000  # stündlich nachsehen, ob 24 Stunden vergangen sind (App bleibt lange offen)
+AUTO_DOWNLOAD = True  # gefundenes Update bei eingeschalteter automatischer Prüfung gleich laden (Tests: aus)
 BANNER_DELAY_MS = 1200  # Hinweis aus dem Zwischenspeicher erst nach dem Start einblenden
 
 BETA_TITLE = "Beta-Versionen verwenden?"
@@ -52,7 +56,7 @@ CHECKING = "Nach Updates wird gesucht …"
 UP_TO_DATE = "PDF Tool ist aktuell."
 VERIFYING = "Update wird überprüft …"
 READY = "Update ist bereit zur Installation."
-INSTALLING = "PDF Tool wird beendet, danach startet das Setup …"
+INSTALLING = "PDF Tool wird aktualisiert und startet danach neu …"
 CANCELLED = "Download abgebrochen."
 ERRORS = {
     ErrorKind.CHECK_FAILED: ("Updates konnten derzeit nicht geprüft werden.", "Bitte die Internetverbindung prüfen und später erneut versuchen."),
@@ -152,6 +156,7 @@ class UpdatesController(Observable):
         self._dismissed = ""  # Version, deren Hinweisleiste in dieser Sitzung ausgeblendet ist
         self._banner_ready = False
         self._helper = None
+        self._fetched = ""  # Version, die in dieser Sitzung schon automatisch geladen wurde
         self.backup = None  # BackupController: Sicherung vor der Installation
         self.set_quietly("channel", Channel.from_config(cfg.get("update_kanal")).value)
         self.set_quietly("automatic", cfg.get("update_automatisch") is not False)
@@ -168,6 +173,8 @@ class UpdatesController(Observable):
         app.at_shutdown(self.shutdown)
         app.observe("ready", self._app_ready)
         app.observe("currentPage", lambda _page: self._sync_banner())
+        if getattr(app, "settings", None) is not None:
+            app.settings.observe("section", lambda _section: self._sync_banner())
         self._sync()
 
     # Konstante Angaben ------------------------------------------------------------------------------------------
@@ -408,6 +415,10 @@ class UpdatesController(Observable):
         service = self.service
         state = service.state
         offer = service.offer
+        if AUTO_DOWNLOAD and state is S.AVAILABLE and offer is not None and self.automatic and self._fetched != str(offer.version):
+            self._fetched = str(offer.version)  # einmal je Version: nach »Abbrechen« lädt nichts von selbst neu
+            if service.download():
+                return  # der Download meldet sich mit seinem eigenen Zustand
         self.state = state.value
         self.lastCheck = when_text(service.last_check)
         self.hasOffer = offer is not None
@@ -475,7 +486,8 @@ class UpdatesController(Observable):
         visible_states = (S.AVAILABLE, S.DOWNLOADING, S.VERIFYING, S.READY, S.INSTALLING, S.CANCELLED)
         relevant = offer is not None and (state in visible_states or (state is S.ERROR and service.error in OFFER_ERRORS))
         dismissed = offer is not None and self._dismissed in (str(offer.version), "*")
-        on_settings = self.app.currentPage == "settings"
+        settings = getattr(self.app, "settings", None)
+        on_settings = self.app.currentPage == "settings" and (settings is None or settings.section == "updates")
         shown = self._banner_ready and relevant and not dismissed and not on_settings
         if shown:
             title, text, kind = self._status(state)

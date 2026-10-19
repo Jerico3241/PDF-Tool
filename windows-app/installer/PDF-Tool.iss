@@ -194,6 +194,9 @@ Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; PDF-Tool.exe startet pythonw.exe ohne Konsolenfenster (Symbol und Name von PDF Tool)
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExe}"; Comment: "{#AppExeComment}"; AppUserModelID: "{#AppUserModelID}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExe}"; Comment: "{#AppExeComment}"; AppUserModelID: "{#AppUserModelID}"; Tasks: desktopicon
+; Explorer: Bilder markieren → Rechtsklick → »Senden an« → »PDF Tool (Bilder zu PDF)« – PDF Tool fügt sie zu einer PDF
+; zusammen (läuft es schon, übernimmt die laufende App die Bilder). Die Deinstallation entfernt die Verknüpfung.
+Name: "{usersendto}\{#AppName} (Bilder zu PDF)"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExe}"; Comment: "Bilder zu einer PDF zusammenfügen"
 
 [Registry]
 ; »Öffnen mit« → »PDF Tool« für PDF-Dateien (HKCU, keine Administratorrechte). PDF Tool wird dabei NICHT

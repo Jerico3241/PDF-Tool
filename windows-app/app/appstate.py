@@ -141,12 +141,11 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Schützen und Weitergeben: Schwärzen, Bereinigen, Kennwortschutz, Verkleinern, Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Stempel und Unterschrift.",
-    "KI-Assistent (optional und standardmäßig aus): Fragen zum geöffneten PDF und Zusammenfassungen mit Seitenangaben, vollständig auf diesem PC. Das Sprachmodell lädt PDF Tool nur auf Wunsch und entfernt es jederzeit wieder.",
-    "Vertragsübersichten: Gekündigte und abgelaufene Verträge lassen sich je mit eigenem Schalter in die Übersicht aufnehmen; ihr Status steht in Rot in der PDF.",
-    "Schneller Start: PDF Tool startet mit Windows unsichtbar und öffnet sich danach sofort – auch beim ersten Mal nach dem Hochfahren. Ausschalten unter Einstellungen → Verhalten → »Im Hintergrund bereithalten«.",
-    "Das Schließen-Kreuz schließt nur das Fenster; PDF Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts unten). Ganz beenden: Rechtsklick auf das Symbol → »Beenden«.",
-    "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite; eigenes Symbol in »Öffnen mit« und bei den Standard-Apps.",
+    "Beta 4.0 – erster Teil. Neu: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
+    "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Schützen« und als Schnellwerkzeug.",
+    "PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF …) in die App ziehen oder im Explorer über Rechtsklick → »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
+    "Updates mit einem Klick: PDF Tool lädt neue Versionen selbst herunter. »Jetzt installieren« aktualisiert ohne Setup-Assistent und startet die App danach neu.",
+    "Aufgeräumte Einstellungen: oben eine Leiste mit den Bereichen Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose und Info.",
     "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 

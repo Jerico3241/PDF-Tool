@@ -8,6 +8,7 @@
  * Warum ein eigenes Programm: Windows zeigt in »Öffnen mit«, bei den Standard-Apps und in der
  * Taskleiste das Symbol und den Namen der gestarteten EXE. Mit pythonw.exe erschiene dort Python.
  * Diese EXE trägt Symbol und Versionsangaben von PDF Tool und endet, sobald die App gestartet ist.
+ * Die App verlässt dabei den Job des aufrufenden Programms (siehe unten).
  */
 #define WIN32_LEAN_AND_MEAN
 #ifndef UNICODE
@@ -65,7 +66,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR arguments, int
     startup.cb = sizeof(startup);
     startup.dwFlags = STARTF_USESHOWWINDOW;
     startup.wShowWindow = (WORD)show;
-    if (!CreateProcessW(python, line, NULL, NULL, FALSE, 0, NULL, workdir, &startup, &process)) {
+    /*
+     * Die App läuft unabhängig vom aufrufenden Programm: Programme wie Hottgenroth »Kaufmann« starten den
+     * PDF-Betrachter in einem eigenen Job und halten eine PDF für »noch geöffnet«, solange darin ein Prozess
+     * läuft – mit der weiterlaufenden App ließe sich dann keine zweite PDF öffnen. Erlaubt der Job das
+     * Verlassen nicht, startet die App wie bisher in ihm.
+     */
+    BOOL started = CreateProcessW(python, line, NULL, NULL, FALSE, CREATE_BREAKAWAY_FROM_JOB, NULL, workdir, &startup, &process);
+    if (!started && GetLastError() == ERROR_ACCESS_DENIED) {
+        started = CreateProcessW(python, line, NULL, NULL, FALSE, 0, NULL, workdir, &startup, &process);
+    }
+    if (!started) {
         wchar_t text[256];
         swprintf(text, 256, L"PDF Tool konnte nicht gestartet werden (Fehler %lu).", GetLastError());
         fail(text);

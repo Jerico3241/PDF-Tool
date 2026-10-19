@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
-from tools.registry import CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
+from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
 from updater.semver import Version
 
 import winsys
@@ -30,10 +30,10 @@ from .timers import Timers
 HOME = "home"
 SETTINGS = "settings"
 PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
-SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key)  # Strg+1 … Strg+5
+SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key, ACTIONS.key)  # Strg+1 … Strg+6
 # Mit eigenem Tab neben ⌂ Start: diese Werkzeuge und die Einstellungen. Der Reader zeigt seine Dokumente als Tabs.
-TAB_KEYS = (CONTRACTS.key, REPAIR.key, SETTINGS)
-HOME_HINT = "Strg+5  PDF Reader & Editor   ·   Strg+2  Vertragsübersichten   ·   Strg+3  PDF reparieren"
+TAB_KEYS = (ACTIONS.key, CONTRACTS.key, REPAIR.key, SETTINGS)
+HOME_HINT = "Strg+5  Reader   ·   Strg+6  Stapel   ·   Strg+2  Vertragsübersichten   ·   Strg+3  Reparieren"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
     "Lokale Windows-App mit Werkzeugen für PDF-Dateien: PDFs lesen, bearbeiten, organisieren und "

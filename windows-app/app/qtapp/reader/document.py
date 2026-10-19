@@ -31,7 +31,7 @@ PAGE_GAP = 12  # Abstand der Seiten (geräteunabhängige Pixel)
 VIEW_MARGIN = 16
 VIEW_MODES = ("continuous", "single", "two", "continuousTwo")
 TOOLS = ("select", "hand", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form", "formDesign", "redact", "stamp", "signature", "link")
-ACTIONS = ("optimize", "redact", "redactSearch", "protect", "watermark", "headerFooter", "clean", "flatten", "sign", "stamp", "crop")  # Schnellwerkzeuge der Startseite
+ACTIONS = ("optimize", "pdfa", "redact", "redactSearch", "protect", "watermark", "headerFooter", "clean", "flatten", "sign", "stamp", "crop")  # Schnellwerkzeuge der Startseite
 SIGNATURE_FILE = "unterschriften.json"  # gespeicherte Unterschriften (nur lokal, nur auf Wunsch)
 MM = 72 / 25.4
 RECOVERY_DELAY_MS = 4000
@@ -1994,7 +1994,7 @@ class DocumentController(Observable):
     def runAction(self, name: str) -> None:  # noqa: N802
         """Werkzeug oder Dialog eines Schnellwerkzeugs (gleich nach dem Öffnen aufgerufen)."""
         handlers = {
-            "optimize": self.optimizeDocument, "redact": lambda: self.setTool("redact"), "redactSearch": self.searchRedact,
+            "optimize": self.optimizeDocument, "pdfa": self.pdfaDocument, "redact": lambda: self.setTool("redact"), "redactSearch": self.searchRedact,
             "protect": self.protectDocument, "watermark": self.watermarkDocument, "headerFooter": self.headerFooterDocument,
             "clean": self.cleanDocument, "flatten": self.flattenDocument, "sign": lambda: self.setTool("signature"),
             "stamp": lambda: self.setTool("stamp"), "crop": lambda: self.cropPages([]),
@@ -2167,6 +2167,24 @@ class DocumentController(Observable):
             self.run(lambda session: session.optimize_copy(target, level), done, refresh=False, busy="PDF wird verkleinert …")
 
         self.run(lambda session: session.size_now(), show, refresh=False, busy="Größe wird ermittelt …")
+
+    @Slot()
+    def pdfaDocument(self) -> None:  # noqa: N802
+        """PDF/A-2b-Kopie für die Archivierung speichern – das Original bleibt unverändert."""
+        target = self.reader.pick_save_pdf(f"{self._stem()}_PDFA.pdf", "Als PDF/A speichern")
+        if not target:
+            return
+
+        def done(result: dict) -> None:
+            parts = []
+            if result["fonts"]:
+                parts.append(f"{result['fonts']} {'Schrift' if result['fonts'] == 1 else 'Schriften'} eingebettet")
+            parts.extend(result["notes"])
+            message = "PDF/A-2b für die Archivierung" + (f" – {', '.join(parts)}." if parts else ".")
+            path = result["path"]
+            self.app.notify("reader", "success", message, title="PDF/A-Kopie gespeichert", auto_hide=12000, actions=[("Öffnen", lambda: self.reader.open_paths([path])), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+
+        self.run(lambda session: session.pdfa_copy(target), done, refresh=False, busy="PDF/A wird erstellt …")
 
     # Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen ----------------------------------------------------------------
     @Slot()

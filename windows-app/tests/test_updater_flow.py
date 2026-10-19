@@ -551,7 +551,7 @@ def test_103_helper_waits_for_the_app_then_starts_the_verified_setup(tmp_path):
     setup, digest = fake_setup(tmp_path)
     app = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.8)"])
     log = tmp_path / "start.log"
-    helper = installer.Launcher(Path(sys.executable)).start(setup, digest, app.pid, log)
+    helper = installer.Launcher(Path(sys.executable), silent=False).start(setup, digest, app.pid, log)
     time.sleep(0.4)
     assert helper.poll() is None and not (tmp_path / "gestartet.txt").exists()  # wartet noch
     app.wait(5)
@@ -594,7 +594,53 @@ def test_helper_waits_at_most_the_timeout(tmp_path):
     assert launch.wait_for_exit(0, 1) is True
 
 
+def silent_setup(folder: Path, code: int = 0) -> tuple[Path, str]:
+    """»Setup«, das seine Parameter notiert und mit ``code`` endet; dazu ein »PDF-Tool.exe«, das den Neustart notiert."""
+    folder.mkdir(parents=True, exist_ok=True)
+    setup = folder / "PDF-Tool-Setup-2.7.3.exe"
+    setup.write_text(f"#!/bin/sh\necho \"$@\" > '{folder / 'parameter.txt'}'\nexit {code}\n", encoding="utf-8")
+    setup.chmod(0o755)
+    app = folder / "PDF-Tool.exe"
+    app.write_text(f"#!/bin/sh\necho neu > '{folder / 'neustart.txt'}'\n", encoding="utf-8")
+    app.chmod(0o755)
+    return setup, hashlib.sha256(setup.read_bytes()).hexdigest()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Shell-Skript als Setup-Attrappe")
+def test_silent_update_installs_without_questions_and_restarts(tmp_path):
+    setup, digest = silent_setup(tmp_path)
+    log = tmp_path / "start.log"
+    code = launch.main(["--setup", str(setup), "--sha256", digest, "--wait", "0", "--log", str(log), "--silent", "--restart", str(tmp_path / "PDF-Tool.exe")])
+    assert code == launch.OK
+    parameters = (tmp_path / "parameter.txt").read_text(encoding="utf-8").split()
+    assert parameters[:4] == ["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"] and parameters[4].startswith("/LOG=")
+    assert wait_until(lambda: (tmp_path / "neustart.txt").exists(), 5)
+    text = log.read_text(encoding="utf-8")
+    assert "Update installiert: PDF-Tool-Setup-2.7.3.exe" in text and "PDF Tool neu gestartet." in text
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Shell-Skript als Setup-Attrappe")
+def test_failed_silent_update_shows_the_setup(tmp_path, messages, monkeypatch):
+    setup, digest = silent_setup(tmp_path, code=1)
+    shown = []
+    monkeypatch.setattr(launch, "start", lambda path: shown.append(path))
+    code = launch.main(["--setup", str(setup), "--sha256", digest, "--wait", "0", "--silent", "--restart", str(tmp_path / "PDF-Tool.exe")])
+    assert code == launch.OK and shown == [setup.resolve()]
+    assert messages == [launch.NOT_INSTALLED]
+    time.sleep(0.3)
+    assert not (tmp_path / "neustart.txt").exists()  # kein Neustart ohne Installation
+
+
+def test_restart_only_starts_our_own_program(tmp_path):
+    other = tmp_path / "cmd.exe"
+    other.write_text("#!/bin/sh\n", encoding="utf-8")
+    assert launch.restart(other) is False
+    assert launch.restart(tmp_path / "PDF-Tool.exe") is False  # fehlt
+
+
 def test_helper_command_uses_isolated_mode_without_shell(tmp_path):
-    args = installer.command(tmp_path / "PDF-Tool-Setup-2.7.3.exe", "a" * 64, 4242, tmp_path / "start.log", python=Path("pythonw.exe"))
+    args = installer.command(tmp_path / "PDF-Tool-Setup-2.7.3.exe", "a" * 64, 4242, tmp_path / "start.log", python=Path("pythonw.exe"), silent=False)
     assert args[:3] == ["pythonw.exe", "-I", str(installer.LAUNCH_SCRIPT)]
     assert args[3:] == ["--setup", str(tmp_path / "PDF-Tool-Setup-2.7.3.exe"), "--sha256", "a" * 64, "--wait", "4242", "--log", str(tmp_path / "start.log")]
+    silent = installer.command(tmp_path / "PDF-Tool-Setup-2.7.3.exe", "a" * 64, 4242, None, python=Path("pythonw.exe"))
+    assert "--silent" in silent  # Standard seit 4.0: »Jetzt installieren« ohne Fragen des Setups

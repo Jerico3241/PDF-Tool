@@ -52,9 +52,10 @@ def start(request, qt_application, config_file: Path, monkeypatch, server, tmp_p
         client = HttpClient(UrlPolicy.loopback(server.port), user_agent="PDF-Tool/Test", system_proxy=False)
         return UpdateService(installed, client, UpdateStore(folder, site=server.base), app.worker.run, releases_url=server.releases_url, site=server.base)
 
-    def launch(profile: str = "full", auto: bool = False, **config) -> Harness:
+    def launch(profile: str = "full", auto: bool = False, fetch: bool = False, **config) -> Harness:
         _prepare(config_file, monkeypatch, profile, config)
         monkeypatch.setattr(updates, "create_service", create)
+        monkeypatch.setattr(updates, "AUTO_DOWNLOAD", fetch)
         monkeypatch.setattr(updates, "START_DELAY_MS", 100 if auto else 3_600_000)
         monkeypatch.setattr(updates, "BANNER_DELAY_MS", 0)
         harness = Harness(ui=True)
@@ -151,9 +152,34 @@ def test_automatic_check_finds_update_and_announces_it_once(start, server, confi
         banners.append(len(h.items("updateBanner")))
     assert banners == [1, 1, 1, 1] and u(h).bannerShown  # eine Leiste, kein neuer Hinweis je Seite
     h.navigate("settings", 0.2)
-    assert not u(h).bannerShown  # die Einstellungen zeigen alles selbst
+    h.runtime.settings.setSection("updates")
+    pump(0.2)
+    assert not u(h).bannerShown  # der Bereich »Updates« der Einstellungen zeigt alles selbst
     assert h.item("updateOffer").property("visible") and h.item("updateOfferTitle").property("text") == "PDF Tool 2.7.3"
     assert requests(server) == 1
+
+
+def test_automatic_check_downloads_the_update_so_one_click_installs(start, server):
+    server.publish("2.7.3", notes=NOTES)
+    h = start(auto=True, fetch=True)
+    assert settle(h, "ready") == "ready"  # ohne »Herunterladen«: gleich bereit
+    assert wait_until(lambda: u(h).bannerShown, 5)
+    assert u(h).canInstall and not u(h).canDownload
+    u(h).cancel()  # nichts zu tun – der Download ist fertig
+    assert u(h).state == "ready"
+
+
+def test_automatic_download_happens_once_per_version(start, server):
+    server.publish("2.7.3", notes=NOTES)
+    server.delay = 0.5
+    h = start(auto=True, fetch=True)
+    assert wait_until(lambda: u(h).state == "downloading", 15)
+    u(h).cancel()
+    assert settle(h, "cancelled") == "cancelled"
+    u(h).checkNow()
+    assert settle(h, "available", "cancelled") in ("available", "cancelled")
+    pump(0.5)
+    assert u(h).state in ("available", "cancelled")  # nach »Abbrechen« lädt nichts von selbst neu
 
 
 def test_98_24_hour_rule_and_manual_check(start, server):

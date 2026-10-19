@@ -207,7 +207,7 @@ PPage {
                     x: Math.floor((available - width) / 2)
                     width: columns * toolWidth + (columns - 1) * columnSpacing
                     height: implicitHeight
-                    columns: toolsCard.width >= Metrics.homeToolsInRowFrom && Math.floor((available - 2 * columnSpacing) / 3) >= toolMinimum ? 3 : 1
+                    columns: toolsCard.width >= Metrics.homeToolsInRowFrom && Math.floor((available - 3 * columnSpacing) / 4) >= toolMinimum ? 4 : (Math.floor((available - columnSpacing) / 2) >= toolMinimum ? 2 : 1)
                     columnSpacing: Metrics.s8
                     rowSpacing: Metrics.s4
                     Repeater {
@@ -251,7 +251,7 @@ PPage {
                     tone: "secondary"
                 }
             }
-            // Gleich breite Felder auf ganzen Pixeln: vier Spalten, sonst zwei bzw. eine – nie schmaler, als Symbol und das
+            // Gleich breite Felder auf ganzen Pixeln: fünf Spalten, sonst zwei bzw. eine – nie schmaler, als Symbol und das
             // längste Wort eines Namens brauchen. Die Hülle bekommt die ganze Breite der Karte (wie bei den Werkzeugen).
             Item {
                 Layout.fillWidth: true
@@ -271,7 +271,7 @@ PPage {
                     }
                     width: available
                     height: implicitHeight
-                    columns: available >= 4 * tileMinimum + 3 * columnSpacing ? 4 : (available >= 2 * tileMinimum + columnSpacing ? 2 : 1)
+                    columns: available >= 5 * tileMinimum + 4 * columnSpacing ? 5 : (available >= 2 * tileMinimum + columnSpacing ? 2 : 1)
                     columnSpacing: Metrics.s8
                     rowSpacing: Metrics.s4
                     Repeater {
@@ -301,7 +301,7 @@ PPage {
             highlighted: App.dragActive && App.dragAccepted
             iconName: "document_pdf"
             title: Reader.opening > 0 ? "Wird geöffnet …" : "PDF hierher ziehen"
-            text: "oder eine Datei auswählen. Mehrere PDFs öffnen sich in eigenen Tabs."
+            text: "oder eine Datei auswählen. Mehrere PDFs öffnen sich in eigenen Tabs, Bilder werden zu einer PDF."
             actions: [
                 PButton {
                     objectName: "homeOpenButton"

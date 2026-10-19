@@ -799,6 +799,23 @@ def test_open_with_forwards_paths_to_the_running_app(reader_app, tmp_path: Path)
     # ohne laufende App: nicht angenommen (der Start öffnet die PDF dann selbst)
     assert instance.forward([str(pdf)], name=name + "-keiner") is False
     assert instance.pdf_arguments(["-OO", str(pdf), "notiz.txt"]) == [str(pdf.resolve())]
+    # Belegte bzw. fehlende Verbindung: ohne laufende App kein Warten
+    import time
+
+    import handoff
+
+    started = time.monotonic()
+    assert handoff._connect(str(tmp_path / "keine-pipe")) is None
+    assert time.monotonic() - started < 0.5
+
+
+def test_outlook_copies_count_as_temporary(tmp_path: Path) -> None:
+    """Outlook löscht seine Kopien der Anhänge später – in der letzten Sitzung gilt ihr Fehlen nicht als Problem."""
+    from qtapp.reader.controller import _temporary
+
+    assert _temporary(r"C:\Users\sal\AppData\Local\Microsoft\Windows\INetCache\Content.Outlook\AB12CD34\Rechnung.pdf")
+    assert not _temporary(str(tmp_path / "a.pdf"))  # andere Ordner (auch der Temp-Ordner) wie bisher
+    assert not _temporary(r"C:\Users\sal\Documents\Rechnung.pdf")
 
 
 def test_crash_recovery_offers_unsaved_session(reader_app, tmp_path: Path, monkeypatch) -> None:

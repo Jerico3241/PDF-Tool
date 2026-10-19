@@ -31,7 +31,15 @@ READER = ToolInfo(
     pages=("reader",),
     shortcut="Strg+5",
 )
-TOOLS: tuple[ToolInfo, ...] = (READER, CONTRACTS, REPAIR)
+ACTIONS = ToolInfo(
+    key="actions",
+    title="Stapel-Aktionen",
+    description="Viele PDFs auf einmal verkleinern, nummerieren, schützen oder als PDF/A speichern.",
+    icon="stack",
+    pages=("actions",),
+    shortcut="Strg+6",
+)
+TOOLS: tuple[ToolInfo, ...] = (READER, ACTIONS, CONTRACTS, REPAIR)
 
 
 def tool_for_page(page: str) -> ToolInfo | None:
