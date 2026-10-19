@@ -2,6 +2,26 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.2.0-beta.5
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Gekündigte und abgelaufene Verträge je mit eigenem Schalter.
+Details in den [Release Notes](release-notes/3.2.0-beta.5.md).
+
+- `engine.py`: `beendete` nimmt eine Auswahl aus »Gekündigt« und »Abgelaufen« (`True`: beide, wie bisher);
+  `beendete_auswahl`, `beendete_werte`, `beendet_art`, `keine_vertraege_text`; `zahl_beendete(df, beendete)`;
+  `pruefe_excel` meldet zusätzlich `beendet_art` (»gekündigt«, »abgelaufen«, »gekündigt/abgelaufen«).
+- `ExcelAnalysis.ended_kind`, `contract_summary(…, ended_kind=…)`, `pdf_fields` übergibt die Auswahl;
+  `ended_selection(cfg)` liest die Einstellungen `vertraege_gekuendigt` und `vertraege_abgelaufen` (ohne sie gilt
+  der frühere Schalter `vertraege_beendete`: an = beide; er wird beim nächsten Speichern entfernt).
+- Oberfläche: Schalter `createCancelledContracts` und `createExpiredContracts` (`Contracts.gekuendigt`,
+  `Contracts.abgelaufen`); Stapel (`AnalysisCache.beendete`, `resolver.Defaults.beendete`) mit derselben Auswahl.
+- Tests: `test_ended_contracts.py` (einzeln, beide, Fehlermeldung, Übernahme des alten Schalters),
+  `test_qt_contracts::test_switch_lists_cancelled_and_expired_contracts_too`.
+- Excel-Prüfung: Laufen mehrere Prüfungen gleichzeitig (Schalter schnell nacheinander), zählt nur die neueste –
+  ein älteres Ergebnis überschreibt die Anzeige nicht mehr.
+- CI: Die Startzeit-Messung läuft nur noch, wenn ein Pull Request Dateien des Programmstarts ändert (oder bei
+  einem manuellen Lauf); main-Läufe vor einer Veröffentlichung messen nicht erneut.
+
 # PDF Tool 3.2.0-beta.4
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). „Im Hintergrund bereithalten“ (Standard: an): Start mit

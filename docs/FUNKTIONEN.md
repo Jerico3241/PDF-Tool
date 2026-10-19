@@ -157,11 +157,13 @@ Mit eingeschalteter Kundenakte gilt:
 Hinweise. Ein erkannter Kunde erscheint einmal – als Hinweis mit Aktionen in der Dateikarte, nach dem
 Übernehmen als aktive Kundenakte in den Kundendaten.
 
-**Gekündigte und abgelaufene Verträge (seit 3.2.0-beta.3):** Der Schalter „Gekündigte und abgelaufene
-Verträge mit aufführen“ unter der Excel-Liste (Standard aus) nimmt Verträge mit dem Anwenderstatus
-„Gekündigt“ oder „Abgelaufen“ mit in die Übersicht auf – in der PDF mit dem Status rot unter der
-Vertragsnummer, in der Prüfung als „· 2 gekündigt/abgelaufen“. Andere Status bleiben ausgeblendet. Der
-Schalter gilt auch für Vorschau und Stapel.
+**Gekündigte und abgelaufene Verträge (seit 3.2.0-beta.3, getrennte Schalter seit 3.2.0-beta.5):** Die
+Schalter „Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit aufführen“ unter der Excel-Liste
+(Standard aus) nehmen Verträge mit dem Anwenderstatus „Gekündigt“ bzw. „Abgelaufen“ mit in die Übersicht auf –
+einzeln oder beide zusammen; in der PDF mit dem Status rot unter der Vertragsnummer, in der Prüfung z. B. als
+„· 1 gekündigt“, „· 1 abgelaufen“ oder „· 2 gekündigt/abgelaufen“. Andere Status bleiben ausgeblendet. Die
+Schalter gelten auch für Vorschau und Stapel. War der frühere gemeinsame Schalter an, sind nach dem Update beide
+an.
 
 - **Kundenakte 2.0:** stabile ID (UUID), Firmenname, Kundennummer, mehrere
   Rechnungsempfänger-E-Mails (die erste ist primär), optionale Notiz, bevorzugtes Logo, bevorzugter

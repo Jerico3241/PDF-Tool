@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0-beta.4 (Beta zum Testen)
+Version 3.2.0-beta.5 (Beta zum Testen)
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -31,7 +31,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0-beta.4.exe
+PDF-Tool-Setup-3.2.0-beta.5.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -41,6 +41,24 @@ optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
 qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 3.2 (Beta 5) – Gekündigt und abgelaufen getrennt
+----------------------------------------------------------------
+In den Vertragsübersichten gibt es unter der Excel-Liste jetzt zwei
+Schalter: „Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit
+aufführen“. So lassen sich nur gekündigte, nur abgelaufene oder beide
+zusammen in die Übersicht aufnehmen. War der bisherige gemeinsame Schalter
+an, sind nach dem Update beide an.
+
+
+Neu in Version 3.2 (Beta 5) – Gekündigt und abgelaufen getrennt
+----------------------------------------------------------------
+In den Vertragsübersichten gibt es unter der Excel-Liste jetzt zwei
+Schalter: „Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit
+aufführen“. So lassen sich nur gekündigte, nur abgelaufene oder beide
+zusammen in die Übersicht aufnehmen. War der bisherige gemeinsame Schalter
+an, sind nach dem Update beide an.
 
 
 Neu in Version 3.2 (Beta 4) – Im Hintergrund bereithalten
@@ -404,6 +422,11 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
+Update von PDF Tool 3.2.0-beta.4 auf 3.2.0-beta.5 (Kanal „Beta“): Aus dem
+Schalter „Gekündigte und abgelaufene Verträge mit aufführen“ werden zwei
+getrennte Schalter. War er an, sind nach dem Update beide an. Alle anderen
+Einstellungen und Daten bleiben unverändert.
+
 Update von PDF Tool 3.2.0-beta.3, 3.2.0-beta.2, 3.2.0-beta.1 oder 3.1.0
 auf 3.2.0-beta.4 (Kanal „Beta“): Das Setup ersetzt die Programmdateien.
 Beim ersten Start trägt PDF Tool sich unter „Start mit Windows“ ein
@@ -563,10 +586,11 @@ Kundenakte – „Kunden“.
    zusätzliche Angaben: der Rechnungsempfänger (bei mehreren „3 erkannt“
    mit Auswahl daneben) und Hinweise. Kundennummer und Firmenname aus der
    Datei werden übernommen, sofern sie darin stehen.
-   Der Schalter „Gekündigte und abgelaufene Verträge mit aufführen“ unter
-   der Excel-Liste nimmt auch Verträge mit dem Anwenderstatus „Gekündigt“
-   oder „Abgelaufen“ in die Übersicht auf; in der PDF steht ihr Status rot
-   unter der Vertragsnummer. Der Schalter gilt auch für den Stapel.
+   Die Schalter „Gekündigte Verträge mit aufführen“ und „Abgelaufene
+   Verträge mit aufführen“ unter der Excel-Liste nehmen auch Verträge mit
+   dem Anwenderstatus „Gekündigt“ bzw. „Abgelaufen“ in die Übersicht auf –
+   einzeln oder beide zusammen; in der PDF steht ihr Status rot unter der
+   Vertragsnummer. Die Schalter gelten auch für den Stapel.
 2. Firmenname und Kundennummer eintragen, sofern sie nicht aus der Excel
    stammen. Mit eingeschalteter Kundenakte: Ist ein Rechnungsempfänger als
    Kunde bekannt, erscheint „Bekannter Kunde gefunden“: „Übernehmen“ füllt

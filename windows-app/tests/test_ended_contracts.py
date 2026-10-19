@@ -1,4 +1,4 @@
-"""Gekündigte und abgelaufene Verträge (Anwenderstatus) wahlweise mit in der Vertragsübersicht."""
+"""Gekündigte und abgelaufene Verträge (Anwenderstatus) wahlweise mit in der Vertragsübersicht – je eigener Schalter."""
 
 from __future__ import annotations
 
@@ -75,13 +75,64 @@ def test_without_a_status_column_nothing_changes(tmp_path: Path) -> None:
         assert result["vertraege"][0].status == ""
 
 
+@pytest.mark.parametrize(
+    ("auswahl", "erwartet", "art"),
+    [
+        (("Gekündigt",), {"V-1001": "", "V-1002": "Gekündigt"}, "gekündigt"),
+        (("Abgelaufen",), {"V-1001": "", "V-1003": "Abgelaufen"}, "abgelaufen"),
+        (("Gekündigt", "Abgelaufen"), {"V-1001": "", "V-1002": "Gekündigt", "V-1003": "Abgelaufen"}, "gekündigt/abgelaufen"),
+    ],
+)
+def test_cancelled_and_expired_can_be_chosen_separately(status_excel: Path, tmp_path: Path, auswahl, erwartet, art) -> None:
+    result = engine.pruefe_excel(status_excel, beendete=auswahl)
+    beendet = len(erwartet) - 1
+    assert (result["aktiv"], result["beendet"], result["inaktiv"]) == (1, beendet, 3 - beendet)
+    assert result["beendet_art"] == art
+    assert {v.nummer: v.status for v in result["vertraege"]} == erwartet
+    assert result["text"].startswith(f"1 aktiver Vertrag · {beendet} {art} · {3 - beendet} inaktiv ausgeblendet")
+    auftrag = engine.PdfAuftrag(excel=status_excel, logo=appstate.DEFAULT_LOGO, kundennummer="10042", zielordner=tmp_path, beendete=auswahl)
+    text = _pdf_text(engine.erstelle_pdf(auftrag))
+    for nummer in ("V-1002", "V-1003"):
+        assert (nummer in text) == (nummer in erwartet)
+    assert ("Gekündigt" in text) == ("Gekündigt" in auswahl) and ("Abgelaufen" in text) == ("Abgelaufen" in auswahl)
+
+
+def test_error_text_names_the_chosen_statuses(tmp_path: Path) -> None:
+    rows = [["V-4001", datetime(2022, 1, 1), "monatlich", 20.0, "Sofort", "Hotline", "a@b.de", 1, "Firma", "Inaktiv"]]
+    path = write_excel(tmp_path / "nur-inaktiv.xlsx", rows)
+    for auswahl, text in (
+        ((), "keine aktiven Verträge"),
+        (("Gekündigt",), "keine aktiven oder gekündigten Verträge"),
+        (("Abgelaufen",), "keine aktiven oder abgelaufenen Verträge"),
+        (("Gekündigt", "Abgelaufen"), "keine aktiven, gekündigten oder abgelaufenen Verträge"),
+    ):
+        with pytest.raises(ValueError, match=text):
+            engine.erstelle_pdf(engine.PdfAuftrag(excel=path, logo=appstate.DEFAULT_LOGO, kundennummer="1", zielordner=tmp_path, beendete=auswahl))
+
+
+def test_settings_from_the_former_single_switch() -> None:
+    """Bis 3.2.0-beta.4 gab es einen gemeinsamen Schalter: an bedeutet nach dem Update beide an."""
+    from tools.contract_overview.overview import ended_selection
+
+    assert ended_selection({}) == ()
+    assert ended_selection({"vertraege_beendete": True}) == ("Gekündigt", "Abgelaufen")
+    assert ended_selection({"vertraege_beendete": False}) == ()
+    assert ended_selection({"vertraege_gekuendigt": True, "vertraege_beendete": True}) == ("Gekündigt",)
+    assert ended_selection({"vertraege_abgelaufen": True}) == ("Abgelaufen",)
+    assert ended_selection({"vertraege_gekuendigt": True, "vertraege_abgelaufen": True}) == ("Gekündigt", "Abgelaufen")
+
+
 def test_the_batch_follows_the_same_switch(status_excel: Path) -> None:
     from tools.contract_overview.batch.analyzer import AnalysisCache, analyze_cached
 
     cache = AnalysisCache()
     analysis, _stamp = analyze_cached(str(status_excel), cache)
     assert (analysis.active, analysis.ended) == (1, 0)
-    cache.beendete = True
+    cache.beendete = ("Gekündigt", "Abgelaufen")
     cache.clear()
     analysis, _stamp = analyze_cached(str(status_excel), cache)
-    assert (analysis.active, analysis.ended) == (1, 2)
+    assert (analysis.active, analysis.ended, analysis.ended_kind) == (1, 2, "gekündigt/abgelaufen")
+    cache.beendete = ("Abgelaufen",)
+    cache.clear()
+    analysis, _stamp = analyze_cached(str(status_excel), cache)
+    assert (analysis.active, analysis.ended, analysis.ended_kind) == (1, 1, "abgelaufen")

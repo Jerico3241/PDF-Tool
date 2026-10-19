@@ -78,7 +78,7 @@ class Defaults:
     regelwerk: dict | None = None  # Regelwerk der »Darstellung« (``RuleSet.to_dict()``)
     regelwerk_name: str = ""
     vorlage_standard: str = ""  # ID der Standardvorlage ("" = keine)
-    beendete: bool = False  # gekündigte und abgelaufene Verträge mit aufführen
+    beendete: tuple[str, ...] = ()  # mit aufführen: »Gekündigt«, »Abgelaufen«
 
 
 @dataclass

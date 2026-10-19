@@ -44,7 +44,10 @@ from richtext import FOOTER_ALIGN, FOOTER_STYLE, HEADER_ALIGN, HEADER_STYLE, Ric
 from tools.contract_overview.history.models import records_from
 from tools.contract_overview.overview import (
     ExcelAnalysis,
+    ENDED_KEYS,
+    ENDED_LEGACY_KEY,
     contract_summary,
+    ended_selection,
     excel_files,
     excel_issues,
     output_issues,
@@ -112,8 +115,9 @@ class ContractOverviewController(Observable):
     titelChanged, titel = prop(str, "titel", DEFAULT_TITEL)
     untertitelChanged, untertitel = prop(str, "untertitel", DEFAULT_UNTERTITEL)
     pdfOeffnenChanged, pdfOeffnen = prop(bool, "pdfOeffnen", True)
-    # Gekündigte und abgelaufene Verträge (Anwenderstatus) mit aufführen – in der PDF mit Status-Hinweis
-    beendeteChanged, beendete = prop(bool, "beendete", False)
+    # Gekündigte bzw. abgelaufene Verträge (Anwenderstatus) mit aufführen – je eigener Schalter, in der PDF mit Status
+    gekuendigtChanged, gekuendigt = prop(bool, "gekuendigt", False)
+    abgelaufenChanged, abgelaufen = prop(bool, "abgelaufen", False)
     bausteinChanged, baustein = prop(str, "baustein", "")
     vorlageChanged, vorlage = prop(str, "vorlage", "")
     # Vorlagen 2.0 und Regelwerk
@@ -170,7 +174,9 @@ class ContractOverviewController(Observable):
         self.set_quietly("titel", cfg.get("titel", DEFAULT_TITEL))
         self.set_quietly("untertitel", cfg.get("untertitel", DEFAULT_UNTERTITEL))
         self.set_quietly("pdfOeffnen", bool(cfg.get("pdf_oeffnen", True)))
-        self.set_quietly("beendete", cfg.get("vertraege_beendete") is True)
+        ended = ended_selection(cfg)
+        self.set_quietly("gekuendigt", "Gekündigt" in ended)
+        self.set_quietly("abgelaufen", "Abgelaufen" in ended)
         self.set_quietly("baustein", cfg.get("baustein_name", ""))
         self.set_quietly("vorlageId", str(cfg.get("vorlage_aktiv") or ""))
         self.set_quietly("defaultTemplate", str(cfg.get("vorlage_standard") or ""))
@@ -216,7 +222,8 @@ class ContractOverviewController(Observable):
         for name in ("firma", "kd", "mail", "excel", "logo", "ziel", "breite", "vorlage"):
             self.observe(name, lambda _value: self.update_readiness())
         self.observe("excel", lambda _value: self.refresh_files())
-        self.observe("beendete", lambda _value: self._ended_changed())
+        self.observe("gekuendigt", lambda _value: self._ended_changed())
+        self.observe("abgelaufen", lambda _value: self._ended_changed())
         self.observe("logo", lambda _value: self.refresh_files())
         self.observe("ziel", lambda _value: self.refresh_files())
         self.observe("kd", lambda _value: self._clear_error("kd") if self.kd.strip() else None)
@@ -267,7 +274,9 @@ class ContractOverviewController(Observable):
             **({"vorlagen": self.state.vorlagen} if self.state.templates is None else {}),
             "staende": self.state.staende,
             "pdf_oeffnen": bool(self.pdfOeffnen),
-            "vertraege_beendete": bool(self.beendete),
+            ENDED_KEYS["Gekündigt"]: bool(self.gekuendigt),
+            ENDED_KEYS["Abgelaufen"]: bool(self.abgelaufen),
+            ENDED_LEGACY_KEY: None,  # ersetzt durch die beiden Schalter
             "vorlage_aktiv": self.vorlageId or None,
             "vorlage_stand": self._template_baseline if self.vorlageId else None,
             "vorlage_standard": self.defaultTemplate or None,
@@ -428,14 +437,19 @@ class ContractOverviewController(Observable):
         self.use_excel(excel)
 
     # Excel-Prüfung ------------------------------------------------------------------------------
+    @property
+    def beendete(self) -> tuple[str, ...]:
+        """Mit aufgeführte beendete Verträge: »Gekündigt«, »Abgelaufen« (je nach Schalter)."""
+        return tuple(status for status, on in (("Gekündigt", self.gekuendigt), ("Abgelaufen", self.abgelaufen)) if on)
+
     def _ended_changed(self) -> None:
-        """Schalter »Gekündigte und abgelaufene Verträge mit aufführen«: Excel und Stapel neu prüfen."""
+        """Schalter »Gekündigte …« bzw. »Abgelaufene Verträge mit aufführen«: Excel und Stapel neu prüfen."""
         self.app.schedule_save()
         if self.excel.strip():
             self.inspect_excel(self.excel.strip())
         batch = getattr(self.tool, "batch", None)
         if batch is not None and hasattr(batch, "ended_changed"):
-            batch.ended_changed(bool(self.beendete))
+            batch.ended_changed(self.beendete)
 
     def inspect_excel(self, path: str) -> None:
         self._analysis = None
@@ -445,17 +459,24 @@ class ContractOverviewController(Observable):
         self.update_readiness()
         self.tool.preview_dirty()
         regeln = [dict(r) for r in self.state.regeln]
-        beendete = bool(self.beendete)
+        beendete = self.beendete
+        # Prüfungen laufen gleichzeitig (z. B. beide Schalter schnell nacheinander): nur die neueste zählt
+        self._check_serial = getattr(self, "_check_serial", 0) + 1
+        serial = self._check_serial
 
         def work() -> dict:
             from engine import pruefe_excel
 
             return pruefe_excel(Path(path), regeln, beendete)
 
-        def failed(exc, _tb) -> None:
-            self._show_check(path, {"ok": False, "text": str(exc), "kunden": [], "mails": [], "firmen": [], "zeilen": []})
+        def done(result: dict) -> None:
+            if serial == self._check_serial:
+                self._show_check(path, result)
 
-        self.app.worker.run(work, lambda result: self._show_check(path, result), failed)
+        def failed(exc, _tb) -> None:
+            done({"ok": False, "text": str(exc), "kunden": [], "mails": [], "firmen": [], "zeilen": []})
+
+        self.app.worker.run(work, done, failed)
 
     def _show_check(self, path: str, result: dict) -> None:
         if self.excel.strip() != path:
@@ -483,7 +504,7 @@ class ContractOverviewController(Observable):
         fehlend = [str(name) for name in result.get("fehlend") or []]
         # Die Vertragszahlen nennt nur die Hinweisleiste der Excel-Karte – weder die Statusleiste
         # noch die Angaben darunter wiederholen sie.
-        vertraege = contract_summary(aktiv, inaktiv, ended=beendet)
+        vertraege = contract_summary(aktiv, inaktiv, ended=beendet, ended_kind=str(result.get("beendet_art") or ""))
         if fehlend:
             spalten = ", ".join(f"»{name}«" for name in fehlend)
             self.notify("info_excel", "error", f"Für die PDF fehlt {'die Spalte' if len(fehlend) == 1 else 'die Spalten'} {spalten}.", title="Spalten fehlen", status=False, animate=animate)
@@ -1264,7 +1285,7 @@ class ContractOverviewController(Observable):
             footer=self.footer_rich(),
             regeln=self.state.regeln,
             regelwerk=self.rule_set_dict(),
-            beendete=bool(self.beendete),
+            beendete=self.beendete,
         )
 
     def _done(self, path: Path, recipient: str = "") -> None:
