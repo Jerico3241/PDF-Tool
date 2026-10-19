@@ -809,14 +809,12 @@ def test_open_with_forwards_paths_to_the_running_app(reader_app, tmp_path: Path)
     assert time.monotonic() - started < 0.5
 
 
-def test_outlook_and_temp_copies_count_as_temporary(tmp_path: Path) -> None:
+def test_outlook_copies_count_as_temporary(tmp_path: Path) -> None:
     """Outlook löscht seine Kopien der Anhänge später – in der letzten Sitzung gilt ihr Fehlen nicht als Problem."""
-    import tempfile
-
     from qtapp.reader.controller import _temporary
 
     assert _temporary(r"C:\Users\sal\AppData\Local\Microsoft\Windows\INetCache\Content.Outlook\AB12CD34\Rechnung.pdf")
-    assert _temporary(str(Path(tempfile.gettempdir()) / "x" / "a.pdf"))
+    assert not _temporary(str(tmp_path / "a.pdf"))  # andere Ordner (auch der Temp-Ordner) wie bisher
     assert not _temporary(r"C:\Users\sal\Documents\Rechnung.pdf")
 
 

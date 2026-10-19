@@ -1437,14 +1437,6 @@ def opened_text(stamp: str, now: datetime | None = None) -> str:
 
 
 def _temporary(path: str) -> bool:
-    """Datei in einem Ordner für vorübergehende Kopien – Anhänge aus Outlook (``INetCache\\Content.Outlook``) oder der
-    Temp-Ordner. Outlook löscht seine Kopien später wieder; dass sie in der letzten Sitzung fehlen, ist kein Fehler."""
-    import tempfile
-
-    text = str(path).replace("/", "\\").lower()
-    if "\\content.outlook\\" in text or "\\inetcache\\" in text:
-        return True
-    try:
-        return Path(path).resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())
-    except (OSError, ValueError):
-        return False
+    """Kopie eines Outlook-Anhangs (``INetCache\\Content.Outlook``). Outlook löscht seine Kopien später wieder; dass sie
+    in der letzten Sitzung fehlen, ist kein Fehler."""
+    return "\\content.outlook\\" in str(path).replace("/", "\\").lower()

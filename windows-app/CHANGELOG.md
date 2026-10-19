@@ -25,7 +25,7 @@ PDF aus Bildern, Updates mit einem Klick und aufgeräumte Einstellungen. Details
 - Öffnen aus anderen Programmen: `EditorDocument.open` liest junge Dateien über `read_settled` (wartet bei Sperre
   oder fehlendem `%%EOF` bis 8 s, endet nach 1 s ohne Änderung); `handoff._connect` wartet bis 2 s auf eine belegte
   Named Pipe statt eine zweite App zu starten; `PDF-Tool.exe` startet die App mit `CREATE_BREAKAWAY_FROM_JOB`
-  (Hottgenroth »Kaufmann«); fehlende Outlook-/Temp-Kopien zählen bei der letzten Sitzung nicht als Fehler.
+  (Hottgenroth »Kaufmann«); fehlende Outlook-Kopien (`Content.Outlook`) zählen bei der letzten Sitzung nicht als Fehler.
 - Neues App-Symbol (»Pdf« von Magnific auf Flaticon, Namensnennung in THIRD_PARTY_LICENSES.md und im Fenster
   »Über«; Vorlage `assets/icon-source.png`): `scripts/make_icons.py` verkleinert die Vorlage
   statt selbst zu zeichnen; `icon.ico` (16–256 px), Favicons und Logo neu, `public/favicon.svg` entfällt.
