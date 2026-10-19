@@ -141,14 +141,13 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Vertragsübersichten: Gekündigte und abgelaufene Verträge haben jetzt je einen eigenen Schalter – wählbar ist nur eins von beiden oder beide zusammen. War der bisherige Schalter an, sind beide an.",
-    "Seit Beta 4 – schneller Start: PDF Tool startet mit Windows unsichtbar und öffnet sich danach sofort – auch beim ersten Mal nach dem Hochfahren. Ausschalten unter Einstellungen → Verhalten → »Im Hintergrund bereithalten«.",
+    "Schützen und Weitergeben: Schwärzen, Bereinigen, Kennwortschutz, Verkleinern, Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Stempel und Unterschrift.",
+    "KI-Assistent (optional und standardmäßig aus): Fragen zum geöffneten PDF und Zusammenfassungen mit Seitenangaben, vollständig auf diesem PC. Das Sprachmodell lädt PDF Tool nur auf Wunsch und entfernt es jederzeit wieder.",
+    "Vertragsübersichten: Gekündigte und abgelaufene Verträge lassen sich je mit eigenem Schalter in die Übersicht aufnehmen; ihr Status steht in Rot in der PDF.",
+    "Schneller Start: PDF Tool startet mit Windows unsichtbar und öffnet sich danach sofort – auch beim ersten Mal nach dem Hochfahren. Ausschalten unter Einstellungen → Verhalten → »Im Hintergrund bereithalten«.",
     "Das Schließen-Kreuz schließt nur das Fenster; PDF Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts unten). Ganz beenden: Rechtsklick auf das Symbol → »Beenden«.",
-    "Seit Beta 3: PDF Tool erscheint in »Öffnen mit« und bei den Standard-Apps mit eigenem Symbol.",
-    "KI-Assistent (seit Beta 2, optional und standardmäßig aus): Fragen zum geöffneten PDF und Zusammenfassungen mit Seitenangaben, vollständig auf diesem PC. Das Sprachmodell lädt PDF Tool nur auf Wunsch und entfernt es jederzeit wieder.",
-    "Schützen und Weitergeben (seit Beta 1): Schwärzen, Bereinigen, Kennwortschutz, Verkleinern, Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Stempel und Unterschrift.",
-    "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite.",
-    "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
+    "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite; eigenes Symbol in »Öffnen mit« und bei den Standard-Apps.",
+    "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]

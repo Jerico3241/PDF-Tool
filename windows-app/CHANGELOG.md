@@ -2,6 +2,16 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 3.2.0
+
+Freigegebene Version – getestet als Betas 3.2.0-beta.1 bis 3.2.0-beta.5, Funktionsumfang wie 3.2.0-beta.5.
+Für Anwender von 3.1 neu: Schützen und Weitergeben, der optionale KI-Assistent, getrennte Schalter für gekündigte
+und abgelaufene Verträge, „Im Hintergrund bereithalten“ und das eigene Startprogramm – im Einzelnen in den
+Abschnitten der Betas unten und in den [Release Notes](release-notes/3.2.0.md).
+
+- Version 3.2.0; README.txt, Neuerungen und Release Notes beschreiben 3.2 als freigegebene Version für Anwender
+  von 3.1. Der Programmcode ist gegenüber 3.2.0-beta.5 unverändert.
+
 # PDF Tool 3.2.0-beta.5
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Gekündigte und abgelaufene Verträge je mit eigenem Schalter.
