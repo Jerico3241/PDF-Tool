@@ -260,6 +260,9 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine, visible: bool =
     state.apply()
     app.geometry = state
     hwnd = int(window.winId())  # natives Fenster anlegen (noch unsichtbar)
+    from .background import launcher_path
+
+    winsys.set_window_identity(hwnd, launcher_path())  # Taskleiste: »PDF Tool« statt »Python«
     app.apply_chrome()
     runtime.theme.darkChanged.connect(app.apply_chrome)
     runtime.theme.revisionChanged.connect(app.apply_chrome)

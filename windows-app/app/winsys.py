@@ -308,6 +308,55 @@ def register_app_identity() -> None:
 
 
 @_safe(False)
+def set_window_identity(hwnd: int, exe: str | Path | None, name: str = "PDF Tool") -> bool:
+    """Taskleiste: Name, Symbol und Neustart-Befehl des Fensters festlegen. Ohne diese Angaben nimmt Windows sie vom
+    Prozess – ``pythonw.exe`` – und zeigt beim Rechtsklick auf das Symbol »Python« mit dem Python-Logo (findet es
+    keine Startmenü-Verknüpfung mit derselben App-Kennung, etwa nach einem Start über »Öffnen mit«).
+    Eigenschaften des Fensters: PKEY_AppUserModel_ID, …_RelaunchCommand, …_RelaunchIconResource und
+    …_RelaunchDisplayNameResource (nur zusammen wirksam)."""
+    import ctypes
+    from ctypes import wintypes
+
+    if not hwnd or exe is None:
+        return False
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
+
+    class PROPERTYKEY(ctypes.Structure):
+        _fields_ = [("fmtid", GUID), ("pid", wintypes.DWORD)]
+
+    class PROPVARIANT(ctypes.Structure):
+        _fields_ = [("vt", ctypes.c_ushort), ("r1", ctypes.c_ushort), ("r2", ctypes.c_ushort), ("r3", ctypes.c_ushort), ("value", ctypes.c_void_p), ("extra", ctypes.c_void_p)]
+
+    def guid(text: str) -> GUID:
+        value = GUID()
+        ctypes.oledll.ole32.CLSIDFromString(ctypes.c_wchar_p("{" + text + "}"), ctypes.byref(value))
+        return value
+
+    app_model = guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3")
+    store = ctypes.c_void_p()
+    ctypes.oledll.shell32.SHGetPropertyStoreForWindow(ctypes.c_void_p(hwnd), ctypes.byref(guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")), ctypes.byref(store))
+    vtable = ctypes.cast(ctypes.cast(store, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+    release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
+    set_value = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, ctypes.POINTER(PROPERTYKEY), ctypes.POINTER(PROPVARIANT))(vtable[6])
+    commit = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p)(vtable[7])
+    keep = []  # Zeichenketten leben bis nach Commit
+    try:
+        # Reihenfolge wichtig: die Neustart-Angaben vor der Kennung
+        values = ((2, f'"{exe}"'), (3, f"{exe},0"), (4, name), (5, APP_USER_MODEL_ID))
+        for pid, text in values:
+            buffer = ctypes.create_unicode_buffer(text)
+            keep.append(buffer)
+            variant = PROPVARIANT(vt=31, value=ctypes.cast(buffer, ctypes.c_void_p))  # VT_LPWSTR
+            set_value(store, ctypes.byref(PROPERTYKEY(app_model, pid)), ctypes.byref(variant))
+        commit(store)
+    finally:
+        release(store)
+    return True
+
+
+@_safe(False)
 def allow_foreground() -> bool:
     """»Öffnen mit« bei laufender App: Der neue Prozess (vom Explorer gestartet, darf in den
     Vordergrund) erlaubt der laufenden App, ihr Fenster nach vorn zu holen."""
