@@ -460,16 +460,23 @@ class ContractOverviewController(Observable):
         self.tool.preview_dirty()
         regeln = [dict(r) for r in self.state.regeln]
         beendete = self.beendete
+        # Prüfungen laufen gleichzeitig (z. B. beide Schalter schnell nacheinander): nur die neueste zählt
+        self._check_serial = getattr(self, "_check_serial", 0) + 1
+        serial = self._check_serial
 
         def work() -> dict:
             from engine import pruefe_excel
 
             return pruefe_excel(Path(path), regeln, beendete)
 
-        def failed(exc, _tb) -> None:
-            self._show_check(path, {"ok": False, "text": str(exc), "kunden": [], "mails": [], "firmen": [], "zeilen": []})
+        def done(result: dict) -> None:
+            if serial == self._check_serial:
+                self._show_check(path, result)
 
-        self.app.worker.run(work, lambda result: self._show_check(path, result), failed)
+        def failed(exc, _tb) -> None:
+            done({"ok": False, "text": str(exc), "kunden": [], "mails": [], "firmen": [], "zeilen": []})
+
+        self.app.worker.run(work, done, failed)
 
     def _show_check(self, path: str, result: dict) -> None:
         if self.excel.strip() != path:
