@@ -204,6 +204,8 @@ def test_outlook_attachments_are_copied_before_outlook_deletes_them(tmp_path, mo
     import handoff
 
     monkeypatch.setenv("TEMP", str(tmp_path / "temp"))
+    monkeypatch.setenv("UE_DATA_DIR", str(tmp_path / "daten"))
+    monkeypatch.delenv("PDFTOOL_ACTIVATION", raising=False)
     outlook = tmp_path / "AppData" / "Local" / "Microsoft" / "Windows" / "INetCache" / "Content.Outlook" / "AB12CD34"
     outlook.mkdir(parents=True)
     attachment = outlook / "Rechnung.pdf"
@@ -222,3 +224,7 @@ def test_outlook_attachments_are_copied_before_outlook_deletes_them(tmp_path, mo
     assert [copy.name for copy in copies] == ["Rechnung.pdf", "mail.pdf"]
     attachment.unlink()  # Outlook räumt auf – die Kopie bleibt
     assert copies[0].is_file()
+    # Übergabe-Protokoll (Support-Paket): Art des Ordners und Ergebnis, nie der Dateiname
+    log = (tmp_path / "daten" / handoff.HANDOFF_LOG).read_text(encoding="utf-8")
+    assert "Start mit Datei über Befehlszeile: Outlook" in log and log.count("Anhang gesichert") == 2
+    assert "Rechnung" not in log and "Vertrag" not in log

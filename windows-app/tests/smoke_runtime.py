@@ -723,6 +723,10 @@ def ui_probe(qt_application, full: bool) -> None:
         QTimer.singleShot(250, lambda: step(actions))
 
     def first() -> None:
+        import winsys
+
+        # Taskleiste: Name und Symbol von PDF Tool statt Python (Eigenschaften des Fensters, echtes Windows-Fenster)
+        shown["identity"] = winsys.set_window_identity(int(window.winId()), Path(sys.executable))
         shown["visible"] = window.isVisible()
         shown["page"] = app.currentPage
         shown["title"] = window.title()
@@ -831,6 +835,7 @@ def ui_probe(qt_application, full: bool) -> None:
     qt_app_title = window_title(VERSION)  # »PDF Tool«, bei einer Beta mit Versionsnummer
     check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
     check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")
+    check(shown.get("identity") is True, "Taskleiste: Name und Symbol von PDF Tool ließen sich nicht setzen")
     check(shown.get("page") == "home", "Startseite fehlt")
     check(shown.get("title") == qt_app_title, f"Fenstertitel: {shown.get('title')} statt {qt_app_title}")
     check(not shown.get("messages"), "Meldungen der QML-Engine:\n" + "\n".join(shown.get("messages") or []))

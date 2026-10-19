@@ -573,7 +573,7 @@ def build_launcher(target: Path, version: str) -> None:
             "@echo off\r\n"
             f'call "{vcvars}" >nul || exit /b 1\r\n'
             "rc /nologo /fo launcher.res launcher.rc || exit /b 1\r\n"
-            "cl /nologo /O1 /MT /W4 /WX /DUNICODE /D_UNICODE launcher.c launcher.res /Fe:PDF-Tool.exe /link /SUBSYSTEM:WINDOWS user32.lib || exit /b 1\r\n",
+            "cl /nologo /O1 /MT /W4 /WX /DUNICODE /D_UNICODE launcher.c launcher.res /Fe:PDF-Tool.exe /link /SUBSYSTEM:WINDOWS user32.lib ole32.lib uuid.lib || exit /b 1\r\n",
             encoding="ascii",
         )
         result = subprocess.run(["cmd", "/c", str(script)], cwd=str(work), capture_output=True, text=True, check=False)
@@ -584,7 +584,7 @@ def build_launcher(target: Path, version: str) -> None:
         result = subprocess.run([windres, "-i", "launcher.rc", "-O", "coff", "-o", "launcher.res.o"], cwd=str(work), capture_output=True, text=True, check=False)
         if result.returncode == 0:
             result = subprocess.run(
-                [gcc, "-O2", "-Wall", "-Wextra", "-Werror", "-municode", "-mwindows", "-static", "-s", "launcher.c", "launcher.res.o", "-o", "PDF-Tool.exe"],
+                [gcc, "-O2", "-Wall", "-Wextra", "-Werror", "-municode", "-mwindows", "-static", "-s", "launcher.c", "launcher.res.o", "-o", "PDF-Tool.exe", "-lole32", "-luuid"],
                 cwd=str(work), capture_output=True, text=True, check=False,
             )
     built = work / "PDF-Tool.exe"

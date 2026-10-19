@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.3
+Version 4.0.0-beta.4
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.3.exe
+PDF-Tool-Setup-4.0.0-beta.4.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -45,6 +45,17 @@ qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
+
+Neu in Version 4.0 Beta 4 – Outlook, Taskleiste, Symbol
+--------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
+- PDF-Anhänge aus Outlook (klassisch und neu) öffnen sich wieder, auch wenn
+  eine Defender-Regel Outlook verbietet, Programme direkt zu starten: Windows
+  startet PDF Tool jetzt selbst und übergibt die Datei.
+  Ein Übergabe-Protokoll (im Support-Paket) zeigt, ob ein Start ankommt.
+- Taskleiste: Rechtsklick auf PDF Tool zeigt „PDF Tool“ statt „Python“.
+- App-Symbol: in Taskleiste und Explorer (16–24 Pixel) scharf gezeichnet;
+  PDF-Dateien in der Sprungliste zeigen das neue statt des alten Symbols.
 
 Neu in Version 4.0 Beta 3 – Aufräumen: Fehler behoben, schneller, stabiler
 ---------------------------------------------------------------------------
@@ -479,6 +490,10 @@ Installation. Ihre Daten bleiben erhalten.
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
 einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.3 auf 4.0.0-beta.4 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent (unter Windows getestet: Beta 3 läuft im
+Hintergrund, das Update installiert still und startet PDF Tool neu).
 
 Update von PDF Tool 3.2.0 (oder älter) auf 4.0.0-beta.1 (Kanal „Beta“): Das
 Setup ersetzt die Programmdateien – dieses eine Mal noch mit dem Setup-

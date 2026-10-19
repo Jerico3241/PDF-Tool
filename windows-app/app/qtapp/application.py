@@ -260,6 +260,9 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine, visible: bool =
     state.apply()
     app.geometry = state
     hwnd = int(window.winId())  # natives Fenster anlegen (noch unsichtbar)
+    from .background import launcher_path
+
+    winsys.set_window_identity(hwnd, launcher_path())  # Taskleiste: »PDF Tool« statt »Python«
     app.apply_chrome()
     runtime.theme.darkChanged.connect(app.apply_chrome)
     runtime.theme.revisionChanged.connect(app.apply_chrome)
@@ -435,6 +438,11 @@ def restart_app() -> None:
         args = [sys.executable, *original[1 : len(original) - len(sys.argv) + 1]]
     else:
         args = [sys.executable, *sys.argv[:1]]
+    from .background import launcher_path
+
+    launcher = launcher_path()
+    if launcher is not None:
+        args = [str(launcher)]  # über PDF-Tool.exe: Symbol und Name von PDF Tool statt Python
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

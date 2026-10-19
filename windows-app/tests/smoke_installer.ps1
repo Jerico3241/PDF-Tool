@@ -27,6 +27,7 @@
 #      unveraendert; Start mit einer PDF, ein zweiter Start reicht seine PDF an die laufende App weiter
 #   4c. »Im Hintergrund bereithalten« (seit 3.2.0-beta.4): Start mit Windows eingetragen, Start mit
 #      --hintergrund ohne Fenster und nur einmal, ein weiterer Start zeigt das Fenster der laufenden App
+#   4d. PDF-Anhang aus Outlook bei laufender App: gesichert und uebergeben, obwohl Outlook seine Kopie loescht
 #   5. still deinstallieren (auch die Eintraege fuer »Oeffnen mit« und »Start mit Windows« sind danach entfernt)
 #
 # Aufruf:
@@ -247,7 +248,7 @@ if ($info.FileDescription -ne $appName -or $info.ProductName -ne $appName) { thr
 if ($info.ProductVersion -ne $version) { throw "Version von PDF-Tool.exe: $($info.ProductVersion) statt $version" }
 $command = (Get-Item -LiteralPath (Join-Path $progIdKey "shell\open\command")).GetValue("")
 if ($command -ne "`"$launcher`" `"%1`"") { throw "Befehl fuer 'Oeffnen mit': $command" }
-if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",0") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
+if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",-2") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
 if ((Get-Item -LiteralPath $appExeKey).GetValue("FriendlyAppName") -ne $appName) { throw "Name von PDF-Tool.exe in 'Oeffnen mit' fehlt" }
 if ((Get-Item -LiteralPath $capabilitiesKey).GetValue("ApplicationName") -ne $appName) { throw "Anmeldung fuer die Standard-Apps fehlt (Capabilities)" }
 if ((Get-Item -LiteralPath (Join-Path $capabilitiesKey "FileAssociations")).GetValue(".pdf") -ne "PDFTool.Dokument") { throw "Standard-Apps: .pdf ist nicht PDF Tool zugeordnet" }
@@ -391,6 +392,59 @@ if ((AppProcesses).Count -ne 1) { throw "Der weitere Start hat eine zweite App g
 if (Test-Path $errorLog) { throw "Fehler im Hintergrundbetrieb: $(Get-Content $errorLog -Raw)" }
 Write-Host "   Fenster aus dem Hintergrund nach $elapsed ms (ab Start von PDF-Tool.exe)"
 if ($env:GITHUB_ACTIONS) { Write-Host "::notice title=Fenster aus dem Hintergrund::PDF Tool $version - $elapsed ms vom Start von PDF-Tool.exe bis zum sichtbaren Fenster" }
+
+Write-Host "4d. PDF-Anhang aus Outlook bei laufender App: Outlook startet PDF-Tool.exe mit seiner Kopie und loescht sie, sobald PDF-Tool.exe endet"
+$appLog = Join-Path $data "pdf-tool.log"
+$handoffLog = Join-Path $data "uebergabe.log"
+$outlookDir = Join-Path $env:LOCALAPPDATA "Microsoft\Windows\INetCache\Content.Outlook\PDFTEST1"
+New-Item -ItemType Directory -Force -Path $outlookDir | Out-Null
+$attachment = Join-Path $outlookDir "Mitteilung_SEPA_Mandat Test GmbH (003).pdf"
+& (Join-Path $target "runtime\python.exe") -s -c "import sys, pikepdf; p = pikepdf.new(); p.add_blank_page(); p.save(sys.argv[1])" $attachment
+if ($LASTEXITCODE -ne 0) { throw "Test-Anhang konnte nicht erzeugt werden" }
+Set-ItemProperty -Path $attachment -Name IsReadOnly -Value $true  # Outlook legt Anhaenge schreibgeschuetzt ab
+$logBefore = if (Test-Path $appLog) { (Get-Content $appLog -Encoding UTF8).Count } else { 0 }
+# wie Outlook: ShellExecuteEx mit der Zuordnung (ProgID PDFTool.Dokument, Verb »open«) - Windows startet
+# PDF-Tool.exe ueber DelegateExecute als COM-Server, nicht als Kindprozess des Aufrufers
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class ShellOpen {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHELLEXECUTEINFO {
+        public int cbSize; public uint fMask; public IntPtr hwnd; public string lpVerb; public string lpFile;
+        public string lpParameters; public string lpDirectory; public int nShow; public IntPtr hInstApp; public IntPtr lpIDList;
+        public string lpClass; public IntPtr hkeyClass; public uint dwHotKey; public IntPtr hIcon; public IntPtr hProcess;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool ShellExecuteExW(ref SHELLEXECUTEINFO info);
+    public static int Open(string file, string progId) {
+        var info = new SHELLEXECUTEINFO();
+        info.cbSize = Marshal.SizeOf(info);
+        info.fMask = 0x00000001 | 0x00000400 | 0x00000100; // SEE_MASK_CLASSNAME | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC
+        info.lpVerb = "open"; info.lpFile = file; info.lpClass = progId; info.nShow = 1;
+        return ShellExecuteExW(ref info) ? 0 : Marshal.GetLastWin32Error();
+    }
+}
+"@
+$opened = [ShellOpen]::Open($attachment, "PDFTool.Dokument")
+if ($opened -ne 0) { throw "ShellExecuteEx ueber die Zuordnung fehlgeschlagen (Fehler $opened)" }
+for ($i = 0; $i -lt 60 -and (Get-Process -Name "PDF-Tool" -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }  # Outlook wartet ebenso
+Set-ItemProperty -Path $attachment -Name IsReadOnly -Value $false
+Remove-Item $outlookDir -Recurse -Force  # Outlook raeumt seine Kopie auf
+$received = $null
+for ($i = 0; $i -lt 40 -and -not $received; $i++) {
+    if (Test-Path $appLog) { $received = Get-Content $appLog -Encoding UTF8 | Select-Object -Skip $logBefore | Where-Object { $_ -like "*Weiterer Start*" } | Select-Object -Last 1 }
+    if (-not $received) { Start-Sleep -Milliseconds 250 }
+}
+if (Test-Path $handoffLog) { Write-Host "   Uebergabe-Protokoll:"; Get-Content $handoffLog -Encoding UTF8 | ForEach-Object { Write-Host "     $_" } }
+if (-not $received) { throw "Outlook-Anhang: die laufende App hat keinen weiteren Start erhalten" }
+Write-Host "   $received"
+if ($received -notlike "*1 Datei(en), 1 vorhanden*") { throw "Outlook-Anhang kam nicht an: $received" }
+if (-not (Test-Path $handoffLog) -or -not (Select-String -Path $handoffLog -Pattern "Start mit Datei .ber COM: Outlook" -Quiet)) { throw "Outlook-Anhang: PDF-Tool.exe wurde nicht ueber DelegateExecute (COM) gestartet" }
+$saved = @(Get-ChildItem (Join-Path $env:LOCALAPPDATA "PDF-Tool\Anhaenge") -Recurse -Filter "Mitteilung_SEPA_Mandat Test GmbH (003).pdf" -ErrorAction SilentlyContinue)
+if ($saved.Count -lt 1) { throw "Outlook-Anhang wurde nicht gesichert" }
+if (Test-Path $errorLog) { throw "Fehler beim Oeffnen des Outlook-Anhangs: $(Get-Content $errorLog -Raw)" }
+Write-Host "   Anhang gesichert und an die laufende App uebergeben"
 Stop-Process -Id $resident.ProcessId -Force
 Start-Sleep -Seconds 2
 # Die automatische Update-Pruefung laeuft wenige Sekunden nach dem Start im Hintergrund (nur lesend).

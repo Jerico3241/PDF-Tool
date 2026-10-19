@@ -270,6 +270,11 @@ jobs:
           Write-Host "Upgrade test: PDF Tool ${{ steps.versions.outputs.previous }} → PDF Tool ${{ steps.versions.outputs.current }}"
           ./windows-app/tests/smoke_installer.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
 
+      - name: "4b. Ein-Klick-Update: PDF Tool ${{ steps.versions.outputs.previous }} läuft im Hintergrund → ${{ steps.versions.outputs.current }} still über den Hilfsprozess der Vorversion"
+        timeout-minutes: 20
+        shell: pwsh
+        run: ./windows-app/tests/smoke_one_click.ps1 -Setup $env:SETUP -Previous $env:PREVIOUS_SETUP
+
       # Die Messung installiert zwei Versionen und kostet einige Minuten: nur, wenn ein Pull Request etwas am
       # Programmstart ändert, oder bei einem manuellen Lauf. main-Läufe (vor einer Veröffentlichung) messen nicht
       # erneut – die Zahlen stehen schon am Pull Request.

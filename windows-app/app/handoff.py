@@ -44,10 +44,50 @@ def pdf_arguments(argv: list[str]) -> list[str]:
     return paths[:MAX_PATHS]
 
 
+ACTIVATION = "PDFTOOL_ACTIVATION"  # PDF-Tool.exe: »direkt« oder »COM« (DelegateExecute) – nur fürs Protokoll
 START_EVENT = "PDFTOOL_START_EVENT"  # Name des Ereignisses, auf das PDF-Tool.exe wartet (siehe ``signal_started``)
 ATTACHMENT_FOLDER = "Anhaenge"
 ATTACHMENT_DAYS = 7  # gesicherte Anhänge so lange aufheben
 _TRANSIENT_PARTS = ("\\content.outlook\\", "\\inetcache\\", "\\olk")
+
+
+HANDOFF_LOG = "uebergabe.log"
+HANDOFF_LOG_LIMIT = 64 * 1024
+
+
+def handoff_log_path() -> Path:
+    """Protokoll der Übergaben im Datenordner (``%APPDATA%\\PDF-Tool``) – nur Art des Ordners und Ergebnisse, keine
+    Dateinamen."""
+    override = os.environ.get("UE_DATA_DIR")
+    if override:
+        return Path(override) / HANDOFF_LOG
+    base = os.environ.get("APPDATA")
+    return (Path(base) if base else Path.home() / ".config") / "PDF-Tool" / HANDOFF_LOG
+
+
+def note(text: str) -> None:
+    """Eine Zeile ins Übergabe-Protokoll (Fehler beim Schreiben werden ignoriert, die Datei bleibt klein)."""
+    try:
+        path = handoff_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_file() and path.stat().st_size > HANDOFF_LOG_LIMIT:
+            path.replace(path.with_suffix(".log.1"))
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [{os.getpid()}] {text}\n")
+    except OSError:
+        pass
+
+
+def place_kind(path: str) -> str:
+    """Art des Ordners für das Protokoll: »Outlook«, »Temp«, »Anhänge« oder »anderer Ordner« – nie der Pfad."""
+    text = os.path.normcase(os.path.abspath(path)).replace("/", "\\").lower()
+    if "\\content.outlook\\" in text or "\\olk" in text:
+        return "Outlook"
+    if "\\inetcache\\" in text:
+        return "INetCache"
+    if is_transient(path):
+        return "Temp"
+    return "anderer Ordner"
 
 
 def attachments_dir() -> Path:
@@ -79,6 +119,8 @@ def secure_transient(argv: list[str], target: Path | None = None) -> list[str]:
 
     result, folder = [], None
     for arg in argv:
+        if arg and not arg.startswith("-"):
+            note(f"Start mit Datei über {os.environ.get(ACTIVATION, 'Befehlszeile')}: {place_kind(arg)}, kurzer Pfad: {'ja' if '~' in arg else 'nein'}, vorhanden: {'ja' if Path(arg).is_file() else 'nein'}, flüchtig: {'ja' if is_transient(arg) else 'nein'}")
         if arg and not arg.startswith("-") and is_transient(arg) and Path(arg).is_file():
             try:
                 if folder is None:
@@ -88,10 +130,11 @@ def secure_transient(argv: list[str], target: Path | None = None) -> list[str]:
                     folder.mkdir(parents=True, exist_ok=True)
                 copy = folder / Path(arg).name
                 shutil.copyfile(arg, copy)  # ohne Schreibschutz der Outlook-Kopie
+                note("Anhang gesichert")
                 result.append(str(copy))
                 continue
-            except OSError:
-                pass  # dann wie bisher mit dem Original
+            except OSError as exc:
+                note(f"Anhang nicht gesichert: {type(exc).__name__} {getattr(exc, 'winerror', None) or exc.errno}")  # dann wie bisher mit dem Original
         result.append(arg)
     return result
 
@@ -110,8 +153,10 @@ def _prune(base: Path) -> None:
 
 
 def signal_started() -> None:
-    """PDF-Tool.exe Bescheid geben: Die Dateien sind gesichert, das Startprogramm darf enden (bis dahin hält es den
-    Aufrufer – etwa Outlook – davon ab, seine Kopie zu löschen)."""
+    """PDF-Tool.exe Bescheid geben: Die App startet selbst (keine laufende App), das Startprogramm darf enden. Bei einer
+    Übergabe an die laufende App ruft ``start.py`` das nicht auf – PDF-Tool.exe endet dann erst mit diesem Prozess,
+    also nach der Übergabe. Bis dahin hält es den Aufrufer (etwa Outlook) davon ab, seine Kopie zu löschen oder
+    diesen Prozess zu beenden."""
     name = os.environ.pop(START_EVENT, "")
     if sys.platform != "win32" or not name:
         return
@@ -158,6 +203,8 @@ def early_forward(argv: list[str], name: str | None = None, timeout: float = EAR
     show = bool(paths) or BACKGROUND_ARGUMENT not in argv
     handle = _connect("\\\\.\\pipe\\" + (name or server_name()))
     if handle is None:
+        if paths:
+            note(f"Keine laufende App – Start mit {len(paths)} Datei(en)")
         return False  # keine laufende App
     reply: list[bytes] = []
 
@@ -179,9 +226,13 @@ def early_forward(argv: list[str], name: str | None = None, timeout: float = EAR
     worker.start()
     worker.join(timeout)
     if worker.is_alive():
+        note(f"Übergabe von {len(paths)} Datei(en): keine Antwort der laufenden App")
         return False  # die laufende App antwortet nicht: normal starten
     try:
         os.close(handle)
     except OSError:
         pass
-    return bool(reply) and reply[0].startswith(b"ok")
+    accepted = bool(reply) and reply[0].startswith(b"ok")
+    if paths:
+        note(f"Übergabe von {len(paths)} Datei(en) an die laufende App: {'angenommen' if accepted else 'abgelehnt'}")
+    return accepted
