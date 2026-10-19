@@ -54,7 +54,8 @@ Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
   startet PDF Tool jetzt selbst und übergibt die Datei.
   Ein Übergabe-Protokoll (im Support-Paket) zeigt, ob ein Start ankommt.
 - Taskleiste: Rechtsklick auf PDF Tool zeigt „PDF Tool“ statt „Python“.
-- App-Symbol: in Taskleiste und Explorer (16–24 Pixel) scharf gezeichnet.
+- App-Symbol: in Taskleiste und Explorer (16–24 Pixel) scharf gezeichnet;
+  PDF-Dateien in der Sprungliste zeigen das neue statt des alten Symbols.
 
 Neu in Version 4.0 Beta 3 – Aufräumen: Fehler behoben, schneller, stabiler
 ---------------------------------------------------------------------------

@@ -35,6 +35,10 @@
 #define AppExe         "PDF-Tool.exe"
 ; Öffnen über die Dateizuordnung (seit 4.0.0-beta.4): DelegateExecute – Windows startet PDF-Tool.exe als COM-Server
 ; (IExecuteCommand), nicht als Kindprozess des Aufrufers. Muss zu CLSID_PDFTOOL_OPEN in installer/launcher/launcher.c passen.
+; Symbol der PDF-Dateien und in »Öffnen mit«: eigene Symbol-Ressource von PDF-Tool.exe. Windows merkt sich Symbole
+; nach Datei und Nummer – mit derselben Nummer bliebe nach einem neuen Symbol das alte sichtbar (Sprungliste,
+; Explorer). Bei einem neuen App-Symbol die Nummer erhöhen (installer/launcher/launcher.rc).
+#define DocIcon        "-2"
 #define OpenClsid      "{{61E62B6E-0FE6-46A2-8AF1-BD670901BF3B}"
 ; Anmeldung als Programm für PDF-Dateien (Einstellungen → Apps → Standard-Apps), nur für diesen Benutzer
 #define CapabilitiesKey "Software\PDF-Tool\Capabilities"
@@ -209,7 +213,7 @@ Name: "{usersendto}\{#AppName} (Bilder zu PDF)"; Filename: "{app}\{#AppExe}"; Wo
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueName: ""; ValueData: "PDF-Dokument"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "PDF-Dokument"
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppUserModelID}"
-Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#DocIcon}"
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\{#PdfProgId}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
@@ -218,14 +222,14 @@ Root: HKCU; Subkey: "Software\Classes\CLSID\{#OpenClsid}"; ValueType: string; Va
 Root: HKCU; Subkey: "Software\Classes\CLSID\{#OpenClsid}\LocalServer32"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"""
 ; Das Programm selbst: Name und Symbol in »Öffnen mit« (Windows liest sie sonst aus der EXE)
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#DocIcon}"
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
 ; Standard-Apps: PDF Tool als Programm für .pdf anmelden (Capabilities + RegisteredApplications)
 Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{#AppExeComment}"
-Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExe}"",{#DocIcon}"
 Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#PdfProgId}"
 Root: HKCU; Subkey: "Software\PDF-Tool"; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppName}"; ValueData: "{#CapabilitiesKey}"; Flags: uninsdeletevalue

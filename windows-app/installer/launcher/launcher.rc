@@ -11,6 +11,9 @@
 #endif
 
 1 ICON "icon.ico"
+// Symbol der PDF-Dateien (DefaultIcon »PDF-Tool.exe,-2«): eigene Nummer je App-Symbol, damit Windows kein altes
+// Symbol aus seinem Zwischenspeicher zeigt (seit 4.0.0-beta.4: neues Symbol) – siehe DocIcon in PDF-Tool.iss
+2 ICON "icon.ico"
 1 24 "launcher.manifest"
 
 VS_VERSION_INFO VERSIONINFO

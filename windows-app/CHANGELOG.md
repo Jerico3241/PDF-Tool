@@ -17,7 +17,9 @@ Beta zum Testen, ohne neue Funktionen. Details in den [Release Notes](release-no
   Dateinamen), das Support-Paket enthält es.
 - Taskleiste: `winsys.set_window_identity` setzt AppUserModel-ID, Neustart-Befehl, Symbol und Namen am Fenster;
   `restart_app` startet über `PDF-Tool.exe`.
-- App-Symbol: 16, 20 und 24 px pixelgenau gezeichnet (`scripts/make_icons.py`).
+- App-Symbol: 16, 20 und 24 px pixelgenau gezeichnet (`scripts/make_icons.py`). Dateisymbol der ProgID und in
+  »Öffnen mit«: eigene Ressource `PDF-Tool.exe,-2` (`DocIcon`), damit der Symbol-Zwischenspeicher von Windows
+  nicht das alte Symbol unter `,0` weiter zeigt.
 - CI: Ein-Klick-Update auf echtem Windows (`tests/smoke_one_click.ps1`: Vorversion läuft im Hintergrund, ihr
   Hilfsprozess installiert still) und Outlook-Anhang bei laufender App (`smoke_installer.ps1`, 4d).
 

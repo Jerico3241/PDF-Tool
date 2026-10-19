@@ -248,7 +248,7 @@ if ($info.FileDescription -ne $appName -or $info.ProductName -ne $appName) { thr
 if ($info.ProductVersion -ne $version) { throw "Version von PDF-Tool.exe: $($info.ProductVersion) statt $version" }
 $command = (Get-Item -LiteralPath (Join-Path $progIdKey "shell\open\command")).GetValue("")
 if ($command -ne "`"$launcher`" `"%1`"") { throw "Befehl fuer 'Oeffnen mit': $command" }
-if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",0") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
+if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",-2") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
 if ((Get-Item -LiteralPath $appExeKey).GetValue("FriendlyAppName") -ne $appName) { throw "Name von PDF-Tool.exe in 'Oeffnen mit' fehlt" }
 if ((Get-Item -LiteralPath $capabilitiesKey).GetValue("ApplicationName") -ne $appName) { throw "Anmeldung fuer die Standard-Apps fehlt (Capabilities)" }
 if ((Get-Item -LiteralPath (Join-Path $capabilitiesKey "FileAssociations")).GetValue(".pdf") -ne "PDFTool.Dokument") { throw "Standard-Apps: .pdf ist nicht PDF Tool zugeordnet" }
