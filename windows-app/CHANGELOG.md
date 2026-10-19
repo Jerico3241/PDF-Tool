@@ -9,6 +9,10 @@ Beta zum Testen. Aufräum-Beta ohne neue Funktionen: Fehler, Abstürze und langs
 
 - Updater: `installer.helper_copy` kopiert die Laufzeit (ohne `site-packages`) und `launch.py` neben das Setup
   (`update-helfer`); der Hilfsprozess belegt so keine Dateien in `{app}\runtime`, die das stille Setup ersetzt.
+- Outlook-Anhänge: `handoff.secure_transient` kopiert Dateien aus `INetCache\Content.Outlook` und dem Temp-Ordner
+  nach `%LOCALAPPDATA%\PDF-Tool\Anhaenge` (7 Tage), bevor `start.py` übergibt; `PDF-Tool.exe` wartet auf das
+  Ereignis aus `signal_started` (höchstens 15 s) statt sofort zu enden. `winsys.bring_to_front` in
+  `present_window`; `InstanceServer` protokolliert Übergaben (Anzahl, vorhanden).
 - `application.restart_app` startet ohne `--hintergrund` und ohne die PDFs des ursprünglichen Starts.
 - `engine.als_datum`/`datum_spalte`: Text-Datumswerte deutsch (Tag zuerst) statt pandas-Raten je Spalte.
 - `preview.BUILD_LOCK`: PDF-Erzeugung (Vorschau, Einzel-PDF, Stapel) nacheinander, ohne die PDFium-Sperre zu halten.

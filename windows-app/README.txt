@@ -51,6 +51,7 @@ Neu in Version 4.0 Beta 3 – Aufräumen: Fehler behoben, schneller, stabiler
 Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
 - Ein-Klick-Update: läuft jetzt wirklich ohne Setup-Assistent (der Helfer lief
   aus dem Ordner, den das Setup ersetzt). Wirksam ab dem nächsten Update.
+- PDF-Anhänge aus Outlook öffnen sich wieder, auch wenn PDF Tool schon läuft.
 - Vertragsübersichten: Datum als Text in der Excel-Liste („01.02.2021“) wird
   immer deutsch gelesen (vorher teils Monat und Tag vertauscht).
 - PDF Reader: schneller beim Blättern großer PDFs; Seitenleiste springt nach

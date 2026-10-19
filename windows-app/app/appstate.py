@@ -141,7 +141,7 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Beta 4.0 – dritter Teil: aufgeräumt. Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
+    "Beta 4.0 – dritter Teil: aufgeräumt. PDF-Anhänge aus Outlook öffnen sich wieder, Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
     "Aus Beta 2: Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
     "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",
     "Aus Beta 1: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",

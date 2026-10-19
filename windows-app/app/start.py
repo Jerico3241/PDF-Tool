@@ -63,8 +63,10 @@ def main() -> None:
     prepare_env()
     # Läuft PDF Tool schon (z. B. im Hintergrund): nur Bescheid geben und enden – ohne Qt zu laden
     try:
-        from handoff import early_forward
+        from handoff import early_forward, secure_transient, signal_started
 
+        sys.argv[1:] = secure_transient(sys.argv[1:])  # Outlook-Anhänge sichern, bevor Outlook sie löscht
+        signal_started()
         if early_forward(sys.argv[1:]):
             raise SystemExit(0)
     except SystemExit:
