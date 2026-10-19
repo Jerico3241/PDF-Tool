@@ -317,6 +317,30 @@ def allow_foreground() -> bool:
     return bool(ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY))
 
 
+@_safe(False)
+def bring_to_front(hwnd: int) -> bool:
+    """Fenster sicher nach vorn holen, wenn ein anderes Programm vorn ist (z. B. Outlook öffnet einen Anhang in der
+    schon laufenden App). Windows lehnt ``SetForegroundWindow`` sonst oft ab und lässt nur die Taskleiste blinken –
+    das Fenster mit der PDF bliebe unsichtbar hinter Outlook. Kurz an die Eingabe des vorderen Fensters
+    anhängen, dann ist es erlaubt."""
+    import ctypes
+
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    user32.GetForegroundWindow.restype = ctypes.c_void_p
+    foreground = user32.GetForegroundWindow()
+    if not hwnd or foreground == hwnd:
+        return True
+    own = kernel32.GetCurrentThreadId()
+    other = user32.GetWindowThreadProcessId(ctypes.c_void_p(foreground), None) if foreground else 0
+    attached = bool(other) and other != own and bool(user32.AttachThreadInput(own, other, True))
+    try:
+        user32.BringWindowToTop(ctypes.c_void_p(hwnd))
+        return bool(user32.SetForegroundWindow(ctypes.c_void_p(hwnd)))
+    finally:
+        if attached:
+            user32.AttachThreadInput(own, other, False)
+
+
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"  # Start mit Windows (nur dieser Benutzer)
 
 

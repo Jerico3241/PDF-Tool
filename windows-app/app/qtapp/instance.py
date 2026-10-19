@@ -70,6 +70,19 @@ def received(data: bytes) -> tuple[list[str], bool]:
     return paths, message.get("show") is True
 
 
+def _log_received(data: bytes, paths: list[str], show: bool) -> None:
+    """Übergabe protokollieren (nur Anzahl und Dateiendung, keine Pfade) – fehlende Dateien fallen so auf."""
+    try:
+        items = json.loads(data.decode("utf-8")).get("open") or []
+        asked = len(items) if isinstance(items, list) else 0
+        from diagnostics.applog import UI
+        from diagnostics.applog import get as get_log
+
+        get_log(UI).info("Weiterer Start übergeben: %d Datei(en), %d vorhanden, Fenster zeigen: %s", asked, len(paths), "ja" if show else "nein")
+    except Exception:  # noqa: BLE001 - Protokoll ist nur Hilfe
+        pass
+
+
 class InstanceServer(QObject):
     """Nimmt Pfade weiterer Starts an (``on_paths(pfade)`` im GUI-Thread). Ein weiterer Start ohne Pfade ruft
     ``on_paths([])`` – die App zeigt dann ihr Fenster."""
@@ -113,7 +126,9 @@ class InstanceServer(QObject):
         self._buffers[socket] = data
         if b"\n" not in data:
             return
-        paths, show = received(data.split(b"\n", 1)[0])
+        line = data.split(b"\n", 1)[0]
+        paths, show = received(line)
+        _log_received(line, paths, show)
         self._buffers[socket] = b""
         socket.write(b"ok\n")
         socket.flush()
