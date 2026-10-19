@@ -195,6 +195,40 @@ Item {
             }
         }
     }
+    // Vergleichen: Unterschiede zur anderen Fassung (geändert gelb, neu grün, entfernt rot); die gewählte
+    // Änderung mit Rahmen
+    Item {
+        objectName: "readerCompareLayer"
+        readonly property var rects: root.doc && root.page >= 0 ? (root.doc.compareRects[root.key] || []) : []
+        anchors.fill: parent
+        visible: rects.length > 0
+        Repeater {
+            model: parent.rects
+            Rectangle {
+                required property var modelData
+                x: modelData[0] * root.s
+                y: modelData[1] * root.s
+                width: Math.max(2, (modelData[2] - modelData[0]) * root.s)
+                height: Math.max(2, (modelData[3] - modelData[1]) * root.s)
+                color: Theme.compareMarks[modelData[4]] || Theme.compareMarks[0]
+            }
+        }
+    }
+    Repeater {
+        model: root.doc && root.doc.currentCompare.page === root.page ? root.doc.currentCompare.rects : []
+        Rectangle {
+            required property var modelData
+            objectName: "readerCurrentCompare"
+            x: modelData[0] * root.s - 2
+            y: modelData[1] * root.s - 2
+            width: (modelData[2] - modelData[0]) * root.s + 4
+            height: (modelData[3] - modelData[1]) * root.s + 4
+            color: "transparent"
+            radius: 2
+            border.width: 2
+            border.color: Theme.searchHitCurrent
+        }
+    }
     Repeater {
         model: root.doc && root.doc.currentHit.page === root.page ? root.doc.currentHit.rects : []
         Rectangle {
@@ -840,7 +874,10 @@ Item {
             root.dragTo(p, mouse)
         }
         onExited: { hoverKey = ""; hoverItem = null; hoverCorner = false; hoverLink = null }
-        onPressed: (mouse) => root.press(point(mouse), mouse)
+        onPressed: (mouse) => {
+            if (root.host) root.host.interacted()  // Einstellungen des Werkzeugs gehen zu
+            root.press(point(mouse), mouse)
+        }
         onReleased: (mouse) => root.release(point(mouse), mouse)
         onDoubleClicked: (mouse) => {
             var p = point(mouse)

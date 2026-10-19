@@ -2,6 +2,32 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.2
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Zweiter Teil von 4.0: Werkzeugleiste des Readers nach
+dem Vorbild von Acrobat, Vergleichen, geteilte Ansicht und Präsentation. Details in den
+[Release Notes](release-notes/4.0.0-beta.2.md).
+
+- Reader-Werkzeugleiste: `ReaderToolbar.qml` nur noch mit Datei-Befehlen und »Alle Werkzeuge«;
+  `QuickTools.qml` (Schnellwerkzeuge links neben dem Dokument, senkrechte Akzentmarkierung) und `AllTools.qml`
+  (Popup mit allen Werkzeugen und Befehlen in Gruppen; Befehle laufen erst nach dem Schließen). Die Menüs
+  »Schützen«, »Seiten gestalten« und »Formular« entfallen. `ToolOptions.qml` ohne Bedienhinweise und »Fertig«;
+  reine Einstellungen erst nach erneutem Klick auf das gewählte Werkzeug (`ReaderPage.toolSettingsOpen`), ein
+  Druck in eine Seite (`DocumentView.interacted`) schließt sie. `PInfoBar.autoHide`: Hinweise zum Dokument
+  schließen nach 5 s (nicht, solange die Maus darauf steht).
+- Vergleichen: `tools/pdf_editor/compare.py` (Wörter mit Lage aus den Zeichen der Seite, `difflib` über beide
+  Fassungen, Rechtecke je Zeile zusammengefasst, Zusammenfassung); `Session.compare_words`; Reader
+  `compare_with`/`compare_paths`/`start_compare`, `showCompare`, `nextCompare`, `endCompare`; Dokument
+  `compareRects`/`currentCompare`, Ebene in `PageView.qml`, Liste `ComparePanel.qml` in der rechten Leiste.
+- Geteilte Ansicht: Reader `splitKey`/`splitDoc`, `toggleSplit`, `openSplitDialog`, `setSplit`, `swapSplit`;
+  `SplitPane.qml` mit eigener `DocumentView`. Die Ansicht holt die gemerkte Stelle eines Tabs über einen eigenen
+  Timer statt `Qt.callLater` (entfällt mit der Ansicht).
+- Präsentation: Reader `presenting`, `startPresentation` (F5), Ende über `leaveFullScreen`/Esc mit
+  wiederhergestellter Ansicht; schwarzer Grund und Blättern mit allen Tasten in `DocumentView.qml`.
+- Tests: `test_compare.py`, `test_qt_reader_v40.py`; angepasst: Werkzeugleiste (`test_qt_protect.py`,
+  `test_qt_reader_motion.py`, `test_qt_forms_v31.py`), Breite der Dokumentfläche (`test_qt_reader_layout.py`),
+  Zeilenanfang bei 400 % (`test_qt_objects.py`).
+
 # PDF Tool 4.0.0-beta.1
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Erster Teil von 4.0: Stapel-Aktionen, Als PDF/A speichern,

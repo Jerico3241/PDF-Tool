@@ -25,6 +25,7 @@ from typing import Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from tools.pdf_editor import compare as comparing
 from tools.pdf_editor import imagepdf, recovery
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
 from tools.registry import READER
@@ -57,7 +58,7 @@ QUICK_TOOLS = (
     ("merge", "Zusammenführen", "Weitere PDFs an ein Dokument anhängen", "merge"),
 )
 LEFT_PANELS = ("thumbs", "outline", "search", "attachments", "")
-RIGHT_PANELS = ("comments", "properties", "assistant", "")
+RIGHT_PANELS = ("comments", "properties", "assistant", "compare", "")
 CLIP_FORMAT = "application/x-pdftool-objects"  # Kennung kopierter Objekte in der Zwischenablage des Systems
 _OCR_PROBE: dict = {"done": False, "engine": None}  # Texterkennung: einmal je Programmlauf gesucht
 MAX_WIDTH = 12000  # Pixel – breitere Seitenbilder gibt es nicht (der Ausschnitt bleibt scharf)
@@ -70,9 +71,10 @@ FONT_FAMILIES = (("Helvetica", "Serifenlos (Helvetica/Arial)"), ("Times", "Serif
 HELP_STEPS = (
     "PDF öffnen: »Öffnen« (Strg+O), eine Datei in das Fenster ziehen oder eine Datei aus »Zuletzt geöffnet« wählen.",
     "Lesen: Seiten blättern (Bild ↑/↓), zoomen (Strg+Mausrad, Strg++ / Strg+−), Miniaturen und Lesezeichen links, Suchen mit Strg+F.",
-    "Bearbeiten: Werkzeug oben wählen – Text ändern oder hinzufügen, Bilder, Kommentare, Formulare. Rückgängig mit Strg+Z.",
+    "Bearbeiten: Werkzeug links neben dem Dokument wählen – Text ändern oder hinzufügen, Kommentare, Zeichnen, Unterschreiben; jedes weitere Werkzeug mit Namen unter »Alle Werkzeuge«. Rückgängig mit Strg+Z.",
     "Speichern: Strg+S (die Datei wird erst nach erfolgreicher Prüfung ersetzt), Speichern unter: Strg+Umschalt+S. Drucken: Strg+P.",
-    "Archivieren und Umwandeln: »Schützen« → »Als PDF/A speichern …«; Bilder (Fotos, Scans) in das Fenster ziehen oder im Explorer über »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
+    "Vergleichen und Präsentieren: »Alle Werkzeuge« → »Mit anderer Fassung vergleichen …« zeigt Unterschiede farbig; »Geteilte Ansicht« zeigt zwei PDFs nebeneinander; F5 startet die Präsentation.",
+    "Archivieren und Umwandeln: »Alle Werkzeuge« → »Als PDF/A speichern …«; Bilder (Fotos, Scans) in das Fenster ziehen oder im Explorer über »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
 )
 HELP_NOTES = (
     "Textänderungen nennen ihren Weg: »Direkt im PDF geändert«, »Neu gesetzt« oder »Kompatibilitätsmodus« (Überlagerung – keine Schwärzung, der Originaltext bleibt in der Datei).",
@@ -93,6 +95,15 @@ class ReaderController(Observable):
     organizeChanged, organize = prop(bool, "organize", False)  # Ansicht »Seiten organisieren«
     openingChanged, opening = prop(int, "opening", 0)  # Dateien, die gerade geöffnet werden
     fullScreenChanged, fullScreen = prop(bool, "fullScreen", False)  # Vollbild (nur das Dokument)
+    presentingChanged, presenting = prop(bool, "presenting", False)  # Präsentation: Vollbild, Seite für Seite, schwarz
+    splitKeyChanged, splitKey = prop(str, "splitKey", "")  # geteilte Ansicht: Dokument rechts neben dem aktuellen ("" = aus)
+    # Vergleichen: läuft, Ergebnis (Text), Änderungen [{key, kind, before, after, oldPage, newPage}], gewählte Änderung
+    compareActiveChanged, compareActive = prop(bool, "compareActive", False)
+    compareRunningChanged, compareRunning = prop(bool, "compareRunning", False)
+    compareSummaryChanged, compareSummary = prop(str, "compareSummary", "")
+    compareItemsChanged, compareItems = prop(list, "compareItems", [])
+    compareIndexChanged, compareIndex = prop(int, "compareIndex", -1)
+    compareNamesChanged, compareNames = prop(list, "compareNames", [])  # [alte Fassung, neue Fassung]
     canPasteChanged, canPaste = prop(bool, "canPaste", False)  # Zwischenablage: Objekte, Bild oder Text
     pageClipChanged, pageClip = prop(int, "pageClip", 0)  # kopierte Seiten (Anzahl; über Tabs hinweg)
     # Texterkennung: "" (noch nicht gesucht), "pruefen", "bereit" oder "fehlt"; installierte Sprachen
@@ -123,6 +134,11 @@ class ReaderController(Observable):
         if view.get("links") in LEFT_PANELS:
             self.set_quietly("leftPanel", view.get("links"))
         self._window_before_full = None  # Fensterzustand vor dem Vollbild
+        self._split_pending = False  # geteilte Ansicht: das nächste geöffnete PDF kommt neben das bisherige
+        self._compare_pending: str = ""  # Vergleichen: Kennung der neuen Fassung, bis die alte geöffnet ist
+        self._compare: tuple | None = None  # (alte Fassung, neue Fassung, Ergebnis)
+        self._compare_serial = 0
+        self._before_presentation: tuple | None = None  # (Dokument, Ansicht, Einpassen, Zoom, Werkzeug) vor der Präsentation
         self._watching_window = False
         self._attachment_dir: str | None = None  # eigener Ordner für geöffnete Anhänge (beim Beenden gelöscht)
         self._clip = None  # kopierte Objekte (objectops.Clip) – gilt für alle Tabs
@@ -163,6 +179,11 @@ class ReaderController(Observable):
         return self._current
 
     current = Property(QObject, _get_current, notify=currentChanged)
+
+    def _get_split(self):
+        return self._docs.get(self.splitKey)
+
+    splitDoc = Property(QObject, _get_split, notify=splitKeyChanged)
 
     def provider(self) -> PageImageProvider:
         return PageImageProvider(self._render, self.cache)
@@ -456,6 +477,7 @@ class ReaderController(Observable):
         if controller is None or controller is self._current:
             return
         self._remember_panels()
+        previous = self._current
         self._current = controller
         # Seitenleisten und »Seiten organisieren« des Tabs (Tabs beeinflussen sich nicht gegenseitig)
         panels = controller.panels or {}
@@ -465,6 +487,194 @@ class ReaderController(Observable):
         self.currentKey = key
         self.hasDocument = True
         self.currentChanged.emit()
+        # Geteilte Ansicht: das Dokument rechts wird angeklickt → die beiden tauschen; ein eben für die geteilte
+        # Ansicht geöffnetes PDF kommt neben das bisherige
+        if previous is not None and previous.ident in self._docs:
+            if key == self.splitKey or self._split_pending:
+                self.splitKey = previous.ident
+        self._split_pending = False
+        if self._compare_pending and self._compare_pending in self._docs and self._compare_pending != key:
+            newer = self._docs[self._compare_pending]
+            self._compare_pending = ""
+            self.splitKey = newer.ident
+            self.start_compare(controller, newer)
+
+    # Geteilte Ansicht ---------------------------------------------------------------------------------------
+    @Slot()
+    def toggleSplit(self) -> None:  # noqa: N802
+        """Zwei PDFs nebeneinander: rechts ein anderes geöffnetes PDF (das zuletzt benutzte), sonst eines zum
+        Öffnen wählen. Noch einmal: wieder nur das aktuelle."""
+        if self.splitKey:
+            self.splitKey = ""
+            if self.compareActive:
+                self.endCompare()
+            return
+        if not self.hasDocument:
+            return
+        others = [key for key in self.tabs.keys() if key != self.currentKey]
+        if others:
+            self.splitKey = others[-1]
+            return
+        self.openSplitDialog()
+
+    @Slot()
+    def openSplitDialog(self) -> None:  # noqa: N802
+        """Ein PDF wählen, das rechts neben dem aktuellen erscheint."""
+        paths = files.open_files("PDF für die geteilte Ansicht öffnen", self.app.initial_dir("reader", self.source_dir), files.PDF_FILTER)
+        if paths:
+            self.open_beside(paths[0])
+
+    def open_beside(self, path: str) -> None:
+        existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+        if existing is not None:
+            if existing is not self._current:
+                self.splitKey = existing.ident
+            return
+        self._split_pending = self._current is not None
+        self.open_paths([str(path)])
+
+    # Vergleichen ----------------------------------------------------------------------------------------------
+    def compare_with(self, newer: DocumentController) -> None:
+        """»Mit anderer Fassung vergleichen«: die ältere Fassung wählen; sie erscheint links, ``newer`` rechts, die
+        Unterschiede sind in beiden markiert und rechts als Liste."""
+        paths = files.open_files("Ältere Fassung zum Vergleichen wählen", self.app.initial_dir("reader", self.source_dir), files.PDF_FILTER)
+        if paths:
+            self.compare_paths(newer, paths[0])
+
+    def compare_paths(self, newer: DocumentController, path: str) -> None:
+        if newer.path and _same(newer.path, path):
+            self.app.notify("reader", "info", "Bitte eine andere Datei wählen – ein PDF mit sich selbst zu vergleichen zeigt keine Unterschiede.", title="Gleiche Datei")
+            return
+        existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+        if existing is not None:
+            self.activate(existing.ident)
+            self.splitKey = newer.ident
+            self.start_compare(existing, newer)
+            return
+        self._compare_pending = newer.ident
+        self.open_paths([str(path)])
+
+    def start_compare(self, older: DocumentController, newer: DocumentController) -> None:
+        self.end_compare()
+        self._compare_serial += 1
+        serial = self._compare_serial
+        self._compare = (older, newer, None)
+        self.compareActive = True
+        self.compareRunning = True
+        self.compareSummary = "Vergleich läuft …"
+        self.compareNames = [older.name, newer.name]
+        self.showRightPanel("compare")
+        found: dict = {}
+
+        def cancelled() -> bool:
+            return serial != self._compare_serial
+
+        def got(which: str, payload) -> None:
+            if cancelled():
+                return
+            found[which] = payload
+            if len(found) == 2:
+                (old_words, old_empty), (new_words, new_empty) = found["old"], found["new"]
+                self.engine.submit(lambda: comparing.compare(old_words, new_words, old_empty, new_empty), lambda result: self._compare_done(serial, result), lambda exc, details: self._compare_failed(serial, exc, details), priority=BACKGROUND, label="vergleichen")
+
+        def failed(exc: BaseException) -> None:
+            self._compare_failed(serial, exc, "")
+
+        older.run(lambda session: session.compare_words(cancelled), lambda payload: got("old", payload), refresh=False, failed=failed, priority=BACKGROUND)
+        newer.run(lambda session: session.compare_words(cancelled), lambda payload: got("new", payload), refresh=False, failed=failed, priority=BACKGROUND)
+
+    def _compare_failed(self, serial: int, exc: BaseException, details: str) -> None:
+        if serial != self._compare_serial:
+            return
+        _log().warning("Vergleich fehlgeschlagen: %s %s", type(exc).__name__, details)
+        self.compareRunning = False
+        self.compareSummary = "Der Vergleich ist fehlgeschlagen. Bitte beide PDFs prüfen (beschädigt oder kennwortgeschützt?)."
+
+    def _compare_done(self, serial: int, result) -> None:
+        if serial != self._compare_serial or self._compare is None:
+            return
+        older, newer, _ = self._compare
+        self._compare = (older, newer, result)
+        self.compareRunning = False
+        self.compareSummary = comparing.summary(result)
+        codes = {"changed": 0, "added": 1, "removed": 2}
+        marks: dict[str, dict[str, list]] = {"old": {}, "new": {}}
+        items = []
+        for number, change in enumerate(result.changes):
+            for side, places in (("old", change.old), ("new", change.new)):
+                for page, rects in places.items():
+                    marks[side].setdefault(str(page), []).extend([round(value, 2) for value in rect] + [codes[change.kind]] for rect in rects)
+            items.append({"key": str(number), "kind": change.kind, "before": change.before, "after": change.after, "oldPage": change.old_at[0], "newPage": change.new_at[0]})
+        older.compareRects = marks["old"]
+        newer.compareRects = marks["new"]
+        self.compareItems = items
+        if items:
+            self.showCompare(0)
+
+    @Slot(int)
+    def showCompare(self, index: int) -> None:  # noqa: N802
+        """Änderung ``index`` in beiden Fassungen zeigen und hervorheben."""
+        if self._compare is None or self._compare[2] is None or not self._compare[2].changes:
+            return
+        older, newer, result = self._compare
+        index %= len(result.changes)
+        change = result.changes[index]
+        self.compareIndex = index
+        for doc, places, at in ((older, change.old, change.old_at), (newer, change.new, change.new_at)):
+            if doc not in self._docs.values():
+                continue
+            page = at[0]
+            doc.currentCompare = {"page": page, "rects": [list(rect) for rect in places.get(page, [])]} if page >= 0 else {}
+            if page >= 0:
+                doc.currentPage = page
+                doc.reveal(page, at[1], at[2])
+
+    @Slot()
+    def nextCompare(self) -> None:  # noqa: N802
+        self.showCompare(self.compareIndex + 1)
+
+    @Slot()
+    def previousCompare(self) -> None:  # noqa: N802
+        self.showCompare(self.compareIndex - 1 if self.compareIndex > 0 else len(self.compareItems) - 1)
+
+    @Slot()
+    def recompare(self) -> None:
+        if self._compare is not None:
+            older, newer, _ = self._compare
+            if older in self._docs.values() and newer in self._docs.values():
+                self.start_compare(older, newer)
+
+    @Slot()
+    def endCompare(self) -> None:  # noqa: N802
+        self.end_compare()
+        if self.rightPanel == "compare":
+            self.rightPanel = ""
+            self._remember_panels()
+
+    def end_compare(self) -> None:
+        self._compare_serial += 1
+        if self._compare is not None:
+            for doc in self._compare[:2]:
+                if doc in self._docs.values():
+                    doc.compareRects = {}
+                    doc.currentCompare = {}
+        self._compare = None
+        self.compareActive = False
+        self.compareRunning = False
+        self.compareSummary = ""
+        self.compareItems = []
+        self.compareIndex = -1
+        self.compareNames = []
+
+    @Slot(str)
+    def setSplit(self, key: str) -> None:  # noqa: N802
+        if key in self._docs and key != self.currentKey:
+            self.splitKey = key
+
+    @Slot()
+    def swapSplit(self) -> None:  # noqa: N802
+        if self.splitKey in self._docs:
+            self.activate(self.splitKey)
 
     def _remember_panels(self) -> None:
         if self._current is not None:
@@ -582,6 +792,10 @@ class ReaderController(Observable):
         controller = self._docs.pop(key, None)
         if controller is None:
             return
+        if key == self.splitKey:
+            self.splitKey = ""
+        if self._compare is not None and controller in self._compare[:2]:
+            self.endCompare()
         if remember:
             self._remember_closed(controller)
         keys = self.tabs.keys()
@@ -716,7 +930,43 @@ class ReaderController(Observable):
         window.showFullScreen()
 
     @Slot()
+    def startPresentation(self) -> None:  # noqa: N802
+        """F5: Präsentation – Vollbild auf schwarzem Grund, eine ganze Seite nach der anderen (Pfeiltasten,
+        Leertaste, Bild auf/ab); Esc beendet sie und stellt Ansicht und Zoom wieder her."""
+        doc = self._current
+        if doc is None or self.presenting:
+            return
+        self._before_presentation = (doc, doc.viewMode, doc.fit, doc.zoom, doc.tool)
+        self.organize = False
+        doc.setTool("select")
+        doc.setViewMode("single")
+        doc.fitPage()
+        self.presenting = True
+        if not self.fullScreen:
+            self.toggleFullScreen()
+
+    def _end_presentation(self) -> None:
+        if not self.presenting:
+            return
+        self.presenting = False
+        before, self._before_presentation = self._before_presentation, None
+        if before is None:
+            return
+        doc, mode, fit, zoom, tool = before
+        if doc not in self._docs.values():
+            return  # inzwischen geschlossen
+        doc.setViewMode(mode)
+        if fit == "width":
+            doc.fitWidth()
+        elif fit == "page":
+            doc.fitPage()
+        else:
+            doc.setZoom(zoom)
+        doc.setTool(tool)
+
+    @Slot()
     def leaveFullScreen(self) -> None:  # noqa: N802
+        self._end_presentation()
         if not self.fullScreen:
             return
         self.fullScreen = False
@@ -738,6 +988,7 @@ class ReaderController(Observable):
         if self.fullScreen and visibility not in (QWindow.Visibility.FullScreen, QWindow.Visibility.Hidden):
             self.fullScreen = False
             self._window_before_full = None
+            self._end_presentation()
 
     def _page_changed(self, page: str) -> None:
         if page != "reader":

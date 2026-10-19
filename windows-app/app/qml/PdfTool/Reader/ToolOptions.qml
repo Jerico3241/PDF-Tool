@@ -5,8 +5,8 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // Schwebende Leiste oben über der Seite (wie die Hinweise): Einstellungen und Befehle des gewählten
-// Werkzeugs (Farbe, Strichstärke, Schriftgröße; Bild einfügen, drehen, ersetzen, Reihenfolge, löschen) und
-// ein kurzer Hinweis, was ein Klick in die Seite tut. Sie schiebt die Seiten nicht nach unten, blendet weich
+// Werkzeugs (Farbe, Strichstärke, Schriftgröße; Bild einfügen, drehen, ersetzen, Reihenfolge, löschen) – ohne
+// Bedienhinweise und ohne »Fertig« (seit 4.0; Esc oder ein Klick auf das Werkzeug beendet es). Sie schiebt die Seiten nicht nach unten, blendet weich
 // ein und aus (»Aus«: sofort) und ist nur da, wenn es etwas zu sagen gibt; Hinweise darunter rücken nach.
 // Eine Textauswahl blendet hier nichts ein: Kopieren, Markieren, Unterstreichen und Durchstreichen
 // stehen im Kontextmenü der Seite (Rechtsklick), Strg+C kopiert.
@@ -48,38 +48,26 @@ Item {
     readonly property bool strokeTool: ["ink", "rect", "ellipse", "line", "arrow"].indexOf(tool) >= 0
     readonly property bool sizeTool: tool === "addText" || tool === "textbox"
     readonly property string toolColor: doc ? (tool === "highlight" ? doc.markColor : doc.toolColor) : "#000000"
-    readonly property bool shown: doc !== null && (tool !== "select" || annotationSelected)
 
+    // Seit 4.0 keine Bedienhinweise mehr (das gewählte Werkzeug zeigt der Strich in den
+    // Schnellwerkzeugen, die Erklärung steht im Tooltip). Übrig bleiben Hinweise mit Inhalt: warum ein Bild
+    // nicht änderbar ist, ein PDF ohne Felder, der Weg der letzten Textänderung.
     readonly property string hint: {
         switch (tool) {
-        case "editText": return "Einen Textblock anklicken, um ihn zu ändern. Blau gestrichelt: direkt im PDF änderbar · orange: wird neu gesetzt oder überlagert."
-        case "objects": return "Text, Bild oder Grafik anklicken, erneut klicken wählt ein Wort. Doppelklick ändert den Text, Ziehen verschiebt; Strg- oder Umschalt+Klick oder ein Rahmen wählt mehrere. Strg+C/V kopiert und fügt ein."
-        case "hand": return "Mit gedrückter Maustaste ziehen, um das Dokument zu bewegen. Erneuter Klick auf »Verschieben« kehrt zu »Auswählen« zurück."
-        case "addText": return "In die Seite klicken und schreiben."
-        case "image": return root.imageSelected ? (selected.editable ? "Ziehen verschiebt, die Ecken ändern die Größe (Umschalt: frei)." : (selected.reason || "Dieses Bild lässt sich nicht ändern.")) : "Bild anklicken – oder einen Rahmen aufziehen und ein Bild einfügen."
-        case "highlight": return "Text markieren: mit der Maus über den Text ziehen."
-        case "underline": return "Text unterstreichen: mit der Maus über den Text ziehen."
-        case "strikeout": return "Text durchstreichen: mit der Maus über den Text ziehen."
-        case "note": return "In die Seite klicken, um eine Notiz anzuheften."
-        case "textbox": return "Rahmen aufziehen (oder klicken) und Text schreiben."
-        case "ink": return "Mit gedrückter Maustaste zeichnen – auch für eine sichtbare Unterschrift (keine digitale Signatur)."
-        case "rect": case "ellipse": return "Rahmen aufziehen."
-        case "line": case "arrow": return "Von Anfang zu Ende ziehen."
-        case "form": return root.doc && Object.keys(root.doc.fieldPages).length > 0 ? "Felder anklicken und ausfüllen. Skripte im PDF werden nicht ausgeführt." : "Dieses PDF enthält keine ausfüllbaren Felder."
-        case "formDesign":
-            if (root.formKind !== "") return root.kindName(root.formKind) + ": Rahmen aufziehen oder klicken."
-            if (root.fieldChosen) return "Ziehen verschiebt, die Ecken ändern die Größe; Doppelklick: Eigenschaften. Pfeiltasten, Entf, Strg+D."
-            return "Feldart wählen und auf der Seite aufziehen – oder ein Feld anklicken. Rechtsklick legt ein Feld genau dort an."
-        case "select": return root.annotationSelected ? (root.ownAnnotation ? "Ziehen verschiebt; die Ecken ändern die Größe." : "Kommentar aus einem anderen Programm – Text und Farbe lassen sich ändern, Ziehen verschiebt.") : ""
-        case "redact":
-            if (root.doc && root.doc.redactMode === "text") return "Über den Text ziehen, der entfernt werden soll. Rot umrandet = vorgemerkt; Rechtsklick entfernt eine Markierung."
-            return "Bereiche aufziehen, die entfernt werden sollen. Rot umrandet = vorgemerkt; Rechtsklick entfernt eine Markierung."
-        case "stamp": return "In die Seite klicken oder einen Rahmen aufziehen. Mit »Auswählen« lässt sich der Stempel verschieben und vergrößern."
-        case "signature": return root.doc && root.doc.signatures.length > 0 ? "In die Seite klicken oder einen Rahmen aufziehen. Keine digitale Signatur." : "Zuerst eine Unterschrift erstellen."
-        case "link": return "Bereich aufziehen und das Ziel wählen. Einen vorhandenen Link anklicken ändert ihn, Rechtsklick entfernt ihn."
+        case "editText": case "objects": return root.doc && root.doc.lastMode !== "" ? "Zuletzt: " + root.doc.lastMode : ""
+        case "image": return root.imageSelected && !selected.editable ? (selected.reason || "Dieses Bild lässt sich nicht ändern.") : ""
+        case "form": return root.doc && Object.keys(root.doc.fieldPages).length > 0 ? "" : "Dieses PDF enthält keine ausfüllbaren Felder."
         default: return ""
         }
     }
+    // Werkzeuge, deren Leiste Befehle trägt, die man zum Arbeiten braucht (Schwärzen anwenden, Unterschrift
+    // wählen, Bild einfügen, Feldart): Leiste immer. Reine Einstellungen (Farbe, Stärke, Größe, Stempelart)
+    // erst nach erneutem Klick auf das Werkzeug (``settingsOpen``); ein gewählter Kommentar zeigt seine immer.
+    property bool settingsOpen: false
+    readonly property bool commandTool: ["redact", "signature", "image", "formDesign"].indexOf(tool) >= 0
+    readonly property bool settingsTool: coloredTool || strokeTool || sizeTool || tool === "stamp"
+    readonly property bool hasControls: commandTool || annotationSelected || (settingsTool && settingsOpen)
+    readonly property bool shown: doc !== null && (hasControls || hint !== "")
 
     readonly property bool present: shown && !suppressed
     readonly property bool animating: heightAnim.running || fadeAnim.running
@@ -97,7 +85,7 @@ Item {
         objectName: "readerToolOptionsCard"
         y: root.gap + (root.present ? 0 : -Motion.infoBarShift)
         anchors.horizontalCenter: parent.horizontalCenter
-        implicitWidth: row.implicitWidth + 18
+        implicitWidth: row.implicitWidth + 12
         width: Math.min(root.width, implicitWidth)
         height: Metrics.controlHeight + 12
         radius: Metrics.radiusOverlay
@@ -111,7 +99,7 @@ Item {
         RowLayout {
             id: row
             anchors.fill: parent
-            anchors.leftMargin: 12
+            anchors.leftMargin: 6  // gleicher Rand links und rechts: Symbole stehen mittig in der Leiste
             anchors.rightMargin: 6
             spacing: 4
 
@@ -344,20 +332,15 @@ Item {
             PIconButton { objectName: "readerFieldDelete"; visible: root.designTool && root.fieldChosen; iconName: "delete"; tip: "Löschen (Entf)"; onClicked: root.doc.deleteField("") }
 
             PText {
+                objectName: "readerToolHint"
                 Layout.fillWidth: true
-                Layout.leftMargin: 8
-                text: (root.tool === "editText" || root.tool === "objects") && root.doc && root.doc.lastMode !== "" ? root.hint + "   Zuletzt: " + root.doc.lastMode : root.hint
+                Layout.leftMargin: root.hasControls ? 8 : 0
+                Layout.rightMargin: root.hasControls ? 0 : 6
+                visible: text !== ""
+                text: root.hint
                 textStyle: "caption"
                 tone: root.imageSelected && !root.selected.editable ? "warning" : "secondary"
                 elide: Text.ElideRight
-            }
-            PButton {
-                visible: root.tool !== "select"
-                kind: "subtle"
-                iconName: "dismiss"
-                text: "Fertig"
-                tip: "Zurück zu »Auswählen« (Esc)"
-                onClicked: root.doc.setTool("select")
             }
         }
     }

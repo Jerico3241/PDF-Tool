@@ -56,23 +56,43 @@ def child(item, name: str):
 
 # --- Werkzeugleiste ------------------------------------------------------------------------------------------------
 def test_toolbar_menus_open_and_tools_switch(reader_app, tmp_path: Path) -> None:
+    """Schnellwerkzeuge links (Menüs für Kommentar, Zeichnen, Unterschrift) und »Alle Werkzeuge« mit Namen."""
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "Leiste.pdf"))
-    toolbar = h.item("readerToolbar")
-    for button, name in (("readerProtect", "readerProtectMenu"), ("readerPageDesign", "readerPageDesignMenu"), ("readerSignMenu", "readerSignToolMenu")):
-        menu = child(toolbar, name)
+    quick = h.item("readerQuickTools")
+    for button, name in (("readerCommentMenu", "readerCommentToolMenu"), ("readerDrawMenu", "readerDrawToolMenu"), ("readerSignMenu", "readerSignToolMenu")):
+        menu = child(quick, name)
         click(h, center(h.item(button)))
         assert wait_until(lambda: menu.property("opened"), 3), name
         key(h, Qt.Key.Key_Escape)
         assert wait_until(lambda: not menu.property("visible"), 3)
-    for tool in ("redact", "stamp", "link"):
+    workspace = h.item("readerQuickToolsArea").parentItem()
+    panel = child(workspace, "readerAllToolsPanel")  # Popup: hängt nicht im Elementbaum
+    for opener in ("readerAllTools", "readerQuickAllTools"):  # Befehlsleiste oder Schnellwerkzeuge
+        click(h, center(h.item(opener)))
+        assert wait_until(lambda: panel.property("opened"), 3), opener
+        key(h, Qt.Key.Key_Escape)
+        assert wait_until(lambda: not panel.property("visible"), 3)
+    # Ein Werkzeug aus der Liste: eingeschaltet, Liste zu, »Alle Werkzeuge« markiert
+    click(h, center(h.item("readerAllTools")))
+    assert wait_until(lambda: panel.property("opened"), 3)
+    click(h, center(h.item("readerToolLink")))
+    assert wait_until(lambda: not panel.property("visible"), 3)
+    assert doc.tool == "link" and h.item("readerQuickAllTools").property("checked") is True
+    for tool in ("redact", "signature"):  # Befehle zum Arbeiten (Anwenden, Unterschrift wählen): Leiste immer
         doc.setTool(tool)
         pump(0.2)
         assert doc.tool == tool and h.item("readerToolOptionsCard").isVisible()
-    assert h.item("readerRedactApply") is not None and h.item("readerProtect").property("checked") is False
+    for tool in ("link", "hand", "editText", "stamp", "ink"):  # keine Bedienhinweise; Einstellungen erst auf Klick (4.0.0-beta.2)
+        doc.setTool(tool)
+        pump(0.4)
+        assert doc.tool == tool and not h.item("readerToolOptionsCard").isVisible()
+    doc.setTool("select")
+    pump(0.1)
+    assert h.item("readerQuickAllTools").property("checked") is False
     doc.setTool("redact")
     pump(0.1)
-    assert h.item("readerProtect").property("checked") is True  # Schwärzen ist aktiv: »Schützen« markiert
+    assert h.item("readerQuickAllTools").property("checked") is True  # Schwärzen ist aktiv: »Alle Werkzeuge« markiert
     h.item("readerView").forceActiveFocus()
     key(h, Qt.Key.Key_Escape)
     assert doc.tool == "select"

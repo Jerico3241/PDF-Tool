@@ -35,6 +35,18 @@ unter `app/tools/` (Fachlogik ohne Oberfläche), einen Controller unter `app/qta
 unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – siehe
 [`windows-app/ARCHITECTURE.md`](../windows-app/ARCHITECTURE.md).
 
+## PDF Reader: Werkzeugleiste, Vergleichen, geteilte Ansicht, Präsentation (seit 4.0.0-beta.2)
+
+- **Werkzeugleiste nach dem Vorbild von Acrobat:** oben nur Datei-Befehle (Öffnen, Speichern, Drucken, E-Mail,
+  Rückgängig/Wiederholen) und »Alle Werkzeuge«; links neben dem Dokument die Schnellwerkzeuge (Auswählen,
+  Verschieben, Kommentieren, Zeichnen, Text hinzufügen, Text bearbeiten, Objekt bearbeiten, Unterschreiben).
+  »Alle Werkzeuge« listet jedes Werkzeug mit Namen in Gruppen (`QuickTools.qml`, `AllTools.qml`).
+- **Mit anderer Fassung vergleichen:** ältere Fassung links, neuere rechts; Unterschiede im Text farbig
+  markiert (geändert gelb, neu grün, entfernt rot) und als Liste rechts (`tools/pdf_editor/compare.py`,
+  `ComparePanel.qml`).
+- **Geteilte Ansicht:** zwei geöffnete PDFs nebeneinander mit eigener Seite und eigenem Zoom (`SplitPane.qml`).
+- **Präsentation (F5):** Vollbild auf schwarzem Grund, Seite für Seite; Esc stellt die Ansicht wieder her.
+
 ## Stapel-Aktionen, PDF/A und PDF aus Bildern (seit 4.0.0-beta.1)
 
 - **Stapel-Aktionen** (Startseite, Strg+6): viele PDFs wählen oder hineinziehen, Aktionen ankreuzen und
@@ -65,7 +77,7 @@ oder Info; nur der gewählte Bereich ist sichtbar.
 
 ## PDF Reader & Editor: Schützen und Weitergeben (seit 3.2)
 
-In der Werkzeugleiste des Readers stehen zwei neue Befehle: **Schützen** (Schild) und **Seiten gestalten**.
+In der Werkzeugleiste des Readers stehen zwei neue Befehle: **Schützen** (Schild) und **Seiten gestalten** (seit 4.0.0-beta.2 als Gruppen unter »Alle Werkzeuge«).
 Alles läuft lokal; jede Änderung lässt sich rückgängig machen, solange das Dokument offen ist, und wird beim
 Speichern geprüft. Technische Einzelheiten: [PDF-EDITOR.md](PDF-EDITOR.md#schützen-und-weitergeben-seit-32).
 
