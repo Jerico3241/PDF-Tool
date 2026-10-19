@@ -243,7 +243,7 @@ def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(u
     assert _pruefe_startseite(h) == (True, 2)
     werkzeug = h.item(WERKZEUGE[0])
     kuerzel = werkzeug.property("shortcut")
-    werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+Feststelltaste+F12")  # Fußzeile breiter als die halbe Karte
+    werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+Feststelltaste+Rollen+Pause+Druck+F12")  # Fußzeile breiter als die halbe Karte (auch mit Segoe UI)
     pump(0.4)
     assert _pruefe_startseite(h) == (True, 1)
     rest = _szene(werkzeug)[2] - (_teil(werkzeug, "toolShortcut")[0] + _teil(werkzeug, "toolShortcut")[2])
