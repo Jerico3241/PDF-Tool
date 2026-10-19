@@ -22,6 +22,8 @@ PDF aus Bildern, Updates mit einem Klick und aufgeräumte Einstellungen. Details
   `ImagesContent.qml`; gezogene Bilder und Bilder aus der Befehlszeile starten »PDF aus Bildern«. Startseite:
   vier Werkzeuge zwei mal zwei, Schnellwerkzeuge in fünf Spalten.
 - Setup: Verknüpfung »Senden an« → »PDF Tool (Bilder zu PDF)«.
+- Neues App-Symbol (Flaticon, Vorlage `assets/icon-source.png`): `scripts/make_icons.py` verkleinert die Vorlage
+  statt selbst zu zeichnen; `icon.ico` (16–256 px), Favicons und Logo neu, `public/favicon.svg` entfällt.
 - Updates: automatischer Download nach der automatischen Prüfung (einmal je Version); der Hilfsprozess
   installiert still (`/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`), startet danach nur `PDF-Tool.exe` neu und
   zeigt das Setup sichtbar, wenn die stille Installation scheitert.
