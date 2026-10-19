@@ -78,6 +78,10 @@ def center_x(item) -> float:
     return item.mapToScene(QPointF(item.width() / 2, 0)).x()
 
 
+def center_y(item) -> float:
+    return item.mapToScene(QPointF(0, item.height() / 2)).y()
+
+
 # --- Seitenleisten ------------------------------------------------------------------------------------------------
 def test_side_panels_slide_fade_or_switch_and_keep_their_state_after_rapid_toggling(motion_app, tmp_path: Path) -> None:
     h = motion_app
@@ -166,12 +170,15 @@ def test_context_menu_fades_and_grows_and_the_tool_marker_follows(motion_app, tm
     assert menu.property("scale") == 1 and menu.property("opacity") == 1
     QTest.keyClick(h.window, Qt.Key.Key_Escape)
     pump(0.3)
-    # Werkzeug wechseln: die Markierung sitzt danach unter dem neuen Werkzeug
+    # Werkzeug wechseln: die Markierung sitzt danach neben dem neuen Werkzeug (Schnellwerkzeuge links)
     marker = h.item("readerToolIndicator")
-    assert abs(center_x(marker) - center_x(h.item("readerToolSelect"))) < 1.5
-    click(h, window_point(h.item("readerToolImage"), 10, 10))
+    assert abs(center_y(marker) - center_y(h.item("readerToolSelect"))) < 1.5
+    click(h, window_point(h.item("readerToolEditText"), 10, 10))
     pump(0.5)
-    assert doc.tool == "image" and abs(center_x(marker) - center_x(h.item("readerToolImage"))) < 1.5
+    assert doc.tool == "editText" and abs(center_y(marker) - center_y(h.item("readerToolEditText"))) < 1.5
+    doc.setTool("image")  # Werkzeug aus »Alle Werkzeuge«: markiert ist »Alle Werkzeuge«
+    pump(0.5)
+    assert abs(center_y(marker) - center_y(h.item("readerQuickAllTools"))) < 1.5
 
 
 # --- Miniaturen ------------------------------------------------------------------------------------------------

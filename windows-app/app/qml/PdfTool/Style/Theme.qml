@@ -80,6 +80,8 @@ QtObject {
     readonly property color searchHit: c.search_hit || "#66FFC400"
     readonly property color searchHitCurrent: c.search_hit_current || "#FF8A00"
     readonly property color selection: Qt.rgba(accent.r, accent.g, accent.b, 0.32)
+    // Vergleichen (auf dem Papier, in beiden Designs gleich): geändert, neu, entfernt
+    readonly property var compareMarks: ["#59FFB300", "#5943A047", "#59E53935"]
 
     // Papier der Kopf-/Fußzeilen-Editoren (wie in der PDF – auch im dunklen Design weiß)
     readonly property color paper: "#FFFFFF"

@@ -19,8 +19,28 @@ Item {
     property var actions: notice ? notice.actions : []
     property bool animate: notice ? notice.animate : true
     property int topMargin: 8
+    // Nach so vielen Millisekunden von selbst schließen (0 = bleibt); solange die Maus darauf steht, nicht
+    property int autoHide: 0
     signal actionTriggered(int index)
     signal closed()
+
+    function dismiss() {
+        if (root.notice)
+            root.notice.close()
+        root.closed()
+    }
+    onShownChanged: if (shown && autoHide > 0) hideTimer.restart(); else hideTimer.stop()
+    Component.onCompleted: if (shown && autoHide > 0) hideTimer.restart()
+    onMessageChanged: if (shown && autoHide > 0) hideTimer.restart()
+    Timer {
+        id: hideTimer
+        interval: root.autoHide
+        onTriggered: {
+            if (barHover.hovered) restart()
+            else if (root.shown) root.dismiss()
+        }
+    }
+    HoverHandler { id: barHover }
 
     readonly property bool animating: heightAnim.running || fadeAnim.running
     readonly property real barHeight: bar.implicitHeight + topMargin
@@ -122,11 +142,7 @@ Item {
                 tip: "Schließen"
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: -4
-                onClicked: {
-                    if (root.notice)
-                        root.notice.close()
-                    root.closed()
-                }
+                onClicked: root.dismiss()
             }
         }
     }

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.1
+Version 4.0.0-beta.2
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.1.exe
+PDF-Tool-Setup-4.0.0-beta.2.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -44,6 +44,27 @@ optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
 qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 4.0 Beta 2 – Werkzeugleiste wie bei Acrobat, Vergleichen, geteilte Ansicht, Präsentation
+-------------------------------------------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Zweiter Teil von Version 4.0.
+- Neue Werkzeugleiste im Reader: oben nur noch Datei-Befehle (Öffnen,
+  Speichern, Drucken, E-Mail, Rückgängig) und links „Alle Werkzeuge“; links
+  neben dem Dokument die Schnellwerkzeuge (Auswählen, Verschieben,
+  Kommentieren, Zeichnen, Text hinzufügen, Text bearbeiten, Objekt
+  bearbeiten, Unterschreiben). „Alle Werkzeuge“ zeigt jedes Werkzeug mit
+  Namen, in Gruppen. Die Einstellungen eines Werkzeugs (Farbe, Stärke …)
+  erscheinen mit einem zweiten Klick auf das Werkzeug; Esc beendet es.
+- Mit anderer Fassung vergleichen (Alle Werkzeuge): die ältere Fassung
+  wählen – beide PDFs stehen nebeneinander, Unterschiede im Text sind farbig
+  markiert (geändert gelb, neu grün, entfernt rot) und rechts als Liste zum
+  Durchklicken.
+- Geteilte Ansicht: zwei PDFs nebeneinander im selben Fenster (Ansicht →
+  „Geteilte Ansicht“ oder Alle Werkzeuge), jedes mit eigener Seite und
+  eigenem Zoom.
+- Präsentation (F5): Vollbild auf schwarzem Grund, eine ganze Seite nach der
+  anderen mit Pfeiltasten, Leertaste oder Bild auf/ab; Esc beendet sie.
 
 
 Neu in Version 4.0 Beta 1 – Stapel-Aktionen, PDF/A, PDF aus Bildern, Updates mit einem Klick

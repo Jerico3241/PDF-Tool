@@ -77,7 +77,7 @@ Flickable {
         parent: view
         anchors.fill: parent
         z: -1
-        color: Theme.viewer
+        color: Reader.presenting ? "black" : Theme.viewer  // Präsentation: Seite auf schwarzem Grund
     }
 
     // --- Aufbau ------------------------------------------------------------------------------------------
@@ -338,18 +338,26 @@ Flickable {
             // die Stelle als Anker setzen (gilt auch für onSizesChanged/onZoomScaleChanged) und danach
             // noch einmal genau anfahren
             var anchor = { page: saved.page, u: saved.u, v: saved.v, x: width / 2, y: height / 2 }
-            var key = doc.docId
             viewAnchor = anchor
             restorePoint(anchor)
-            Qt.callLater(function() {
-                if (!view.doc || view.doc.docId !== key) return
-                view.relayout()
-                view.restorePoint({ page: anchor.page, u: anchor.u, v: anchor.v, x: view.width / 2, y: view.height / 2 })
-                view.rememberAnchor()
-                view.updateSlots()
-            })
+            restoreLater.anchor = anchor
+            restoreLater.key = doc.docId
+            restoreLater.restart()  // ein Timer der Ansicht statt Qt.callLater: entfällt mit ihr (geteilte Ansicht)
         } else {
             reveal(doc.currentPage, -1, -1)
+        }
+    }
+    Timer {
+        id: restoreLater
+        property var anchor: null
+        property string key: ""
+        interval: 0
+        onTriggered: {
+            if (!view.doc || view.doc.docId !== key || anchor === null) return
+            view.relayout()
+            view.restorePoint({ page: anchor.page, u: anchor.u, v: anchor.v, x: view.width / 2, y: view.height / 2 })
+            view.rememberAnchor()
+            view.updateSlots()
         }
     }
     Component.onCompleted: {
@@ -475,6 +483,10 @@ Flickable {
         cursorShape: view.doc && (view.doc.tool === "hand" || view.movable) ? Qt.OpenHandCursor : Qt.ArrowCursor
     }
 
+    // Druck in eine Seite (Werkzeug benutzen, Auswählen, Ziehen; meldet PageView) – schließt die Einstellungen
+    // des Werkzeugs
+    signal interacted()
+
     Keys.onPressed: (event) => {
         if (!view.doc) return
         if (view.doc.tool === "objects" && view.editing === null && view.objectKey(event)) {
@@ -484,6 +496,15 @@ Flickable {
         if (view.doc.tool === "formDesign" && view.editing === null && view.fieldKey(event)) {
             event.accepted = true
             return
+        }
+        // Präsentation: jede Taste zum Blättern wechselt die ganze Seite
+        if (Reader.presenting) {
+            switch (event.key) {
+            case Qt.Key_Right: case Qt.Key_Down: case Qt.Key_PageDown: case Qt.Key_Space: case Qt.Key_Return: case Qt.Key_Enter:
+                view.doc.step(1); event.accepted = true; return
+            case Qt.Key_Left: case Qt.Key_Up: case Qt.Key_PageUp: case Qt.Key_Backspace:
+                view.doc.step(-1); event.accepted = true; return
+            }
         }
         var page = view.height * 0.9
         switch (event.key) {

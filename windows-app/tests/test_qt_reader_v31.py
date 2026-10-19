@@ -293,22 +293,40 @@ def wheel(h, item, steps: int, modifiers=NO_MOD) -> None:
     pump(0.4)
 
 
-def test_clicking_the_chosen_tool_returns_to_select(reader_app, tmp_path: Path) -> None:
-    """Ein gewähltes Werkzeug lässt sich abwählen: zurück zu »Auswählen«. Die Schaltflächen zeigen immer das
-    Werkzeug des Dokuments – bis 3.1.0-beta.2 schaltete sich die Schaltfläche nur selbst um, das Werkzeug blieb."""
+def test_clicking_the_chosen_tool_shows_its_settings_and_esc_returns_to_select(reader_app, tmp_path: Path) -> None:
+    """Die Schaltflächen zeigen immer das Werkzeug des Dokuments. Seit 4.0.0-beta.2 zeigt ein erneuter Klick auf das
+    gewählte Werkzeug seine Einstellungen (Farbe …) statt es abzuwählen; ein Druck in die Seite blendet sie aus,
+    Esc kehrt zu »Auswählen« zurück."""
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "Werkzeuge.pdf"))
     select, objects, hand = h.item("readerToolSelect"), h.item("readerToolObjects"), h.item("readerToolHand")
+    card = h.item("readerToolOptionsCard")
     click(h, center(objects))
     assert doc.tool == "objects" and objects.property("checked") and not select.property("checked")
-    click(h, center(objects))  # abwählen
+    click(h, center(objects))  # erneut: bleibt gewählt (Objekt bearbeiten hat keine Einstellungen)
+    assert doc.tool == "objects" and objects.property("checked") and not card.isVisible()
+    click(h, center(select))
     assert doc.tool == "select" and select.property("checked") and not objects.property("checked")
-    click(h, center(select))  # »Auswählen« bleibt gewählt
-    assert doc.tool == "select" and select.property("checked")
+    click(h, center(hand))
     click(h, center(hand))
     assert doc.tool == "hand" and hand.property("checked") and not select.property("checked")
-    click(h, center(hand))
-    assert doc.tool == "select" and not hand.property("checked")
+    # Markieren: Einstellungen erst beim zweiten Klick, ein Druck in die Seite blendet sie aus
+    comment = h.item("readerToolComment")
+    click(h, center(comment))
+    pump(0.4)
+    assert doc.tool == "highlight" and not card.isVisible()
+    click(h, center(comment))
+    pump(0.4)
+    assert doc.tool == "highlight" and card.isVisible()
+    click(h, page_point(h, 0, 300, 400))
+    pump(0.4)
+    assert doc.tool == "highlight" and not card.isVisible()
+    click(h, center(comment))
+    pump(0.4)
+    assert card.isVisible()
+    click(h, center(comment))  # noch einmal: wieder zu
+    pump(0.4)
+    assert not card.isVisible()
     # Wechsel ohne die Leiste (Menü, Esc, Controller): die Schaltflächen folgen – auch nach dem Abwählen
     doc.setTool("objects")
     pump(0.1)

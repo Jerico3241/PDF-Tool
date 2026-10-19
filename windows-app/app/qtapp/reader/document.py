@@ -95,6 +95,9 @@ class DocumentController(Observable):
     searchSummaryChanged, searchSummary = prop(str, "searchSummary", "")
     hitRectsChanged, hitRects = prop(dict, "hitRects", {})  # Seite (Text) → Liste von Rechtecken
     currentHitChanged, currentHit = prop(dict, "currentHit", {})  # {page, rects}
+    # Vergleichen: Seite (Text) → [[x0, y0, x1, y1, Art]] (0 geändert, 1 neu, 2 entfernt); gewählte Änderung {page, rects}
+    compareRectsChanged, compareRects = prop(dict, "compareRects", {})
+    currentCompareChanged, currentCompare = prop(dict, "currentCompare", {})
     # Bearbeiten
     blocksChanged, blocks = prop(list, "blocks", [])
     blocksPageChanged, blocksPage = prop(int, "blocksPage", -1)
@@ -610,6 +613,11 @@ class DocumentController(Observable):
         self.run(lambda session: session.markup(page, kind, rects, color, ""), lambda _key: (self.clear_selection(), self.loadAnnotations()), busy="")
 
     # Suche ---------------------------------------------------------------------------------------------------------
+    @Slot()
+    def compareWith(self) -> None:  # noqa: N802
+        """»Mit anderer Fassung vergleichen …« (Alle Werkzeuge)."""
+        self.reader.compare_with(self)
+
     @Slot()
     def requestSearch(self) -> None:  # noqa: N802
         self.searchFocusSerial = self.searchFocusSerial + 1

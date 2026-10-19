@@ -74,8 +74,8 @@ jobs:
             dateien: reader reader_layout reader_v31 pages_v31 forms_v31
           - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
             dateien: objects objects_v31 edit_v31 reader_motion ocr
-          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent
-            dateien: protect comfort assistant
+          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen
+            dateien: protect comfort assistant reader_v40
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -183,8 +183,8 @@ jobs:
       - name: 1. Tests (PDF Editor – Schwärzen, Bereinigen, Reduzieren, Kennwortschutz, Verkleinern, Kopf-/Fußzeile und Wasserzeichen, Stempel und Unterschrift, Lesezeichen, Links, Zuschneiden)
         run: python -m pytest windows-app/tests/test_editor_redact.py windows-app/tests/test_editor_cleanup.py windows-app/tests/test_editor_protect.py windows-app/tests/test_editor_optimize.py windows-app/tests/test_editor_pagemarks.py windows-app/tests/test_editor_stamps.py windows-app/tests/test_editor_navigation.py -q -rs -p no:cacheprovider
 
-      - name: 1. Tests (4.0 – Als PDF/A speichern, PDF aus Bildern, Stapel-Aktionen)
-        run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py -q -rs -p no:cacheprovider
+      - name: 1. Tests (4.0 – Als PDF/A speichern, PDF aus Bildern, Stapel-Aktionen, Vergleichen)
+        run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py windows-app/tests/test_compare.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider

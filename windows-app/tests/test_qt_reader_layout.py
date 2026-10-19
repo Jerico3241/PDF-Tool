@@ -20,6 +20,7 @@ from conftest import neustart, pump, wait_until
 from test_qt_reader import click, open_pdf, reader, settle, window_point
 
 LEFT_WIDTH, RIGHT_WIDTH, RAIL = 300, 280, 44  # Metrics.readerLeftPanelWidth / readerRightPanelWidth / readerRailWidth
+QUICK = 40 + 2 * 8  # Schnellwerkzeuge zwischen linker Leiste und Dokument (Metrics.readerQuickToolsWidth + Rand)
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ def test_left_panel_keeps_its_width_and_the_document_does_not_move(reader_app, t
         positions.add(round(left_x(view)))
         sizes.add(round(view.width()))
     assert widths == {LEFT_WIDTH}
-    assert positions == {round(right_x(panel))}  # die Dokumentfläche beginnt an der Leiste
+    assert positions == {round(right_x(panel)) + QUICK}  # die Dokumentfläche beginnt nach Leiste und Schnellwerkzeugen
     assert len(sizes) == 1
 
 
@@ -92,7 +93,7 @@ def test_tabs_in_the_header_switch_and_the_strip_reopens(reader_app, tmp_path: P
     assert r.leftPanel == ""
     assert wait_until(lambda: not h.item("readerLeftPanel").isVisible(), 3)
     rail, view = h.item("readerLeftRail"), h.item("readerView")
-    assert round(rail.width()) == RAIL and round(left_x(view)) == round(right_x(rail))
+    assert round(rail.width()) == RAIL and round(left_x(view)) == round(right_x(rail)) + QUICK
     # Wieder öffnen über den Streifen – gleich mit dem gewünschten Inhalt
     press(h, "readerRailOutline")
     assert r.leftPanel == "outline" and "Lesezeichen" in titles(h)

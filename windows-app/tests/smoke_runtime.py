@@ -517,6 +517,19 @@ def main() -> int:
     stapel = batch_runner.process(adresse, work / "adresse_bearbeitet.pdf", plan)
     check(editor_pdfa.check(stapel.target.read_bytes()) == [], "Stapel-Aktionen: Ergebnis ist kein PDF/A")
     print(f"PDF/A: {archiv_info.fonts} Schriften eingebettet; PDF aus Bildern: {bilder.pages} Seiten; Stapel-Aktionen: {plan.summary()}")
+    # 4.0.0-beta.2: Vergleichen (Wörter mit Lage über PDFium, difflib aus der Laufzeit)
+    from qtapp.reader.session import Session
+    from tools.pdf_editor import compare as editor_compare
+
+    sitzung = Session.open("vergleich", str(adresse))
+    try:
+        woerter, ohne_text = sitzung.compare_words()
+    finally:
+        sitzung.close()
+    vergleich = editor_compare.compare(woerter, woerter[:-1])
+    check(len(woerter) > 3 and not ohne_text, f"Vergleichen: {len(woerter)} Wörter, ohne Text {ohne_text}")
+    check([change.kind for change in vergleich.changes] == ["removed"], f"Vergleichen: {editor_compare.summary(vergleich)}")
+    print(f"Vergleichen: {len(woerter)} Wörter, {editor_compare.summary(vergleich)}")
     ai_check(app_dir, work)
 
     if args.part == "runtime":

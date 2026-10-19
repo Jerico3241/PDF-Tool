@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, compare, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
@@ -150,6 +150,30 @@ class Session:
             used += len(value)
             result.append(value)
         return result
+
+    def compare_words(self, cancelled=lambda: False) -> tuple[list, list[int]]:
+        """Alle Wörter des Dokuments für »Vergleichen« (Seite, Text, Rechteck in Anzeige-Punkten) und die Seiten ohne Text."""
+        from pdfium_lock import PDFIUM_LOCK
+
+        words, empty = [], []
+        for page in range(self.document.page_count):
+            if cancelled():
+                break
+            geo = self.document.geometry(page)
+            chars = []
+            with PDFIUM_LOCK:
+                textpage = self.document.textpage(page)
+                for i in range(textpage.count_chars()):
+                    char = textpage.get_text_range(i, 1)
+                    left, bottom, right, top = textpage.get_charbox(i, loose=True)
+                    chars.append((char, geo.rect_to_view(normalize((left, bottom, right, top)))))
+            found = compare.words_from_chars(page, chars)
+            if not found:
+                empty.append(page)
+            words.extend(found)
+            if len(words) > compare.MAX_WORDS:
+                break
+        return words, empty
 
     def selection_rects(self, page: int, start: int, count: int) -> list[list[float]]:
         geo = self.document.geometry(page)

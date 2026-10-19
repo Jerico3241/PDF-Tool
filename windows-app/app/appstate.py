@@ -141,8 +141,10 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Beta 4.0 – erster Teil. Neu: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
-    "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Schützen« und als Schnellwerkzeug.",
+    "Beta 4.0 – zweiter Teil. Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
+    "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",
+    "Aus Beta 1: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
+    "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Alle Werkzeuge« → »Schützen« und als Schnellwerkzeug.",
     "PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF …) in die App ziehen oder im Explorer über Rechtsklick → »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
     "Updates mit einem Klick: PDF Tool lädt neue Versionen selbst herunter. »Jetzt installieren« aktualisiert ohne Setup-Assistent und startet die App danach neu.",
     "Aufgeräumte Einstellungen: oben eine Leiste mit den Bereichen Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose und Info.",

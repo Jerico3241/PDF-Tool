@@ -67,6 +67,8 @@ QtObject {
     readonly property int readerPanelTab: 28      // Umschalter und Schließen im Kopf einer Seitenleiste
     readonly property int readerRailWidth: 44     // eingeklappte Seitenleiste: Streifen mit ihren Symbolen
     readonly property int readerRailButton: 36
+    readonly property int readerQuickToolsWidth: 40   // Schnellwerkzeuge links: Schaltfläche (32) und Rand
+    readonly property int readerAllToolsWidth: 320
     readonly property int readerViewMargin: 16    // wie VIEW_MARGIN in qtapp/reader/document.py
     readonly property int readerNarrowFrom: 820   // schmaler: Seitenleisten liegen über der Ansicht
     readonly property int readerHandle: 10        // Anfasser zum Ändern der Bildgröße

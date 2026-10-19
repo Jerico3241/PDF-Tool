@@ -25,3 +25,7 @@ AssistantPanel 1.0 AssistantPanel.qml
 OrganizeView 1.0 OrganizeView.qml
 ObjectPanel 1.0 ObjectPanel.qml
 OcrProgress 1.0 OcrProgress.qml
+QuickTools 1.0 QuickTools.qml
+AllTools 1.0 AllTools.qml
+SplitPane 1.0 SplitPane.qml
+ComparePanel 1.0 ComparePanel.qml
