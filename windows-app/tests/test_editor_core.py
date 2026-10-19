@@ -13,7 +13,7 @@ import pytest
 
 import editorsamples as samples
 from tools.pdf_editor import commands, outline, recovery, render, save, textlayer
-from tools.pdf_editor.document import EditorDocument
+from tools.pdf_editor.document import EditorDocument, FileStamp
 from tools.pdf_editor.errors import DamagedDocument, ExternalChange, NotAPdf, PasswordRequired, ReadOnlyDocument, SaveFailed
 from tools.pdf_editor.geometry import PageGeometry
 
@@ -31,6 +31,66 @@ def test_open_reads_pages_sizes_and_does_not_keep_the_file_open(tmp_path: Path) 
         path.unlink()
     finally:
         doc.close()
+
+
+def test_open_waits_for_a_file_another_program_is_still_writing(tmp_path: Path) -> None:
+    """Word »Nach dem Veröffentlichen öffnen« bzw. Anhang aus Outlook: Die Datei ist beim Start noch nicht fertig."""
+    import threading
+
+    full = samples.standard_text(tmp_path / "fertig.pdf", pages=2).read_bytes()
+    path = tmp_path / "Brief.pdf"
+    path.write_bytes(full[: len(full) // 2])  # halb geschrieben, ohne %%EOF
+
+    def finish() -> None:
+        time.sleep(0.4)
+        path.write_bytes(full)
+
+    writer = threading.Thread(target=finish)
+    writer.start()
+    try:
+        doc = EditorDocument.open(path)
+    finally:
+        writer.join()
+    try:
+        assert doc.page_count == 2
+        assert doc.stamp == FileStamp.of(path)  # der Stand gilt ab dem fertigen Lesen
+    finally:
+        doc.close()
+
+
+def test_open_retries_while_another_program_locks_the_file(tmp_path: Path, monkeypatch) -> None:
+    from tools.pdf_editor import document as document_module
+
+    path = samples.standard_text(tmp_path / "gesperrt.pdf")
+    real = Path.read_bytes
+    calls = []
+
+    def locked_twice(self):
+        calls.append(1)
+        if len(calls) <= 2:
+            raise PermissionError(13, "Der Prozess kann nicht auf die Datei zugreifen")
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", locked_twice)
+    monkeypatch.setattr(document_module, "SETTLE_STEP", 0.01)
+    doc = EditorDocument.open(path)
+    doc.close()
+    assert len(calls) == 3
+
+
+def test_damaged_file_is_reported_without_long_waiting(tmp_path: Path) -> None:
+    path = tmp_path / "kaputt.pdf"
+    path.write_bytes(b"%PDF-1.7\n1 0 obj << >> endobj\n")
+    started = time.monotonic()
+    with pytest.raises(DamagedDocument):
+        EditorDocument.open(path)  # jung, aber unverändert: nach etwa einer Sekunde
+    assert time.monotonic() - started < 3
+    old = time.time() - 3600
+    os.utime(path, (old, old))
+    started = time.monotonic()
+    with pytest.raises(DamagedDocument):
+        EditorDocument.open(path)  # alt: sofort
+    assert time.monotonic() - started < 0.5
 
 
 def test_password_is_required_wrong_password_is_reported_and_right_one_opens(tmp_path: Path) -> None:

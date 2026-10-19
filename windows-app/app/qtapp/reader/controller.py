@@ -928,7 +928,7 @@ class ReaderController(Observable):
                 return
             busy = {_key(doc.path) for doc in self._docs.values() if doc.path} | {_key(path) for path in self._opening_paths}
             entries = [entry for entry in existing if _key(entry["pfad"]) not in busy][: max(0, TAB_LIMIT - len(self._docs) - self.opening)]
-            state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": len(wanted) - len(existing), "failed": 0}
+            state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": sum(1 for entry in wanted if entry not in existing and not _temporary(entry["pfad"])), "failed": 0}
             if not entries:
                 self._restoring = False
                 if state["missing"]:
@@ -1434,3 +1434,17 @@ def opened_text(stamp: str, now: datetime | None = None) -> str:
     if when.date() == today - timedelta(days=1):
         return f"Gestern, {when:%H:%M}"
     return f"{when:%d.%m.%Y}"
+
+
+def _temporary(path: str) -> bool:
+    """Datei in einem Ordner für vorübergehende Kopien – Anhänge aus Outlook (``INetCache\\Content.Outlook``) oder der
+    Temp-Ordner. Outlook löscht seine Kopien später wieder; dass sie in der letzten Sitzung fehlen, ist kein Fehler."""
+    import tempfile
+
+    text = str(path).replace("/", "\\").lower()
+    if "\\content.outlook\\" in text or "\\inetcache\\" in text:
+        return True
+    try:
+        return Path(path).resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())
+    except (OSError, ValueError):
+        return False

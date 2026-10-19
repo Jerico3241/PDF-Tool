@@ -16,12 +16,14 @@ import json
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 PREFIX = "PDFTool-Oeffnen-"
 MAX_PATHS = 50
 BACKGROUND_ARGUMENT = "--hintergrund"  # Start mit Windows: ohne Fenster
 EARLY_TIMEOUT = 3.0  # Sekunden bis zur Antwort der laufenden App
+BUSY_WAIT = 2.0  # Sekunden, die ein weiterer Start auf eine belegte Verbindung wartet
 
 
 def server_name() -> str:
@@ -46,6 +48,22 @@ def message(paths: list[str], show: bool) -> bytes:
     return json.dumps({"open": paths[:MAX_PATHS], "show": bool(show)}).encode("utf-8") + b"\n"
 
 
+def _connect(pipe: str, wait: float = BUSY_WAIT):
+    """Named Pipe öffnen. Ist sie gerade belegt (z. B. mehrere Anhänge aus Outlook kurz nacheinander geöffnet: die
+    laufende App bedient noch den vorigen Start), kurz warten und erneut versuchen – sonst startete ein zweites
+    PDF Tool. ``None``: keine laufende App bzw. weiter belegt."""
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            return os.open(pipe, os.O_RDWR | getattr(os, "O_BINARY", 0))
+        except FileNotFoundError:
+            return None  # keine laufende App
+        except OSError:
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.05)
+
+
 def early_forward(argv: list[str], name: str | None = None, timeout: float = EARLY_TIMEOUT) -> bool:
     """Nur Windows: Start an die laufende App übergeben. ``True``: angenommen – dieser Prozess kann sofort enden.
 
@@ -54,10 +72,9 @@ def early_forward(argv: list[str], name: str | None = None, timeout: float = EAR
         return False
     paths = pdf_arguments(argv)
     show = bool(paths) or BACKGROUND_ARGUMENT not in argv
-    try:
-        handle = os.open("\\\\.\\pipe\\" + (name or server_name()), os.O_RDWR | getattr(os, "O_BINARY", 0))
-    except OSError:
-        return False  # keine laufende App (oder die Verbindung ist gerade belegt)
+    handle = _connect("\\\\.\\pipe\\" + (name or server_name()))
+    if handle is None:
+        return False  # keine laufende App
     reply: list[bytes] = []
 
     def talk() -> None:
