@@ -141,7 +141,8 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Beta 4.0 – zweiter Teil. Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
+    "Beta 4.0 – dritter Teil: aufgeräumt. Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
+    "Aus Beta 2: Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
     "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",
     "Aus Beta 1: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
     "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Alle Werkzeuge« → »Schützen« und als Schnellwerkzeug.",
@@ -283,7 +284,8 @@ def migrate_legacy_config(target: Path | None = None, legacy: Path | None = None
 
 
 def load_config(path: Path | None = None) -> dict:
-    """Liest die Einstellungen. Beschädigte Dateien liefern leere Einstellungen."""
+    """Liest die Einstellungen. Beschädigte Dateien liefern leere Einstellungen; die beschädigte Datei bleibt als
+    ``….defekt`` liegen, damit das nächste Speichern sie nicht spurlos ersetzt."""
     target = Path(path or CONFIG_FILE)
     if path is None:
         migrate_legacy_config(target)
@@ -291,9 +293,19 @@ def load_config(path: Path | None = None) -> dict:
         return {}
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError:
+        return {}
+    except ValueError:
+        _keep_damaged(target)
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _keep_damaged(target: Path) -> None:
+    try:
+        shutil.copy2(target, target.with_name(target.name + ".defekt"))
+    except OSError:
+        pass
 
 
 def save_config(data: dict, path: Path | None = None) -> bool:
@@ -305,6 +317,8 @@ def save_config(data: dict, path: Path | None = None) -> bool:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(data, handle, ensure_ascii=False, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())  # Stromausfall beim Abmelden: keine leere Datei
             os.replace(temp, target)
         finally:
             if os.path.exists(temp):

@@ -198,11 +198,31 @@ def clean_bemerkung(text: str) -> str:
     return text.strip()
 
 
+def als_datum(value):
+    """Ein Zellwert als Datum. Text wird deutsch gelesen (»01.02.2021« = 1. Februar), auch wenn pandas aus
+    dem ersten Wert sonst Monat-zuerst raten würde; echte Excel-Datumswerte bleiben, wie sie sind."""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return pd.NaT
+        for muster in ("%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d.%m.%Y %H:%M"):
+            stamp = pd.to_datetime(text, format=muster, errors="coerce")
+            if not pd.isna(stamp):
+                return stamp
+        return pd.to_datetime(text, errors="coerce", dayfirst=True)
+    return pd.to_datetime(value, errors="coerce")
+
+
+def datum_spalte(werte: "pd.Series") -> "pd.Series":
+    """Eine Spalte als Datum (siehe ``als_datum``), Zelle für Zelle."""
+    return pd.to_datetime(werte.map(als_datum), errors="coerce")
+
+
 def fmt_date(d) -> str:
     if pd.isna(d):
         return "–"
     if not hasattr(d, "strftime"):
-        d = pd.to_datetime(d, errors="coerce")
+        d = als_datum(d)
         if pd.isna(d):
             return "–"
     return d.strftime("%d.%m.%Y")
@@ -385,7 +405,7 @@ def _rohbetrag(value) -> float | str | None:
 def _iso_datum(value) -> str | None:
     if value is None:
         return None
-    stamp = pd.to_datetime(value, errors="coerce")
+    stamp = als_datum(value)
     return None if pd.isna(stamp) else stamp.strftime("%Y-%m-%d")
 
 
@@ -722,7 +742,7 @@ def pruefe_excel(pfad: Path, regeln=None, beendete=False) -> dict:
     beendet = zahl_beendete(daten, beendete)
     col_beginn = _col(df, *SPALTE_BEGINN, required=False)
     if col_beginn:
-        daten["_sort"] = pd.to_datetime(daten[col_beginn], errors="coerce")
+        daten["_sort"] = datum_spalte(daten[col_beginn])
         daten = daten.sort_values("_sort", kind="stable")
     anzahl = int(len(daten)) - beendet  # aktive Verträge
     col_kunde = _col(df, *SPALTE_KUNDE, required=False)
@@ -885,7 +905,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
         raise ValueError(keine_vertraege_text(auftrag.beendete))
     col_status = _col(df, *SPALTE_STATUS, required=False)
     df["_beginn_roh"] = df[col_beginn]
-    df[col_beginn] = pd.to_datetime(df[col_beginn], errors="coerce")
+    df[col_beginn] = datum_spalte(df[col_beginn])
     df = df.sort_values(col_beginn, kind="stable").reset_index(drop=True)
     vertraege = vertragsdaten(df, col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung, "_beginn_roh", (col_status or "") if beendete_auswahl(auftrag.beendete) else "")
 

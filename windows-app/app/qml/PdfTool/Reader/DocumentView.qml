@@ -28,6 +28,17 @@ Flickable {
     readonly property bool paired: mode === "two" || mode === "continuousTwo"
     readonly property bool paged: mode === "single" || mode === "two"
     readonly property var sizes: doc ? doc.pageSizes : []
+    // Markierungen aller Seiten: einmal je Änderung aus Python holen – die Seiten (PageView) lesen nur ihren
+    // Eintrag. Sonst holte jede sichtbare Seite beim Blättern die ganze Tabelle (große PDFs: spürbar langsam).
+    readonly property string toolKey: doc ? doc.tool : "select"
+    readonly property var hitMap: doc ? doc.hitRects : ({})
+    readonly property var compareMap: doc ? doc.compareRects : ({})
+    readonly property var annotationMap: doc ? doc.annotationPages : ({})
+    readonly property var fieldMap: doc && toolKey === "form" ? doc.fieldPages : ({})
+    readonly property var designMap: doc && toolKey === "formDesign" ? doc.designPages : ({})
+    readonly property var linkMap: doc ? doc.linkPages : ({})
+    readonly property var markMap: doc ? doc.redactMarks : ({})
+    readonly property var objectMap: doc && toolKey === "objects" ? doc.objectPages : ({})
     readonly property int pageCount: sizes.length
     readonly property int current: doc ? doc.currentPage : 0
     readonly property real ratio: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
@@ -219,8 +230,9 @@ Flickable {
         if (!doc) return
         var point = pointAt(x, y)
         restoring = true
+        var before = zoomScale
         doc.zoomBy(factor)
-        relayout()
+        if (zoomScale === before) relayout()  // sonst hat onZoomScaleChanged schon neu angeordnet
         restoring = false
         restorePoint(point)
         rememberAnchor()

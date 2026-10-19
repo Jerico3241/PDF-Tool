@@ -21,6 +21,7 @@ FocusScope {
     id: root
     objectName: "readerOrganizeView"
     property var doc: null
+    readonly property var sizes: doc ? doc.pageSizes : []  // einmal je Änderung, nicht je Zelle
     property var selection: ({})
     property int anchorIndex: -1
     readonly property var selectedPages: {
@@ -257,6 +258,27 @@ FocusScope {
             focus: true
             clip: true
             model: root.doc ? root.doc.pageCount : 0
+            // Seiten gelöscht oder eingefügt: das Modell beginnt neu (oben) – die Stelle bleibt
+            property real keptY: 0
+            property int keptCount: 0
+            property bool restoring: false
+            onContentYChanged: if (!restoring && count === keptCount && count > 0) keptY = contentY
+            onCountChanged: {
+                if (keptCount > 0 && count > 0) {
+                    restoring = true
+                    restoreLater.restart()  // erst nach dem Neuaufbau (Timer statt Qt.callLater: endet mit der Ansicht)
+                }
+                keptCount = count
+            }
+            Timer {
+                id: restoreLater
+                interval: 0
+                onTriggered: {
+                    if (grid.count > 0)
+                        grid.contentY = Math.max(grid.originY - grid.topMargin, Math.min(grid.keptY, grid.originY + grid.contentHeight + grid.bottomMargin - grid.height))
+                    grid.restoring = false
+                }
+            }
             cellWidth: Math.max(root.thumbBox + 24, Math.floor((width - 16) / Math.max(1, Math.floor((width - 16) / (root.thumbBox + 24)))))
             cellHeight: root.thumbBox * 1.42 + 40
             leftMargin: 8
@@ -275,7 +297,7 @@ FocusScope {
                 id: cell
                 required property int index
                 readonly property bool isCell: true
-                readonly property var size: root.doc && index < root.doc.pageSizes.length ? root.doc.pageSizes[index] : [595, 842]
+                readonly property var size: index < root.sizes.length ? root.sizes[index] : [595, 842]
                 readonly property real fit: Math.min(root.thumbBox / size[0], root.thumbBox * 1.42 / size[1])
                 readonly property bool chosen: root.selection[index] === true
                 // gezogene Seiten: Platzhalter an der neuen Stelle – Rahmen im Akzentton, Seite abgeblendet (die
@@ -544,7 +566,7 @@ FocusScope {
         id: ghost
         objectName: "readerOrganizeGhost"
         readonly property int first: root.selectedPages.length > 0 ? root.selectedPages[0] : -1
-        readonly property var size: root.doc && first >= 0 && first < root.doc.pageSizes.length ? root.doc.pageSizes[first] : [595, 842]
+        readonly property var size: first >= 0 && first < root.sizes.length ? root.sizes[first] : [595, 842]
         readonly property real fit: Math.min(root.thumbBox * 0.6 / size[0], root.thumbBox * 0.85 / size[1])
         readonly property point at: grid.mapToItem(root, dragArea.pointerX, dragArea.pointerY)
         visible: opacity > 0

@@ -15,6 +15,7 @@ Rect = tuple[float, float, float, float]
 
 MAX_WORDS = 400_000  # je Dokument; darüber dauert der Vergleich zu lange
 EXCERPT = 80  # Zeichen je Seite einer Änderung in der Liste
+BLOCK_LIMIT = 4_000_000  # Wörter alt × neu in einem geänderten Abschnitt; darüber gilt er als Ganzes geändert
 
 
 @dataclass(frozen=True)
@@ -115,14 +116,54 @@ def _key(word: Word) -> str:
     return word.text.replace("­", "").replace("’", "'").replace("„", '"').replace("“", '"').replace("”", '"')
 
 
-def compare(old: list[Word], new: list[Word], old_empty: list[int] | None = None, new_empty: list[int] | None = None) -> Result:
-    truncated = len(old) > MAX_WORDS or len(new) > MAX_WORDS
-    old, new = old[:MAX_WORDS], new[:MAX_WORDS]
-    matcher = difflib.SequenceMatcher(None, [_key(word) for word in old], [_key(word) for word in new], autojunk=False)
-    changes: list[Change] = []
-    for tag, a0, a1, b0, b1 in matcher.get_opcodes():
+def _lines(words: list[Word]) -> list[tuple[int, int]]:
+    """Wörter zu Zeilen (Anfang, Ende als Indizes): gleiche Seite, etwa gleiche Höhe, nacheinander."""
+    lines: list[tuple[int, int]] = []
+    start = 0
+    for index in range(1, len(words) + 1):
+        if index == len(words):
+            lines.append((start, index))
+            break
+        before, word = words[index - 1], words[index]
+        height = max(1.0, before.rect[3] - before.rect[1])
+        if word.page != before.page or abs(word.rect[1] - before.rect[1]) > height * 0.5:
+            lines.append((start, index))
+            start = index
+    return lines if words else []
+
+
+def _opcodes(old_keys: list[str], new_keys: list[str], old: list[Word], new: list[Word], cancelled=None):
+    """Unterschiede Wort für Wort – in zwei Stufen, damit lange Dokumente nicht minutenlang rechnen: erst ganze
+    Zeilen vergleichen (gleiche Zeilen fallen weg), dann nur in den geänderten Abschnitten die Wörter."""
+    old_lines, new_lines = _lines(old), _lines(new)
+    line_matcher = difflib.SequenceMatcher(None, [" ".join(old_keys[a:b]) for a, b in old_lines], [" ".join(new_keys[a:b]) for a, b in new_lines], autojunk=False)
+    for tag, la0, la1, lb0, lb1 in line_matcher.get_opcodes():
+        if cancelled is not None and cancelled():
+            raise CompareCancelled()
+        a0 = old_lines[la0][0] if la0 < la1 else (old_lines[la0][0] if la0 < len(old_lines) else len(old))
+        a1 = old_lines[la1 - 1][1] if la0 < la1 else a0
+        b0 = new_lines[lb0][0] if lb0 < lb1 else (new_lines[lb0][0] if lb0 < len(new_lines) else len(new))
+        b1 = new_lines[lb1 - 1][1] if lb0 < lb1 else b0
         if tag == "equal":
             continue
+        if tag != "replace" or (a1 - a0) * (b1 - b0) > BLOCK_LIMIT:
+            yield ("replace" if a1 > a0 and b1 > b0 else ("delete" if a1 > a0 else "insert")), a0, a1, b0, b1
+            continue
+        words = difflib.SequenceMatcher(None, old_keys[a0:a1], new_keys[b0:b1], autojunk=False)
+        for inner, x0, x1, y0, y1 in words.get_opcodes():
+            if inner != "equal":
+                yield inner, a0 + x0, a0 + x1, b0 + y0, b0 + y1
+
+
+class CompareCancelled(Exception):
+    pass
+
+
+def compare(old: list[Word], new: list[Word], old_empty: list[int] | None = None, new_empty: list[int] | None = None, cancelled=None) -> Result:
+    truncated = len(old) > MAX_WORDS or len(new) > MAX_WORDS
+    old, new = old[:MAX_WORDS], new[:MAX_WORDS]
+    changes: list[Change] = []
+    for tag, a0, a1, b0, b1 in _opcodes([_key(word) for word in old], [_key(word) for word in new], old, new, cancelled):
         before, after = old[a0:a1], new[b0:b1]
         kind = "changed" if before and after else ("removed" if before else "added")
         old_places, old_at = _places(before)

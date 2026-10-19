@@ -82,6 +82,7 @@ class ActionsController(Observable):
         self._plan = Plan.from_settings(stored)
         self._password = ""  # nur im Arbeitsspeicher
         self._items: list[dict] = []
+        self._next_key = 0  # fortlaufend: ein Schlüssel wird nie zweimal vergeben, auch nach Entfernen
         self._cancel: threading.Event | None = None
         self._last_folder = ""
         self.set_quietly("outMode", OUT_FOLDER if stored.get("ausgabe") == OUT_FOLDER else OUT_ORIGINAL)
@@ -192,7 +193,8 @@ class ActionsController(Observable):
                 size = p.stat().st_size
             except OSError:
                 continue
-            self._items.append({"key": str(len(self._items)) + ":" + p.name, "path": str(p), "name": p.name, "folder": str(p.parent), "size": size, "state": "waiting", "message": "", "output": ""})
+            self._next_key += 1
+            self._items.append({"key": str(self._next_key) + ":" + p.name, "path": str(p), "name": p.name, "folder": str(p.parent), "size": size, "state": "waiting", "message": "", "output": ""})
             known.add(str(path).lower())
             added += 1
         if added:
