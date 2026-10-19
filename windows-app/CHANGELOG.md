@@ -2,6 +2,32 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.3
+
+Beta zum Testen. Aufräum-Beta ohne neue Funktionen: Fehler, Abstürze und langsame Stellen. Details in den
+[Release Notes](release-notes/4.0.0-beta.3.md).
+
+- Updater: `installer.helper_copy` kopiert die Laufzeit (ohne `site-packages`) und `launch.py` neben das Setup
+  (`update-helfer`); der Hilfsprozess belegt so keine Dateien in `{app}\runtime`, die das stille Setup ersetzt.
+- Outlook-Anhänge: `handoff.secure_transient` kopiert Dateien aus `INetCache\Content.Outlook` und dem Temp-Ordner
+  nach `%LOCALAPPDATA%\PDF-Tool\Anhaenge` (7 Tage), bevor `start.py` übergibt; `PDF-Tool.exe` wartet auf das
+  Ereignis aus `signal_started` (höchstens 15 s) statt sofort zu enden. `winsys.bring_to_front` in
+  `present_window`; `InstanceServer` protokolliert Übergaben (Anzahl, vorhanden).
+- `application.restart_app` startet ohne `--hintergrund` und ohne die PDFs des ursprünglichen Starts.
+- `engine.als_datum`/`datum_spalte`: Text-Datumswerte deutsch (Tag zuerst) statt pandas-Raten je Spalte.
+- `preview.BUILD_LOCK`: PDF-Erzeugung (Vorschau, Einzel-PDF, Stapel) nacheinander, ohne die PDFium-Sperre zu halten.
+- `appstate.save_config` mit `fsync`; beschädigte `gui-config.json` bleibt als `….defekt`.
+- Stapel-Aktionen: fortlaufende Schlüssel (`_next_key`) statt Listenlänge.
+- Reader: `PageResponse.cancel` meldet `finished` (Qt räumt abgebrochene Bilder sonst nicht ab, einmalig über
+  `_delivered`); Aufträge nach dem Schließen eines Tabs öffnen das Dokument nicht neu und melden nichts an das
+  gelöschte Objekt (`_CLOSED`, `_closing`, auch Texterkennung); `fieldnudge`-Timer beim Schließen;
+  `open_paths` übergeht Dateien, die gerade geöffnet werden.
+- QML: `DocumentView` holt die Markierungstabellen einmal je Änderung (`hitMap`, `linkMap` …), `PageView` liest
+  nur ihren Eintrag; Seitenmaße einmal je Ansicht in `ThumbnailPanel`/`OrganizeView`; Seitenleiste und Raster
+  behalten die Stelle nach Löschen/Einfügen; `zoomAt` ordnet nur einmal neu an.
+- Vergleichen: erst Zeilen, dann Wörter in geänderten Abschnitten (`_opcodes`), abbrechbar (`cancelled`).
+- Tests: Datum als Text (`test_core.py`), Laufzeit-Kopie des Hilfsprozesses (`test_updater_flow.py`).
+
 # PDF Tool 4.0.0-beta.2
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Zweiter Teil von 4.0: Werkzeugleiste des Readers nach

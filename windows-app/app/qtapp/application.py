@@ -428,7 +428,13 @@ def restart_app() -> None:
     Instanz alles gespeichert hat – die neue liest beim Start den neuen Stand."""
     import subprocess
 
-    args = [sys.executable, *sys.orig_argv[1:]] if getattr(sys, "orig_argv", None) else [sys.executable, *sys.argv]
+    # Nur Interpreter-Optionen und Startskript übernehmen: ohne »--hintergrund« (sonst käme PDF Tool unsichtbar
+    # oder gar nicht zurück) und ohne die PDFs vom ursprünglichen Start
+    original = list(getattr(sys, "orig_argv", None) or [])
+    if original and len(original) >= len(sys.argv):
+        args = [sys.executable, *original[1 : len(original) - len(sys.argv) + 1]]
+    else:
+        args = [sys.executable, *sys.argv[:1]]
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

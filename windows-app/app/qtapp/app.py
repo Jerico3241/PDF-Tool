@@ -608,11 +608,13 @@ class AppController(Observable):
                 shown = getattr(hooks, "shown", None)
                 if shown is not None:
                     shown()
+            winsys.bring_to_front(int(window.winId()))
             return
         if window.visibility() == window.Visibility.Minimized:
             window.showNormal()
         window.raise_()
         window.requestActivate()
+        winsys.bring_to_front(int(window.winId()))
 
     @Slot()
     def quit_app(self) -> None:

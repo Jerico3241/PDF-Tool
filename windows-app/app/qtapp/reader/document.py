@@ -45,6 +45,8 @@ LISTED_HITS = 500
 _ids = itertools.count(1)
 
 
+_CLOSED = object()  # Ergebnis eines Auftrags, der nach dem Schließen nicht mehr lief
+
 class DocumentController(Observable):
     """Zustand eines Tabs; Arbeit läuft im Arbeitsthread."""
 
@@ -289,11 +291,15 @@ class DocumentController(Observable):
             self.busyText = busy
 
         def work():
+            if self.session is not None and self.session.closed:
+                return _CLOSED  # Tab schon geschlossen: das Dokument nicht für einen Nachzügler neu öffnen
             result = func(self.session)
             state = self.session.state() if refresh and self.session is not None and not self.session.closed else None
             return result, state
 
         def finish(payload) -> None:
+            if payload is _CLOSED or self._closing:
+                return  # das Tab-Objekt wird gerade gelöscht
             result, state = payload
             if busy:
                 self.busy = False
@@ -304,6 +310,8 @@ class DocumentController(Observable):
                 done(result)
 
         def error(exc: BaseException, details: str) -> None:
+            if self._closing:
+                return
             if busy:
                 self.busy = False
                 self.busyText = ""
@@ -1243,9 +1251,16 @@ class DocumentController(Observable):
 
     def _on_worker(self, func: Callable[[Any], Any]) -> Any:
         """Aus dem Thread der Texterkennung: ``func(session)`` im Arbeitsthread ausführen und warten."""
-        task = self.engine.submit(lambda: func(self.session), priority=BACKGROUND, label="texterkennung")
+        closed = object()
+
+        def work():
+            if self.session is None or self.session.closed:
+                return closed  # Tab geschlossen: das Dokument nicht neu öffnen
+            return func(self.session)
+
+        task = self.engine.submit(work, priority=BACKGROUND, label="texterkennung")
         result = self.engine.wait(task, timeout=600)
-        if task.cancelled:
+        if task.cancelled or result is closed:
             from tools.pdf_editor import ocr
 
             raise ocr.OcrCancelled()
@@ -1265,6 +1280,8 @@ class DocumentController(Observable):
         started = time.monotonic()
 
         def progress(done: int, total: int, page: int) -> None:
+            if self._closing:
+                return
             self.ocrDone, self.ocrTotal = done, total
             self.ocrStatus = f"Seite {page + 1} wird erkannt ({done + 1} von {total})" if done < total else "Erkannter Text wird übernommen und geprüft …"
 
@@ -1299,6 +1316,8 @@ class DocumentController(Observable):
             self._ocr_cancel = None
 
         def done(summary: dict) -> None:
+            if self._closing:
+                return  # Tab während der Erkennung geschlossen
             finished()
             if summary.get("state") is not None:
                 self.apply_state(summary["state"])
@@ -1318,6 +1337,8 @@ class DocumentController(Observable):
             self.app.notify("reader", "success", message, title="Text erkannt", auto_hide=12000)
 
         def failed(exc: BaseException, details: str) -> None:
+            if self._closing:
+                return
             finished()
             if isinstance(exc, ocr.OcrCancelled):
                 self.app.notify("reader", "info", "Die Texterkennung wurde abgebrochen. Das Dokument ist unverändert.", title="Abgebrochen", auto_hide=8000)
@@ -2897,7 +2918,7 @@ class DocumentController(Observable):
         self.cancel_search()
         if self._ocr_cancel is not None:
             self._ocr_cancel.set()  # beendet einen laufenden Tesseract-Prozess
-        for timer in ("recovery", "nudge", "saved", "links"):
+        for timer in ("recovery", "nudge", "fieldnudge", "saved", "links"):
             self.app.timers.cancel(f"reader:{timer}:{self.ident}")
         for task in self._pending.values():
             task.cancel()

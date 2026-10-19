@@ -644,3 +644,25 @@ def test_helper_command_uses_isolated_mode_without_shell(tmp_path):
     assert args[3:] == ["--setup", str(tmp_path / "PDF-Tool-Setup-2.7.3.exe"), "--sha256", "a" * 64, "--wait", "4242", "--log", str(tmp_path / "start.log")]
     silent = installer.command(tmp_path / "PDF-Tool-Setup-2.7.3.exe", "a" * 64, 4242, None, python=Path("pythonw.exe"))
     assert "--silent" in silent  # Standard seit 4.0: »Jetzt installieren« ohne Fragen des Setups
+
+
+def test_helper_runs_from_a_copy_outside_the_installation(tmp_path):
+    # Das Setup ersetzt {app}\runtime – der Hilfsprozess darf dort nichts belegen
+    runtime = tmp_path / "app" / "runtime"
+    (runtime / "Lib" / "site-packages" / "PySide6").mkdir(parents=True)
+    (runtime / "Lib" / "os.py").write_text("", encoding="utf-8")
+    (runtime / "DLLs").mkdir()
+    (runtime / "DLLs" / "_hashlib.pyd").write_bytes(b"x")
+    (runtime / "pythonw.exe").write_bytes(b"x")
+    (runtime / "python313.dll").write_bytes(b"x")
+    downloads = tmp_path / "updates"
+    downloads.mkdir()
+    python, script = installer.helper_copy(downloads, runtime / "pythonw.exe")
+    assert python == downloads / installer.HELPER_FOLDER / "runtime" / "pythonw.exe" and python.is_file()
+    assert (python.parent / "python313.dll").is_file() and (python.parent / "DLLs" / "_hashlib.pyd").is_file()
+    assert (python.parent / "Lib" / "os.py").is_file() and not (python.parent / "Lib" / "site-packages").exists()
+    assert script.read_bytes() == installer.LAUNCH_SCRIPT.read_bytes()
+    args = installer.command(downloads / "PDF-Tool-Setup-4.0.0.exe", "a" * 64, 1, python=python, script=script)
+    assert args[:3] == [str(python), "-I", str(script)]
+    again, _ = installer.helper_copy(downloads, runtime / "pythonw.exe")  # Rest eines früheren Updates wird ersetzt
+    assert again == python

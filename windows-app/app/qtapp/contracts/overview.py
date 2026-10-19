@@ -57,7 +57,7 @@ from tools.contract_overview.overview import (
     template_rules,
     valid_width,
 )
-from tools.contract_overview.preview import RENDER_LOCK
+from tools.contract_overview.preview import BUILD_LOCK
 from tools.contract_overview.templates.models import ENTRY_RULE_SET
 
 from .. import files, mail
@@ -1254,7 +1254,7 @@ class ContractOverviewController(Observable):
 
             job = PdfAuftrag(**auftrag, pdf_oeffnen=False, status=lambda msg: worker.post(self.set_status, msg, "busy"))
             # Gemeinsame Sperre mit der Vorschau: die PDF-Erzeugung läuft nie parallel.
-            with RENDER_LOCK:
+            with BUILD_LOCK:
                 path = erstelle_pdf(job)
             return path, records_from(job.vertraege, regeln, regelwerk)
 

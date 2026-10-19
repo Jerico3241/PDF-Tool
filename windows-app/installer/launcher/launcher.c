@@ -7,7 +7,8 @@
  *
  * Warum ein eigenes Programm: Windows zeigt in »Öffnen mit«, bei den Standard-Apps und in der
  * Taskleiste das Symbol und den Namen der gestarteten EXE. Mit pythonw.exe erschiene dort Python.
- * Diese EXE trägt Symbol und Versionsangaben von PDF Tool und endet, sobald die App gestartet ist.
+ * Diese EXE trägt Symbol und Versionsangaben von PDF Tool und endet, sobald die App die übergebenen Dateien
+ * gesichert hat (siehe unten).
  * Die App verlässt dabei den Job des aufrufenden Programms (siehe unten).
  */
 #define WIN32_LEAN_AND_MEAN
@@ -20,6 +21,8 @@
 #include <windows.h>
 #include <stdio.h>
 #include <wchar.h>
+
+#define START_WAIT_MS 15000
 
 static void fail(const wchar_t *text)
 {
@@ -72,11 +75,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR arguments, int
      * läuft – mit der weiterlaufenden App ließe sich dann keine zweite PDF öffnen. Erlaubt der Job das
      * Verlassen nicht, startet die App wie bisher in ihm.
      */
+    /*
+     * Outlook löscht seine Kopie eines Anhangs, sobald das gestartete Programm (und sein Job) endet. Dieses
+     * Startprogramm wartet deshalb, bis die App die Datei gesichert hat (start.py setzt dieses Ereignis), höchstens
+     * START_WAIT_MS – oder bis die App endet (Übergabe an die schon laufende App).
+     */
+    wchar_t event_name[64];
+    swprintf(event_name, 64, L"Local\\PDFTool-Start-%lu", GetCurrentProcessId());
+    HANDLE ready = CreateEventW(NULL, TRUE, FALSE, event_name);
+    if (ready != NULL) {
+        SetEnvironmentVariableW(L"PDFTOOL_START_EVENT", event_name);
+    }
     BOOL started = CreateProcessW(python, line, NULL, NULL, FALSE, CREATE_BREAKAWAY_FROM_JOB, NULL, workdir, &startup, &process);
     if (!started && GetLastError() == ERROR_ACCESS_DENIED) {
         started = CreateProcessW(python, line, NULL, NULL, FALSE, 0, NULL, workdir, &startup, &process);
     }
     if (!started) {
+        if (ready != NULL) {
+            CloseHandle(ready);
+        }
         wchar_t text[256];
         swprintf(text, 256, L"PDF Tool konnte nicht gestartet werden (Fehler %lu).", GetLastError());
         fail(text);
@@ -85,6 +102,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR arguments, int
     /* Das Fenster der App darf in den Vordergrund (dieses Programm wurde vom Benutzer gestartet). */
     AllowSetForegroundWindow(process.dwProcessId);
     CloseHandle(process.hThread);
+    if (ready != NULL) {
+        HANDLE waits[2] = { process.hProcess, ready };
+        WaitForMultipleObjects(2, waits, FALSE, START_WAIT_MS);
+        CloseHandle(ready);
+    }
     CloseHandle(process.hProcess);
     return 0;
 }

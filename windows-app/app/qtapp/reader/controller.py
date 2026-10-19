@@ -325,6 +325,8 @@ class ReaderController(Observable):
                 if then is not None:
                     then(existing)
                 continue
+            if then is None and any(_same(opening, path) for opening in self._opening_paths):
+                continue  # wird schon geöffnet (z. B. Doppelklick zweimal kurz hintereinander)
             if len(self._docs) >= TAB_LIMIT:
                 self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
                 return
@@ -575,7 +577,7 @@ class ReaderController(Observable):
             found[which] = payload
             if len(found) == 2:
                 (old_words, old_empty), (new_words, new_empty) = found["old"], found["new"]
-                self.engine.submit(lambda: comparing.compare(old_words, new_words, old_empty, new_empty), lambda result: self._compare_done(serial, result), lambda exc, details: self._compare_failed(serial, exc, details), priority=BACKGROUND, label="vergleichen")
+                self.engine.submit(lambda: comparing.compare(old_words, new_words, old_empty, new_empty, cancelled), lambda result: self._compare_done(serial, result), lambda exc, details: self._compare_failed(serial, exc, details), priority=BACKGROUND, label="vergleichen")
 
         def failed(exc: BaseException) -> None:
             self._compare_failed(serial, exc, "")

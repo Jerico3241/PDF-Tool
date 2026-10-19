@@ -20,6 +20,8 @@ ListView {
     readonly property real ratio: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
     readonly property int thumbWidth: Reader.thumbWidth
 
+    // Seitenmaße einmal je Änderung holen – nicht je Zeile die ganze Liste (große PDFs)
+    readonly property var sizes: doc ? doc.pageSizes : []
     model: doc ? doc.pageCount : 0
     clip: true
     reuseItems: true
@@ -38,13 +40,15 @@ ListView {
     Accessible.name: "Seitenminiaturen"
 
     onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
+    // Seiten gelöscht oder eingefügt: das Modell beginnt neu (oben) – zurück zur aktuellen Seite
+    onCountChanged: currentIndex = Qt.binding(function() { return list.doc ? list.doc.currentPage : -1 })
     Keys.onUpPressed: if (doc) doc.goTo(doc.currentPage - 1)
     Keys.onDownPressed: if (doc) doc.goTo(doc.currentPage + 1)
 
     delegate: Item {
         id: row
         required property int index
-        readonly property var size: list.doc && index < list.doc.pageSizes.length ? list.doc.pageSizes[index] : [595, 842]
+        readonly property var size: index < list.sizes.length ? list.sizes[index] : [595, 842]
         readonly property real aspect: size[1] / Math.max(1, size[0])
         readonly property real thumbW: Math.min(list.thumbWidth, 200 / aspect)  // sehr hohe Seiten: höchstens 200 hoch
         readonly property real thumbHeight: thumbW * aspect

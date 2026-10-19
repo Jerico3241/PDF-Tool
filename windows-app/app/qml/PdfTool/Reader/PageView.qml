@@ -179,7 +179,7 @@ Item {
     Item {
         id: hitLayer
         objectName: "readerHitLayer"
-        readonly property var rects: root.doc && root.page >= 0 ? (root.doc.hitRects[root.key] || []) : []
+        readonly property var rects: root.doc && root.page >= 0 ? (root.host.hitMap[root.key] || []) : []
         anchors.fill: parent
         opacity: rects.length > 0 ? 1 : 0
         Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
@@ -199,7 +199,7 @@ Item {
     // Änderung mit Rahmen
     Item {
         objectName: "readerCompareLayer"
-        readonly property var rects: root.doc && root.page >= 0 ? (root.doc.compareRects[root.key] || []) : []
+        readonly property var rects: root.doc && root.page >= 0 ? (root.host.compareMap[root.key] || []) : []
         anchors.fill: parent
         visible: rects.length > 0
         Repeater {
@@ -278,18 +278,18 @@ Item {
         }
         return best
     }
-    readonly property var annotationsHere: doc && page >= 0 ? (doc.annotationPages[key] || []) : []
+    readonly property var annotationsHere: doc && page >= 0 ? (host.annotationMap[key] || []) : []
     readonly property var blocksHere: doc && doc.blocksPage === page && tool === "editText" ? doc.blocks : []
     readonly property var imagesHere: doc && doc.imagesPage === page && tool === "image" ? doc.images : []
-    readonly property var fieldsHere: doc && page >= 0 && tool === "form" ? (doc.fieldPages[key] || []) : []
+    readonly property var fieldsHere: doc && page >= 0 && tool === "form" ? (host.fieldMap[key] || []) : []
     // Formular gestalten: Widgets dieser Seite und das gewählte (mit seiner aktuellen Lage)
-    readonly property var designHere: doc && page >= 0 && tool === "formDesign" ? (doc.designPages[key] || []) : []
+    readonly property var designHere: doc && page >= 0 && tool === "formDesign" ? (host.designMap[key] || []) : []
     readonly property var fieldChosen: doc && tool === "formDesign" && doc.fieldSelection.page === page ? doc.fieldSelection : null
     readonly property var selected: doc ? doc.selectedObject : ({})
     readonly property bool selectedHere: selected.page === page && selected.kind !== undefined
     // Links dieser Seite (Anklicken mit »Auswählen«, Bearbeiten mit dem Link-Werkzeug) und vorgemerkte Schwärzungen
-    readonly property var linksHere: doc && page >= 0 ? (doc.linkPages[key] || []) : []
-    readonly property var marksHere: doc && page >= 0 ? (doc.redactMarks[key] || []) : []
+    readonly property var linksHere: doc && page >= 0 ? (host.linkMap[key] || []) : []
+    readonly property var marksHere: doc && page >= 0 ? (host.markMap[key] || []) : []
     function linkAt(u, v) { return smallestAt(linksHere, u, v, 0) }
     function linkLabel(link) {
         if (!link) return ""
@@ -300,7 +300,7 @@ Item {
     }
 
     // --- Objekt bearbeiten: Objekte dieser Seite, Auswahl, Treffer -----------------------------------------
-    readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (doc.objectPages[key] || null) : null
+    readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (host.objectMap[key] || null) : null
     readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images, objectsHere.paths || []) : []
     // Räumlicher Index: Objekte je waagerechtem Band von 24 pt (Anzeige-Punkte, einmal je Seitenstand) –
     // beim Bewegen der Maus wird nur das Band unter dem Zeiger geprüft, nicht jedes Objekt der Seite

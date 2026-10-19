@@ -44,6 +44,90 @@ def pdf_arguments(argv: list[str]) -> list[str]:
     return paths[:MAX_PATHS]
 
 
+START_EVENT = "PDFTOOL_START_EVENT"  # Name des Ereignisses, auf das PDF-Tool.exe wartet (siehe ``signal_started``)
+ATTACHMENT_FOLDER = "Anhaenge"
+ATTACHMENT_DAYS = 7  # gesicherte Anhänge so lange aufheben
+_TRANSIENT_PARTS = ("\\content.outlook\\", "\\inetcache\\", "\\olk")
+
+
+def attachments_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    root = Path(base) if base else Path.home() / ".cache"
+    return root / "PDF-Tool" / ATTACHMENT_FOLDER
+
+
+def is_transient(path: str) -> bool:
+    """Kopie, die das aufrufende Programm gleich wieder löscht: Outlook-Anhänge (``INetCache\\Content.Outlook``)
+    und Dateien im Temp-Ordner (andere Mailprogramme, Browser)."""
+    text = os.path.normcase(os.path.abspath(path)).replace("/", "\\").lower()
+    if any(part in text for part in _TRANSIENT_PARTS):
+        return True
+    for name in ("TEMP", "TMP"):
+        folder = os.environ.get(name)
+        if folder:
+            prefix = os.path.normcase(os.path.abspath(folder)).replace("/", "\\").lower().rstrip("\\") + "\\"
+            if text.startswith(prefix):
+                return True
+    return False
+
+
+def secure_transient(argv: list[str], target: Path | None = None) -> list[str]:
+    """Anhänge aus Outlook & Co. sofort in einen eigenen Ordner kopieren und die Kopie öffnen. Outlook löscht seine
+    Kopie, sobald das gestartete Programm endet – bei laufender App endet es gleich nach der Übergabe, und die App
+    fände die Datei nicht mehr. Alles andere bleibt unverändert."""
+    import shutil
+
+    result, folder = [], None
+    for arg in argv:
+        if arg and not arg.startswith("-") and is_transient(arg) and Path(arg).is_file():
+            try:
+                if folder is None:
+                    base = target or attachments_dir()
+                    _prune(base)
+                    folder = base / (time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(3).hex())
+                    folder.mkdir(parents=True, exist_ok=True)
+                copy = folder / Path(arg).name
+                shutil.copyfile(arg, copy)  # ohne Schreibschutz der Outlook-Kopie
+                result.append(str(copy))
+                continue
+            except OSError:
+                pass  # dann wie bisher mit dem Original
+        result.append(arg)
+    return result
+
+
+def _prune(base: Path) -> None:
+    """Gesicherte Anhänge nach ``ATTACHMENT_DAYS`` Tagen entfernen."""
+    import shutil
+
+    limit = time.time() - ATTACHMENT_DAYS * 86400
+    try:
+        for folder in base.iterdir():
+            if folder.is_dir() and folder.stat().st_mtime < limit:
+                shutil.rmtree(folder, ignore_errors=True)
+    except OSError:
+        pass
+
+
+def signal_started() -> None:
+    """PDF-Tool.exe Bescheid geben: Die Dateien sind gesichert, das Startprogramm darf enden (bis dahin hält es den
+    Aufrufer – etwa Outlook – davon ab, seine Kopie zu löschen)."""
+    name = os.environ.pop(START_EVENT, "")
+    if sys.platform != "win32" or not name:
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenEventW.restype = ctypes.c_void_p
+        handle = kernel32.OpenEventW(0x0002, False, name)  # EVENT_MODIFY_STATE
+        if handle:
+            kernel32.SetEvent(ctypes.c_void_p(handle))
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+    except Exception:  # noqa: BLE001 - dann wartet das Startprogramm nur bis zu seinem Zeitlimit
+        pass
+
+
 def message(paths: list[str], show: bool) -> bytes:
     return json.dumps({"open": paths[:MAX_PATHS], "show": bool(show)}).encode("utf-8") + b"\n"
 

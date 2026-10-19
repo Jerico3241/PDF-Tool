@@ -198,3 +198,27 @@ def test_switching_off_restores_the_old_behaviour(resident, config_file: Path) -
     assert h.qt.quitOnLastWindowClosed()
     assert json.loads(config_file.read_text(encoding="utf-8"))["hintergrund"] is False
     assert h.app.requestClose() is True and h.app.closing
+
+
+def test_outlook_attachments_are_copied_before_outlook_deletes_them(tmp_path, monkeypatch):
+    import handoff
+
+    monkeypatch.setenv("TEMP", str(tmp_path / "temp"))
+    outlook = tmp_path / "AppData" / "Local" / "Microsoft" / "Windows" / "INetCache" / "Content.Outlook" / "AB12CD34"
+    outlook.mkdir(parents=True)
+    attachment = outlook / "Rechnung.pdf"
+    attachment.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    other = tmp_path / "Dokumente" / "Vertrag.pdf"
+    other.parent.mkdir()
+    other.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    (tmp_path / "temp").mkdir()
+    in_temp = tmp_path / "temp" / "mail.pdf"
+    in_temp.write_bytes(b"%PDF-1.7\n%%EOF\n")
+    target = tmp_path / "Anhaenge"
+    secured = handoff.secure_transient([str(attachment), str(other), "--hintergrund", str(in_temp)], target)
+    assert secured[1:3] == [str(other), "--hintergrund"]  # alles andere bleibt, wie es ist
+    copies = [Path(secured[0]), Path(secured[3])]
+    assert all(copy.parent.parent == target and copy.read_bytes() == b"%PDF-1.7\n%%EOF\n" for copy in copies)
+    assert [copy.name for copy in copies] == ["Rechnung.pdf", "mail.pdf"]
+    attachment.unlink()  # Outlook räumt auf – die Kopie bleibt
+    assert copies[0].is_file()
