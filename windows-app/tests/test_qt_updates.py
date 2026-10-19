@@ -152,7 +152,9 @@ def test_automatic_check_finds_update_and_announces_it_once(start, server, confi
         banners.append(len(h.items("updateBanner")))
     assert banners == [1, 1, 1, 1] and u(h).bannerShown  # eine Leiste, kein neuer Hinweis je Seite
     h.navigate("settings", 0.2)
-    assert not u(h).bannerShown  # die Einstellungen zeigen alles selbst
+    h.runtime.settings.setSection("updates")
+    pump(0.2)
+    assert not u(h).bannerShown  # der Bereich »Updates« der Einstellungen zeigt alles selbst
     assert h.item("updateOffer").property("visible") and h.item("updateOfferTitle").property("text") == "PDF Tool 2.7.3"
     assert requests(server) == 1
 

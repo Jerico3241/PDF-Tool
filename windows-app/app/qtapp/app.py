@@ -33,7 +33,7 @@ PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
 SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key, ACTIONS.key)  # Strg+1 … Strg+6
 # Mit eigenem Tab neben ⌂ Start: diese Werkzeuge und die Einstellungen. Der Reader zeigt seine Dokumente als Tabs.
 TAB_KEYS = (ACTIONS.key, CONTRACTS.key, REPAIR.key, SETTINGS)
-HOME_HINT = "Strg+5  PDF Reader & Editor   ·   Strg+6  Stapel-Aktionen   ·   Strg+2  Vertragsübersichten   ·   Strg+3  PDF reparieren"
+HOME_HINT = "Strg+5  Reader   ·   Strg+6  Stapel   ·   Strg+2  Vertragsübersichten   ·   Strg+3  Reparieren"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
     "Lokale Windows-App mit Werkzeugen für PDF-Dateien: PDFs lesen, bearbeiten, organisieren und "

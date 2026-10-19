@@ -202,7 +202,8 @@ class Harness:
                     settings.setSection(key)
                     pump(0.15)
                 return
-            current = current.parentItem()
+            parent_item = getattr(current, "parentItem", None)  # Popups u. a. sind QObject ohne parentItem
+            current = parent_item() if parent_item is not None else None
 
     def items(self, name: str) -> list:
         from PySide6.QtCore import QObject
