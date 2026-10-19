@@ -183,7 +183,26 @@ class Harness:
         """QML-Element mit ``objectName`` (oder ``None``) – sucht im Elementbaum des Fensters,
         auch in Seiten, die ein Loader erzeugt hat (sie hängen nicht im QObject-Baum)."""
         found = self.items(name)
+        if found:
+            self._reveal_settings_section(found[0])
         return found[0] if found else None
+
+    # Einstellungen (seit 4.0) in Bereichen: Wie ein Klick in der Bereichsleiste zeigt ein Test den Bereich, in dem
+    # das gesuchte Element steht – die Tests bleiben so unabhängig davon, welcher Bereich gerade gewählt ist.
+    _SECTION_WRAPPERS = {"dataBackup": "data", "dataDiagnose": "data"}
+
+    def _reveal_settings_section(self, item) -> None:
+        current = item
+        while current is not None:
+            name = current.objectName()
+            key = name[len("settingsSection_"):] if name.startswith("settingsSection_") else self._SECTION_WRAPPERS.get(name)
+            if key:
+                settings = getattr(self.runtime, "settings", None) if self.runtime is not None else None
+                if settings is not None and settings.section != key:
+                    settings.setSection(key)
+                    pump(0.15)
+                return
+            current = current.parentItem()
 
     def items(self, name: str) -> list:
         from PySide6.QtCore import QObject

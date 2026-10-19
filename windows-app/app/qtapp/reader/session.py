@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
@@ -760,6 +760,10 @@ class Session:
     def optimize_copy(self, target: str, level: str) -> dict:
         result = optimize.optimize_copy(self.document, target, level)
         return {"path": str(result.path), "before": result.before, "after": result.after, "images": result.images, "skipped": result.skipped, "percent": result.saved_percent}
+
+    def pdfa_copy(self, target: str) -> dict:
+        result = pdfa.save_copy(self.document, target)
+        return {"path": str(result.path), "fonts": result.fonts, "notes": list(result.notes)}
 
     def marks_present(self) -> dict:
         return pagemarks.present(self.document)

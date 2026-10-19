@@ -440,6 +440,17 @@ andere geprüft (die Datei wird erst ersetzt, wenn die neue fehlerfrei geöffnet
   Zugeschnitten wird die CropBox – der Inhalt außerhalb bleibt in der Datei (zum Entfernen: Schwärzen);
   »Zuschnitt zurücksetzen« zeigt wieder die ganze Seite.
 
+## PDF/A und PDF aus Bildern (seit 4.0.0-beta.1)
+
+- `pdfa.py`: `convert(bytes)` → PDF/A-2b-Bytes oder `PdfaError(problems)`; `save_copy(document, ziel)` speichert
+  den aktuellen Stand (auch ungespeicherte Änderungen) als Kopie, `check(bytes)` ist die Kurzprüfung danach.
+  Einfache Schriften ohne Einbettung werden je Datei einmal durch eine Teilmenge einer Systemschrift ersetzt
+  (`fonts.find_system_font`, fontTools): mit WinAnsi-Kodierung, sonst symbolisch mit (3,0)-cmap; immer mit
+  ToUnicode. CID-Schriften ohne `CIDToGIDMap` erhalten `Identity`. XMP schreibt die Standardbibliothek (die
+  Laufzeit hat kein lxml). Bei der Entwicklung mit veraPDF geprüft; die Tests prüfen mit `check`.
+- `imagepdf.py`: `create(bilder, ziel, page_size, margin)` – je Bild eine Seite, JPEG ohne Neukodierung,
+  geprüft und atomar gespeichert wie »Speichern unter«.
+
 ## KI-Assistent (optional, seit 3.2)
 
 Rechte Seitenleiste `assistant` (`Reader/AssistantPanel.qml`), nur wenn der Assistent in den Einstellungen

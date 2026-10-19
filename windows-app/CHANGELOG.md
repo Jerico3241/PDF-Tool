@@ -2,6 +2,36 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.1
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Erster Teil von 4.0: Stapel-Aktionen, Als PDF/A speichern,
+PDF aus Bildern, Updates mit einem Klick und aufgeräumte Einstellungen. Details in den
+[Release Notes](release-notes/4.0.0-beta.1.md).
+
+- `tools/pdf_editor/pdfa.py`: PDF/A-2b-Kopie (`save_copy`, `convert`, `check`) – nicht eingebettete einfache
+  Schriften werden durch Teilmengen von Systemschriften ersetzt (fontTools, ToUnicode; symbolisch mit (3,0)-cmap,
+  wenn die Kodierung von WinAnsi abweicht), sRGB-OutputIntent aus Pillow/ImageCms, XMP mit der Standardbibliothek
+  (ohne lxml), JavaScript/Anhänge/Signaturwerte entfernt, Anmerkungs-Flags und Erscheinungsbilder angeglichen.
+  Mit veraPDF (PDF/A-2b) an den Beispieldokumenten der Tests geprüft.
+- `tools/pdf_editor/imagepdf.py`: PDF aus Bildern – JPEG unverändert (DCTDecode), EXIF-Ausrichtung, Transparenz
+  auf Weiß, mehrseitige TIFFs, Seitengröße und Rand; unlesbare Dateien werden übersprungen und genannt.
+- `tools/pdf_actions` (`actions`, `runner`): Stapel-Aktionen mit fester Reihenfolge; `optimize.optimize_bytes`
+  als gemeinsamer Kern von »PDF verkleinern«.
+- Oberfläche: Werkzeug »Stapel-Aktionen« (`qtapp/actions.py`, `ActionsPage.qml`, Strg+6, eigener Tab), Reader
+  `pdfaDocument` und Menüpunkt, Schnellwerkzeuge »Als PDF/A speichern« und »PDF aus Bildern«, Dialog
+  `ImagesContent.qml`; gezogene Bilder und Bilder aus der Befehlszeile starten »PDF aus Bildern«. Startseite:
+  vier Werkzeuge zwei mal zwei, Schnellwerkzeuge in fünf Spalten.
+- Setup: Verknüpfung »Senden an« → »PDF Tool (Bilder zu PDF)«.
+- Updates: automatischer Download nach der automatischen Prüfung (einmal je Version); der Hilfsprozess
+  installiert still (`/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`), startet danach nur `PDF-Tool.exe` neu und
+  zeigt das Setup sichtbar, wenn die stille Installation scheitert.
+- Einstellungen in Bereichen (`Settings.section`, `setSection`, `show`); »Einstellungen öffnen« der Kundenakte
+  springt zu »Vertragsübersichten«.
+- Tests: `test_editor_pdfa.py`, `test_editor_imagepdf.py`, `test_pdf_actions.py`, `test_qt_actions.py`,
+  angepasste Qt-Tests (Startseite, Einstellungsbereiche); `smoke_runtime.py` prüft PDF/A, PDF aus Bildern und
+  Stapel-Aktionen mit der Laufzeit des Setups, `smoke_installer.ps1` misst die Zeit bis zum Fenster des
+  Setup-Assistenten.
+
 # PDF Tool 3.2.0
 
 Freigegebene Version – getestet als Betas 3.2.0-beta.1 bis 3.2.0-beta.5, Funktionsumfang wie 3.2.0-beta.5.

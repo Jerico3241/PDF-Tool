@@ -274,6 +274,7 @@ Rectangle {
         }
         PMenuItem { objectName: "readerMenuFlatten"; text: "Reduzieren (Formulare und Kommentare fest übernehmen) …"; iconName: "layer"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.flattenDocument() } } }
         PMenuItem { objectName: "readerMenuOptimize"; text: "PDF verkleinern …"; iconName: "arrow_minimize"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.optimizeDocument() } } }
+        PMenuItem { objectName: "readerMenuPdfa"; text: "Als PDF/A speichern …"; iconName: "library"; onTriggered: { var d = root.doc; protectMenu.afterClose = function() { d.pdfaDocument() } } }
     }
     PMenu {
         id: pageDesignMenu

@@ -188,6 +188,28 @@ if ($Previous) {
     }
 }
 
+# Nur Messung (scheitert nie): Wie lange dauert es vom Doppelklick auf das Setup bis zum Fenster des Assistenten?
+# Das ist die Wartezeit, die Anwender beim Start des Setups bemerken (Pruefung durch Windows, Entpacken des
+# Setup-Programms). Danach wird der Assistent sofort beendet, ohne etwas zu installieren.
+$startWatch = [Diagnostics.Stopwatch]::StartNew()
+$wizard = Start-Process -FilePath $Setup -PassThru
+$shown = $null
+while ($startWatch.Elapsed.TotalSeconds -lt 120 -and $null -eq $shown) {
+    Start-Sleep -Milliseconds 50
+    $shown = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like "*$appName*" -and $_.Path -and ($_.Path -like "*\Temp\*" -or $_.Path -eq $Setup) } | Select-Object -First 1
+}
+$startWatch.Stop()
+Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -eq $Setup -or ($_.Path -like "*\Temp\is-*")) } | Stop-Process -Force -ErrorAction SilentlyContinue
+if ($wizard -and -not $wizard.HasExited) { Stop-Process -Id $wizard.Id -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Milliseconds 500
+if ($null -ne $shown) {
+    $seconds = [Math]::Round($startWatch.Elapsed.TotalSeconds, 1)
+    Write-Host "0. Setup-Assistent sichtbar nach $seconds s ($([Math]::Round((Get-Item $Setup).Length / 1MB, 1)) MB)"
+    Write-Host "::notice::Setup-Start: Assistent nach $seconds s sichtbar"
+} else {
+    Write-Host "::warning::Setup-Start: kein Fenster des Assistenten nach 120 s gefunden (nur Messung)"
+}
+
 Write-Host "1. Stille Installation: $Setup"
 $log = Install $Setup "installation"
 foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\handoff.py", "app\qtapp\background.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "runtime\Lib\site-packages\PySide6\QtPrintSupport.pyd", "runtime\Lib\site-packages\PySide6\Qt6PrintSupport.dll", "runtime\Lib\site-packages\fontTools\__init__.py", "app\qtapp\instance.py", "app\qtapp\reader\controller.py", "app\qtapp\reader\document.py", "app\tools\pdf_editor\textedit.py", "app\tools\pdf_editor\save.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {

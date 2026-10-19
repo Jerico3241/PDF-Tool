@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0
+Version 4.0.0-beta.1
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -21,6 +21,9 @@ Werkzeuge für PDF-Dateien:
   einem Vergleich mit dem letzten Vertragsstand des Kunden; mit Vorlagen
   für die Darstellung und einem Regelwerk, das Werte der Übersicht nach
   eigenen Regeln anpasst (die Excel-Datei bleibt dabei unverändert).
+- Stapel-Aktionen: viele PDFs auf einmal verkleinern, mit Seitenzahlen oder
+  Wasserzeichen versehen, Text erkennen, bereinigen, mit Kennwort schützen
+  oder als PDF/A speichern – jede als neue Datei.
 - PDF reparieren: analysiert beschädigte PDF-Dateien – eine oder mehrere auf
   einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen; bei
   Bedarf baut es die Dokumentstruktur aus den noch vorhandenen Objekten neu
@@ -31,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0.exe
+PDF-Tool-Setup-4.0.0-beta.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -41,6 +44,33 @@ optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
 qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 4.0 Beta 1 – Stapel-Aktionen, PDF/A, PDF aus Bildern, Updates mit einem Klick
+---------------------------------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Erster Teil von Version 4.0.
+- Stapel-Aktionen (Startseite oder Strg+6): PDFs wählen oder hineinziehen,
+  Aktionen ankreuzen – Text erkennen, bereinigen, reduzieren, Wasserzeichen,
+  Seitenzahlen, verkleinern, PDF/A, Kennwortschutz – und „Alle bearbeiten“.
+  Die Reihenfolge ist fest und immer richtig. Jede PDF wird als neue Datei
+  gespeichert („_bearbeitet“ oder eigener Zusatz); Originale und vorhandene
+  Dateien werden nie überschrieben.
+- Als PDF/A speichern (Reader → „Schützen“, Schnellwerkzeug): archivfähige
+  Kopie nach PDF/A-2b – fehlende Schriften werden aus Windows eingebettet,
+  Skripte, Anhänge und Ähnliches entfernt; die Meldung nennt, was geändert
+  wurde.
+- PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF, BMP, GIF, WebP) in das
+  Fenster ziehen, über das Schnellwerkzeug wählen oder im Explorer markieren
+  → Rechtsklick → „Senden an“ → „PDF Tool (Bilder zu PDF)“. Reihenfolge,
+  Seitengröße (wie das Bild, A4, Letter) und Rand wählen; Fotos behalten ihre
+  Qualität, gedrehte Handyfotos stehen richtig herum.
+- Updates mit einem Klick: PDF Tool lädt eine neue Version nach der
+  automatischen Prüfung selbst herunter. „Jetzt installieren“ aktualisiert
+  ohne Setup-Assistent und startet PDF Tool danach neu. Gilt ab dem Update
+  von 4.0.0-beta.1 auf eine spätere Version.
+- Einstellungen aufgeräumt: oben eine Leiste mit den Bereichen Allgemein,
+  PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose
+  und Info – statt einer langen Seite.
 
 
 Neu in Version 3.2 – Schützen und Weitergeben, KI-Assistent, schneller Start
@@ -393,9 +423,10 @@ Aktualisieren
 -------------
 Ab Version 2.7.2 meldet PDF Tool neue Versionen selbst: Einstellungen →
 Updates → „Nach Updates suchen“, oder der Hinweis nach der automatischen
-Prüfung. „Herunterladen“ und danach „Jetzt installieren“ – PDF Tool beendet
-sich, das Setup startet und aktualisiert die vorhandene Installation. Am
-Ende kann PDF Tool direkt wieder gestartet werden.
+Prüfung. Ab Version 4.0 lädt PDF Tool das Update nach der automatischen
+Prüfung selbst herunter; „Jetzt installieren“ beendet PDF Tool, installiert
+das Update ohne Setup-Assistent und startet PDF Tool wieder. Klappt die
+stille Installation nicht, erscheint das Setup wie bisher.
 
 Beta-Versionen erhalten (Einstellungen → Updates; Standard: aus): Aus
 erhält PDF Tool nur freigegebene Versionen (Kanal „Stable“). Eingeschaltet
@@ -408,6 +439,11 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 3.2.0 (oder älter) auf 4.0.0-beta.1 (Kanal „Beta“): Das
+Setup ersetzt die Programmdateien – dieses eine Mal noch mit dem Setup-
+Assistenten, ab dem nächsten Update mit einem Klick. Alle Einstellungen und
+Daten bleiben unverändert.
 
 Update von PDF Tool 3.1.0 auf 3.2.0: Das Setup ersetzt die
 Programmdateien, legt das Startprogramm „PDF-Tool.exe“ und die Laufzeit

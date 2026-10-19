@@ -497,6 +497,26 @@ def main() -> int:
         gelesen.close()
     check("Hottgenroth" in seite and "4711" in seite, "Texterkennung: erkannter Text nach dem Speichern nicht lesbar")
     print(f"Texterkennung: Tesseract {engine.version} (gebündelt, Sprachen {', '.join(engine.languages)}), {erkannt.words} Wörter, Sicherheit {erkannt.confidence:.0f} %, {dauer:.1f} s")
+    # 4.0: Als PDF/A speichern (Schriften aus C:\Windows\Fonts eingebettet, sRGB-Profil aus Pillow/ImageCms),
+    # PDF aus Bildern und Stapel-Aktionen mit der Laufzeit des Setups – ohne lxml
+    from PIL import Image
+
+    from tools.pdf_actions import actions as batch_actions
+    from tools.pdf_actions import runner as batch_runner
+    from tools.pdf_editor import imagepdf as editor_imagepdf
+    from tools.pdf_editor import pdfa as editor_pdfa
+
+    archiv, archiv_info = editor_pdfa.convert(adresse.read_bytes())
+    check(editor_pdfa.check(archiv) == [], "PDF/A: Kurzprüfung nicht bestanden")
+    check(archiv_info.fonts >= 1, "PDF/A: keine Ersatzschrift eingebettet")
+    Image.new("RGB", (640, 480), (30, 90, 200)).save(work / "foto.jpg", quality=90)
+    Image.new("RGBA", (300, 200), (200, 0, 0, 128)).save(work / "grafik.png")
+    bilder = editor_imagepdf.create([work / "foto.jpg", work / "grafik.png"], work / "bilder.pdf", page_size="a4")
+    check(bilder.pages == 2 and not bilder.skipped, f"PDF aus Bildern: {bilder}")
+    plan = batch_actions.Plan(steps=[batch_actions.NUMBERS, batch_actions.OPTIMIZE, batch_actions.PDFA])
+    stapel = batch_runner.process(adresse, work / "adresse_bearbeitet.pdf", plan)
+    check(editor_pdfa.check(stapel.target.read_bytes()) == [], "Stapel-Aktionen: Ergebnis ist kein PDF/A")
+    print(f"PDF/A: {archiv_info.fonts} Schriften eingebettet; PDF aus Bildern: {bilder.pages} Seiten; Stapel-Aktionen: {plan.summary()}")
     ai_check(app_dir, work)
 
     if args.part == "runtime":

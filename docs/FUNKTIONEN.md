@@ -35,6 +35,34 @@ unter `app/tools/` (Fachlogik ohne Oberfläche), einen Controller unter `app/qta
 unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – siehe
 [`windows-app/ARCHITECTURE.md`](../windows-app/ARCHITECTURE.md).
 
+## Stapel-Aktionen, PDF/A und PDF aus Bildern (seit 4.0.0-beta.1)
+
+- **Stapel-Aktionen** (Startseite, Strg+6): viele PDFs wählen oder hineinziehen, Aktionen ankreuzen und
+  „Alle bearbeiten“. Feste Reihenfolge: Text erkennen → bereinigen → reduzieren → Wasserzeichen →
+  Seitenzahlen → verkleinern → PDF/A → Kennwortschutz. PDF/A und Kennwortschutz schließen sich aus.
+  Jede PDF wird als neue Datei gespeichert (neben dem Original oder in einem Ordner, mit Zusatz am Namen);
+  nichts wird überschrieben, ein vorhandener Name bekommt „(2)“. Kennwortgeschützte PDFs werden ausgelassen.
+  Die gewählten Aktionen bleiben gespeichert, das Kennwort nie.
+- **Als PDF/A speichern** (Reader → „Schützen“, Schnellwerkzeug): PDF/A-2b-Kopie. Nicht eingebettete
+  Schriften werden durch Teilmengen von Windows-Schriften ersetzt (Arial, Times New Roman, Courier New …),
+  sRGB-Farbprofil und XMP-Metadaten ergänzt, Skripte, Anhänge und Signaturwerte entfernt. Enthält ein PDF
+  Druckfarben (CMYK) ohne Profil oder gibt es für eine Schrift keinen Ersatz, nennt die Meldung den Grund.
+- **PDF aus Bildern**: Bilder in das Fenster ziehen, das Schnellwerkzeug nutzen oder im Explorer „Senden
+  an“ → „PDF Tool (Bilder zu PDF)“. Reihenfolge, Seitengröße (wie das Bild, A4, Letter) und Rand wählen.
+  JPEGs werden unverändert übernommen, die EXIF-Ausrichtung beachtet, Transparenz liegt auf Weiß.
+
+## Updates mit einem Klick (seit 4.0.0-beta.1)
+
+Nach der automatischen Prüfung lädt PDF Tool eine neue Version selbst herunter (SHA-256 geprüft).
+„Jetzt installieren“ beendet PDF Tool; der Hilfsprozess installiert still
+(`/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`) und startet danach `PDF-Tool.exe`. Scheitert die stille
+Installation, zeigt er das Setup wie bisher. Wirkt ab dem Update von 4.0.0-beta.1 auf eine spätere Version.
+
+## Einstellungen in Bereichen (seit 4.0.0-beta.1)
+
+Eine Leiste oben wählt Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose
+oder Info; nur der gewählte Bereich ist sichtbar.
+
 ## PDF Reader & Editor: Schützen und Weitergeben (seit 3.2)
 
 In der Werkzeugleiste des Readers stehen zwei neue Befehle: **Schützen** (Schild) und **Seiten gestalten**.

@@ -379,8 +379,9 @@ def main(argv: list[str] | None = None) -> int:
         if instance.forward(paths, show=True):
             return 0
     runtime = Runtime(cfg)
-    if paths:
-        # PDF per Doppelklick bzw. »Öffnen mit«: gleich im Reader beginnen – er ist im ersten Bild fertig,
+    if any(path.lower().endswith(".pdf") for path in paths):
+        # PDF per Doppelklick bzw. »Öffnen mit«: gleich im Reader beginnen (Bilder über »Senden an«: Startseite und
+        # »PDF aus Bildern«) – er ist im ersten Bild fertig,
         # ohne Umweg über die Startseite (sie lädt danach im Hintergrund wie die übrigen Seiten)
         runtime.app.navigate("reader")
 

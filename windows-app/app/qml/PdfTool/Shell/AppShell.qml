@@ -155,6 +155,7 @@ FocusScope {
     Shortcut { sequence: "Ctrl+3"; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
     Shortcut { sequence: "Ctrl+4"; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
     Shortcut { sequence: "Ctrl+5"; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
+    Shortcut { sequence: "Ctrl+6"; enabled: !Dialogs.open; onActivated: App.openShortcut(6) }
     // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument)
     readonly property string currentTab: App.currentPage === "settings" ? "settings" : App.currentTool
     Shortcut { sequence: "Ctrl+W"; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }

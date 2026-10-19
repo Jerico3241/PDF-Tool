@@ -446,7 +446,7 @@ def test_night_mode_survives_a_restart(ui_app) -> None:
 
 # --- Schnellwerkzeuge der Startseite --------------------------------------------------------------------------------
 def test_quick_tools_open_a_pdf_and_start_the_tool(ui_app, tmp_path: Path, monkeypatch) -> None:
-    """Startseite → Schnellwerkzeuge: acht Kacheln; ein Klick wählt eine PDF, öffnet sie im Tab und startet das
+    """Startseite → Schnellwerkzeuge: zehn Kacheln; ein Klick wählt eine PDF, öffnet sie im Tab und startet das
     Werkzeug, sobald das Dokument geöffnet und aktiv ist (``runAction``). »Zusammenführen« hängt weitere PDFs an.
     Abgebrochene Auswahl: nichts geschieht; ein schon offenes Dokument wird aktiv und das Werkzeug startet dort."""
     from qtapp import files
@@ -459,14 +459,14 @@ def test_quick_tools_open_a_pdf_and_start_the_tool(ui_app, tmp_path: Path, monke
     monkeypatch.setattr(DocumentController, "runAction", lambda self, name: calls.append((self.ident, name, r.current is self)), raising=False)
     monkeypatch.setattr(DocumentController, "mergeFiles", lambda self: calls.append((self.ident, "merge", r.current is self)))
     tiles = {entry["action"]: entry for entry in r.quickTools}
-    assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
-    assert list(tiles) == ["optimize", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
+    assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Als PDF/A speichern", "PDF aus Bildern", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
+    assert list(tiles) == ["optimize", "pdfa", "images", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
     h.navigate("home", 0.3)
     for action in tiles:
         tile = h.item(f"quickTool_{action}")
         assert tile is not None and tile.isVisible() and tile.property("title") == tiles[action]["title"]
     grid = h.item("homeQuickGrid")
-    assert grid.property("columns") in (1, 2, 4)
+    assert grid.property("columns") in (1, 2, 5)
     # Abgebrochen: nichts
     click(h, center(h.item("quickTool_optimize")))
     pump(0.3)

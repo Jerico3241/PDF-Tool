@@ -154,6 +154,7 @@ T.Popup {
                             case "checklist": return checklistContent
                             case "protect": return protectContent
                             case "optimize": return optimizeContent
+                            case "images": return imagesContent
                             case "header_footer": return headerFooterContent
                             case "watermark": return watermarkContent
                             case "redact_search": return redactSearchContent
@@ -233,6 +234,7 @@ T.Popup {
     Component { id: checklistContent; ChecklistContent {} }
     Component { id: protectContent; ProtectContent {} }
     Component { id: optimizeContent; OptimizeContent {} }
+    Component { id: imagesContent; ImagesContent {} }
     Component { id: headerFooterContent; HeaderFooterContent {} }
     Component { id: watermarkContent; WatermarkContent {} }
     Component { id: redactSearchContent; RedactSearchContent {} }
