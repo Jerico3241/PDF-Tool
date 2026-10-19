@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0-beta.5 (Beta zum Testen)
+Version 3.2.0
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -31,7 +31,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0-beta.5.exe
+PDF-Tool-Setup-3.2.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -43,65 +43,9 @@ Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
 
-Neu in Version 3.2 (Beta 5) – Gekündigt und abgelaufen getrennt
-----------------------------------------------------------------
-In den Vertragsübersichten gibt es unter der Excel-Liste jetzt zwei
-Schalter: „Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit
-aufführen“. So lassen sich nur gekündigte, nur abgelaufene oder beide
-zusammen in die Übersicht aufnehmen. War der bisherige gemeinsame Schalter
-an, sind nach dem Update beide an.
-
-
-Neu in Version 3.2 (Beta 5) – Gekündigt und abgelaufen getrennt
-----------------------------------------------------------------
-In den Vertragsübersichten gibt es unter der Excel-Liste jetzt zwei
-Schalter: „Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit
-aufführen“. So lassen sich nur gekündigte, nur abgelaufene oder beide
-zusammen in die Übersicht aufnehmen. War der bisherige gemeinsame Schalter
-an, sind nach dem Update beide an.
-
-
-Neu in Version 3.2 (Beta 4) – Im Hintergrund bereithalten
----------------------------------------------------------
-Der erste Start nach dem Hochfahren des PCs war langsam, weil Windows die
-App erst von der Festplatte laden muss. Jetzt (Einstellungen → Verhalten →
-„Im Hintergrund bereithalten“, standardmäßig an):
-- PDF Tool startet mit Windows unsichtbar und baut sich dabei schon auf.
-  Öffnen Sie es danach (Startmenü, Desktop oder Doppelklick auf eine PDF),
-  erscheint das Fenster sofort.
-- Das Schließen-Kreuz schließt nur das Fenster: Ihre PDFs werden wie
-  gewohnt geschlossen (mit Rückfrage bei ungespeicherten Änderungen), PDF
-  Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts
-  unten, ggf. hinter dem Pfeil „^“). Klick auf das Symbol öffnet das
-  Fenster wieder.
-- Ganz beenden: Rechtsklick auf das Symbol → „Beenden“.
-- Ausgeschaltet verhält sich PDF Tool wie bisher: kein Symbol, kein Start
-  mit Windows, das Kreuz beendet die App.
-
-
-Neu in Version 3.2 (Beta 2) – KI-Assistent (optional)
------------------------------------------------------
-Standardmäßig aus: Solange Sie ihn nicht einschalten, lädt PDF Tool nichts
-und belegt weder Speicherplatz noch Arbeitsspeicher dafür.
-- Einschalten unter Einstellungen → KI-Assistent und ein Sprachmodell
-  wählen: „Genau“ (Qwen3.5 4B, 2,6 GB, braucht beim Antworten rund 5 GB
-  Arbeitsspeicher) oder „Kompakt“ (Qwen3.5 2B, 1,2 GB, rund 2 GB, etwa
-  doppelt so schnell, etwas ungenauer). Geladen wird erst nach
-  „Herunterladen“ – von Hugging Face über HTTPS, mit Prüfung der
-  Prüfsumme; der Download lässt sich anhalten und fortsetzen.
-- Im Reader: Seitenleiste „KI-Assistent“ (rechts). Fragen eintippen oder
-  „Dokument zusammenfassen“ – die Antworten nennen die Seiten, ein Klick
-  darauf springt dorthin. Antworten können Fehler enthalten; bitte auf den
-  genannten Seiten prüfen.
-- Dokumente, Fragen und Antworten verlassen den PC nicht und werden nicht
-  gespeichert. „Modell entfernen …“ löscht das Modell wieder; auch die
-  Deinstallation entfernt es.
-
-
-Neu in Version 3.2 (Beta 1) – Schützen und Weitergeben
-------------------------------------------------------
-Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
-(Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.2.0 Beta“.
+Neu in Version 3.2 – Schützen und Weitergeben, KI-Assistent, schneller Start
+-----------------------------------------------------------------------------
+Freigegebene Version (getestet als Betas 3.2.0-beta.1 bis 3.2.0-beta.5).
 Neue Schaltflächen im Reader: „Schützen“ (Schild), „Seiten gestalten“,
 „Unterschreiben“ und das Werkzeug „Links“.
 - Schwärzen: Bereiche aufziehen oder Text markieren; „Schwärzen anwenden“
@@ -133,6 +77,49 @@ Neue Schaltflächen im Reader: „Schützen“ (Schild), „Seiten gestalten“,
   die PDFs der letzten Sitzung (Einstellungen → PDF Reader).
 - Nachtmodus (Seiten dunkel, nur die Anzeige) und Schnellwerkzeuge auf der
   Startseite: PDF wählen, das Werkzeug startet sofort.
+
+KI-Assistent (optional, standardmäßig aus): Solange Sie ihn nicht
+einschalten, lädt PDF Tool nichts und belegt weder Speicherplatz noch
+Arbeitsspeicher dafür.
+- Einschalten unter Einstellungen → KI-Assistent und ein Sprachmodell
+  wählen: „Genau“ (Qwen3.5 4B, 2,6 GB, braucht beim Antworten rund 5 GB
+  Arbeitsspeicher) oder „Kompakt“ (Qwen3.5 2B, 1,2 GB, rund 2 GB, etwa
+  doppelt so schnell, etwas ungenauer). Geladen wird erst nach
+  „Herunterladen“ – von Hugging Face über HTTPS, mit Prüfung der
+  Prüfsumme; der Download lässt sich anhalten und fortsetzen.
+- Im Reader: Seitenleiste „KI-Assistent“ (rechts). Fragen eintippen oder
+  „Dokument zusammenfassen“ – die Antworten nennen die Seiten, ein Klick
+  darauf springt dorthin. Antworten können Fehler enthalten; bitte auf den
+  genannten Seiten prüfen.
+- Dokumente, Fragen und Antworten verlassen den PC nicht und werden nicht
+  gespeichert. „Modell entfernen …“ löscht das Modell wieder; auch die
+  Deinstallation entfernt es.
+
+Vertragsübersichten: Unter der Excel-Liste gibt es zwei Schalter,
+„Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit
+aufführen“ (standardmäßig aus). So lassen sich nur gekündigte, nur
+abgelaufene oder beide zusammen in die Übersicht aufnehmen; in der PDF
+steht ihr Status in Rot unter der Vertragsnummer. Andere Status (z. B.
+„Inaktiv“) bleiben ausgeblendet.
+
+Im Hintergrund bereithalten (Einstellungen → Verhalten, standardmäßig an):
+- PDF Tool startet mit Windows unsichtbar und baut sich dabei schon auf.
+  Öffnen Sie es danach (Startmenü, Desktop oder Doppelklick auf eine PDF),
+  erscheint das Fenster sofort – auch beim ersten Mal nach dem Hochfahren.
+- Das Schließen-Kreuz schließt nur das Fenster: Ihre PDFs werden wie
+  gewohnt geschlossen (mit Rückfrage bei ungespeicherten Änderungen), PDF
+  Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts
+  unten, ggf. hinter dem Pfeil „^“). Klick auf das Symbol öffnet das
+  Fenster wieder.
+- Ganz beenden: Rechtsklick auf das Symbol → „Beenden“.
+- Ausgeschaltet verhält sich PDF Tool wie bisher: kein Symbol, kein Start
+  mit Windows, das Kreuz beendet die App.
+
+Windows: PDF Tool startet über ein eigenes Startprogramm „PDF-Tool.exe“
+und erscheint in „Öffnen mit“ und unter Einstellungen → Apps →
+Standard-Apps mit eigenem Symbol. Die Standard-App für PDF ändert das Setup
+nicht – das entscheiden Sie.
+
 
 Neu in Version 3.1 – PDF Reader & Editor, Tabs statt Seitenleiste
 ------------------------------------------------------------------
@@ -421,6 +408,16 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 3.1.0 auf 3.2.0: Das Setup ersetzt die
+Programmdateien, legt das Startprogramm „PDF-Tool.exe“ und die Laufzeit
+des KI-Assistenten im Unterordner „ai“ an. Beim ersten Start trägt PDF
+Tool sich unter „Start mit Windows“ ein (Einstellung „Im Hintergrund
+bereithalten“, standardmäßig an; im Task-Manager unter „Autostart-Apps“
+als „PDF Tool“). Alle Einstellungen und Daten bleiben unverändert; der
+KI-Assistent ist aus, bis Sie ihn einschalten. Wer eine Beta von 3.2 nutzt
+(Kanal „Beta“), erhält 3.2.0 als Update; Daten, Einstellungen und der
+Kanal „Beta“ bleiben erhalten.
 
 Update von PDF Tool 3.2.0-beta.4 auf 3.2.0-beta.5 (Kanal „Beta“): Aus dem
 Schalter „Gekündigte und abgelaufene Verträge mit aufführen“ werden zwei

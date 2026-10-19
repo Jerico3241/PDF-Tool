@@ -74,7 +74,7 @@ class ExcelAnalysis:
 
 
 ENDED_KEYS = {"Gekündigt": "vertraege_gekuendigt", "Abgelaufen": "vertraege_abgelaufen"}  # gui-config.json
-ENDED_LEGACY_KEY = "vertraege_beendete"  # bis 3.2.0-beta.4: ein Schalter für beide
+ENDED_LEGACY_KEY = "vertraege_beendete"  # bis 3.2 Beta 4: ein Schalter für beide
 
 
 def ended_selection(cfg: dict) -> tuple[str, ...]:
