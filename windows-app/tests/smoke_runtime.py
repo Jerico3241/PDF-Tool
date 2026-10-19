@@ -167,7 +167,7 @@ def main() -> int:
     check(hasattr(qt_comparison, "ComparisonView") and qt_comparison.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
     check(hasattr(rebuild, "write_classic") and hasattr(scanner, "scan"), "Rohrekonstruktion fehlt")
 
-    check([tool.key for tool in registry.TOOLS] == ["reader", "contracts", "repair"], "Werkzeuge fehlen")
+    check([tool.key for tool in registry.TOOLS] == ["reader", "actions", "contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool") and hasattr(qt_reader, "ReaderTool"), "Werkzeuge der Oberfläche fehlen")
     check(qt_instance.server_name().startswith(qt_instance.PREFIX), "»Öffnen mit« fehlt")
     check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
