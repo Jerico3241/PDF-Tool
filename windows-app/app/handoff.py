@@ -44,6 +44,7 @@ def pdf_arguments(argv: list[str]) -> list[str]:
     return paths[:MAX_PATHS]
 
 
+ACTIVATION = "PDFTOOL_ACTIVATION"  # PDF-Tool.exe: »direkt« oder »COM« (DelegateExecute) – nur fürs Protokoll
 START_EVENT = "PDFTOOL_START_EVENT"  # Name des Ereignisses, auf das PDF-Tool.exe wartet (siehe ``signal_started``)
 ATTACHMENT_FOLDER = "Anhaenge"
 ATTACHMENT_DAYS = 7  # gesicherte Anhänge so lange aufheben
@@ -119,7 +120,7 @@ def secure_transient(argv: list[str], target: Path | None = None) -> list[str]:
     result, folder = [], None
     for arg in argv:
         if arg and not arg.startswith("-"):
-            note(f"Start mit Datei: {place_kind(arg)}, kurzer Pfad: {'ja' if '~' in arg else 'nein'}, vorhanden: {'ja' if Path(arg).is_file() else 'nein'}, flüchtig: {'ja' if is_transient(arg) else 'nein'}")
+            note(f"Start mit Datei über {os.environ.get(ACTIVATION, 'Befehlszeile')}: {place_kind(arg)}, kurzer Pfad: {'ja' if '~' in arg else 'nein'}, vorhanden: {'ja' if Path(arg).is_file() else 'nein'}, flüchtig: {'ja' if is_transient(arg) else 'nein'}")
         if arg and not arg.startswith("-") and is_transient(arg) and Path(arg).is_file():
             try:
                 if folder is None:

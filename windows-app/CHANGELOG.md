@@ -6,6 +6,11 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
 Beta zum Testen, ohne neue Funktionen. Details in den [Release Notes](release-notes/4.0.0-beta.4.md).
 
+- Dateizuordnung: `shell\open\command` der ProgID `PDFTool.Dokument` (und `Applications\PDF-Tool.exe`) trägt
+  `DelegateExecute` = `{61E62B6E-0FE6-46A2-8AF1-BD670901BF3B}`; `PDF-Tool.exe -Embedding` ist der COM-Server dazu
+  (`IExecuteCommand`, `IObjectWithSelection`). Windows startet PDF Tool so über den COM-Dienst statt als Kindprozess
+  des Aufrufers – die Defender-ASR-Regel für Office-Kommunikationsanwendungen blockierte `olk.exe`/Outlook beim
+  Start von `PDF-Tool.exe`.
 - Outlook-Anhänge: `start.py` setzt das Ereignis für `PDF-Tool.exe` (`signal_started`) erst, wenn die App selbst
   startet; bei einer Übergabe endet `PDF-Tool.exe` mit dem Übergabe-Prozess, also danach. Vorher endete es schon
   vor der Übergabe. `handoff.note` schreibt `uebergabe.log` (Art des Ordners, gesichert, angenommen – keine

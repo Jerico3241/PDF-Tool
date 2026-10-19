@@ -403,10 +403,32 @@ $attachment = Join-Path $outlookDir "Mitteilung_SEPA_Mandat Test GmbH (003).pdf"
 if ($LASTEXITCODE -ne 0) { throw "Test-Anhang konnte nicht erzeugt werden" }
 Set-ItemProperty -Path $attachment -Name IsReadOnly -Value $true  # Outlook legt Anhaenge schreibgeschuetzt ab
 $logBefore = if (Test-Path $appLog) { (Get-Content $appLog -Encoding UTF8).Count } else { 0 }
-# wie der Befehl der ProgID PDFTool.Dokument: "PDF-Tool.exe" "%1"
-$mail = Start-Process -FilePath $launcher -ArgumentList "`"$attachment`"" -WorkingDirectory $outlookDir -PassThru
-$null = $mail.Handle
-if (-not $mail.WaitForExit(30000)) { throw "PDF-Tool.exe endete beim Oeffnen des Anhangs nicht" }
+# wie Outlook: ShellExecuteEx mit der Zuordnung (ProgID PDFTool.Dokument, Verb »open«) - Windows startet
+# PDF-Tool.exe ueber DelegateExecute als COM-Server, nicht als Kindprozess des Aufrufers
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class ShellOpen {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHELLEXECUTEINFO {
+        public int cbSize; public uint fMask; public IntPtr hwnd; public string lpVerb; public string lpFile;
+        public string lpParameters; public string lpDirectory; public int nShow; public IntPtr hInstApp; public IntPtr lpIDList;
+        public string lpClass; public IntPtr hkeyClass; public uint dwHotKey; public IntPtr hIcon; public IntPtr hProcess;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool ShellExecuteExW(ref SHELLEXECUTEINFO info);
+    public static int Open(string file, string progId) {
+        var info = new SHELLEXECUTEINFO();
+        info.cbSize = Marshal.SizeOf(info);
+        info.fMask = 0x00000001 | 0x00000400 | 0x00000100; // SEE_MASK_CLASSNAME | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC
+        info.lpVerb = "open"; info.lpFile = file; info.lpClass = progId; info.nShow = 1;
+        return ShellExecuteExW(ref info) ? 0 : Marshal.GetLastWin32Error();
+    }
+}
+"@
+$opened = [ShellOpen]::Open($attachment, "PDFTool.Dokument")
+if ($opened -ne 0) { throw "ShellExecuteEx ueber die Zuordnung fehlgeschlagen (Fehler $opened)" }
+for ($i = 0; $i -lt 60 -and (Get-Process -Name "PDF-Tool" -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }  # Outlook wartet ebenso
 Set-ItemProperty -Path $attachment -Name IsReadOnly -Value $false
 Remove-Item $outlookDir -Recurse -Force  # Outlook raeumt seine Kopie auf
 $received = $null
@@ -418,6 +440,7 @@ if (Test-Path $handoffLog) { Write-Host "   Uebergabe-Protokoll:"; Get-Content $
 if (-not $received) { throw "Outlook-Anhang: die laufende App hat keinen weiteren Start erhalten" }
 Write-Host "   $received"
 if ($received -notlike "*1 Datei(en), 1 vorhanden*") { throw "Outlook-Anhang kam nicht an: $received" }
+if (-not (Test-Path $handoffLog) -or -not (Select-String -Path $handoffLog -Pattern "Start mit Datei .ber COM: Outlook" -Quiet)) { throw "Outlook-Anhang: PDF-Tool.exe wurde nicht ueber DelegateExecute (COM) gestartet" }
 $saved = @(Get-ChildItem (Join-Path $env:LOCALAPPDATA "PDF-Tool\Anhaenge") -Recurse -Filter "Mitteilung_SEPA_Mandat Test GmbH (003).pdf" -ErrorAction SilentlyContinue)
 if ($saved.Count -lt 1) { throw "Outlook-Anhang wurde nicht gesichert" }
 if (Test-Path $errorLog) { throw "Fehler beim Oeffnen des Outlook-Anhangs: $(Get-Content $errorLog -Raw)" }

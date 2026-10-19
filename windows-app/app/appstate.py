@@ -141,7 +141,7 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Beta 4.0 – vierter Teil: PDF-Anhänge aus Outlook kommen bei laufender App an, in der Taskleiste steht »PDF Tool« statt »Python«, das Symbol ist auch klein scharf.",
+    "Beta 4.0 – vierter Teil: PDF-Anhänge aus Outlook öffnen sich wieder (auch mit strengen Defender-Regeln), in der Taskleiste steht »PDF Tool« statt »Python«, das Symbol ist auch klein scharf.",
     "Aus Beta 3: aufgeräumt. PDF-Anhänge aus Outlook öffnen sich wieder, Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
     "Aus Beta 2: Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
     "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",

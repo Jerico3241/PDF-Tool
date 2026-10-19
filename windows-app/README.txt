@@ -49,8 +49,9 @@ nur, wenn Sie den Assistenten einrichten.
 Neu in Version 4.0 Beta 4 – Outlook, Taskleiste, Symbol
 --------------------------------------------------------
 Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
-- PDF-Anhänge aus Outlook: Bei laufender App endete das Startprogramm, bevor
-  die Datei bei PDF Tool ankam – es wartet jetzt, bis sie übergeben ist.
+- PDF-Anhänge aus Outlook (klassisch und neu) öffnen sich wieder, auch wenn
+  eine Defender-Regel Outlook verbietet, Programme direkt zu starten: Windows
+  startet PDF Tool jetzt selbst und übergibt die Datei.
   Ein Übergabe-Protokoll (im Support-Paket) zeigt, ob ein Start ankommt.
 - Taskleiste: Rechtsklick auf PDF Tool zeigt „PDF Tool“ statt „Python“.
 - App-Symbol: in Taskleiste und Explorer (16–24 Pixel) scharf gezeichnet.
