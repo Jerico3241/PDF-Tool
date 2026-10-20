@@ -150,6 +150,8 @@ class ReaderController(Observable):
         self._ocr_chosen = [str(code) for code in chosen if isinstance(code, str)][:6] if isinstance(chosen, list) else []
         self._clip_cut = False
         self._page_data: bytes | None = None  # kopierte Seiten als kleine PDF
+        stored_sign = cfg.get("reader_signieren")
+        self.sign_defaults: dict = dict(stored_sign) if isinstance(stored_sign, dict) else {}  # Grund, Ort, sichtbar, Zertifikat
         self._paste_counts: dict[tuple[str, int], int] = {}  # wie oft je Dokument und Seite eingefügt
         self._clipboard_watched = False
         self.source_dir = str(cfg.get("ordner_reader") or "")
@@ -1013,7 +1015,7 @@ class ReaderController(Observable):
         session = self._session if self._restore_wanted() else None
         return {
             "reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel},
-            "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
+            "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), "reader_signieren": dict(self.sign_defaults) or None, NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
             "reader_bilder": {"seite": self._image_options["pageSize"], "rand": self._image_options["margin"], "ordner": self._image_options["folder"]},
             "reader_scan": {
                 "quelle": self._scan_options["source"], "farbe": self._scan_options["color"], "dpi": self._scan_options["dpi"],
@@ -1670,6 +1672,11 @@ class ReaderController(Observable):
         if chosen:
             return chosen
         return ["deu"] if "deu" in installed else installed[:1]
+
+    def remember_sign_defaults(self, values: dict) -> None:
+        if values != self.sign_defaults:
+            self.sign_defaults = dict(values)
+            self.app.schedule_save()
 
     def remember_ocr_languages(self, codes: list[str]) -> None:
         if codes and codes != self._ocr_chosen:

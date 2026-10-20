@@ -74,8 +74,8 @@ jobs:
             dateien: reader reader_layout reader_v31 pages_v31 forms_v31 speech
           - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
             dateien: objects objects_v31 edit_v31 reader_motion ocr
-          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen
-            dateien: protect comfort assistant reader_v40
+          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen, digitale Signatur
+            dateien: protect comfort assistant reader_v40 signing
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -92,7 +92,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
@@ -156,7 +156,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
@@ -183,8 +183,8 @@ jobs:
       - name: 1. Tests (PDF Editor – Schwärzen, Bereinigen, Reduzieren, Kennwortschutz, Verkleinern, Kopf-/Fußzeile und Wasserzeichen, Stempel und Unterschrift, Lesezeichen, Links, Zuschneiden)
         run: python -m pytest windows-app/tests/test_editor_redact.py windows-app/tests/test_editor_cleanup.py windows-app/tests/test_editor_protect.py windows-app/tests/test_editor_optimize.py windows-app/tests/test_editor_pagemarks.py windows-app/tests/test_editor_stamps.py windows-app/tests/test_editor_navigation.py -q -rs -p no:cacheprovider
 
-      - name: 1. Tests (4.0 – Als PDF/A speichern, PDF aus Bildern, Stapel-Aktionen, Vergleichen)
-        run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py windows-app/tests/test_compare.py -q -rs -p no:cacheprovider
+      - name: 1. Tests (4.0 – Als PDF/A speichern, PDF aus Bildern, Stapel-Aktionen, Vergleichen, digitale Signatur mit dem Zertifikatspeicher von Windows)
+        run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py windows-app/tests/test_compare.py windows-app/tests/test_digsig.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider

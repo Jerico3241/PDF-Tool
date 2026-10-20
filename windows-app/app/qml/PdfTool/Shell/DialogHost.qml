@@ -161,6 +161,8 @@ T.Popup {
                             case "watermark": return watermarkContent
                             case "redact_search": return redactSearchContent
                             case "signature": return signatureContent
+                            case "digital_sign": return digitalSignContent
+                            case "signatures": return signaturesContent
                             case "link": return linkContent
                             case "crop": return cropContent
                             case "assistant_setup": return assistantSetupContent
@@ -238,6 +240,8 @@ T.Popup {
     Component { id: optimizeContent; OptimizeContent {} }
     Component { id: imagesContent; ImagesContent {} }
     Component { id: scanContent; ScanContent {} }
+    Component { id: digitalSignContent; DigitalSignContent {} }
+    Component { id: signaturesContent; SignaturesContent {} }
     Component { id: shortcutsContent; ShortcutsContent {} }
     Component { id: headerFooterContent; HeaderFooterContent {} }
     Component { id: watermarkContent; WatermarkContent {} }

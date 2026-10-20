@@ -175,6 +175,8 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/pypdfium2/__init__.py",
     "runtime/Lib/site-packages/pypdf/__init__.py",
     "runtime/Lib/site-packages/comtypes/client/__init__.py",
+    "runtime/Lib/site-packages/cryptography/hazmat/bindings/_rust.pyd",
+    "runtime/Lib/site-packages/asn1crypto/cms.py",
     "runtime/Lib/site-packages/pypdfium2_raw/pdfium.dll",
     "runtime/Lib/site-packages/shiboken6/__init__.py",
     "runtime/Lib/site-packages/shiboken6/Shiboken.pyd",

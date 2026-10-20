@@ -38,6 +38,9 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | ↳ Bibliotheken von PDFium | – | Apache-2.0 (abseil, llvm-libc mit LLVM-Exception), FTL (FreeType), Unicode-3.0 (ICU), MIT (lcms, simdutf), BSD (agg, OpenJPEG, libjpeg-turbo), libpng, libtiff, Zlib, MIT/Apache-2.0 (fast_float) | Schriften, Bilder, Farbprofile | https://github.com/bblanchon/pdfium-binaries |
 | fontTools | 4.66.1 | MIT | PDF Reader & Editor: Teilmengen lokaler Schriften einbetten (nur wenn die Schrift es erlaubt) | https://github.com/fonttools/fonttools |
 | comtypes | 1.4.17 | MIT | Scannen über die Scanner-Schnittstelle von Windows (WIA) | https://github.com/enthought/comtypes |
+| cryptography | 50.0.2 | Apache-2.0 oder BSD-3-Clause | Digitale Signatur: Zertifikate, .pfx-Dateien, Prüfen von Signaturen | https://github.com/pyca/cryptography |
+| cffi | 2.1.1 | MIT | Grundlage von cryptography | https://github.com/python-cffi/cffi |
+| asn1crypto | 1.5.1 | MIT | Digitale Signatur: CMS-Paket (PAdES) | https://github.com/wbond/asn1crypto |
 | pypdf | 6.19.0 | BSD-3-Clause | PDF reparieren (dritte, tolerante Engine der erweiterten Wiederherstellung) | https://github.com/py-pdf/pypdf |
 | packaging | 26.3 | Apache-2.0 oder BSD-2-Clause | von pikepdf benötigt | https://github.com/pypa/packaging |
 | pandas | 2.3.3 | BSD-3-Clause | Vertragsübersichten (Excel lesen) | https://pandas.pydata.org |
