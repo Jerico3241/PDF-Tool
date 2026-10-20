@@ -35,6 +35,7 @@ ACTIONS = ("optimize", "pdfa", "redact", "redactSearch", "protect", "watermark",
 SIGNATURE_FILE = "unterschriften.json"  # gespeicherte Unterschriften (nur lokal, nur auf Wunsch)
 MM = 72 / 25.4
 RECOVERY_DELAY_MS = 4000
+MAX_SELECTION_PAGES = 200  # Auswahl über Seiten: höchstens so viele Seiten (Textschichten im Speicher)
 LINKS_DELAY_MS = 250  # nach einer Änderung: Links gesammelt neu lesen
 SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
 NUDGE_DELAY_MS = 350  # Pfeiltasten: so lange sammeln, dann ein Schritt (eine Änderung, ein Rückgängig)
@@ -84,7 +85,8 @@ class DocumentController(Observable):
     redoTextChanged, redoText = prop(str, "redoText", "")
     # Auswahl (Text)
     selectionPageChanged, selectionPage = prop(int, "selectionPage", -1)
-    selectionRectsChanged, selectionRects = prop(list, "selectionRects", [])
+    selectionRectsChanged, selectionRects = prop(list, "selectionRects", [])  # Rechtecke auf selectionPage
+    selectionPagesChanged, selectionPages = prop(dict, "selectionPages", {})  # Seite (Text) → Rechtecke (seit 4.0.0-beta.5 über Seiten)
     textPagesChanged, textPages = prop(list, "textPages", [])  # Seiten mit geladener Zeichentabelle
     # Suche
     searchTextChanged, searchText = prop(str, "searchText", "")
@@ -162,7 +164,8 @@ class DocumentController(Observable):
         self._texts: dict[int, Any] = {}  # Seite → PageText (Zeichentabelle)
         self._text_requests: set[int] = set()
         self._select_all_pending: set[int] = set()  # »Alles auswählen«, sobald die Textschicht da ist
-        self._selection: tuple[int, int, int] | None = None  # Seite, Anfang, Ende (einschließlich)
+        self._selection: tuple[int, int, int, int] | None = None  # erste Seite, Anfang, letzte Seite, Ende (einschließlich)
+        self._across_pending: tuple | None = None  # Auswahl über Seiten, deren Textschicht noch lädt
         self._search_task: Task | None = None
         self._search_hits: list[dict] = []
         self._search_serial = 0
@@ -510,6 +513,8 @@ class DocumentController(Observable):
                 if page in self._select_all_pending:
                     self._select_all_pending.discard(page)
                     self._select_whole(page)
+                if self._across_pending is not None:
+                    self.selectAcross(*self._across_pending)
 
         def failed(_exc) -> None:
             self._text_requests.discard(page)
@@ -582,11 +587,62 @@ class DocumentController(Observable):
         if table is not None and table.boxes:
             self._set_selection(page, 0, len(table.boxes) - 1)
 
-    def _set_selection(self, page: int, start: int, end: int) -> None:
-        table = self._texts[page]
-        self._selection = (page, start, end)
+    @Slot(int, float, float, int, float, float, result=bool)
+    def selectAcross(self, first: int, u0: float, v0: float, last: int, u1: float, v1: float) -> bool:  # noqa: N802
+        """Auswahl über Seitengrenzen: von (u0, v0) auf Seite ``first`` bis (u1, v1) auf Seite ``last``."""
+        if first == last:
+            self._across_pending = None
+            return self.selectRange(first, u0, v0, u1, v1)
+        if last < first:
+            first, u0, v0, last, u1, v1 = last, u1, v1, first, u0, v0
+        first, last = max(0, first), min(self.pageCount - 1, last, first + MAX_SELECTION_PAGES - 1)
+        if first > last:
+            return False
+        missing = [page for page in range(first, last + 1) if page not in self._texts]
+        if missing:
+            self._across_pending = (first, u0, v0, last, u1, v1)
+            for page in missing:
+                self.loadText(page)
+            return False
+        self._across_pending = None
+        start = self._index_at(first, u0, v0, nearest=True)
+        end = self._index_at(last, u1, v1, nearest=True)
+        if start < 0:  # erste Seite ohne Text: ab der nächsten Seite mit Text
+            start = 0
+        if end < 0:
+            end = max(0, len(self._texts[last].boxes) - 1)
+        self._set_selection(first, start, end, last)
+        return True
+
+    def _set_selection(self, page: int, start: int, end: int, last: int | None = None) -> None:
+        last = page if last is None else last
+        self._selection = (page, start, last, end)
+        rects: dict[str, list] = {}
+        for current in range(page, last + 1):
+            boxes = self._texts[current].boxes
+            lo = start if current == page else 0
+            hi = end if current == last else len(boxes) - 1
+            if boxes and lo <= hi:
+                rects[str(current)] = _line_rects(boxes[lo : hi + 1])
         self.selectionPage = page
-        self.selectionRects = _line_rects(table.boxes[start : end + 1])
+        self.selectionRects = rects.get(str(page), [])
+        self.selectionPages = rects
+
+    def selection_spans(self) -> list[tuple[int, int, int]]:
+        """Die Auswahl je Seite: (Seite, Anfang, Anzahl Zeichen)."""
+        if self._selection is None:
+            return []
+        page, start, last, end = self._selection
+        spans = []
+        for current in range(page, last + 1):
+            table = self._texts.get(current)
+            if table is None or not table.boxes:
+                continue
+            lo = start if current == page else 0
+            hi = end if current == last else len(table.boxes) - 1
+            if lo <= hi:
+                spans.append((current, lo, hi - lo + 1))
+        return spans
 
     @Slot()
     def clearSelection(self) -> None:  # noqa: N802
@@ -595,10 +651,13 @@ class DocumentController(Observable):
     def clear_selection(self) -> None:
         self._select_all_pending.clear()  # eine neue Auswahl, ein Klick oder eine Änderung ersetzt die Bitte
         self._selection = None
+        self._across_pending = None
         if self.selectionPage != -1:
             self.selectionPage = -1
         if self.selectionRects:
             self.selectionRects = []
+        if self.selectionPages:
+            self.selectionPages = {}
 
     @Slot()
     def copySelection(self) -> None:  # noqa: N802
@@ -607,18 +666,17 @@ class DocumentController(Observable):
         if not (self.permissions or {}).get("copy", True):
             self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Text.", title="Kopieren nicht erlaubt")
             return
-        page, start, end = self._selection
-        self.run(lambda session: session.text(page, start, end - start + 1), lambda text: self.app.copy_text(text, "Text kopiert."), refresh=False, priority=VIEW)
+        spans = self.selection_spans()
+        self.run(lambda session: "\n".join(session.text(page, start, count) for page, start, count in spans), lambda text: self.app.copy_text(text, "Text kopiert."), refresh=False, priority=VIEW)
 
     @Slot(str)
     def markSelection(self, kind: str) -> None:  # noqa: N802
         """Auswahl markieren, unterstreichen oder durchstreichen (Anmerkung)."""
         if self._selection is None or kind not in ("highlight", "underline", "strikeout") or not self.edit_allowed("annotate"):
             return
-        page = self._selection[0]
-        rects = [list(rect) for rect in self.selectionRects]
+        pages = {page: [list(rect) for rect in rects] for page, rects in self.selectionPages.items()}
         color = self.markColor if kind == "highlight" else self.toolColor
-        self.run(lambda session: session.markup(page, kind, rects, color, ""), lambda _key: (self.clear_selection(), self.loadAnnotations()), busy="")
+        self.run(lambda session: session.markup_pages(kind, pages, color), lambda _result: (self.clear_selection(), self.loadAnnotations()), busy="")
 
     # Suche ---------------------------------------------------------------------------------------------------------
     @Slot()
@@ -2320,8 +2378,14 @@ class DocumentController(Observable):
         """Ausgewählten Text zum Schwärzen vormerken (je Zeile ein Bereich)."""
         if self._selection is None:
             return
-        page, start, end = self._selection
-        self.run(lambda session: session.selection_rects(page, start, end - start + 1), lambda rects: (self._add_marks(page, rects), self.clear_selection()), refresh=False, priority=VIEW)
+        spans = self.selection_spans()
+
+        def marked(found: list) -> None:
+            for page, rects in found:
+                self._add_marks(page, rects)
+            self.clear_selection()
+
+        self.run(lambda session: [(page, session.selection_rects(page, start, count)) for page, start, count in spans], marked, refresh=False, priority=VIEW)
 
     @Slot(int, str)
     def removeRedactMark(self, page: int, ident: str) -> None:  # noqa: N802

@@ -510,6 +510,14 @@ class Session:
         rects = [geo.rect_to_page(normalize(tuple(rect))) for rect in view_rects]
         return annotations.add_markup(self.document, self.history, page, kind, rects, style=annotations.Style(color=_rgb(color)), contents=contents)
 
+    def markup_pages(self, kind: str, pages: dict, color: str) -> None:
+        """Eine Auswahl über mehrere Seiten markieren – ein Schritt zum Rückgängigmachen."""
+        title = "Text " + {"highlight": "markieren", "underline": "unterstreichen", "strikeout": "durchstreichen"}.get(kind, "markieren")
+        with commands.group(self.document, self.history, title):
+            for page, rects in pages.items():
+                if rects:
+                    self.markup(int(page), kind, rects, color, "")
+
     def add_note(self, page: int, u: float, v: float, text: str, color: str) -> str:
         x, y = self.document.geometry(page).to_page(u, v)
         return annotations.add_note(self.document, self.history, page, x, y, text, style=annotations.Style(color=_rgb(color)))
