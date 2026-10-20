@@ -79,7 +79,7 @@ def cert_info(der: bytes) -> CertInfo:
             alt = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
             names = alt.get_values_for_type(x509.RFC822Name)
             email = names[0] if names else ""
-        except x509.ExtensionNotFound:
+        except (x509.ExtensionNotFound, ValueError):  # ValueError: Erweiterungen nicht lesbar (fehlerhaft kodiert)
             pass
     return CertInfo(
         subject=common(cert.subject), issuer=common(cert.issuer), email=email,
@@ -102,6 +102,8 @@ def can_sign(der: bytes) -> bool:
         usage = cert.extensions.get_extension_for_class(x509.KeyUsage).value
     except x509.ExtensionNotFound:
         return True
+    except ValueError:  # Erweiterungen nicht lesbar: zum Signieren nicht anbieten
+        return False
     return bool(usage.digital_signature or usage.content_commitment)
 
 

@@ -5,6 +5,7 @@ Vertrauenskette."""
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -77,7 +78,10 @@ windows = pytest.mark.skipif(sys.platform != "win32", reason="nur unter Windows"
 
 
 def _powershell(script: str) -> str:
-    result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, timeout=120)
+    # Windows PowerShell 5.1 aus einem pwsh-7-Schritt: ohne dessen PSModulePath, sonst fehlt das Laufwerk »Cert:«
+    env = {key: value for key, value in os.environ.items() if key.upper() != "PSMODULEPATH"}
+    result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", "Import-Module Microsoft.PowerShell.Security; " + script],
+                            capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 
@@ -126,9 +130,13 @@ def test_windows_trusts_a_certificate_from_a_known_authority() -> None:
     found = None
     while context:
         der = winsign._der(context)
-        info = digsig.cert_info(der)
         from datetime import datetime, timezone
 
+        try:
+            info = digsig.cert_info(der)
+        except ValueError:  # fehlerhaft kodierte Stammzertifikate gibt es (ROOT-Speicher der CI)
+            context = winsign.crypt32.CertEnumCertificatesInStore(store, context)
+            continue
         if info.self_signed and info.valid_at(datetime.now(timezone.utc)) and "Microsoft" in info.subject:
             found = der
             break
