@@ -163,6 +163,7 @@ T.Popup {
                             case "signature": return signatureContent
                             case "digital_sign": return digitalSignContent
                             case "signatures": return signaturesContent
+                            case "assistant_translate": return translateContent
                             case "link": return linkContent
                             case "crop": return cropContent
                             case "assistant_setup": return assistantSetupContent
@@ -242,6 +243,7 @@ T.Popup {
     Component { id: scanContent; ScanContent {} }
     Component { id: digitalSignContent; DigitalSignContent {} }
     Component { id: signaturesContent; SignaturesContent {} }
+    Component { id: translateContent; TranslateContent {} }
     Component { id: shortcutsContent; ShortcutsContent {} }
     Component { id: headerFooterContent; HeaderFooterContent {} }
     Component { id: watermarkContent; WatermarkContent {} }

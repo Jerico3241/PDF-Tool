@@ -28,7 +28,7 @@ from typing import Callable
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from tools.pdf_editor import compare as comparing
-from tools.pdf_editor import imagepdf, recovery, scan
+from tools.pdf_editor import imagepdf, office, recovery, scan
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
 from tools.registry import READER
 
@@ -52,6 +52,7 @@ QUICK_TOOLS = (
     ("pdfa", "Als PDF/A speichern", "Archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften speichern", "library"),
     ("images", "PDF aus Bildern", "Fotos und Scans (JPG, PNG, TIFF …) zu einer PDF zusammenfügen", "image_add"),
     ("scan", "Scannen", "Vom Scanner direkt in eine PDF – auf Wunsch durchsuchbar", "scan_text"),
+    ("office", "Office in PDF", "Word-, Excel- oder PowerPoint-Datei in PDF umwandeln (mit Microsoft Office)", "document_pdf"),
     ("redact", "Schwärzen", "Text und Bereiche dauerhaft unkenntlich machen", "eye_off"),
     ("protect", "Kennwortschutz", "Kennwort zum Öffnen oder Einschränkungen festlegen", "lock_closed"),
     ("watermark", "Wasserzeichen", "Wasserzeichen auf die Seiten legen", "layer"),
@@ -318,7 +319,13 @@ class ReaderController(Observable):
         """PDFs öffnen (je Datei ein Tab; schon geöffnete werden aktiv). ``then(Dokument)``: sobald das jeweilige
         Dokument geöffnet und aktiv ist – ``then(None)``, wenn es sich nicht öffnen ließ."""
         images = [p for p in paths if imagepdf.is_image(p)]
-        pdfs = [p for p in paths if p not in images and (p.lower().endswith(".pdf") or _looks_like_pdf(p))]
+        documents = [p for p in paths if p not in images and office.kind_of(p) is not None]
+        pdfs = [p for p in paths if p not in images and p not in documents and (p.lower().endswith(".pdf") or _looks_like_pdf(p))]
+        if documents:
+            # Word, Excel, PowerPoint (Ziehen, »Senden an«): über Office in PDF umwandeln und öffnen
+            self.office_to_pdf(documents[0])
+            if not pdfs and not images:
+                return
         if images:
             # Bilder (Ziehen, »Senden an« im Explorer): zu einer PDF zusammenfügen
             self.images_to_pdf(images)
@@ -1049,6 +1056,9 @@ class ReaderController(Observable):
         if action == "scan":
             self.scanToPdf()
             return
+        if action == "office":
+            self.officeToPdf()
+            return
         path = self.pick_pdf(f"{tool[1]} – erste PDF wählen" if action == "merge" else f"{tool[1]} – PDF wählen")
         if not path:
             return
@@ -1124,6 +1134,61 @@ class ReaderController(Observable):
             self.app.notify("reader", "error", message, title="PDF aus Bildern")
 
         self.engine.submit(lambda: imagepdf.create(order, target, page_size=page_size, margin=margin), done, failed, label="bilder")
+
+    # Office in PDF -----------------------------------------------------------------------------------------------------
+    @Slot()
+    def officeToPdf(self) -> None:  # noqa: N802
+        path = files.open_file("Office in PDF – Datei wählen", self.app.initial_dir("reader", self.source_dir), office.FILTER)
+        if path:
+            self.office_to_pdf(path)
+
+    def office_to_pdf(self, path: str) -> None:
+        """Word-, Excel- oder PowerPoint-Datei über das installierte Office in eine neue PDF umwandeln und öffnen."""
+        kind = office.kind_of(path)
+        if kind is None:
+            return
+        if not office.installed(kind):
+            self.app.notify("reader", "warning", f"Zum Umwandeln braucht PDF Tool Microsoft {office.NAMES[kind]}. Es ist auf diesem PC nicht installiert.", title="Office in PDF")
+            return
+        target = files.save_file("PDF speichern", str(Path(path).with_suffix(".pdf")), files.PDF_FILTER)
+        if not target:
+            return
+        if not target.lower().endswith(".pdf"):
+            target += ".pdf"
+        if Path(target).exists():
+            # Die Dateiauswahl hat das Überschreiben bestätigt: erst nach erfolgreicher Umwandlung ersetzen
+            final, target = target, str(Path(target).with_name(f".{Path(target).stem[:40]}.pdftool-office.pdf"))
+            Path(target).unlink(missing_ok=True)
+        else:
+            final = target
+        self.source_dir = str(Path(path).parent)
+        self.app.set_status(f"{Path(path).name} wird mit {office.NAMES[kind]} in PDF umgewandelt …", "busy")
+
+        def work() -> str:
+            office.to_pdf(path, target)
+            if final != target:
+                os.replace(target, final)
+            return final
+
+        def done(result: str) -> None:
+            self.app.notify("reader", "success", f"{Path(path).name} wurde in PDF umgewandelt.", title="Office in PDF", auto_hide=8000)
+            self.open_paths([result])
+
+        def failed(exc: BaseException, _details: str) -> None:
+            if final != target:
+                Path(target).unlink(missing_ok=True)
+            message = str(exc) if isinstance(exc, EditorError) else f"{office.NAMES[kind]} konnte die Datei nicht umwandeln."
+            self.app.notify("reader", "error", message, title="Office in PDF")
+
+        self.engine.submit(work, done, failed, label="office")
+
+    @Slot(str)
+    def openExternal(self, path: str) -> None:  # noqa: N802
+        """Umgewandelte Datei (Word, Excel, Text) mit dem Standardprogramm öffnen."""
+        try:
+            files.open_path(path)
+        except OSError as exc:
+            self.app.notify("reader", "error", str(exc) or "Kein Programm zum Öffnen gefunden.", title="Nicht geöffnet")
 
     # Scannen -----------------------------------------------------------------------------------------------------------
     @Slot()
@@ -1713,7 +1778,9 @@ class ReaderTool:
         return HINT
 
     def accepts(self, paths: list[str], page: str) -> bool:
-        return any(p.lower().endswith(".pdf") or imagepdf.is_image(p) for p in paths)
+        # Office-Dateien wandelt der Reader in PDF um – Excel-Listen aber nur im Reader selbst (auf der Startseite
+        # gehören sie zu den »Vertragsübersichten«)
+        return any(p.lower().endswith(".pdf") or imagepdf.is_image(p) or office.kind_of(p) in ("word", "powerpoint") or (page == READER.key and office.kind_of(p) == "excel") for p in paths)
 
     def drag_enter(self, accepted: bool, page: str) -> None:
         self.controller.dropHighlight = accepted

@@ -5,8 +5,9 @@ Versteht dieselben Aufrufparameter und dieselbe Schnittstelle wie das Original, 
 Antwort (Server-Sent Events, »data: {…}« je Stück, zuletzt »data: [DONE]«). Der Schlüssel kommt wie beim Original aus
 ``LLAMA_API_KEY``; ohne passenden »Authorization: Bearer …« antwortet die Attrappe mit 401.
 
-Die Antworten sind fest und nennen die Seiten der Auszüge, die sie bekommen hat (»[Seite N]«) – so lässt sich
-prüfen, welche Abschnitte PDF Tool schickt und wie es Seitenangaben verlinkt. Steuerung über die Umgebung:
+Die Antworten sind fest und nennen die Seiten der Auszüge, die sie bekommen hat (»[Seite N]«, bei mehreren PDFs
+»[Datei N »Name«, Seite M]«) – so lässt sich prüfen, welche Abschnitte PDF Tool schickt und wie es Seitenangaben
+verlinkt. Übersetzungen kommen als »[EN] « vor jedem Absatz zurück. Steuerung über die Umgebung:
 
 * ``FAKE_LLAMA_LOAD`` – Sekunden »Modell laden« (Standard 0,3)
 * ``FAKE_LLAMA_MODE`` – ``slow`` (lange, langsame Antwort: Abbrechen), ``context`` (Fehler »Kontext zu groß«),
@@ -37,6 +38,13 @@ _LOG_LOCK = threading.Lock()
 def answer_for(messages: list[dict]) -> str:
     """Feste Antwort je Art der Anfrage – mit den Seiten der mitgeschickten Auszüge."""
     content = str((messages[-1] if messages else {}).get("content") or "")
+    system = str((messages[0] if messages else {}).get("content") or "")
+    if system.startswith("Du bist ein Übersetzer"):  # Übersetzen: erkennbar markiert, Absätze bleiben
+        return "\n\n".join(f"[EN] {part}" for part in content.split("\n\n"))
+    sources = re.findall(r"\[Datei (\d+) »[^«]*«, Seite (\d+)\]", content)
+    if sources:  # mehrere PDFs: Quelle mit Datei und Seite
+        cited = "; ".join(f"Datei {file}, S. {page}" for file, page in sources[:2])
+        return f"Die Kündigungsfrist beträgt drei Monate ({cited})."
     pages = [int(value) for value in re.findall(r"\[Seite (\d+)\]", content)]
     first = pages[0] if pages else 1
     last = pages[-1] if pages else 1

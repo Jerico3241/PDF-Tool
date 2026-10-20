@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, compare, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, compare, convert, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
@@ -730,6 +730,10 @@ class Session:
 
     def export_images(self, indexes: list[int], folder: str, stem: str, fmt: str, dpi: int) -> list[str]:
         return [str(path) for path in export.export_pages(self.document, indexes, folder, stem, fmt=fmt, dpi=dpi)]
+
+    def convert(self, fmt: str, target: str, indexes: list[int]) -> convert.Result:
+        """In Word, Excel oder Text umwandeln (neue Datei ``target``)."""
+        return convert.convert(self.document, target, fmt, indexes)
 
     # Eigenschaften ---------------------------------------------------------------------------------------------
     def properties(self) -> dict:

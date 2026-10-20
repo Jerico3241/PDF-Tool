@@ -54,6 +54,7 @@ _HEADING = re.compile(r"#{1,6}\s+")
 class Passage:
     page: int  # 0-basiert
     text: str
+    source: int = -1  # mehrere PDFs: Index der Datei (``assistant.library``)
 
 
 def clean(text: str) -> str:
@@ -180,7 +181,8 @@ class Index:
             size = len(self.items[index].text)
             if used + size > budget_chars:
                 if not chosen and size > budget_chars:  # schon der erste Abschnitt ist zu lang: gekürzt
-                    return [Passage(self.items[index].page, self.items[index].text[:budget_chars])]
+                    item = self.items[index]
+                    return [Passage(item.page, item.text[:budget_chars], item.source)]
                 if beginning:
                     break
                 continue
@@ -194,6 +196,28 @@ def excerpt_block(items: list[Passage]) -> str:
     return "\n\n".join(f"[Seite {item.page + 1}]\n{item.text}" for item in items)
 
 
+def library_block(items: list[Passage], names: list[str]) -> str:
+    """Abschnitte aus mehreren PDFs: je Abschnitt »[Datei 2 »Name.pdf«, Seite N]« und der Text."""
+    return "\n\n".join(f"[Datei {item.source + 1} »{names[item.source]}«, Seite {item.page + 1}]\n{item.text}" for item in items)
+
+
+# Quellen in Antworten über mehrere PDFs: »(Datei 2, S. 4)«, »Datei 1, Seiten 3 und 5«
+_SOURCE = re.compile(r"\b(?:Datei|Quelle)\s?(\d{1,4})\s*(?:»[^«\n]{0,120}«)?\s*[,;:]?\s*(S\.|Seiten?)\s?(\d{1,5})((?:\s?(?:[,–\-]|und|bis)\s?\d{1,5})*)")
+
+
+def cited_sources(answer: str, page_counts: list[int]) -> list[tuple[int, int]]:
+    """(Datei, Seite) – 0-basierte Datei, 1-basierte Seite –, die eine Antwort über mehrere PDFs nennt."""
+    found: list[tuple[int, int]] = []
+    for match in _SOURCE.finditer(answer or ""):
+        source = int(match.group(1)) - 1
+        if not 0 <= source < len(page_counts):
+            continue
+        for number in _numbers(match, 2):
+            if 1 <= number <= page_counts[source] and (source, number) not in found:
+                found.append((source, number))
+    return found
+
+
 def cited_pages(answer: str, page_count: int) -> list[int]:
     """Seitenzahlen (1-basiert), die eine Antwort nennt – nur Seiten, die es im Dokument gibt."""
     pages: list[int] = []
@@ -204,10 +228,10 @@ def cited_pages(answer: str, page_count: int) -> list[int]:
     return pages
 
 
-def _numbers(match: re.Match) -> list[int]:
-    first = int(match.group(2))
+def _numbers(match: re.Match, offset: int = 1) -> list[int]:
+    first = int(match.group(offset + 1))
     numbers = [first]
-    rest = match.group(3) or ""
+    rest = match.group(offset + 2) or ""
     previous = first
     for separator, value in re.findall(r"\s?([,–\-]|und|bis)\s?(\d{1,5})", rest):
         number = int(value)
@@ -219,7 +243,7 @@ def _numbers(match: re.Match) -> list[int]:
     return numbers
 
 
-def rich(answer: str, page_count: int) -> str:
+def rich(answer: str, page_count: int, names: list[str] | None = None, page_counts: list[int] | None = None) -> str:
     """Antwort für die Anzeige (Qt »StyledText«). Zuerst wird alles maskiert – so kann eine Antwort weder Bilder noch
     Verweise oder andere Auszeichnungen einschleusen (ihr Inhalt stammt zum Teil aus dem PDF). Danach nur: **fett**,
     Überschriften (fett), Stichpunkte und Seitenverweise: »S. 3–5« verweist auf die Seiten 3 und 5, ein Klick springt
@@ -233,8 +257,20 @@ def rich(answer: str, page_count: int) -> str:
         label, rest = match.group(1), match.group(0)[len(match.group(1)):]
         return label + re.sub(r"\d{1,5}", page_link, rest)
 
+    def source(match: re.Match) -> str:
+        index = int(match.group(1)) - 1
+        if names is None or page_counts is None or not 0 <= index < len(names):
+            return match.group(0)
+        pages = [n for n in _numbers(match, 2) if 1 <= n <= page_counts[index]]
+        if not pages:
+            return match.group(0)
+        links = ", ".join(f'<a href="src:{index}:{n}">{n}</a>' for n in pages)
+        return f"{html.escape(names[index], quote=False)}, S. {links}"
+
     def inline(line: str) -> str:
         line = _BOLD.sub(lambda match: f"<b>{match.group(1) or match.group(2)}</b>", html.escape(line, quote=False))
+        if names is not None:  # mehrere PDFs: nur Angaben mit Datei werden Verweise
+            return _SOURCE.sub(source, line)
         return _CITATION.sub(citation, line)
 
     out: list[str] = []

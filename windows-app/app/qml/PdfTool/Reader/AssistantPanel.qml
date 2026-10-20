@@ -5,8 +5,9 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// KI-Assistent zum geöffneten PDF: Fragen stellen, Dokument zusammenfassen. Antworten nennen die Seiten, auf die sie
-// sich stützen – ein Klick springt dorthin. Das Gespräch gehört zum Tab und lebt nur im Arbeitsspeicher.
+// KI-Assistent zum geöffneten PDF: Fragen stellen, Dokument zusammenfassen oder übersetzen (neues PDF). Antworten nennen
+// die Seiten, auf die sie sich stützen – ein Klick springt dorthin. Das Gespräch gehört zum Tab und lebt nur im
+// Arbeitsspeicher. »Mehrere PDFs fragen«: Fragen an gewählte PDFs oder einen Ordner, die Antwort nennt Datei und Seite.
 // Ohne Sprachmodell: »Einrichten …« (wie in den Einstellungen); während des Downloads dessen Fortschritt.
 // Kopf (Titel, Schließen) und Breite kommen von der rechten Seitenleiste (RightPanel).
 ColumnLayout {
@@ -17,6 +18,7 @@ ColumnLayout {
     readonly property string phase: Assistant.state
     readonly property bool ready: phase === "ready"
     readonly property bool loading: phase === "download" || phase === "verify"
+    readonly property bool several: Assistant.scopeLabel !== ""  // Fragen an mehrere PDFs
     spacing: 0
 
     function send(question) {
@@ -138,6 +140,24 @@ ColumnLayout {
                 enabled: !Assistant.busy && root.doc !== null
                 onClicked: { flick.stick = true; Assistant.summarize() }
             }
+            PButton {
+                objectName: "readerAssistantTranslate"
+                width: parent.width
+                iconName: "local_language"
+                text: "Dokument übersetzen …"
+                enabled: !Assistant.busy && root.doc !== null
+                onClicked: { flick.stick = true; Assistant.translate() }
+            }
+            PButton {
+                id: severalButton
+                objectName: "readerAssistantSeveral"
+                width: parent.width
+                iconName: "library"
+                text: "Mehrere PDFs fragen …"
+                tip: "Fragen an gewählte PDFs oder alle PDFs eines Ordners"
+                enabled: !Assistant.busy
+                onClicked: severalMenu.popup(severalButton, 0, severalButton.height)
+            }
             Repeater {
                 model: [
                     { label: "Fristen und Termine", question: "Welche Fristen und Termine nennt das Dokument?" },
@@ -204,6 +224,7 @@ ColumnLayout {
                     required property bool pending
                     required property string note
                     required property var pages
+                    required property var sources
                     Layout.fillWidth: true
                     implicitHeight: kind === "question" ? bubble.height : details.implicitHeight
                     Accessible.role: Accessible.ListItem
@@ -256,6 +277,10 @@ ColumnLayout {
                             lineHeight: 1.1
                             onLinkActivated: (link) => {
                                 if (link.indexOf("page:") === 0) Assistant.openPage(parseInt(link.slice(5)))
+                                else if (link.indexOf("src:") === 0) {
+                                    var part = link.split(":")
+                                    Assistant.openSource(parseInt(part[1]), parseInt(part[2]))
+                                }
                             }
                             HoverHandler { cursorShape: answerText.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
                             Accessible.role: Accessible.StaticText
@@ -304,6 +329,19 @@ ColumnLayout {
                                     onClicked: Assistant.openPage(modelData)
                                 }
                             }
+                            Repeater {
+                                model: entry.sources
+                                PButton {
+                                    required property var modelData
+                                    objectName: "readerAssistantSource"
+                                    implicitHeight: 28
+                                    leftPadding: 8
+                                    rightPadding: 8
+                                    text: modelData.label
+                                    tip: "Datei öffnen und zur Seite " + modelData.page + " springen"
+                                    onClicked: Assistant.openSource(modelData.file, modelData.page)
+                                }
+                            }
                             PIconButton {
                                 objectName: "readerAssistantCopy"
                                 implicitWidth: 28
@@ -326,6 +364,41 @@ ColumnLayout {
         Layout.margins: Metrics.s12
         visible: root.ready
         spacing: Metrics.s8
+        // Wen die Fragen erreichen: dieses PDF oder mehrere
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Metrics.s6
+            PIcon { name: root.several ? "library" : "document"; size: 14; color: Theme.textSecondary }
+            PText {
+                objectName: "readerAssistantScope"
+                Layout.fillWidth: true
+                text: "Fragen an: " + (root.several ? Assistant.scopeLabel : "dieses PDF")
+                textStyle: "caption"
+                tone: "secondary"
+                elide: Text.ElideRight
+            }
+            PButton {
+                id: scopeButton
+                objectName: "readerAssistantScopeButton"
+                visible: !root.several
+                implicitHeight: 24
+                leftPadding: 6
+                rightPadding: 6
+                kind: "subtle"
+                text: "Mehrere PDFs …"
+                enabled: !Assistant.busy
+                onClicked: severalMenu.popup(scopeButton, 0, scopeButton.height)
+            }
+            PIconButton {
+                objectName: "readerAssistantScopeClear"
+                visible: root.several
+                implicitWidth: 24
+                implicitHeight: 24
+                iconName: "dismiss"
+                tip: "Wieder nur dieses PDF fragen"
+                onClicked: Assistant.clearScope()
+            }
+        }
         RowLayout {
             Layout.fillWidth: true
             spacing: Metrics.s8
@@ -335,8 +408,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 minLines: 1
                 maxLines: 5
-                label: "Frage zum Dokument"
-                placeholderText: "Frage zu diesem PDF …"
+                label: root.several ? "Frage an die gewählten PDFs" : "Frage zum Dokument"
+                placeholderText: root.several ? "Frage an die gewählten PDFs …" : "Frage zu diesem PDF …"
                 enabled: root.doc !== null
                 submitOnEnter: true
                 onSubmitted: if (root.send(input.text)) input.text = ""
@@ -344,11 +417,20 @@ ColumnLayout {
             PIconButton {
                 objectName: "readerAssistantSummarizeMore"
                 Layout.alignment: Qt.AlignBottom
-                visible: root.conversation.count > 0 && !Assistant.busy
+                visible: root.conversation.count > 0 && !Assistant.busy && !root.several
                 iconName: "text_bullet_list_square"
                 tip: "Dokument zusammenfassen"
                 enabled: root.doc !== null
                 onClicked: { flick.stick = true; Assistant.summarize() }
+            }
+            PIconButton {
+                objectName: "readerAssistantTranslateMore"
+                Layout.alignment: Qt.AlignBottom
+                visible: root.conversation.count > 0 && !Assistant.busy && !root.several
+                iconName: "local_language"
+                tip: "Dokument übersetzen"
+                enabled: root.doc !== null
+                onClicked: { flick.stick = true; Assistant.translate() }
             }
             PIconButton {
                 objectName: "readerAssistantSend"
@@ -381,5 +463,12 @@ ColumnLayout {
                 wrap: true
             }
         }
+    }
+
+    PMenu {
+        id: severalMenu
+        objectName: "readerAssistantSeveralMenu"
+        PMenuItem { text: "PDFs wählen …"; iconName: "document_multiple"; onTriggered: severalMenu.afterClose = function() { flick.stick = true; Assistant.chooseFiles() } }
+        PMenuItem { text: "Ordner wählen (mit Unterordnern) …"; iconName: "folder_open"; onTriggered: severalMenu.afterClose = function() { flick.stick = true; Assistant.chooseFolder() } }
     }
 }

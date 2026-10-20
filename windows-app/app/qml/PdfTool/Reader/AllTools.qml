@@ -6,7 +6,7 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // »Alle Werkzeuge« (seit 4.0, wie bei Acrobat): eine Liste aller Werkzeuge und Befehle des Readers mit Namen,
-// in Gruppen (Bearbeiten, Kommentieren, Formulare und Unterschrift, Seiten, Schützen, Text erkennen und
+// in Gruppen (Bearbeiten, Kommentieren, Formulare und Unterschrift, Seiten, Schützen, Text erkennen, umwandeln und
 // exportieren). Sie gleitet neben den Schnellwerkzeugen über die Seite und schließt sich mit Esc, einem Klick
 // daneben oder sobald ein Eintrag gewählt ist. Das aktive Werkzeug ist markiert.
 T.Popup {
@@ -62,12 +62,16 @@ T.Popup {
             { name: "readerMenuFlatten", text: "Reduzieren (Formulare und Kommentare fest übernehmen) …", icon: "layer", run: "flatten" },
             { name: "readerMenuOptimize", text: "PDF verkleinern …", icon: "arrow_minimize", run: "optimize" },
             { name: "readerMenuPdfa", text: "Als PDF/A speichern …", icon: "library", run: "pdfa" } ] },
-        { title: "Text erkennen und exportieren", items: [
+        { title: "Text erkennen, umwandeln und exportieren", items: [
             { name: "readerMenuOcr", text: "Text erkennen (OCR) …", icon: "document_search", run: "ocr" },
             { text: "Erkannten Text entfernen", icon: "eraser", run: "removeOcr" },
             { text: "Seiten als PNG exportieren (150 dpi)", icon: "arrow_export", run: "png150" },
             { text: "Seiten als PNG exportieren (300 dpi)", icon: "arrow_export", run: "png300" },
-            { text: "Seiten als JPEG exportieren (150 dpi)", icon: "arrow_export", run: "jpeg150" } ] },
+            { text: "Seiten als JPEG exportieren (150 dpi)", icon: "arrow_export", run: "jpeg150" },
+            { name: "readerMenuToWord", text: "In Word umwandeln (.docx) …", icon: "document", run: "toWord" },
+            { name: "readerMenuToExcel", text: "In Excel umwandeln (.xlsx) …", icon: "document_table", run: "toExcel" },
+            { name: "readerMenuToText", text: "Als Text speichern (.txt) …", icon: "text_bullet_list_ltr", run: "toText" },
+            { name: "readerMenuOfficeToPdf", text: "Word, Excel oder PowerPoint in PDF umwandeln …", icon: "document_pdf", run: "officeToPdf" } ] },
         { title: "Ansicht und Vergleichen", items: [
             { name: "readerAllCompare", text: "Mit anderer Fassung vergleichen …", icon: "branch_compare", run: "compare" },
             { name: "readerAllSplit", text: Reader.splitKey !== "" ? "Geteilte Ansicht schließen" : "Geteilte Ansicht (zwei PDFs nebeneinander)", icon: "layout_column_two", run: "split2" },
@@ -105,6 +109,10 @@ T.Popup {
         case "png150": d.exportImages([], "png", 150); break
         case "png300": d.exportImages([], "png", 300); break
         case "jpeg150": d.exportImages([], "jpeg", 150); break
+        case "toWord": d.convertDocument("docx"); break
+        case "toExcel": d.convertDocument("xlsx"); break
+        case "toText": d.convertDocument("txt"); break
+        case "officeToPdf": Reader.officeToPdf(); break
         }
     }
     property string pending: ""

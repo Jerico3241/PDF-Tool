@@ -29,3 +29,4 @@ ScanContent 1.0 ScanContent.qml
 ShortcutsContent 1.0 ShortcutsContent.qml
 DigitalSignContent 1.0 DigitalSignContent.qml
 SignaturesContent 1.0 SignaturesContent.qml
+TranslateContent 1.0 TranslateContent.qml

@@ -2084,6 +2084,38 @@ class DocumentController(Observable):
         stem = self._stem()
         self.run(lambda session: session.export_images(chosen, folder, stem, fmt, dpi), lambda written: self.app.notify("reader", "success", f"{len(written)} {'Bild' if len(written) == 1 else 'Bilder'} gespeichert in {folder}", title="Exportiert", auto_hide=8000), refresh=False, busy="Seiten werden exportiert …")
 
+    @Slot(str)
+    def convertDocument(self, fmt: str) -> None:  # noqa: N802
+        """In Word (.docx), Excel (.xlsx) oder Text (.txt) umwandeln: neue Datei neben dem PDF, danach öffnen oder zeigen."""
+        from tools.pdf_editor import convert
+
+        if fmt not in convert.FORMATS:
+            return
+        if not (self.permissions or {}).get("copy", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben keinen Export von Inhalten.", title="Nicht möglich")
+            return
+        label = {"docx": "Word", "xlsx": "Excel", "txt": "Text"}[fmt]
+        target = self.reader.pick_save_file(self._stem() + convert.FORMATS[fmt], f"Als {label} speichern")
+        if not target:
+            return
+        if not target.lower().endswith(convert.FORMATS[fmt]):
+            target += convert.FORMATS[fmt]
+        if self.path and os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(self.path)):
+            self.app.notify("reader", "warning", "Die umgewandelte Datei braucht einen eigenen Namen.", title="Nicht gespeichert")
+            return
+
+        def done(result) -> None:
+            path = str(result.path)
+            message = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'} gespeichert als {os.path.basename(path)}."
+            if result.empty:
+                where = ", ".join(str(i + 1) for i in result.empty[:6]) + (" …" if len(result.empty) > 6 else "")
+                scanned = " als Bild übernommen" if fmt == "docx" else " ohne Inhalt"
+                message += f" Seite {where} ohne Text{scanned} – für Scans vorher »Text erkennen (OCR)« verwenden."
+            self.app.notify("reader", "warning" if result.empty else "success", message, title=f"In {label} umgewandelt", auto_hide=12000,
+                            actions=[("Öffnen", lambda: self.reader.openExternal(path)), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+
+        self.run(lambda session: session.convert(fmt, target, []), done, refresh=False, busy=f"Wird in {label} umgewandelt …")
+
     @Slot()
     def showProperties(self) -> None:  # noqa: N802
         def done(props) -> None:
