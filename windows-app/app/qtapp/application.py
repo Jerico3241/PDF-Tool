@@ -123,6 +123,12 @@ class Runtime(QObject):
         self.assistant = AssistantController(self.app, cfg, self)
         self.assistant.attach_reader(self.singletons["Reader"])
         self.singletons["Assistant"] = self.assistant
+        # Vorlesen (Sprachausgabe von Windows) – richtet sich erst beim ersten Vorlesen ein
+        from .speech import SpeechController
+
+        self.speech = SpeechController(self.app, cfg, self)
+        self.speech.attach_reader(self.singletons["Reader"])
+        self.singletons["Speech"] = self.speech
         self.app.observe("ready", lambda ready: (self.backup.start(), self.diagnose.start()) if ready else None)
         # Windows-Einstellungen (Design, Akzentfarbe, Animationseffekte) sofort übernehmen
         from . import system

@@ -252,6 +252,20 @@ Item {
             }
         }
     }
+    // Vorlesen: das gerade gesprochene Wort
+    Repeater {
+        model: root.doc && root.doc.speechWord.page === root.page ? root.doc.speechWord.rects : []
+        Rectangle {
+            required property var modelData
+            objectName: "readerSpeechWord"
+            x: modelData[0] * root.s - 1
+            y: modelData[1] * root.s - 1
+            width: (modelData[2] - modelData[0]) * root.s + 2
+            height: (modelData[3] - modelData[1]) * root.s + 2
+            radius: 2
+            color: Theme.searchHit
+        }
+    }
     Repeater {
         model: root.doc && root.doc.selectionPage >= 0 ? (root.doc.selectionPages[String(root.page)] || []) : []
         Rectangle {
@@ -1396,6 +1410,7 @@ Item {
         property real v: 0
         PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
         PMenuItem { text: "Hier einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
+        PMenuItem { text: contextMenu.hasSelection ? "Auswahl vorlesen" : "Ab dieser Seite vorlesen"; iconName: "speaker_2"; onTriggered: { var d = root.doc, p = root.page; contextMenu.afterClose = function() { if (d.selectionPage < 0) d.setCurrentPage(p); Speech.readFromHere() } } }
         PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
     }
 

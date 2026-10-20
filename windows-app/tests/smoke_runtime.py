@@ -175,6 +175,13 @@ def main() -> int:
         print(f"Scannen: {len(scanning.scanners())} Scanner gefunden")
     except scanning.ScanError as exc:
         print(f"Scannen: {exc}")
+    from tools.pdf_editor import speech as speaking
+
+    try:  # Vorlesen: Sprachausgabe von Windows (SAPI) – CI-Rechner haben meist englische Stimmen
+        voices = speaking.default_backend().voices()
+        print(f"Vorlesen: {len(voices)} Stimme(n): {', '.join(voice.name for voice in voices[:4])}")
+    except speaking.SpeechError as exc:
+        print(f"Vorlesen: {exc}")
 
     check([tool.key for tool in registry.TOOLS] == ["reader", "actions", "contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool") and hasattr(qt_reader, "ReaderTool"), "Werkzeuge der Oberfläche fehlen")

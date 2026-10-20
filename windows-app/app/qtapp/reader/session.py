@@ -137,6 +137,18 @@ class Session:
     def text(self, page: int, start: int, count: int) -> str:
         return textlayer.text(self.document, page, start, count)
 
+    def raw_text(self, page: int, start: int = 0, count: int = -1) -> str:
+        """Text wie PDFium ihn liefert – ein Zeichen je Zeichen der Seite (Vorlesen: Wort markieren)."""
+        from pdfium_lock import PDFIUM_LOCK
+
+        if not 0 <= page < self.document.page_count:
+            return ""
+        with PDFIUM_LOCK:
+            textpage = self.document.textpage(page)
+            if count < 0:
+                count = textpage.count_chars() - start
+            return textpage.get_text_range(start, count) if count > 0 else ""
+
     def page_texts(self, limit: int = 2_000_000) -> list[str]:
         """Text aller Seiten (KI-Assistent) – zusammen höchstens ``limit`` Zeichen; danach folgen leere Seiten."""
         result: list[str] = []

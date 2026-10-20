@@ -86,6 +86,7 @@ class DocumentController(Observable):
     # Auswahl (Text)
     selectionPageChanged, selectionPage = prop(int, "selectionPage", -1)
     selectionRectsChanged, selectionRects = prop(list, "selectionRects", [])  # Rechtecke auf selectionPage
+    speechWordChanged, speechWord = prop(dict, "speechWord", {})  # Vorlesen: gerade gesprochenes Wort {page, rects}
     selectionPagesChanged, selectionPages = prop(dict, "selectionPages", {})  # Seite (Text) → Rechtecke (seit 4.0.0-beta.5 über Seiten)
     textPagesChanged, textPages = prop(list, "textPages", [])  # Seiten mit geladener Zeichentabelle
     # Suche
@@ -627,6 +628,16 @@ class DocumentController(Observable):
         self.selectionPage = page
         self.selectionRects = rects.get(str(page), [])
         self.selectionPages = rects
+
+    def text_rects(self, page: int, start: int, count: int) -> list[list[float]] | None:
+        """Zeilenrechtecke von Zeichen einer Seite – ``None``, solange ihre Textschicht noch lädt."""
+        table = self._texts.get(page)
+        if table is None:
+            self.loadText(page)
+            return None
+        if start < 0 or count <= 0:
+            return []
+        return _line_rects(table.boxes[start : start + count])
 
     def selection_spans(self) -> list[tuple[int, int, int]]:
         """Die Auswahl je Seite: (Seite, Anfang, Anzahl Zeichen)."""

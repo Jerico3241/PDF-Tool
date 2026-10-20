@@ -201,6 +201,7 @@ FocusScope {
                                 suppressed: Reader.fullScreen || Reader.organize
                             }
                             OcrProgress { Layout.fillWidth: true; doc: page.doc }
+                            SpeechBar { Layout.fillWidth: true }
                             PInfoBar { Layout.fillWidth: true; notice: Notices.area("reader") }
                             PInfoBar {
                                 objectName: "readerObjectNotice"
@@ -371,6 +372,7 @@ FocusScope {
             Shortcut { sequence: "Ctrl+W"; enabled: page.active && Reader.hasDocument; onActivated: Reader.closeCurrent() }
             Shortcut { sequences: ["F11"]; enabled: page.active && page.editing; onActivated: Reader.toggleFullScreen() }
             Shortcut { sequences: ["F5"]; enabled: page.active && page.editing && !Reader.presenting; onActivated: Reader.startPresentation() }
+            Shortcut { sequence: "Ctrl+Shift+Y"; enabled: page.active && Reader.hasDocument && !Reader.organize; onActivated: Speech.toggle() }
             Shortcut { sequence: "Ctrl+G"; enabled: page.active && page.editing && !Reader.organize; onActivated: controls.focusPage() }
             Shortcut {
                 sequences: [StandardKey.SelectAll]

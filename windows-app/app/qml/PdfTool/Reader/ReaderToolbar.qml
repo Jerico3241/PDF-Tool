@@ -134,6 +134,7 @@ Rectangle {
         PMenuItem { text: "Druckvorschau"; iconName: "eye"; enabled: root.doc !== null; onTriggered: root.doc.previewPrint() }
         PMenuItem { text: "Seiten organisieren"; iconName: "grid"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: Reader.setOrganize(!Reader.organize) }
         PMenuItem { text: "Seitenansicht …"; iconName: "document_one_page_multiple"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: viewMenu.popup(moreButton, 0, moreButton.height) }
+        PMenuItem { objectName: "readerMenuSpeech"; text: Speech.active ? "Vorlesen beenden" : "Vorlesen (Strg+Umschalt+Y)"; iconName: "speaker_2"; enabled: root.doc !== null; onTriggered: moreMenu.afterClose = function() { Speech.toggle() } }
         PMenuItem { text: "Eigenschaften"; iconName: "info"; enabled: root.doc !== null; onTriggered: root.doc.showProperties() }
         PMenuItem { text: "Pfad kopieren"; iconName: "copy"; enabled: root.doc !== null && root.doc.path !== ""; onTriggered: App.copyPath(root.doc.path) }
         PMenuItem { text: "Ordner öffnen"; iconName: "folder"; enabled: root.doc !== null && root.doc.path !== ""; onTriggered: Reader.showInFolder(root.doc.path) }
