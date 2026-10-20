@@ -188,3 +188,128 @@ def test_reader_saves_a_pdfa_copy(ui_app, tmp_path: Path) -> None:
     assert pdfa.check((tmp_path / "vertrag_PDFA.pdf").read_bytes()) == []
     assert wait_until(lambda: h.app.notices.get("reader").shown, 10)
     assert h.app.notices.get("reader").title == "PDF/A-Kopie gespeichert"
+
+
+class FakeScanner:
+    """Attrappe der Scanner-Schnittstelle: Vorlagenglas eine Seite je Durchgang, Einzug ``sheets`` Blätter."""
+
+    def __init__(self, sheets: int = 3, fail_after: int | None = None) -> None:
+        self.sheets = sheets
+        self.fail_after = fail_after
+        self.calls: list = []
+
+    def scanners(self):
+        from tools.pdf_editor import scan
+
+        return [scan.Scanner("wia-1", "Büroscanner"), scan.Scanner("wia-2", "Zweiter Scanner")]
+
+    def pages(self, ident, settings, target, start):
+        from PIL import Image
+
+        self.calls.append((ident, settings, start))
+        count = self.sheets if settings.source == "feeder" else 1
+        for index in range(start, start + count):
+            if self.fail_after is not None and index >= self.fail_after:
+                raise RuntimeError("Treiber")
+            path = target / f"Seite-{index + 1:04d}.png"
+            Image.new("RGB", (int(8.27 * settings.dpi / 10), int(11.69 * settings.dpi / 10)), (250, 250, 250)).save(path)  # A4 bei dpi/10
+            yield path
+
+
+def test_scan_flatbed_pages_into_a_pdf(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from qtapp import files
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    fake = FakeScanner()
+    monkeypatch.setattr(scan, "_TEST_BACKEND", fake)
+    asked: list = []
+    answers = iter([("primary", {"scanner": "wia-2", "source": "flatbed", "color": "gray", "dpi": 300, "ocr": False}), ("primary", {}), ("secondary", {})])
+
+    def ask(kind, title, message="", **options):
+        asked.append((kind, title, options.get("data")))
+        return next(answers)
+
+    monkeypatch.setattr(h.app.dialogs, "ask", ask)
+    files.RESPONSES.append(str(tmp_path / "scan"))
+    r.quickTool("scan")
+    assert wait_until(lambda: r.tabs.count == 1, 30)
+    assert asked[0][0] == "scan" and [s["name"] for s in asked[0][2]["scanners"]] == ["Büroscanner", "Zweiter Scanner"]
+    assert [entry[1] for entry in asked[1:]] == ["1 Seite gescannt", "2 Seiten gescannt"]
+    assert [(ident, settings.color, start) for ident, settings, start in fake.calls] == [("wia-2", "gray", 0), ("wia-2", "gray", 1)]
+    with pikepdf.open(tmp_path / "scan.pdf") as pdf:
+        sizes = [tuple(round(float(v)) for v in page.mediabox[2:]) for page in pdf.pages]
+    assert sizes == [(60, 84), (60, 84)]  # 248 × 350 Pixel bei 300 dpi
+    h.app.persist()
+    stored = r.config()["reader_scan"]
+    assert stored["scanner"] == "wia-2" and stored["farbe"] == "gray" and stored["ocr"] is False
+
+
+def test_scan_feeder_and_driver_failure_keeps_pages(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from qtapp import files
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    monkeypatch.setattr(scan, "_TEST_BACKEND", FakeScanner(sheets=4, fail_after=2))
+    asked: list = []
+    answers = iter([("primary", {"scanner": "wia-1", "source": "feeder", "color": "color", "dpi": 150, "ocr": False}), ("secondary", {})])
+
+    def ask(kind, title, message="", **options):
+        asked.append((kind, title, message))
+        return next(answers)
+
+    monkeypatch.setattr(h.app.dialogs, "ask", ask)
+    files.RESPONSES.append(str(tmp_path / "einzug.pdf"))
+    r.scanToPdf()
+    assert wait_until(lambda: r.tabs.count == 1, 30)
+    assert asked[1][1] == "Scan fehlgeschlagen" and "2 Seiten sind schon gescannt" in asked[1][2]
+    with pikepdf.open(tmp_path / "einzug.pdf") as pdf:
+        assert len(pdf.pages) == 2
+
+
+def test_scan_without_scanner_explains(ui_app, monkeypatch) -> None:
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+
+    class Empty(FakeScanner):
+        def scanners(self):
+            return []
+
+    monkeypatch.setattr(scan, "_TEST_BACKEND", Empty())
+    r.scanToPdf()
+    assert wait_until(lambda: h.app.notices.get("reader").shown and h.app.notices.get("reader").title == "Kein Scanner gefunden", 10)
+    assert not r._scanning
+
+
+def test_scan_dialog_renders_and_collects(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from PySide6.QtCore import QTimer
+
+    from qtapp import dialogs
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    monkeypatch.setattr(scan, "_TEST_BACKEND", FakeScanner())
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", None)
+    seen: dict = {}
+
+    def look():
+        request = h.app.dialogs.request
+        if not request or request.get("kind") != "scan":
+            QTimer.singleShot(100, look)
+            return
+        seen["scanner"] = h.item("scanScanner").property("displayText")
+        h.item("scanFeeder").setProperty("checked", True)
+        h.item("scanFeeder").clicked.emit()
+        seen["messages"] = list(h.messages())
+        h.app.dialogs.answer(request["id"], "close", {})
+
+    QTimer.singleShot(200, look)
+    r.scanToPdf()
+    assert wait_until(lambda: "messages" in seen, 15)
+    assert seen["scanner"] == "Büroscanner" and seen["messages"] == []
+    assert wait_until(lambda: not r._scanning, 5)

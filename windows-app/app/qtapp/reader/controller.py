@@ -17,7 +17,9 @@ protokolliert.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
+import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,7 +28,7 @@ from typing import Callable
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from tools.pdf_editor import compare as comparing
-from tools.pdf_editor import imagepdf, recovery
+from tools.pdf_editor import imagepdf, recovery, scan
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
 from tools.registry import READER
 
@@ -49,6 +51,7 @@ QUICK_TOOLS = (
     ("optimize", "PDF verkleinern", "Verkleinerte Kopie speichern – das Original bleibt unverändert", "arrow_minimize"),
     ("pdfa", "Als PDF/A speichern", "Archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften speichern", "library"),
     ("images", "PDF aus Bildern", "Fotos und Scans (JPG, PNG, TIFF …) zu einer PDF zusammenfügen", "image_add"),
+    ("scan", "Scannen", "Vom Scanner direkt in eine PDF – auf Wunsch durchsuchbar", "scan_text"),
     ("redact", "Schwärzen", "Text und Bereiche dauerhaft unkenntlich machen", "eye_off"),
     ("protect", "Kennwortschutz", "Kennwort zum Öffnen oder Einschränkungen festlegen", "lock_closed"),
     ("watermark", "Wasserzeichen", "Wasserzeichen auf die Seiten legen", "layer"),
@@ -156,6 +159,13 @@ class ReaderController(Observable):
             "margin": images.get("rand") if images.get("rand") in imagepdf.MARGINS else "none",
             "folder": str(images.get("ordner") or ""),
         }
+        stored = cfg.get("reader_scan") if isinstance(cfg.get("reader_scan"), dict) else {}
+        settings = scan.Settings.of({"source": stored.get("quelle"), "color": stored.get("farbe"), "dpi": stored.get("dpi")})
+        self._scan_options = {
+            "source": settings.source, "color": settings.color, "dpi": settings.dpi, "ocr": stored.get("ocr") is not False,
+            "scanner": str(stored.get("scanner") or ""), "folder": str(stored.get("ordner") or ""),
+        }
+        self._scanning = False
         self._external: list[str] = []
         self._preloaded = False  # PDF-Engine vorab geladen (bzw. angestoßen)
         self._opening_paths: list[str] = []  # Dateien, die gerade geöffnet werden
@@ -1005,6 +1015,10 @@ class ReaderController(Observable):
             "reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel},
             "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
             "reader_bilder": {"seite": self._image_options["pageSize"], "rand": self._image_options["margin"], "ordner": self._image_options["folder"]},
+            "reader_scan": {
+                "quelle": self._scan_options["source"], "farbe": self._scan_options["color"], "dpi": self._scan_options["dpi"],
+                "ocr": self._scan_options["ocr"], "scanner": self._scan_options["scanner"], "ordner": self._scan_options["folder"],
+            },
         }
 
     # Nachtmodus --------------------------------------------------------------------------------------------------
@@ -1029,6 +1043,9 @@ class ReaderController(Observable):
             return
         if action == "images":
             self.imagesToPdf()
+            return
+        if action == "scan":
+            self.scanToPdf()
             return
         path = self.pick_pdf(f"{tool[1]} – erste PDF wählen" if action == "merge" else f"{tool[1]} – PDF wählen")
         if not path:
@@ -1105,6 +1122,138 @@ class ReaderController(Observable):
             self.app.notify("reader", "error", message, title="PDF aus Bildern")
 
         self.engine.submit(lambda: imagepdf.create(order, target, page_size=page_size, margin=margin), done, failed, label="bilder")
+
+    # Scannen -----------------------------------------------------------------------------------------------------------
+    @Slot()
+    def scanToPdf(self) -> None:  # noqa: N802
+        """Vom Scanner (WIA) in eine neue PDF: Scanner, Quelle, Farbe und Auflösung wählen, Seite für Seite (Vorlagenglas)
+        oder alle auf einmal (Einzug) scannen, als PDF speichern, im Reader öffnen und auf Wunsch Text erkennen."""
+        if self._scanning:
+            return
+        self._scanning = True
+        self.probe_ocr()
+        self.app.set_status("Scanner werden gesucht …", "busy")
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self._scanning = False
+            self.app.set_status("", "neutral")
+            self.app.notify("reader", "error", str(exc) if isinstance(exc, scan.ScanError) else "Die Scanner ließen sich nicht abfragen.", title="Scannen")
+
+        self.app.worker.run(scan.scanners, self._scan_choose, failed)
+
+    def _scan_choose(self, found: list) -> None:
+        self.app.set_status("", "neutral")
+        if not found:
+            self._scanning = False
+            self.app.notify(
+                "reader", "warning",
+                "PDF Tool findet Scanner über die Scanner-Schnittstelle von Windows. Bitte den Scanner einschalten und verbinden; "
+                "bei manchen Geräten ist dafür der Treiber des Herstellers nötig.",
+                title="Kein Scanner gefunden",
+            )
+            return
+        options = self._scan_options
+        chosen = options["scanner"] if any(item.ident == options["scanner"] for item in found) else found[0].ident
+        data = {
+            "scanners": [{"id": item.ident, "name": item.name} for item in found], "scanner": chosen,
+            "source": options["source"], "color": options["color"], "dpi": options["dpi"], "resolutions": list(scan.RESOLUTIONS),
+            "ocr": options["ocr"] and self.ocrState != "fehlt", "ocrAvailable": self.ocrState != "fehlt",
+        }
+        answer, result = self.app.dialogs.ask("scan", "Scannen", "", primary="Scannen", data=data, width=520)
+        if answer != "primary":
+            self._scanning = False
+            return
+        result = result or {}
+        ident = str(result.get("scanner") or chosen)
+        if not any(item.ident == ident for item in found):
+            ident = chosen
+        settings = scan.Settings.of(result)
+        with_ocr = bool(result.get("ocr")) and self.ocrState != "fehlt"
+        options.update(scanner=ident, source=settings.source, color=settings.color, dpi=settings.dpi, ocr=with_ocr)
+        self.app.schedule_save()
+        folder = Path(tempfile.mkdtemp(prefix="pdf-tool-scan-"))
+        self._scan_more(ident, settings, folder, [], with_ocr)
+
+    def _scan_more(self, ident: str, settings, folder: Path, pages: list, with_ocr: bool) -> None:
+        self.app.set_status(f"Seite {len(pages) + 1} wird gescannt …" if settings.source == "flatbed" else "Einzug wird gescannt …", "busy")
+
+        def done(_new: list) -> None:
+            self.app.set_status("", "neutral")
+            if settings.source == "flatbed":
+                count = f"{len(pages)} {'Seite' if len(pages) == 1 else 'Seiten'} gescannt"
+                answer, _data = self.app.dialogs.ask(
+                    "confirm", count, "Für die nächste Seite das Blatt wenden oder ein neues auflegen.",
+                    primary="Nächste Seite scannen", secondary="Fertig", close="Abbrechen", default="secondary",
+                )
+                if answer == "primary":
+                    self._scan_more(ident, settings, folder, pages, with_ocr)
+                    return
+                if answer != "secondary":
+                    self._scan_cancelled(folder)
+                    return
+            self._scan_finish(pages, folder, with_ocr)
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self.app.set_status("", "neutral")
+            message = str(exc) if isinstance(exc, scan.ScanError) else "Der Scan ist fehlgeschlagen."
+            if not isinstance(exc, scan.ScanError):
+                _log("scan").warning("Scannen fehlgeschlagen: %s", type(exc).__name__)
+            if pages:
+                answer, _data = self.app.dialogs.ask(
+                    "confirm", "Scan fehlgeschlagen", f"{message}\n\n{len(pages)} {'Seite ist' if len(pages) == 1 else 'Seiten sind'} schon gescannt.",
+                    primary="Erneut versuchen", secondary="Mit diesen Seiten fertigstellen", close="Abbrechen",
+                )
+                if answer == "primary":
+                    self._scan_more(ident, settings, folder, pages, with_ocr)
+                elif answer == "secondary":
+                    self._scan_finish(pages, folder, with_ocr)
+                else:
+                    self._scan_cancelled(folder)
+                return
+            self._scan_cancelled(folder, quiet=True)
+            self.app.notify("reader", "error", message, title="Scannen")
+
+        start = len(pages)
+        self.app.worker.run(lambda: scan.scan(ident, settings, folder, start=start, into=pages), done, failed)
+
+    def _scan_cancelled(self, folder: Path, quiet: bool = False) -> None:
+        self._scanning = False
+        shutil.rmtree(folder, ignore_errors=True)
+        if not quiet:
+            self.app.set_status("Scannen abgebrochen.", "info")
+
+    def _scan_finish(self, pages: list, folder: Path, with_ocr: bool) -> None:
+        default_dir = self._scan_options["folder"] or str(Path.home() / "Documents")
+        name = time.strftime("Scan %Y-%m-%d %H-%M.pdf")
+        target = files.save_file("Scan speichern", str(Path(default_dir) / name), files.PDF_FILTER)
+        if not target:
+            self._scan_cancelled(folder)
+            return
+        if not target.lower().endswith(".pdf"):
+            target += ".pdf"
+        self._scan_options["folder"] = str(Path(target).parent)
+        self.app.schedule_save()
+        self.app.set_status(f"PDF aus {len(pages)} gescannten {'Seite' if len(pages) == 1 else 'Seiten'} wird erstellt …", "busy")
+        languages = self.ocr_languages()
+
+        def done(result) -> None:
+            self._scanning = False
+            shutil.rmtree(folder, ignore_errors=True)
+            pages_text = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'}"
+            self.app.notify("reader", "success", f"{pages_text} gescannt und gespeichert." + (" Der Text wird jetzt erkannt." if with_ocr else ""), title="Scan gespeichert", auto_hide=10000)
+
+            def recognize(controller: DocumentController | None) -> None:
+                if controller is not None and with_ocr and languages and self.ocr_engine() is not None:
+                    controller.start_ocr_all(languages)
+
+            self.open_paths([str(result.path)], then=recognize)
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self._scanning = False
+            self.app.notify("reader", "error", str(exc) if isinstance(exc, EditorError) else "Die PDF ließ sich nicht erstellen.", title="Scannen")
+            shutil.rmtree(folder, ignore_errors=True)
+
+        self.engine.submit(lambda: imagepdf.create([str(p) for p in pages], target, page_size="auto"), done, failed, label="scan")
 
     # Per E-Mail senden ---------------------------------------------------------------------------------------------
     @Slot()

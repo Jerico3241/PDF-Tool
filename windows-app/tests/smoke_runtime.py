@@ -100,6 +100,7 @@ def main() -> int:
     check(importlib.util.find_spec("tkinter") is None, "tkinter gehört nicht mehr zur Laufzeit (Qt-Oberfläche)")
     import PySide6
     from PySide6 import QtCore, QtGui, QtNetwork, QtPrintSupport, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
+    import comtypes.client  # noqa: F401 - Scannen (WIA)
     import fontTools
     import numpy
     import openpyxl
@@ -166,6 +167,14 @@ def main() -> int:
     check(lenient.available(), "pypdf fehlt in der Laufzeit (dritte Engine)")
     check(hasattr(qt_comparison, "ComparisonView") and qt_comparison.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
     check(hasattr(rebuild, "write_classic") and hasattr(scanner, "scan"), "Rohrekonstruktion fehlt")
+
+    from tools.pdf_editor import scan as scanning
+
+    check(isinstance(scanning.default_backend(), scanning.WiaBackend), "Scannen: WIA-Schnittstelle (comtypes) fehlt")
+    try:  # CI-Rechner haben keinen Scanner und oft keinen WIA-Dienst – nur: kein Absturz, sondern Liste oder Meldung
+        print(f"Scannen: {len(scanning.scanners())} Scanner gefunden")
+    except scanning.ScanError as exc:
+        print(f"Scannen: {exc}")
 
     check([tool.key for tool in registry.TOOLS] == ["reader", "actions", "contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool") and hasattr(qt_reader, "ReaderTool"), "Werkzeuge der Oberfläche fehlen")

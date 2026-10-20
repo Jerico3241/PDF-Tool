@@ -25,3 +25,4 @@ LinkContent 1.0 LinkContent.qml
 CropContent 1.0 CropContent.qml
 AssistantSetupContent 1.0 AssistantSetupContent.qml
 ImagesContent 1.0 ImagesContent.qml
+ScanContent 1.0 ScanContent.qml

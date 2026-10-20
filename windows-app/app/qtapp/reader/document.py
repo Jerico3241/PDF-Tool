@@ -1266,6 +1266,15 @@ class DocumentController(Observable):
             raise ocr.OcrCancelled()
         return result
 
+    def start_ocr_all(self, languages: list[str]) -> None:
+        """Nach dem Scannen: alle Seiten erkennen, ohne Rückfrage (Sprachen wie zuletzt gewählt)."""
+        if self.ocrRunning or self.pageCount == 0 or self.session is None:
+            return
+        installed = [entry["code"] for entry in self.reader.ocrLanguages]
+        chosen = [code for code in languages if code in installed] or installed[:1]
+        if chosen:
+            self._start_ocr(list(range(self.pageCount)), chosen, False)
+
     def _start_ocr(self, pages: list[int], languages: list[str], redo: bool) -> None:
         from tools.pdf_editor import ocr
 
