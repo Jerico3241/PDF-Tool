@@ -330,7 +330,11 @@ if (-not (Get-Process -Id $app.ProcessId -ErrorAction SilentlyContinue)) { throw
 if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Raw)" }
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $autostart = (Get-Item -LiteralPath $runKey -ErrorAction SilentlyContinue).GetValue($appName)
-if ($autostart -ne "`"$launcher`" --hintergrund") { throw "Start mit Windows: '$autostart' statt PDF-Tool.exe --hintergrund" }
+if ($autostart -ne "`"$launcher`" --hintergrund") {
+    $appLog = Join-Path $data "pdf-tool.log"
+    if (Test-Path $appLog) { Write-Host "--- pdf-tool.log ---"; Get-Content $appLog -Tail 60 | Write-Host }
+    throw "Start mit Windows: '$autostart' statt PDF-Tool.exe --hintergrund"
+}
 Stop-Process -Id $app.ProcessId -Force
 Start-Sleep -Seconds 2
 Write-Host "   App lief ohne Fehler; Start mit Windows eingetragen ($autostart)"
