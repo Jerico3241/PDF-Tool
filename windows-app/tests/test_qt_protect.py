@@ -364,3 +364,57 @@ def test_new_dialogs_render_and_collect(reader_app, tmp_path: Path, monkeypatch)
     assert h.item("cropBottom").property("text") == "20" and h.item("cropContent").property("acceptable") is True
     h.app.dialogs.shutdown()
     pump(0.3)
+
+
+def test_dialog_from_all_tools_is_visible(ui_app, tmp_path: Path, monkeypatch) -> None:
+    """»Alle Werkzeuge« › »Text erkennen (OCR) …«: der Dialog erscheint, nicht nur die Abdunklung (4.0 Beta 5).
+    Die Texterkennung wird erst gesucht, während der Dialog offen ist – Deutsch ist danach vorgewählt."""
+    import time
+
+    from PySide6.QtCore import QTimer
+
+    from qtapp import dialogs
+    from qtapp.reader import controller
+    from tools.pdf_editor import ocr
+
+    class Engine:
+        languages = ["deu", "eng", "fra"]
+
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", None)
+    monkeypatch.setattr(ocr, "find_engine", lambda *args, **kwargs: (time.sleep(0.5), Engine())[1])
+    monkeypatch.setitem(controller._OCR_PROBE, "done", False)
+    h = ui_app
+    h.app.dialogs.shutdown()
+    h.navigate("reader", 0.3)
+    open_pdf(h, samples.standard_text(tmp_path / "werkzeuge.pdf"))
+    seen: dict = {}
+
+    def respond() -> None:
+        service = h.app.dialogs
+        if not service.open:
+            QTimer.singleShot(50, respond)
+            return
+        pump(1.0)
+        button = h.item("dialogPrimaryButton")
+        opacity, item = 1.0, button
+        while item is not None:  # wirklich zu sehen: kein Vorfahre durchsichtig (der Dialog blendete nie ein)
+            opacity, item = opacity * item.opacity(), item.parentItem()
+        seen.update(kind=service.request.get("kind"), shown=button is not None and button.isVisible() and opacity == 1,
+                    enabled=button.property("enabled") if button else None, deu=h.item("ocrLanguage_deu").property("checked"))
+        service.answer(service.request["id"], "close", {})
+
+    QTimer.singleShot(50, respond)
+    workspace = h.item("readerQuickToolsArea").parentItem()
+    panel = child(workspace, "readerAllToolsPanel")
+    click(h, center(h.item("readerAllTools")))
+    assert wait_until(lambda: panel.property("opened"), 3)
+    entry = h.item("readerMenuOcr")
+    flick = entry
+    while flick is not None and flick.property("contentY") is None:
+        flick = flick.parentItem()
+    flick.setProperty("contentY", max(0.0, entry.mapToItem(flick.property("contentItem"), 0, 0).y() - 100))
+    pump(0.3)
+    click(h, center(entry))
+    assert wait_until(lambda: "kind" in seen, 10)
+    assert seen["kind"] == "ocr" and seen["shown"], seen
+    assert seen["deu"] is True and seen["enabled"] is True, seen

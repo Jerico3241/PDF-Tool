@@ -33,6 +33,18 @@ ColumnLayout {
         root.scope = data.scope || "all"
         root.languages = (data.languages || []).slice()
         redo.checked = false
+        root.preselect()
+    }
+    // Wird die Texterkennung erst gefunden, während der Dialog offen ist: Deutsch (sonst die erste Sprache)
+    // vorwählen – »Erkennen« bliebe sonst gesperrt
+    function preselect() {
+        var codes = (Reader.ocrLanguages || []).map(function(entry) { return entry.code })
+        if (root.languages.length > 0 || codes.length === 0) return
+        root.languages = [codes.indexOf("deu") >= 0 ? "deu" : codes[0]]
+    }
+    Connections {
+        target: Reader
+        function onOcrLanguagesChanged() { root.preselect() }
     }
 
     PText {

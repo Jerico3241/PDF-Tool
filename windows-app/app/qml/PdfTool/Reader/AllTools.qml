@@ -41,6 +41,8 @@ T.Popup {
             { name: "readerToolFormDesign", text: "Formular gestalten", icon: "form_new", tool: "formDesign" },
             { text: "Unterschrift setzen", icon: "signature", tool: "signature" },
             { text: "Neue Unterschrift …", icon: "pen", run: "newSignature" },
+            { name: "readerMenuDigitalSign", text: "Digital signieren (Zertifikat) …", icon: "shield_checkmark", run: "digitalSign" },
+            { name: "readerMenuCheckSignatures", text: "Signaturen prüfen", icon: "shield", run: "checkSignatures" },
             { text: "Stempel", icon: "document_checkmark", tool: "stamp" } ] },
         { title: "Seiten", items: [
             { name: "readerAllOrganize", text: "Seiten organisieren", icon: "grid", run: "organize" },
@@ -81,6 +83,8 @@ T.Popup {
         case "split2": Reader.toggleSplit(); break
         case "compare": d.compareWith(); break
         case "newSignature": d.newSignature(); break
+        case "digitalSign": d.digitalSign(); break
+        case "checkSignatures": d.checkSignatures(); break
         case "organize": Reader.setOrganize(true); break
         case "headerFooter": d.headerFooterDocument(); break
         case "watermark": d.watermarkDocument(); break
@@ -128,7 +132,8 @@ T.Popup {
         quietClose = false
         var command = pending
         pending = ""
-        if (command !== "" && root.doc) perform(command)
+        // erst nach »closed«: ein Dialog, der hier wartet (z. B. »Text erkennen«), bliebe sonst unsichtbar
+        if (command !== "" && root.doc) Qt.callLater(perform, command)
     }
 
     width: Metrics.readerAllToolsWidth
