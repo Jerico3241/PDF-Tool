@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.6
+Version 4.0.0-beta.7
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.6.exe
+PDF-Tool-Setup-4.0.0-beta.7.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -48,6 +48,22 @@ qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
+
+Neu in Version 4.0 Beta 7 – Updates von selbst, aufgeräumte Leiste
+-------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Updates: PDF Tool sucht bei jedem Start und installiert ein gefundenes
+  Update selbst. Danach startet es neu und öffnet die PDFs wieder. Mit
+  ungespeicherten Änderungen wartet es. Abschaltbar unter Einstellungen →
+  Updates → „Updates automatisch installieren“.
+- In den Einstellungen wird „Nach Updates suchen“ nach einem Fund zu
+  „Jetzt installieren“; die Neuerungen stehen direkt darunter. Die
+  Hinweisleiste über den Seiten gibt es nicht mehr.
+- Leiste oben: kein ≡ Menü mehr. „?“ öffnet das Hilfe-Menü (Kurzanleitung,
+  Tastenkürzel, Neuerungen, Über), das Zahnrad die Einstellungen – ohne
+  eigenen Tab.
+- Behoben: In den Stapel-Aktionen wurde beim Anklicken eines Kästchens kurz
+  ein anderes grau.
 
 Neu in Version 4.0 Beta 6 – Englisch, Signatur, Umwandeln, KI
 ----------------------------------------------------------------
@@ -525,6 +541,9 @@ Installation. Ihre Daten bleiben erhalten.
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
 einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.6 auf 4.0.0-beta.7 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent.
 
 Update von PDF Tool 4.0.0-beta.5 auf 4.0.0-beta.6 (Kanal „Beta“): mit einem
 Klick, ohne Setup-Assistent.

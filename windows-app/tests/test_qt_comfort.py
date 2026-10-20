@@ -258,6 +258,26 @@ def test_drag_a_document_tab_to_a_new_place(app, tmp_path: Path) -> None:
 
 
 # --- Letzte Sitzung -------------------------------------------------------------------------------------------------
+def test_pdfs_reopen_once_after_an_automatic_update(ui_app, tmp_path: Path, config_file: Path) -> None:
+    """Automatisches Update (4.0 Beta 7): auch ohne die Einstellung »letzte Sitzung« öffnet der Neustart danach die
+    PDFs einmal wieder – der übernächste Start nicht mehr."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    assert h.settings.readerRestoreSession is False
+    open_many(h, tmp_path, "eins", "zwei")
+    reader(h).restore_after_update = True  # wie vor dem Beenden für das Setup
+    h = neustart(h)
+    r = reader(h)
+    assert wait_until(lambda: r.tabs.count == 2 and r.opening == 0, 30)
+    settle(h)
+    assert names(h) == ["eins.pdf", "zwei.pdf"]
+    h = neustart(h)
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert "reader_sitzung_update" not in data and "reader_sitzung" not in data
+    pump(1.0)
+    assert reader(h).tabs.count == 0
+
+
 def test_session_restore_off_by_default_and_on_after_enabling(ui_app, tmp_path: Path, config_file: Path) -> None:
     """Standard: aus – nach einem Neustart sind keine PDFs offen, die Einstellungen enthalten keine Liste. Eingeschaltet
     merkt sich das Beenden die geöffneten PDFs (Pfad, Seite, das aktive); der nächste Start öffnet sie im Hintergrund

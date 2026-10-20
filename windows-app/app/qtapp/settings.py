@@ -79,7 +79,7 @@ class SettingsController(Observable):
             self.section = key
 
     def show(self, key: str) -> None:
-        """Einstellungen mit dem Bereich ``key`` öffnen (z. B. »updates« aus der Hinweisleiste)."""
+        """Einstellungen mit dem Bereich ``key`` öffnen (z. B. »updates«)."""
         self.setSection(key)
         self.app.navigate("settings")
 

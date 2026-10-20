@@ -5,9 +5,10 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Leiste oben nach dem Vorbild von Adobe Acrobat: ≡ Menü, ⌂ Start, je ein Tab für geöffnete Werkzeuge
-// (Vertragsübersichten, PDF reparieren, Einstellungen) und für jedes geöffnete PDF, »+« öffnet weitere PDFs;
-// rechts Kurzanleitung und Einstellungen. Sie liegt auf dem Hintergrund (Mica), der aktive Tab geht in die
+// Leiste oben nach dem Vorbild von Adobe Acrobat: ⌂ Start, je ein Tab für geöffnete Werkzeuge
+// (Vertragsübersichten, PDF reparieren) und für jedes geöffnete PDF, »+« öffnet weitere PDFs; rechts »?« mit dem
+// Hilfe-Menü und das Zahnrad für die Einstellungen (seit 4.0 Beta 7 ohne eigenen Tab und ohne ≡ Menü – jeder Befehl
+// hat genau einen Platz). Sie liegt auf dem Hintergrund (Mica), der aktive Tab geht in die
 // Inhaltsebene darunter über. Die Akzentmarkierung gleitet zum aktiven Tab und folgt ihm, wenn Tabs
 // hinzukommen, wegfallen oder die Dokument-Tabs gescrollt werden.
 // Bewegung der Dokument-Tabs: ein neuer Tab blendet ein, ein geschlossener blendet aus, die übrigen rücken weich
@@ -35,7 +36,7 @@ Item {
     // (sonst werden sie gleichmäßig schmaler, der Name gekürzt); die Dokument-Tabs teilen sich den Rest und werden wie in
     // Edge schmaler – reicht auch das nicht, zeigt die Leiste nur ganze, gleich breite Tabs und ‹ › zum Blättern.
     // Alle Breiten folgen aus der Breite der Leiste, nie aus der Liste selbst (das gäbe eine Schleife).
-    readonly property real fixedWidth: menuButton.width + homeTab.width + addButton.width + helpButton.width + settingsButton.width + 6 * row.spacing
+    readonly property real fixedWidth: homeTab.width + addButton.width + helpButton.width + settingsButton.width + 5 * row.spacing
     readonly property real toolTabCap: {
         var count = toolTabs.count
         if (count === 0) return 0
@@ -64,9 +65,15 @@ Item {
     readonly property string activeKey: App.currentPage === "home" ? "home"
                                        : (App.currentPage === "settings" ? "settings"
                                        : (App.currentTool === "reader" ? (Reader.hasDocument ? "doc:" + Reader.currentKey : "") : App.currentTool))
+    // Kürzel eines Befehls ohne Klammern (»F1«) – ``Shortcuts.hints`` liefert » (F1)« für Kurzinfos
+    function keyText(command) {
+        var hint = Shortcuts.hints[command] || ""
+        return hint.replace(/^\s*\(/, "").replace(/\)\s*$/, "")
+    }
     function tabItem(key) {
         if (key === "") return null
         if (key === "home") return homeTab
+        if (key === "settings") return settingsButton
         if (key.indexOf("doc:") === 0) {
             var index = Reader.tabs.indexOf(key.substring(4))
             return index >= 0 ? docs.itemAtIndex(index) : null
@@ -156,15 +163,6 @@ Item {
         anchors.rightMargin: 6
         spacing: 2
 
-        PIconButton {
-            id: menuButton
-            objectName: "appMenuButton"
-            Layout.alignment: Qt.AlignBottom
-            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
-            iconName: "navigation"
-            tip: I18n.tr("Menü", I18n.revision)
-            onClicked: appMenu.popup(menuButton, 0, menuButton.height + 4)
-        }
         AppTab {
             id: homeTab
             objectName: "tabHome"
@@ -387,8 +385,10 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "question_circle"
-            tip: I18n.tr("Kurzanleitung" + Shortcuts.hints["app.help"], I18n.revision)
-            onClicked: App.showHelp()
+            tip: I18n.tr("Hilfe", I18n.revision)
+            toggle: true
+            checked: helpMenu.opened
+            onClicked: helpMenu.popup(helpButton, helpButton.width - helpMenu.width, helpButton.height + 4)
         }
         PIconButton {
             id: settingsButton
@@ -397,6 +397,8 @@ Item {
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "settings"
             tip: I18n.tr("Einstellungen" + Shortcuts.hints["app.settings"], I18n.revision)
+            toggle: true
+            checked: App.currentPage === "settings"  // die Einstellungen haben keinen eigenen Tab
             onClicked: App.navigate("settings")
         }
     }
@@ -453,20 +455,19 @@ Item {
         NumberAnimation { id: glide; target: indicator; property: "progress"; to: 1; duration: Motion.indicator; easing.type: Motion.decelerate }
     }
 
+    // Hilfe-Menü (»?«): Kurzanleitung, Tastenkürzel, Neuerungen, Über
     PMenu {
-        id: appMenu
-        objectName: "appMenu"
-        PMenuItem { objectName: "menuOpen"; text: I18n.tr("PDF öffnen …", I18n.revision); iconName: "folder_open"; onTriggered: Reader.openDialog() }
-        PMenuItem { objectName: "menuHome"; text: I18n.tr("Start", I18n.revision); iconName: "home"; onTriggered: App.navigate("home") }
-        PMenuItem { objectName: "menuSettings"; text: I18n.tr("Einstellungen", I18n.revision); iconName: "settings"; onTriggered: App.navigate("settings") }
+        id: helpMenu
+        objectName: "helpMenu"
+        PMenuItem { objectName: "menuHelp"; text: I18n.tr("Kurzanleitung", I18n.revision); hint: I18n.tr(bar.keyText("app.help"), I18n.revision); iconName: "question_circle"; onTriggered: helpMenu.afterClose = function() { App.showHelp() } }
+        PMenuItem { objectName: "menuShortcuts"; text: I18n.tr("Tastenkürzel", I18n.revision); hint: I18n.tr(bar.keyText("app.shortcuts"), I18n.revision); iconName: "keyboard"; onTriggered: helpMenu.afterClose = function() { Shortcuts.showOverview() } }
         T.MenuSeparator {
             topPadding: 4
             bottomPadding: 4
-            contentItem: Rectangle { implicitWidth: 180; implicitHeight: 1; color: Theme.divider }
+            contentItem: Rectangle { implicitWidth: 200; implicitHeight: 1; color: Theme.divider }
         }
-        PMenuItem { objectName: "menuHelp"; text: I18n.tr("Kurzanleitung", I18n.revision); iconName: "question_circle"; onTriggered: App.showHelp() }
-        PMenuItem { objectName: "menuNews"; text: I18n.tr("Neu in dieser Version", I18n.revision); iconName: "megaphone"; onTriggered: App.showChangelog() }
-        PMenuItem { objectName: "menuAbout"; text: I18n.tr("Über PDF Tool", I18n.revision); iconName: "info"; onTriggered: App.showAbout() }
+        PMenuItem { objectName: "menuNews"; text: I18n.tr("Neu in dieser Version", I18n.revision); iconName: "megaphone"; onTriggered: helpMenu.afterClose = function() { App.showChangelog() } }
+        PMenuItem { objectName: "menuAbout"; text: I18n.tr("Über PDF Tool", I18n.revision); iconName: "info"; onTriggered: helpMenu.afterClose = function() { App.showAbout() } }
     }
 
     // Kontextmenü eines Dokument-Tabs. Die Aktion läuft erst nach dem Ausblenden (Rückfragen beim Schließen).

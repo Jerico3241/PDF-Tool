@@ -118,6 +118,7 @@ class Runtime(QObject):
         self.backup = BackupController(self.app, self)
         self.diagnose = DiagnoseController(self.app, self.backup, self.updates, self)
         self.updates.backup = self.backup
+        self.updates.reader = self.singletons.get("Reader")
         for controller in (self.backup, self.diagnose):
             self.app.register_work(controller.running_work)
         self.singletons["Backup"] = self.backup

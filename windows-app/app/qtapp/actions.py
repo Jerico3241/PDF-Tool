@@ -56,6 +56,10 @@ class ActionsController(Observable):
     filesChanged, files = prop(list, "files", [])
     countChanged, count = prop(int, "count", 0)
     stepsChanged, steps = prop(list, "steps", [])  # [{key, label, description, checked}]
+    # Für die Liste in QML (seit 4.0 Beta 7): feste Schritte und die gewählten getrennt – ändert sich nur die Auswahl,
+    # entsteht die Liste nicht neu (sonst wäre kurz das zuletzt erzeugte Kästchen unter dem Mauszeiger »gehovert«)
+    stepListChanged, stepList = prop(list, "stepList", [])  # [{key, label, description}]
+    chosenChanged, chosen = prop(list, "chosen", [])  # Schlüssel der gewählten Schritte
     watermarkTextChanged, watermarkText = prop(str, "watermarkText", "VERTRAULICH")
     numberFormatChanged, numberFormat = prop(str, "numberFormat", "seite_von")
     numberPositionChanged, numberPosition = prop(str, "numberPosition", "bc")
@@ -362,6 +366,10 @@ class ActionsController(Observable):
     def _refresh(self) -> None:
         chosen = set(self._plan.steps)
         self.steps = [{"key": key, "label": actions.LABELS[key], "description": actions.DESCRIPTIONS[key], "checked": key in chosen} for key in actions.ORDER]
+        fixed = [{"key": key, "label": actions.LABELS[key], "description": actions.DESCRIPTIONS[key]} for key in actions.ORDER]
+        if fixed != self.stepList:
+            self.stepList = fixed
+        self.chosen = [key for key in actions.ORDER if key in chosen]
         self.summary = self._plan.summary()
         self._plan.password = self._password
         problem = actions.problem(self._plan)

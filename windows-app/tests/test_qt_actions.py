@@ -53,6 +53,30 @@ def test_page_loads_and_lists_dropped_pdfs(ui_app, tmp_path: Path) -> None:
     assert not h.messages()
 
 
+def test_step_checkboxes_hover_and_click_only_themselves(ui_app) -> None:
+    """Beta 6: ein Klick auf ein Kästchen ließ kurz ein anderes grau (»gehovert«) erscheinen, weil die ganze Liste neu
+    entstand. Seit Beta 7 bleibt sie stehen: nur das Kästchen unter dem Mauszeiger ist hervorgehoben."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+
+    h = ui_app
+    h.app.openShortcut(6)
+    pump(0.4)
+    ocr = h.item("actionsStep_ocr")
+    protect = h.item("actionsStep_protect")
+    point = ocr.mapToScene(QPointF(10, ocr.height() / 2)).toPoint()
+    QTest.mouseMove(h.window, point)
+    pump(0.2)
+    assert ocr.property("hovered") is True and protect.property("hovered") is False
+    QTest.mouseClick(h.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    pump(0.1)
+    assert "ocr" in controller(h).chosen and ocr.property("checked") is True
+    assert h.item("actionsStep_ocr") is ocr  # dieselben Kästchen – nichts neu erzeugt
+    hovered = [key for key in ("clean", "flatten", "watermark", "numbers", "optimize", "pdfa", "protect") if h.item(f"actionsStep_{key}") is not None and h.item(f"actionsStep_{key}").property("hovered")]
+    assert hovered == [] and ocr.property("hovered") is True
+    assert not h.messages()
+
+
 def test_steps_settings_survive_restart_without_password(ui_app, config_file: Path) -> None:
     h = ui_app
     c = controller(h)

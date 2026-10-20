@@ -2,6 +2,22 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.7
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.7.md).
+
+- Updates: Prüfung bei jedem Start (`_start_check`, danach weiter höchstens alle 24 Stunden), automatische
+  Installation (`update_auto_installieren`, Standard an): geladen, dann `installNow` ohne Klick – wartet auf laufende
+  Verarbeitung und ungespeicherte Dokumente (`ReaderController.unsaved`, alle 30 s, höchstens 20-mal je Sitzung).
+  Vor dem Beenden merkt sich der Reader die PDFs (`reader_sitzung_update`) und öffnet sie nach dem Neustart einmal
+  wieder, auch ohne die Einstellung »letzte Sitzung«.
+- Update-Karte: ein Knopf je Zustand (`Updates.action`: check, install, cancel; `act()`), »Jetzt installieren« lädt
+  und installiert in einem Schritt; Release Notes in der Karte (`Updates.notes`, `Controls/PReleaseNotes.qml`).
+  `Shell/UpdateBanner.qml` entfällt.
+- Leiste oben: ≡ Menü entfällt, »?« öffnet das Hilfe-Menü (`helpMenu`, Einträge über `afterClose`), die
+  Einstellungen haben keinen Tab mehr (`tab_for`), das Zahnrad ist markiert und trägt die Akzentmarkierung.
+- Stapel-Aktionen: die Liste der Schritte entsteht nicht mehr bei jedem Klick neu (`stepList`, `chosen`).
+
 # PDF Tool 4.0.0-beta.6
 
 Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.6.md).

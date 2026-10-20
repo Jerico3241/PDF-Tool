@@ -530,7 +530,9 @@ PPage {
         spacing: 0
         PSectionTitle { text: I18n.tr("Updates", I18n.revision) }
 
-        // Version, Zustand des Updaters, verfügbares Update mit Fortschritt und Aktionen
+        // Version, Zustand des Updaters und ein Knopf je Zustand (seit 4.0 Beta 7): »Nach Updates suchen«, nach einem
+        // Fund »Jetzt installieren« (lädt, prüft und installiert), während des Downloads »Abbrechen«. Die Release Notes
+        // eines gefundenen Updates stehen direkt in der Karte.
         Rectangle {
             id: updateCard
             objectName: "updateCard"
@@ -555,7 +557,13 @@ PPage {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 16
-                    PIcon { name: "arrow_sync"; size: Metrics.iconSizeMedium; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
+                    PIcon {
+                        name: updateCard.offerShown ? "arrow_download" : "arrow_sync"
+                        color: updateCard.offerShown ? Theme.accentText : Theme.textPrimary
+                        size: Metrics.iconSizeMedium
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: 2
+                    }
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 1
@@ -573,23 +581,23 @@ PPage {
                         }
                     }
                     PButton {
-                        objectName: "updateCheckButton"
-                        text: I18n.tr("Nach Updates suchen", I18n.revision)
-                        iconName: "arrow_sync"
-                        enabled: Updates.canCheck
-                        busy: Updates.state === "checking"
-                        busyText: I18n.tr("Suche …", I18n.revision)
-                        onClicked: Updates.checkNow()
+                        objectName: "updateActionButton"
+                        text: I18n.tr(Updates.action === "install" ? "Jetzt installieren" : (Updates.action === "cancel" ? "Abbrechen" : "Nach Updates suchen"), I18n.revision)
+                        iconName: Updates.action === "install" ? "arrow_download" : (Updates.action === "cancel" ? "dismiss" : "arrow_sync")
+                        kind: Updates.action === "install" ? "accent" : "standard"
+                        enabled: Updates.action === "cancel" ? Updates.canCancel : (Updates.action === "install" ? (Updates.canInstall || Updates.canDownload) : Updates.canCheck)
+                        busy: updateCard.phase === "checking" || updateCard.phase === "installing"
+                        busyText: I18n.tr(updateCard.phase === "installing" ? "Wird installiert …" : "Suche …", I18n.revision)
+                        onClicked: Updates.act()
                     }
                 }
 
-                // Zustand: »PDF Tool ist aktuell.«, »Nach Updates wird gesucht …«, Fehler …
+                // Zustand: »PDF Tool ist aktuell.«, gefundenes Update, Download mit Fortschritt, Fehler …
                 RowLayout {
                     objectName: "updateStatus"
                     Layout.fillWidth: true
                     Layout.leftMargin: 36
                     spacing: 8
-                    visible: !updateCard.offerShown
                     Item {
                         Layout.preferredWidth: 16
                         Layout.preferredHeight: 16
@@ -607,66 +615,21 @@ PPage {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 1
-                        PText { objectName: "updateStatusTitle"; text: I18n.tr(Updates.statusTitle, I18n.revision); wrap: true; Layout.fillWidth: true }
-                        PText { text: I18n.tr(Updates.statusText, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
-                    }
-                }
-
-                // Verfügbares Update (auch während Download, Prüfung, bereit, abgebrochen oder Fehler)
-                Rectangle {
-                    objectName: "updateOffer"
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 36
-                    visible: updateCard.offerShown
-                    implicitHeight: offerColumn.implicitHeight + 24
-                    radius: Metrics.radiusControl
-                    color: Theme.surfaceSecondary
-                    border.width: 1
-                    border.color: Theme.border
-                    ColumnLayout {
-                        id: offerColumn
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: 12
-                        spacing: 6
                         RowLayout {
+                            Layout.fillWidth: true
                             spacing: 8
-                            Layout.fillWidth: true
-                            PText { objectName: "updateOfferTitle"; text: I18n.tr(Updates.offerTitle, I18n.revision); textStyle: "bodyStrong" }
-                            PBadge { text: I18n.tr(Updates.offerBeta ? "Beta-Update" : "", I18n.revision); tone: "accent" }
-                            Item { Layout.fillWidth: true }
+                            PText { objectName: "updateStatusTitle"; text: I18n.tr(Updates.statusTitle, I18n.revision); textStyle: updateCard.offerShown ? "bodyStrong" : "body"; wrap: true; Layout.fillWidth: true }
+                            PBadge { objectName: "updateOfferBeta"; text: I18n.tr(updateCard.offerShown && Updates.offerBeta ? "Beta-Update" : "", I18n.revision); tone: "accent" }
                         }
-                        PText {
-                            text: I18n.tr([Updates.offerDate !== "" ? "Veröffentlicht am " + Updates.offerDate : "", Updates.offerSize !== "" ? "Größe: " + Updates.offerSize : ""].filter(function(part) { return part !== "" }).join(" · "), I18n.revision)
-                            textStyle: "caption"
-                            tone: "secondary"
-                            Layout.fillWidth: true
-                        }
-                        PText {
-                            objectName: "updateOfferStatus"
-                            text: I18n.tr(Updates.statusTitle, I18n.revision)
-                            tone: Updates.statusKind === "error" ? "error" : (Updates.statusKind === "success" ? "success" : "")
-                            wrap: true
-                            visible: updateCard.phase !== "available"
-                            Layout.fillWidth: true
-                            Layout.topMargin: 4
-                        }
+                        PText { objectName: "updateStatusText"; text: I18n.tr(updateCard.phase === "downloading" ? Updates.progressText : Updates.statusText, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
                         PProgressBar {
                             objectName: "updateProgress"
                             Layout.fillWidth: true
+                            Layout.maximumWidth: 420
+                            Layout.topMargin: 6
                             visible: updateCard.phase === "downloading" || updateCard.phase === "verifying"
                             indeterminate: updateCard.phase === "verifying"
                             value: Updates.progress
-                        }
-                        PText {
-                            objectName: "updateProgressText"
-                            text: I18n.tr(updateCard.phase === "downloading" ? Updates.progressText : Updates.statusText, I18n.revision)
-                            textStyle: "caption"
-                            tone: "secondary"
-                            wrap: true
-                            visible: text !== "" && updateCard.phase !== "available"
-                            Layout.fillWidth: true
                         }
                         PInfoBar {
                             Layout.fillWidth: true
@@ -674,18 +637,27 @@ PPage {
                             severity: "warning"
                             message: I18n.tr(Updates.workHint, I18n.revision)
                             closable: false
-                            topMargin: 4
-                        }
-                        Flow {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 6
-                            spacing: 8
-                            PButton { objectName: "updateNotesButton"; text: I18n.tr("Release Notes", I18n.revision); iconName: "document_bullet_list"; onClicked: Updates.showDetails() }
-                            PButton { objectName: "updateDownloadButton"; text: I18n.tr(updateCard.phase === "error" ? "Erneut versuchen" : "Herunterladen", I18n.revision); kind: "accent"; visible: Updates.canDownload; onClicked: Updates.download() }
-                            PButton { objectName: "updateCancelButton"; text: I18n.tr("Abbrechen", I18n.revision); visible: Updates.canCancel; onClicked: Updates.cancel() }
-                            PButton { objectName: "updateInstallButton"; text: I18n.tr("Jetzt installieren", I18n.revision); kind: "accent"; visible: Updates.canInstall; onClicked: Updates.installNow() }
+                            topMargin: 6
                         }
                     }
+                }
+
+                // Release Notes des gefundenen Updates
+                ColumnLayout {
+                    objectName: "updateOffer"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 36
+                    visible: updateCard.offerShown
+                    spacing: 6
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.divider }
+                    PText { objectName: "updateOfferTitle"; text: I18n.tr("Was ist neu in " + Updates.offerTitle, I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 4 }
+                    PText {
+                        text: I18n.tr("Für diese Version liegen keine Release Notes vor.", I18n.revision)
+                        tone: "secondary"
+                        visible: Updates.notes.length === 0
+                    }
+                    PReleaseNotes { objectName: "updateCardNotes"; Layout.fillWidth: true; blocks: Updates.notes }
+                    PButton { objectName: "updateNotesButton"; text: I18n.tr("Alle Details", I18n.revision); kind: "subtle"; iconName: "document_bullet_list"; onClicked: Updates.showDetails() }
                 }
             }
         }
@@ -727,12 +699,28 @@ PPage {
             Layout.topMargin: 4
             iconName: "clock"
             title: I18n.tr("Automatisch nach Updates suchen", I18n.revision)
-            description: I18n.tr("Höchstens einmal täglich im Hintergrund – der Start wartet nie darauf. Installiert wird nur, wenn Sie es bestätigen.", I18n.revision)
+            description: I18n.tr("Bei jedem Start im Hintergrund – der Start wartet nie darauf.", I18n.revision)
             PToggle {
                 objectName: "updateAutomaticToggle"
                 label: I18n.tr("Automatisch nach Updates suchen", I18n.revision)
                 checked: Updates.automatic
                 onToggled: Updates.setAutomatic(checked)
+            }
+        }
+
+        PSettingsCard {
+            objectName: "updateAutoInstallCard"
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            iconName: "arrow_download"
+            enabled: Updates.automatic
+            title: I18n.tr("Updates automatisch installieren", I18n.revision)
+            description: I18n.tr("Ein gefundenes Update wird geladen und installiert, danach startet PDF Tool neu und öffnet die PDFs wieder. Mit ungespeicherten Änderungen wartet es. Aus: nur »Jetzt installieren«.", I18n.revision)
+            PToggle {
+                objectName: "updateAutoInstallToggle"
+                label: I18n.tr("Updates automatisch installieren", I18n.revision)
+                checked: Updates.autoInstall
+                onToggled: Updates.setAutoInstall(checked)
             }
         }
     }

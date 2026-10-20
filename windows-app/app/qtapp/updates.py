@@ -1,17 +1,18 @@
-"""Updates in der Oberfläche (QML: ``Updates``): Einstellungen, Hinweisleiste, Details, Installation.
+"""Updates in der Oberfläche (QML: ``Updates``): Einstellungen, Details, Installation.
 
 Die Logik steckt im ``updater``-Paket (``UpdateService``); hier entstehen nur Texte, die
 sichtbaren Aktionen und die Verbindung zur App:
 
 * Einstellungen → Updates: Version, Schalter »Beta-Versionen erhalten« (aus: Kanal Stable, an:
-  Beta – gespeichert wie bisher als ``update_kanal``), automatische Prüfung, letzte Prüfung,
-  »Nach Updates suchen«, Angebot mit Fortschritt, Bereit-Zustand und Fehlern.
-* Hinweisleiste über allen Seiten (außer den Einstellungen, die alles selbst zeigen): einmal je
-  Version, kein Dialog, der die Arbeit unterbricht; »Später« blendet sie für diese Sitzung aus.
-* Automatische Prüfung: höchstens alle 24 Stunden, erst nach dem Start im Hintergrund – der
-  Programmstart wartet nie auf das Netzwerk; offline passiert still nichts.
-* Seit 4.0 lädt die automatische Prüfung ein gefundenes Update gleich im Hintergrund herunter – die
-  Hinweisleiste bietet danach nur noch »Jetzt installieren« an.
+  Beta – gespeichert wie bisher als ``update_kanal``), automatische Prüfung und Installation, letzte
+  Prüfung. Ein Knopf je Zustand: »Nach Updates suchen«, nach einem Fund »Jetzt installieren« (lädt,
+  prüft und installiert in einem Schritt), während des Downloads »Abbrechen«. Die Release Notes stehen
+  direkt in der Karte (seit 4.0 Beta 7; die Hinweisleiste über den Seiten gibt es nicht mehr).
+* Automatische Prüfung: bei jedem Start im Hintergrund (danach höchstens alle 24 Stunden, solange die
+  App offen bleibt) – der Programmstart wartet nie auf das Netzwerk; offline passiert still nichts.
+* Automatische Installation (Standard, seit 4.0 Beta 7): ein gefundenes Update wird im Hintergrund
+  geladen und installiert, PDF Tool startet danach neu und öffnet die PDFs wieder. Gewartet wird, solange
+  eine Verarbeitung läuft oder ein Dokument ungespeicherte Änderungen hat – nie geht etwas verloren.
 * »Jetzt installieren«: nicht während einer Verarbeitung (Hinweis statt Abbruch). Sonst: Setup
   erneut prüfen, Hilfsprozess starten, App beenden wie über das Schließen-Kreuz (Einstellungen
   werden gespeichert) – das Setup läuft danach still (nur ein Fortschrittsfenster) und PDF Tool
@@ -45,7 +46,8 @@ S = UpdateState
 START_DELAY_MS = 4000  # automatische Prüfung erst einige Sekunden nach dem ersten Bild
 PERIODIC_MS = 60 * 60 * 1000  # stündlich nachsehen, ob 24 Stunden vergangen sind (App bleibt lange offen)
 AUTO_DOWNLOAD = True  # gefundenes Update bei eingeschalteter automatischer Prüfung gleich laden (Tests: aus)
-BANNER_DELAY_MS = 1200  # Hinweis aus dem Zwischenspeicher erst nach dem Start einblenden
+AUTO_INSTALL_RETRY_MS = 30_000  # automatische Installation wartet (Verarbeitung, ungespeichert): erneut versuchen
+AUTO_INSTALL_TRIES = 20  # höchstens so oft je Sitzung – sonst beim nächsten Start (das Update ist dann schon geladen)
 
 BETA_TITLE = "Beta-Versionen verwenden?"
 BETA_TEXT = "Beta-Versionen enthalten Funktionen und Änderungen, die noch getestet werden. Sie können instabiler sein als Stable-Versionen."
@@ -58,6 +60,7 @@ VERIFYING = "Update wird überprüft …"
 READY = "Update ist bereit zur Installation."
 INSTALLING = "PDF Tool wird aktualisiert und startet danach neu …"
 CANCELLED = "Download abgebrochen."
+WAITING_UNSAVED = "Das Update wird installiert, sobald alle Dokumente gespeichert sind."
 ERRORS = {
     ErrorKind.CHECK_FAILED: ("Updates konnten derzeit nicht geprüft werden.", "Bitte die Internetverbindung prüfen und später erneut versuchen."),
     ErrorKind.RATE_LIMITED: ("Updates konnten derzeit nicht geprüft werden.", "GitHub hat gerade zu viele Anfragen aus diesem Netzwerk erhalten. Bitte später erneut versuchen."),
@@ -143,23 +146,25 @@ class UpdatesController(Observable):
     canInstallChanged, canInstall = prop(bool, "canInstall", False)
     hintChanged, hint = prop(str, "hint", "")  # Beta → Stable
     workHintChanged, workHint = prop(str, "workHint", "")  # laufende Verarbeitung
-    bannerShownChanged, bannerShown = prop(bool, "bannerShown", False)
-    bannerKindChanged, bannerKind = prop(str, "bannerKind", "info")
-    bannerTitleChanged, bannerTitle = prop(str, "bannerTitle", "")
-    bannerTextChanged, bannerText = prop(str, "bannerText", "")
+    autoInstallChanged, autoInstall = prop(bool, "autoInstall", True)  # gefundenes Update selbst installieren
+    actionChanged, action = prop(str, "action", "check")  # Knopf der Karte: check, install, cancel
+    notesChanged, notes = prop(list, "notes", [])  # Release Notes des Angebots (geprüfte Blöcke, ``updater.notes``)
 
     def __init__(self, app, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.app = app
         self.installed = Version.coerce(VERSION)
         self._beta_confirmed = cfg.get("update_beta_bestaetigt") is True
-        self._dismissed = ""  # Version, deren Hinweisleiste in dieser Sitzung ausgeblendet ist
-        self._banner_ready = False
         self._helper = None
         self._fetched = ""  # Version, die in dieser Sitzung schon automatisch geladen wurde
+        self._install_wanted = False  # »Jetzt installieren« vor dem Download: nach dem Laden gleich installieren
+        self._auto_wanted = False  # automatisch gefunden und geladen: ohne Klick installieren
+        self._auto_tries = 0
         self.backup = None  # BackupController: Sicherung vor der Installation
+        self.reader = None  # ReaderController: ungespeicherte Dokumente, PDFs nach dem Neustart wieder öffnen
         self.set_quietly("channel", Channel.from_config(cfg.get("update_kanal")).value)
         self.set_quietly("automatic", cfg.get("update_automatisch") is not False)
+        self.set_quietly("autoInstall", cfg.get("update_auto_installieren") is not False)
         self.service = create_service(app, self.installed)
         self.service.setParent(self)
         self.service.changed.connect(self._sync)
@@ -169,12 +174,12 @@ class UpdatesController(Observable):
         self._periodic = QTimer(self)
         self._periodic.setInterval(PERIODIC_MS)
         self._periodic.timeout.connect(self._auto_check)
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setSingleShot(True)
+        self._auto_timer.timeout.connect(self._try_auto_install)
         app.register_config(self.config)
         app.at_shutdown(self.shutdown)
         app.observe("ready", self._app_ready)
-        app.observe("currentPage", lambda _page: self._sync_banner())
-        if getattr(app, "settings", None) is not None:
-            app.settings.observe("section", lambda _section: self._sync_banner())
         self._sync()
 
     # Konstante Angaben ------------------------------------------------------------------------------------------
@@ -200,6 +205,7 @@ class UpdatesController(Observable):
         return {
             "update_kanal": self.channel,
             "update_automatisch": bool(self.automatic),
+            "update_auto_installieren": None if self.autoInstall else False,
             "update_letzte_pruefung": schedule.format_time(last) if last else None,
             "update_beta_bestaetigt": True if self._beta_confirmed else None,
         }
@@ -209,15 +215,20 @@ class UpdatesController(Observable):
         if not ready:
             return
         self._periodic.start()
-        self.app.timers.later("update-auto", START_DELAY_MS, self._auto_check)
-        self.app.timers.later("update-banner", BANNER_DELAY_MS, self._banner_go)
+        self.app.timers.later("update-auto", START_DELAY_MS, self._start_check)
 
-    def _banner_go(self) -> None:
-        self._banner_ready = True
-        self._sync_banner()
+    def _start_check(self) -> None:
+        """Bei jedem Start (seit 4.0 Beta 7): nachsehen – ein schon geladenes Update wird gleich installiert."""
+        if not self.automatic:
+            return
+        if self.service.state is S.READY:
+            self._auto_wanted = True
+            self._sync()
+            return
+        self.service.check(manual=False)
 
     def _auto_check(self) -> None:
-        """Höchstens alle 24 Stunden – gezählt ab der letzten erfolgreichen Prüfung."""
+        """Solange die App offen bleibt: höchstens alle 24 Stunden – gezählt ab der letzten erfolgreichen Prüfung."""
         if self.automatic and schedule.due(self.service.last_check):
             self.service.check(manual=False)
 
@@ -266,23 +277,38 @@ class UpdatesController(Observable):
             self.app.timers.later("update-auto", 1500, self._auto_check)
         self._sync()
 
+    @Slot(bool)
+    def setAutoInstall(self, enabled: bool) -> None:  # noqa: N802
+        if bool(enabled) == self.autoInstall:
+            return
+        self.autoInstall = bool(enabled)
+        if not enabled:
+            self._auto_wanted = False
+            self._auto_timer.stop()
+        self.app.persist()
+        self.app.set_status("Updates automatisch installieren: " + ("eingeschaltet" if enabled else "ausgeschaltet"), "success")
+        self._sync()
+
     @Slot()
     def download(self) -> None:
         self.workHint = ""
-        if self.service.download():
-            self._dismissed = ""  # der Fortschritt erscheint wieder in der Hinweisleiste
+        self.service.download()
 
     @Slot()
     def cancel(self) -> None:
+        self._install_wanted = self._auto_wanted = False
+        self._auto_timer.stop()
         self.service.cancel()
 
     @Slot()
-    def later(self) -> None:
-        """»Später« bzw. Schließen der Hinweisleiste: für diese Sitzung ausblenden – das Update bleibt verfügbar."""
-        offer = self.service.offer
-        self._dismissed = str(offer.version) if offer is not None else "*"
-        self.workHint = ""
-        self._sync_banner()
+    def act(self) -> None:
+        """Der Knopf der Update-Karte: suchen, installieren (auch ohne vorherigen Download) oder abbrechen."""
+        if self.action == "cancel":
+            self.cancel()
+        elif self.action == "install":
+            self.installNow()
+        else:
+            self.checkNow()
 
     @Slot()
     def showDetails(self) -> None:  # noqa: N802
@@ -290,7 +316,7 @@ class UpdatesController(Observable):
         if offer is None:
             return
         state = self.service.state
-        primary = "Herunterladen" if self.canDownload else ("Jetzt installieren" if state is S.READY else "")
+        primary = "Jetzt installieren" if self.canDownload or state is S.READY else ""
         data = {
             "version": str(offer.version),
             "label": offer.version.label(),
@@ -305,9 +331,7 @@ class UpdatesController(Observable):
         answer, _result = self.app.dialogs.ask("update_details", f"PDF Tool {offer.version}", primary=primary, close="Später", data=data, width=600)
         if answer != "primary":
             return
-        if primary == "Herunterladen":
-            self.download()
-        elif primary == "Jetzt installieren":
+        if primary == "Jetzt installieren":
             self.installNow()
 
     @Slot(str)
@@ -327,14 +351,18 @@ class UpdatesController(Observable):
 
     def _block_for_work(self, work: list[str]) -> None:
         self.workHint = f"{WORK_RUNNING} ({', '.join(work)})" if work else WORK_RUNNING
-        self._dismissed = ""
         self.app.set_status(self.workHint, "warning")
         self._sync()
 
     @Slot()
     def installNow(self) -> None:  # noqa: N802
+        """»Jetzt installieren«: noch nicht geladen → laden und prüfen, danach gleich installieren."""
         if self.service.state is not S.READY:
+            if self.canDownload:
+                self._install_wanted = True
+                self.download()
             return
+        self._install_wanted = False
         work = self._running_work()
         if work:
             self._block_for_work(work)
@@ -357,6 +385,28 @@ class UpdatesController(Observable):
             return
         self.service.begin_install(self._launch)
 
+    def _try_auto_install(self) -> None:
+        """Automatische Installation: nur ohne laufende Verarbeitung und ohne ungespeicherte Änderungen – sonst später
+        noch einmal (höchstens ``AUTO_INSTALL_TRIES``-mal, danach beim nächsten Start)."""
+        if not (self._auto_wanted and self.autoInstall and self.automatic) or self.service.state is not S.READY or self.app.closing:
+            return
+        unsaved = self.reader.unsaved() if self.reader is not None else []
+        work = self._running_work()
+        if unsaved or work:
+            self._auto_tries += 1
+            self.workHint = WAITING_UNSAVED if unsaved and not work else (f"{WORK_RUNNING} ({', '.join(work)})" if work else WORK_RUNNING)
+            if self._auto_tries < AUTO_INSTALL_TRIES:
+                self._auto_timer.start(AUTO_INSTALL_RETRY_MS)
+            else:
+                self._auto_wanted = False  # nicht mehr in dieser Sitzung: »Jetzt installieren« bleibt, der nächste Start installiert
+            self._sync()
+            return
+        self._auto_wanted = False
+        get_log(INSTALLER).info("Automatische Installation von %s", self.offerTitle)
+        if self.reader is not None:
+            self.reader.restore_after_update = True  # nach dem Neustart die PDFs wieder öffnen
+        self.installNow()
+
     def _launch(self, path, digest: str) -> None:
         """Setup geprüft: Hilfsprozess starten, dann die App beenden (das Setup startet danach)."""
         work = self._running_work()
@@ -373,6 +423,8 @@ class UpdatesController(Observable):
         get_log(INSTALLER).info("Installation von %s: PDF Tool wird beendet, danach startet das Setup", path.name)
         if self._quit_app():
             return
+        if self.reader is not None:
+            self.reader.restore_after_update = False
         # Beenden wurde abgelehnt (z. B. Rückfrage eines Werkzeugs): kein Setup, das Update bleibt bereit
         get_log(INSTALLER).info("Installation abgebrochen: PDF Tool wurde nicht beendet – Hilfsprozess beendet, das Update bleibt bereit")
         helper, self._helper = self._helper, None
@@ -399,6 +451,7 @@ class UpdatesController(Observable):
 
     def shutdown(self) -> None:
         self._periodic.stop()
+        self._auto_timer.stop()
         self.service.shutdown()
 
     # Anzeige ----------------------------------------------------------------------------------------------------------
@@ -409,7 +462,6 @@ class UpdatesController(Observable):
         self.progressText = progress_text(service.received, total)
         if service.state is S.DOWNLOADING:
             self.statusText = self.progressText
-            self._sync_banner()
 
     def _sync(self) -> None:
         service = self.service
@@ -418,6 +470,7 @@ class UpdatesController(Observable):
         if AUTO_DOWNLOAD and state is S.AVAILABLE and offer is not None and self.automatic and self._fetched != str(offer.version):
             self._fetched = str(offer.version)  # einmal je Version: nach »Abbrechen« lädt nichts von selbst neu
             if service.download():
+                self._auto_wanted = self.autoInstall  # fertig geladen: ohne Klick installieren
                 return  # der Download meldet sich mit seinem eigenen Zustand
         self.state = state.value
         self.lastCheck = when_text(service.last_check)
@@ -438,10 +491,24 @@ class UpdatesController(Observable):
         self.hint = BETA_NEWER if self.installed.is_prerelease and self.channel == "stable" and offer is None else ""
         if state is not S.READY:
             self.workHint = ""  # der Hinweis gilt nur für »Jetzt installieren«
+        if state in (S.CANCELLED, S.ERROR, S.UP_TO_DATE) or offer is None:
+            self._install_wanted = self._auto_wanted = False
+        self.notes = notes.render(offer.notes) if offer is not None else []
+        if self.canCancel:
+            self.action = "cancel"
+        elif offer is not None and (self.canDownload or self.canInstall or state is S.INSTALLING):
+            self.action = "install"
+        else:
+            self.action = "check"
         self._sync_progress()
         title, text, kind = self._status(state)
         self.statusTitle, self.statusText, self.statusKind = title, text, kind
-        self._sync_banner()
+        if state is S.READY and self._install_wanted:
+            # erst nach dieser Meldung (Signale laufen noch) installieren
+            self.app.timers.later("update-install", 0, self.installNow)
+        elif state is S.READY and self._auto_wanted and not self._auto_tries:
+            # automatische Installation: der erste Versuch gleich, weitere über den Zeitgeber
+            self.app.timers.later("update-install", 0, self._try_auto_install)
 
     def _offer_line(self) -> str:
         parts = []  # »Beta« zeigt ein eigenes Etikett
@@ -478,23 +545,3 @@ class UpdatesController(Observable):
         if not self.automatic:
             return "Automatische Prüfung ist ausgeschaltet.", "Mit »Nach Updates suchen« jederzeit selbst prüfen.", "neutral"
         return "Noch nicht nach Updates gesucht.", "Die erste Prüfung erfolgt kurz nach dem Start im Hintergrund.", "neutral"
-
-    def _sync_banner(self) -> None:
-        service = self.service
-        offer = service.offer
-        state = service.state
-        visible_states = (S.AVAILABLE, S.DOWNLOADING, S.VERIFYING, S.READY, S.INSTALLING, S.CANCELLED)
-        relevant = offer is not None and (state in visible_states or (state is S.ERROR and service.error in OFFER_ERRORS))
-        dismissed = offer is not None and self._dismissed in (str(offer.version), "*")
-        settings = getattr(self.app, "settings", None)
-        on_settings = self.app.currentPage == "settings" and (settings is None or settings.section == "updates")
-        shown = self._banner_ready and relevant and not dismissed and not on_settings
-        if shown:
-            title, text, kind = self._status(state)
-            if self.workHint:
-                text, kind = self.workHint, "warning"
-            elif state is S.AVAILABLE:
-                text = self._offer_line()
-            self.bannerTitle, self.bannerText = title, text
-            self.bannerKind = {"busy": "info", "neutral": "info"}.get(kind, kind)
-        self.bannerShown = shown

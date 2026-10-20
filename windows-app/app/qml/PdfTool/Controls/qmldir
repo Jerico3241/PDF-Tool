@@ -45,3 +45,4 @@ PTextMenu 1.0 PTextMenu.qml
 PToggle 1.0 PToggle.qml
 PToolTip 1.0 PToolTip.qml
 PWheelScroll 1.0 PWheelScroll.qml
+PReleaseNotes 1.0 PReleaseNotes.qml
