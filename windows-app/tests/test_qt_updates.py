@@ -1,11 +1,12 @@
-"""Qt-Oberfläche: Updates – Einstellungen, Hinweisleiste, Details, Download, Installation.
+"""Qt-Oberfläche: Updates – Einstellungen (Update-Karte), Details, Download, Installation.
 
 Gegen einen lokalen Testserver (``updateserver.py``), nie gegen GitHub; der Hilfsprozess, der das
 Setup startet, ist eine Attrappe (``conftest.FakeLauncher``). Geprüft werden u. a. die Tests 82–99
 der Vorgabe aus Sicht der Oberfläche: Start ohne Warten, offline still, 24-Stunden-Regel,
-manuelle Prüfung, Kanalwechsel ohne Neustart mit Beta-Rückfrage, Persistenz, Hinweis einmal je
-Version, Details mit sicheren Release Notes, Fortschritt, Abbruch, Doppelklick, Bereit,
-»Jetzt installieren« (nicht während einer Verarbeitung), Animationsprofile.
+manuelle Prüfung, Kanalwechsel ohne Neustart mit Beta-Rückfrage, Persistenz, Details mit sicheren
+Release Notes, Fortschritt, Abbruch, Doppelklick, Bereit, »Jetzt installieren« (nicht während einer
+Verarbeitung). Seit 4.0 Beta 7: Prüfung bei jedem Start, automatische Installation (wartet auf
+ungespeicherte Dokumente), ein Knopf je Zustand und die Release Notes in der Karte.
 """
 
 from __future__ import annotations
@@ -57,7 +58,6 @@ def start(request, qt_application, config_file: Path, monkeypatch, server, tmp_p
         monkeypatch.setattr(updates, "create_service", create)
         monkeypatch.setattr(updates, "AUTO_DOWNLOAD", fetch)
         monkeypatch.setattr(updates, "START_DELAY_MS", 100 if auto else 3_600_000)
-        monkeypatch.setattr(updates, "BANNER_DELAY_MS", 0)
         harness = Harness(ui=True)
         harness.holder = {"current": harness}
         harnesses.append(harness)
@@ -106,7 +106,9 @@ def test_settings_show_version_channel_automatic_and_last_check(start):
     assert schalter.property("checked") is False and schalter.property("label") == "Beta-Versionen erhalten"
     assert h.item("updateChannelCombo") is None
     assert u(h).automatic and h.item("updateAutomaticToggle").property("checked")
-    assert h.item("updateCheckButton").property("enabled")
+    assert u(h).autoInstall and h.item("updateAutoInstallToggle").property("checked")
+    knopf = h.item("updateActionButton")
+    assert knopf.property("enabled") and knopf.property("text") == "Nach Updates suchen" and u(h).action == "check"
 
 
 def test_08_start_never_waits_for_the_network(start, server):
@@ -114,7 +116,7 @@ def test_08_start_never_waits_for_the_network(start, server):
     began = time.monotonic()
     h = start(auto=True)
     assert h.app.ready and time.monotonic() - began < 20
-    assert u(h).state == "idle" and not u(h).bannerShown
+    assert u(h).state == "idle"
     assert wait_until(lambda: requests(server) == 1, 10)  # die Prüfung läuft danach im Hintergrund
     assert u(h).state == "idle"  # unsichtbar: keine Anzeige »wird gesucht«, keine Fehlermeldung
     h.navigate("repair", 0.2)
@@ -128,7 +130,7 @@ def test_93_offline_start_is_silent_and_manual_check_explains(start, monkeypatch
     u(h).service.client.policy = UrlPolicy.loopback(1)
     u(h)._auto_check()  # wie die automatische Prüfung nach dem Start
     assert wait_until(lambda: u(h).service.auto_failed, 15)
-    assert u(h).state == "idle" and not u(h).bannerShown and u(h).statusKind == "neutral"
+    assert u(h).state == "idle" and u(h).statusKind == "neutral"
     h.navigate("settings", 0.2)
     u(h).checkNow()
     assert settle(h, "error") == "error"
@@ -137,36 +139,62 @@ def test_93_offline_start_is_silent_and_manual_check_explains(start, monkeypatch
     assert u(h).lastCheck == "Noch nie"  # eine fehlgeschlagene Prüfung zählt nicht
 
 
-def test_automatic_check_finds_update_and_announces_it_once(start, server, config_file):
+def test_start_check_finds_update_and_the_button_becomes_install(start, server, config_file):
+    """Ohne automatische Installation: der Knopf der Karte wird »Jetzt installieren«, die Release Notes stehen
+    in der Karte – keine Hinweisleiste mehr über den Seiten."""
     server.publish("2.7.3", notes=NOTES)
-    h = start(auto=True)
+    h = start(auto=True, update_auto_installieren=False)
     assert settle(h, "available") == "available"
-    assert wait_until(lambda: u(h).bannerShown, 5)
-    assert u(h).bannerTitle == "PDF Tool 2.7.3 ist verfügbar."
-    assert h.item("updateBannerTitle").property("text") == "PDF Tool 2.7.3 ist verfügbar."
+    assert u(h).statusTitle == "PDF Tool 2.7.3 ist verfügbar." and u(h).action == "install"
     assert requests(server) == 1
-    assert config(config_file)["update_letzte_pruefung"].endswith("Z")
-    banners = []
-    for page in ("create", "repair", "batch", "home"):
-        h.navigate(page, 0.15)
-        banners.append(len(h.items("updateBanner")))
-    assert banners == [1, 1, 1, 1] and u(h).bannerShown  # eine Leiste, kein neuer Hinweis je Seite
+    assert config(config_file)["update_letzte_pruefung"].endswith("Z") and config(config_file)["update_auto_installieren"] is False
+    assert h.item("updateBanner") is None
     h.navigate("settings", 0.2)
     h.runtime.settings.setSection("updates")
-    pump(0.2)
-    assert not u(h).bannerShown  # der Bereich »Updates« der Einstellungen zeigt alles selbst
-    assert h.item("updateOffer").property("visible") and h.item("updateOfferTitle").property("text") == "PDF Tool 2.7.3"
-    assert requests(server) == 1
+    pump(0.3)
+    assert h.item("updateActionButton").property("text") == "Jetzt installieren"
+    assert h.item("updateOffer").property("visible") and h.item("updateOfferTitle").property("text") == "Was ist neu in PDF Tool 2.7.3"
+    assert len([item for item in h.item("updateCardNotes").childItems() if item.property("kind")]) == 4
+    assert not updates.LAUNCHES  # ohne automatische Installation: erst nach dem Klick
 
 
-def test_automatic_check_downloads_the_update_so_one_click_installs(start, server):
+def test_start_check_downloads_installs_and_reopens_the_pdfs(start, server, config_file):
+    """Standard seit 4.0 Beta 7: beim Start gefunden, im Hintergrund geladen, installiert – PDF Tool beendet sich
+    (das Setup startet es neu) und merkt sich, die PDFs danach einmal wieder zu öffnen."""
     server.publish("2.7.3", notes=NOTES)
     h = start(auto=True, fetch=True)
-    assert settle(h, "ready") == "ready"  # ohne »Herunterladen«: gleich bereit
-    assert wait_until(lambda: u(h).bannerShown, 5)
-    assert u(h).canInstall and not u(h).canDownload
-    u(h).cancel()  # nichts zu tun – der Download ist fertig
-    assert u(h).state == "ready"
+    assert wait_until(lambda: updates.LAUNCHES, 30), u(h).state
+    assert h.app.closing
+    assert config(config_file)["reader_sitzung_update"] is True
+
+
+def test_automatic_install_waits_for_unsaved_documents(start, server, monkeypatch):
+    from qtapp.reader.controller import ReaderController
+
+    server.publish("2.7.3")
+    unsaved = ["Vertrag.pdf"]
+    monkeypatch.setattr(ReaderController, "unsaved", lambda self: list(unsaved))
+    monkeypatch.setattr(updates, "AUTO_INSTALL_RETRY_MS", 3_600_000)
+    h = start(auto=True, fetch=True)
+    assert settle(h, "ready") == "ready"
+    pump(0.3)
+    assert not updates.LAUNCHES and not h.app.closing
+    assert u(h).workHint == "Das Update wird installiert, sobald alle Dokumente gespeichert sind."
+    assert u(h).action == "install"  # »Jetzt installieren« bleibt
+    unsaved.clear()  # gespeichert: der nächste Versuch installiert
+    u(h)._try_auto_install()
+    assert wait_until(lambda: updates.LAUNCHES, 10) and h.app.closing
+
+
+def test_install_button_downloads_and_installs_in_one_step(start, server):
+    server.publish("2.7.3")
+    h = start()
+    u(h).checkNow()
+    settle(h, "available")
+    assert u(h).action == "install"
+    u(h).act()  # »Jetzt installieren«: laden, prüfen, installieren
+    assert wait_until(lambda: updates.LAUNCHES, 30) and h.app.closing
+
 
 
 def test_automatic_download_happens_once_per_version(start, server):
@@ -185,14 +213,14 @@ def test_automatic_download_happens_once_per_version(start, server):
 def test_98_24_hour_rule_and_manual_check(start, server):
     server.publish("2.7.3")
     vor_einer_stunde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    h = start(auto=True, update_letzte_pruefung=vor_einer_stunde)
-    pump(1.0)
-    u(h)._auto_check()
+    h = start(auto=True, update_letzte_pruefung=vor_einer_stunde, update_auto_installieren=False)
+    assert settle(h, "available") == "available" and requests(server) == 1  # beim Start immer
+    u(h)._auto_check()  # stündlich, solange die App offen ist: < 24 Stunden seit der Prüfung – kein Aufruf
     pump(0.3)
-    assert requests(server) == 0  # < 24 Stunden: kein Aufruf
-    assert u(h).lastCheck.startswith("Heute, ") or u(h).lastCheck.startswith("Gestern, ")
+    assert requests(server) == 1
+    assert u(h).lastCheck.startswith("Heute, ")
     u(h).checkNow()  # der Knopf prüft trotzdem
-    assert settle(h, "available") == "available" and requests(server) == 1
+    assert settle(h, "available") == "available" and requests(server) == 2
 
 
 def test_automatic_off_means_no_request(start, server):
@@ -272,7 +300,7 @@ def test_beta_toggle_switches_the_channel_with_confirmation_once(start, monkeypa
     assert u(h).channel == "beta" and schalter.property("checked") is True
     assert len(h.app.dialogs.history) == gefragt
     # »Nach Updates suchen« und »Automatisch nach Updates suchen« bleiben (Hinweis bei neuerer Beta: test_19)
-    assert h.item("updateCheckButton").property("visible") and h.item("updateAutomaticToggle").property("visible")
+    assert h.item("updateActionButton").property("visible") and h.item("updateAutomaticToggle").property("visible")
 
 
 @pytest.mark.parametrize("gespeichert,beta", [(None, False), ("stable", False), ("beta", True), ("unbekannt", False)])
@@ -294,7 +322,7 @@ def test_81_channel_switch_works_without_restart(start, server):
     u(h).setChannel("beta")
     assert settle(h, "available") == "available" and u(h).offerTitle == "PDF Tool 2.8.0-beta.1"
     assert u(h).offerBeta and u(h).offerLabel == "2.8.0 Beta 1"
-    assert u(h).bannerTitle == "PDF Tool 2.8.0 Beta 1 ist verfügbar."
+    assert u(h).statusTitle == "PDF Tool 2.8.0 Beta 1 ist verfügbar."
     u(h).setChannel("stable")
     assert u(h).offerTitle == "PDF Tool 2.7.3" and not u(h).offerBeta
 
@@ -335,7 +363,7 @@ def test_28_29_30_details_with_safe_release_notes(start, server, monkeypatch):
     monkeypatch.setattr(dialogs, "AUTO_ANSWER", "close")  # »Später«
     u(h).showDetails()
     request = h.app.dialogs.history[-1]
-    assert request["kind"] == "update_details" and request["primary"] == "Herunterladen" and request["close"] == "Später"
+    assert request["kind"] == "update_details" and request["primary"] == "Jetzt installieren" and request["close"] == "Später"
     data = request["data"]
     assert (data["version"], data["channel"], data["installed"], data["date"]) == ("2.7.3", "Stable", "2.7.2", "01.10.2026")
     assert data["size"].endswith("KB") or data["size"].endswith("MB")
@@ -381,14 +409,16 @@ def test_download_progress_ready_and_install(start, server, config_file):
     h = start()
     u(h).checkNow()
     settle(h, "available")
-    assert wait_until(lambda: u(h).bannerShown, 5)
+    h.navigate("settings", 0.2)
+    h.runtime.settings.setSection("updates")
     texts = []
     u(h).progressTextChanged.connect(lambda: texts.append(u(h).progressText))
     u(h).download()
-    assert u(h).state == "downloading" and h.item("updateBannerProgress").property("visible")
+    pump(0.1)
+    assert u(h).state == "downloading" and h.item("updateProgress").property("visible") and u(h).action == "cancel"
     assert settle(h, "ready") == "ready"
     assert any(" von " in text and text.endswith("%") for text in texts)
-    assert u(h).bannerTitle == "Update ist bereit zur Installation." and u(h).canInstall
+    assert u(h).statusTitle == "Update ist bereit zur Installation." and u(h).canInstall and u(h).action == "install"
     assert u(h).statusText.endswith("Prüfsumme bestätigt (SHA-256)")
     setup = start.folder / "PDF-Tool-Setup-2.7.3.exe"
     assert setup.is_file()
@@ -418,7 +448,6 @@ def test_96_install_waits_for_running_repair(start, server, tmp_path):
     u(h).installNow()
     assert u(h).state == "ready" and not updates.LAUNCHES and not h.app.closing
     assert u(h).workHint.startswith("Es läuft noch eine Verarbeitung. Bitte warten Sie, bis diese abgeschlossen ist, oder brechen Sie sie ab.")
-    assert u(h).bannerKind == "warning" and u(h).bannerText == u(h).workHint
     assert wait_until(lambda: not h.app.running_work(), 60)
     u(h).installNow()
     assert wait_until(lambda: updates.LAUNCHES, 10) and h.app.closing
@@ -439,7 +468,7 @@ def test_install_is_undone_when_closing_is_refused(start, server, monkeypatch):
     assert u(h).state == "ready" and not h.app.closing
 
 
-def test_92_cancel_in_the_banner(start, server):
+def test_92_cancel_in_the_card(start, server):
     server.publish("2.7.3", setup=b"MZ" + os.urandom(3 * 1024 * 1024))
     server.delay = 0.02
     h = start()
@@ -447,12 +476,15 @@ def test_92_cancel_in_the_banner(start, server):
     settle(h, "available")
     u(h).download()
     assert wait_until(lambda: u(h).service.received > 64 * 1024, 20)
-    assert h.item("updateBannerCancel").property("visible")
-    u(h).cancel()  # »Abbrechen« in der Hinweisleiste
+    h.navigate("settings", 0.2)
+    h.runtime.settings.setSection("updates")
+    pump(0.2)
+    assert h.item("updateActionButton").property("text") == "Abbrechen"
+    u(h).act()  # »Abbrechen« in der Update-Karte
     assert wait_until(lambda: u(h).state == "cancelled", 5)
     pump(0.2)
     assert not (start.folder / "PDF-Tool-Setup-2.7.3.exe.part").exists() and not (start.folder / "PDF-Tool-Setup-2.7.3.exe").exists()
-    assert u(h).bannerTitle == "Download abgebrochen." and u(h).canDownload
+    assert u(h).statusTitle == "Download abgebrochen." and u(h).canDownload and u(h).action == "install"
 
 
 def test_95_double_click_downloads_once(start, server):
@@ -476,27 +508,9 @@ def test_91_wrong_checksum_shows_error_and_never_offers_install(start, server):
     assert settle(h, "error") == "error"
     assert u(h).statusTitle == "Das heruntergeladene Update konnte nicht verifiziert werden und wurde daher nicht installiert."
     assert not u(h).canInstall and u(h).canDownload  # »Erneut versuchen«
-    assert u(h).bannerKind == "error"
+    assert u(h).statusKind == "error" and u(h).action == "install"  # »Jetzt installieren« lädt erneut
     u(h).installNow()
     assert not updates.LAUNCHES
-
-
-def test_73_later_hides_banner_until_next_start(start, server):
-    server.publish("2.7.3")
-    h = start()
-    u(h).checkNow()
-    settle(h, "available")
-    assert wait_until(lambda: u(h).bannerShown, 5)
-    u(h).later()
-    assert not u(h).bannerShown
-    for page in ("create", "home"):
-        h.navigate(page, 0.15)
-        assert not u(h).bannerShown
-    assert u(h).state == "available"  # Update bleibt verfügbar
-    count = requests(server)
-    h = neustart(h)
-    assert u(h).state == "available" and requests(server) == count  # aus der letzten Prüfung, ohne Anfrage
-    assert wait_until(lambda: u(h).bannerShown, 5)
 
 
 def test_44_ready_update_survives_restart_without_download(start, server):
@@ -510,19 +524,6 @@ def test_44_ready_update_survives_restart_without_download(start, server):
     h = neustart(h)
     assert settle(h, "ready") == "ready"
     assert server.count("/storage/") == loads
-
-
-@pytest.mark.parametrize("profile", ["full", "reduced", "off"])
-def test_77_banner_follows_the_motion_profile(start, server, profile):
-    server.publish("2.7.3")
-    h = start(profile=profile)
-    u(h).checkNow()
-    settle(h, "available")
-    banner = h.item("updateBanner")
-    bar = h.item("updateBannerBar")
-    assert wait_until(lambda: bar.property("opacity") > 0.99 and banner.property("visible"), 3)
-    u(h).later()
-    assert wait_until(lambda: not banner.property("visible") and banner.property("height") == 0, 3)
 
 
 def test_94_slow_download_keeps_the_ui_responsive(start, server):

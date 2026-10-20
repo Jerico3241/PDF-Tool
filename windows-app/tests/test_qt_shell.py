@@ -431,26 +431,24 @@ def test_theme_accent_and_profile_apply_live_and_persist(app, config_file: Path)
 def test_tools_open_as_tabs_next_to_start_and_close_again(app) -> None:
     """Adobe-Prinzip: Werkzeuge erscheinen beim Öffnen als Tab neben ⌂ Start (in der Reihenfolge des Öffnens) und
     bleiben, bis man sie schließt – Eingaben bleiben dabei erhalten. Ist der geschlossene Tab zu sehen, folgt der
-    rechts daneben, sonst der links daneben bzw. Start. Strg+W schließt den Tab des sichtbaren Werkzeugs."""
+    rechts daneben, sonst der links daneben bzw. Start. Strg+W schließt den Tab des sichtbaren Werkzeugs. Die
+    Einstellungen haben keinen eigenen Tab (seit 4.0 Beta 7): das Zahnrad ist markiert, solange sie zu sehen sind."""
     a = app.app
     assert app.item("navigationPane") is None and app.item("appTabs").isVisible()
     assert a.openTabs == [] and app.item("tabHome").property("active") is True
     app.navigate("repair", 0.3)
     app.navigate("layout", 0.3)  # eine Ansicht der Vertragsübersichten
     app.navigate("settings", 0.3)
-    assert a.openTabs == ["repair", "contracts", "settings"]
-    assert app.item("tab_settings").property("active") and not app.item("tab_repair").property("active")
+    assert a.openTabs == ["repair", "contracts"] and app.item("tab_settings") is None
+    assert app.item("appSettingsButton").property("checked") and not app.item("tab_repair").property("active")
     app.navigate("home", 0.3)
-    assert a.openTabs == ["repair", "contracts", "settings"] and app.item("tabHome").property("active")
+    assert a.openTabs == ["repair", "contracts"] and app.item("tabHome").property("active")
+    assert not app.item("appSettingsButton").property("checked")
     # Klick auf einen Tab: das Werkzeug mit seiner zuletzt gezeigten Ansicht
     tab = app.item("tab_contracts")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, tab.mapToScene(QPointF(30, tab.height() / 2)).toPoint())
     pump(0.4)
     assert a.currentPage == "layout" and tab.property("active")
-    # den sichtbaren Tab schließen: der rechts daneben folgt
-    a.closeTab("contracts")
-    pump(0.3)
-    assert a.openTabs == ["repair", "settings"] and a.currentPage == "settings"
     # Strg+W: Tab des sichtbaren Werkzeugs – ganz rechts, also folgt der links daneben
     QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
     pump(0.3)
@@ -490,10 +488,11 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     assert any(ziel + 2 < lage < vorher - 2 for lage in lagen) == (app.theme.effectiveProfile == "full")  # unterwegs (nur »Vollständig«)
     pump(0.4)
     assert abs(mitte(marker) - ziel) < 1
-    app.navigate("settings", 0.4)
+    app.navigate("settings", 0.6)
+    assert abs(mitte(marker) - mitte(app.item("appSettingsButton"))) < 1  # Einstellungen: unter dem Zahnrad
     app.navigate("layout", 0.6)
     assert abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
-    app.app.closeTab("settings")  # links vom aktiven Tab: dieser rückt nach, die Markierung bleibt darunter
+    app.app.closeTab("repair")  # links vom aktiven Tab: dieser rückt nach, die Markierung bleibt darunter
     pump(0.6)
     assert app.app.currentPage == "layout" and abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
     app.settings.setProfile("off")
@@ -503,18 +502,22 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     assert not app.messages()
 
 
-def test_menu_offers_open_settings_help_and_about(app) -> None:
-    """≡ Menü: PDF öffnen, Start, Einstellungen, Kurzanleitung, Neuerungen, Über – ein Eintrag führt dorthin."""
-    button = app.item("appMenuButton")
+def test_help_menu_replaces_the_app_menu(app) -> None:
+    """Seit 4.0 Beta 7 kein ≡ Menü mehr (jeder Eintrag hatte schon einen Knopf): »?« öffnet das Hilfe-Menü mit
+    Kurzanleitung, Tastenkürzel, Neuerungen und Über – ein Eintrag öffnet seinen Dialog nach dem Schließen."""
+    assert app.item("appMenuButton") is None and app.item("appMenu") is None
+    button = app.item("appHelpButton")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
     pump(0.4)
-    assert app.item("appMenu").property("opened") is True
-    names = ("menuOpen", "menuHome", "menuSettings", "menuHelp", "menuNews", "menuAbout")
-    assert [app.item(name).property("text") for name in names] == ["PDF öffnen …", "Start", "Einstellungen", "Kurzanleitung", "Neu in dieser Version", "Über PDF Tool"]
-    entry = app.item("menuSettings")
+    assert app.item("helpMenu").property("opened") is True
+    names = ("menuHelp", "menuShortcuts", "menuNews", "menuAbout")
+    assert [app.item(name).property("text") for name in names] == ["Kurzanleitung", "Tastenkürzel", "Neu in dieser Version", "Über PDF Tool"]
+    assert app.item("menuHelp").property("hint") == "F1" and app.item("menuShortcuts").property("hint") == "Strg+F1"
+    entry = app.item("menuAbout")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, entry.mapToScene(QPointF(entry.width() / 2, entry.height() / 2)).toPoint())
-    pump(0.5)
-    assert app.app.currentPage == "settings" and app.item("appMenu").property("opened") is False
+    pump(0.6)
+    assert app.item("helpMenu").property("opened") is False
+    assert app.app.dialogs.history and app.app.dialogs.history[-1]["kind"] == "about"
     assert not app.messages()
 
 

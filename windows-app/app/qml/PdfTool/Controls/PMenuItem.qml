@@ -6,6 +6,7 @@ import PdfTool.Backend
 T.MenuItem {
     id: control
     property string iconName: ""
+    property string hint: ""  // rechts, grau: Tastenkürzel (»F1«)
     implicitWidth: Math.max(160, contentItem.implicitWidth + leftPadding + rightPadding)
     implicitHeight: 34
     height: visible ? implicitHeight : 0  // ausgeblendete Einträge nehmen im Menü keinen Platz ein
@@ -16,18 +17,34 @@ T.MenuItem {
     Accessible.role: Accessible.MenuItem
     Accessible.name: I18n.tr(text, I18n.revision)
 
-    contentItem: Row {
-        spacing: 12
-        PIcon {
+    contentItem: Item {
+        implicitWidth: entry.implicitWidth + (hintText.visible ? hintText.implicitWidth + 32 : 0)
+        implicitHeight: entry.implicitHeight
+        Row {
+            id: entry
             anchors.verticalCenter: parent.verticalCenter
-            name: control.iconName
-            color: control.enabled ? Theme.textPrimary : Theme.disabled
+            spacing: 12
+            PIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: control.iconName
+                color: control.enabled ? Theme.textPrimary : Theme.disabled
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: I18n.tr(control.text, I18n.revision)
+                font: control.font
+                color: control.enabled ? Theme.textPrimary : Theme.disabled
+                textFormat: Text.PlainText
+            }
         }
         Text {
+            id: hintText
+            anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: I18n.tr(control.text, I18n.revision)
-            font: control.font
-            color: control.enabled ? Theme.textPrimary : Theme.disabled
+            visible: control.hint !== ""
+            text: I18n.tr(control.hint, I18n.revision)
+            font: Typography.caption
+            color: Theme.textSecondary
             textFormat: Text.PlainText
         }
     }

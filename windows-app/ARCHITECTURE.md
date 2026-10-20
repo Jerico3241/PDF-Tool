@@ -254,8 +254,10 @@ Instanz alles gespeichert hat.
 ## Updater (`app/updater`, seit 2.7.2)
 
 Der Updater ist kein Werkzeug, sondern eine eigene Schicht: Logik in `app/updater/`, Anzeige im
-Controller `app/qtapp/updates.py` (QML: `Updates`), Oberfläche in `Shell/UpdateBanner.qml`,
-`Pages/SettingsPage.qml` (Abschnitt „Updates“) und `Dialogs/UpdateContent.qml`. QML ruft nie
+Controller `app/qtapp/updates.py` (QML: `Updates`), Oberfläche in `Pages/SettingsPage.qml`
+(Abschnitt „Updates“, mit den Release Notes über `Controls/PReleaseNotes.qml`) und `Dialogs/UpdateContent.qml`.
+Seit 4.0 Beta 7 sucht PDF Tool bei jedem Start und installiert ein gefundenes Update selbst (Einstellung
+`update_auto_installieren`); die Hinweisleiste über den Seiten gibt es nicht mehr. QML ruft nie
 GitHub auf, lädt nichts, berechnet keine Prüfsumme und vergleicht keine Versionen.
 
 | Modul | Aufgabe |

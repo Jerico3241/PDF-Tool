@@ -3,13 +3,13 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Aufbau des Hauptfensters (Adobe-Prinzip): oben die Tab-Leiste mit ≡ Menü, ⌂ Start, den Tabs der geöffneten
+// Aufbau des Hauptfensters (Adobe-Prinzip): oben die Tab-Leiste mit ⌂ Start, den Tabs der geöffneten
 // Werkzeuge und PDFs; darunter die Inhaltsebene mit Seiten und Statuszeile über die ganze Breite. Dazu
 // Dialoge, Drag & Drop und Tastenkürzel.
 FocusScope {
     id: shell
     property alias pages: host
-    // Vollbild (F11 im Reader): nur das Dokument – Tab-Leiste, Hinweisleiste und Statuszeile ausgeblendet
+    // Vollbild (F11 im Reader): nur das Dokument – Tab-Leiste und Statuszeile ausgeblendet
     readonly property bool fullScreen: Reader.fullScreen
 
     // Themawechsel: das bisherige Bild blendet über dem neuen aus (kurz, »Aus«: sofort)
@@ -79,19 +79,10 @@ FocusScope {
             color: Theme.layer
             Rectangle { width: parent.width; height: 1; color: Theme.layerStroke; visible: !shell.fullScreen }
 
-            // Hinweisleiste für Updates über den Seiten (die Seiten rücken einmal um ihre Höhe)
-            UpdateBanner {
-                id: updateBanner
-                x: 0
-                y: shell.fullScreen ? 0 : 1
-                width: layer.width
-                height: implicitHeight
-                suppressed: shell.fullScreen
-            }
             PageHost {
                 id: host
                 x: 0
-                y: updateBanner.y + updateBanner.height
+                y: shell.fullScreen ? 0 : 1
                 width: layer.width
                 height: layer.height - y - status.height
             }

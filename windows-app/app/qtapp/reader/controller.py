@@ -45,6 +45,7 @@ TAB_LIMIT = 24
 CLOSED_LIMIT = 10  # »Geschlossenen Tab wieder öffnen«: so viele zuletzt geschlossene Dokumente
 NIGHT_KEY = "reader_nachtmodus"  # Nachtmodus (gui-config.json)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
+UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
 # Beschreibung (Tooltip), Symbol
 QUICK_TOOLS = (
@@ -177,6 +178,9 @@ class ReaderController(Observable):
         # Letzte Sitzung (nur mit der Einstellung): gilt bis zum Beenden, das sie neu festhält; der Start öffnet sie einmal
         self._session = _session_from(cfg.get(SESSION_KEY))
         self._session_pending = self._session
+        # Automatisches Update (seit 4.0 Beta 7): die PDFs vor dem Neustart einmal wieder öffnen, auch ohne Einstellung
+        self.restore_after_update = False
+        self._update_once = cfg.get(UPDATE_SESSION_KEY) is True
         self._restoring = False  # Wiederherstellung läuft (Beenden währenddessen: die gemerkte Liste bleibt)
         self._quit_active = ""  # beim Beenden: der aktive Tab vor den Rückfragen zu ungespeicherten Dokumenten
         self._refresh_recent()
@@ -1023,6 +1027,7 @@ class ReaderController(Observable):
         return {
             "reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel},
             "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), "reader_signieren": dict(self.sign_defaults) or None, NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
+            UPDATE_SESSION_KEY: True if self.restore_after_update else None,
             "reader_bilder": {"seite": self._image_options["pageSize"], "rand": self._image_options["margin"], "ordner": self._image_options["folder"]},
             "reader_scan": {
                 "quelle": self._scan_options["source"], "farbe": self._scan_options["color"], "dpi": self._scan_options["dpi"],
@@ -1355,8 +1360,14 @@ class ReaderController(Observable):
 
     # Letzte Sitzung (Einstellung »PDFs der letzten Sitzung beim Start wieder öffnen«) -------------------------------
     def _restore_wanted(self) -> bool:
+        if self.restore_after_update or self._update_once:
+            return True
         settings = self.app.settings
         return settings is not None and bool(getattr(settings, "readerRestoreSession", False))
+
+    def unsaved(self) -> list[str]:
+        """Namen der Dokumente mit ungespeicherten Änderungen (ein automatisches Update wartet darauf)."""
+        return [controller.name for controller in self._docs.values() if controller.dirty]
 
     def _restore_setting(self, enabled: bool) -> None:
         if not enabled:
@@ -1380,7 +1391,9 @@ class ReaderController(Observable):
         """Nach dem Start: die PDFs der letzten Sitzung im Hintergrund wieder öffnen – nur vorhandene Dateien, ohne
         Rückfragen; der Start wartet nie darauf. ``recovered``: schon wiederhergestellte Dokumente (Absturz)."""
         session = self._session_pending
-        if session is None or not self._restore_wanted() or self.app.closing:
+        wanted_now = self._restore_wanted()
+        self._update_once = False  # nach dem Update nur dieses eine Mal
+        if session is None or not wanted_now or self.app.closing:
             self._session_pending = None
             return
         self._session_pending = None

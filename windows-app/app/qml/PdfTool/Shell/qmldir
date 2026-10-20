@@ -5,4 +5,3 @@ AppTabs 1.0 AppTabs.qml
 PageHost 1.0 PageHost.qml
 StatusBar 1.0 StatusBar.qml
 DialogHost 1.0 DialogHost.qml
-UpdateBanner 1.0 UpdateBanner.qml

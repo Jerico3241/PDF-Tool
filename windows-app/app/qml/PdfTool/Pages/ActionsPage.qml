@@ -78,16 +78,18 @@ PPage {
         subtitle: I18n.tr(Actions.summary !== "" ? Actions.summary : "Mindestens eine Aktion ankreuzen", I18n.revision)
         iconName: "checkbox_checked"
         Repeater {
-            model: Actions.steps
+            model: Actions.stepList
             ColumnLayout {
+                id: stepItem
                 required property var modelData
+                readonly property bool chosen: Actions.chosen.indexOf(modelData.key) >= 0
                 Layout.fillWidth: true
                 spacing: 0
                 PCheckBox {
                     objectName: "actionsStep_" + modelData.key
                     Layout.fillWidth: true
                     text: I18n.tr(modelData.label, I18n.revision)
-                    checked: modelData.checked
+                    checked: stepItem.chosen
                     enabled: !Actions.running
                     onClicked: Actions.setStep(modelData.key, checked)
                 }
@@ -98,7 +100,7 @@ PPage {
                     Layout.topMargin: 4
                     Layout.bottomMargin: 4
                     spacing: 8
-                    visible: modelData.checked && modelData.key === Actions.texts.watermark
+                    visible: stepItem.chosen && modelData.key === Actions.texts.watermark
                     PTextField { objectName: "actionsWatermarkText"; label: I18n.tr("Text des Wasserzeichens", I18n.revision); text: Actions.watermarkText; invalid: text.trim() === ""; onTextEdited: Actions.setWatermarkText(text) }
                 }
                 RowLayout {
@@ -106,7 +108,7 @@ PPage {
                     Layout.topMargin: 4
                     Layout.bottomMargin: 4
                     spacing: 8
-                    visible: modelData.checked && modelData.key === Actions.texts.numbers
+                    visible: stepItem.chosen && modelData.key === Actions.texts.numbers
                     PComboBox {
                         objectName: "actionsNumberFormat"
                         label: I18n.tr("Format der Seitenzahl", I18n.revision)
@@ -132,7 +134,7 @@ PPage {
                     Layout.topMargin: 4
                     Layout.bottomMargin: 4
                     spacing: 8
-                    visible: modelData.checked && modelData.key === Actions.texts.optimize
+                    visible: stepItem.chosen && modelData.key === Actions.texts.optimize
                     PComboBox {
                         objectName: "actionsOptimizeLevel"
                         label: I18n.tr("Qualität", I18n.revision)
@@ -149,7 +151,7 @@ PPage {
                     Layout.topMargin: 4
                     Layout.bottomMargin: 4
                     spacing: 8
-                    visible: modelData.checked && modelData.key === Actions.texts.protect
+                    visible: stepItem.chosen && modelData.key === Actions.texts.protect
                     PTextField {
                         objectName: "actionsPassword"
                         label: I18n.tr("Kennwort zum Öffnen", I18n.revision)

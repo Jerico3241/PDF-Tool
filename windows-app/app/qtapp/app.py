@@ -244,10 +244,10 @@ class AppController(Observable):
         self.refresh_hint()
 
     def tab_for(self, page: str) -> str:
-        """Tab einer Seite: das Werkzeug (Vertragsübersichten, PDF reparieren) bzw. »settings« – Start und der
-        Reader haben keinen eigenen (die Dokumente des Readers sind Tabs)."""
+        """Tab einer Seite: das Werkzeug (Vertragsübersichten, PDF reparieren) – Start, die Einstellungen (seit 4.0
+        Beta 7: das Zahnrad ist markiert) und der Reader haben keinen eigenen (die Dokumente des Readers sind Tabs)."""
         if page == SETTINGS:
-            return SETTINGS
+            return ""
         info = tool_for_page(page)
         return info.key if info is not None and info.key in TAB_KEYS else ""
 

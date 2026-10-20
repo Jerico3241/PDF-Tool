@@ -141,7 +141,8 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Beta 4.0 – sechster Teil: Englische Oberfläche (Einstellungen → Sprache), digitale Signatur mit Zertifikat, PDF in Word, Excel oder Text umwandeln (und Office-Dateien in PDF), der KI-Assistent übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner. Texterkennung startet wieder richtig.",
+    "Beta 4.0 – siebter Teil: Updates suchen und installieren sich beim Start von selbst (PDFs öffnen sich danach wieder), in den Einstellungen wird der Knopf zu »Jetzt installieren« und zeigt die Neuerungen. Oben ist aufgeräumt: kein ≡ Menü mehr, »?« ist das Hilfe-Menü, die Einstellungen öffnen sich ohne eigenen Tab.",
+    "Aus Beta 6: Englische Oberfläche (Einstellungen → Sprache), digitale Signatur mit Zertifikat, PDF in Word, Excel oder Text umwandeln (und Office-Dateien in PDF), der KI-Assistent übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner. Texterkennung startet wieder richtig.",
     "Aus Beta 5: Scannen direkt in eine PDF (Startseite → »Scannen«), Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y), Texterkennung in zehn Sprachen, Text über Seitengrenzen markieren und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).",
     "Aus Beta 4: PDF-Anhänge aus Outlook öffnen sich wieder (auch mit strengen Defender-Regeln), in der Taskleiste steht »PDF Tool« statt »Python«, das Symbol ist auch klein scharf.",
     "Aus Beta 3: aufgeräumt. PDF-Anhänge aus Outlook öffnen sich wieder, Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
