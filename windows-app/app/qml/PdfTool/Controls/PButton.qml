@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Schaltfläche: »standard«, »accent« (Hauptaktion), »subtle« (ohne Fläche) oder »danger«.
 // Hover und Druck ändern Farbe und Rahmen weich; Tastaturfokus zeigt einen deutlichen Rahmen.
@@ -31,8 +32,8 @@ T.Button {
     focusPolicy: Qt.StrongFocus
     hoverEnabled: true
     Accessible.role: Accessible.Button
-    Accessible.name: text !== "" ? text : tip
-    Accessible.description: tip
+    Accessible.name: I18n.tr(text !== "" ? text : tip, I18n.revision)
+    Accessible.description: I18n.tr(tip, I18n.revision)
     Accessible.checkable: toggle
     Accessible.checked: toggle && checked
 
@@ -71,7 +72,7 @@ T.Button {
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: control.busy && control.busyText !== "" ? control.busyText : control.text
+                text: I18n.tr(control.busy && control.busyText !== "" ? control.busyText : control.text, I18n.revision)
                 visible: text !== ""
                 font: control.font
                 color: control.foreground
@@ -132,7 +133,7 @@ T.Button {
     Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
 
     PToolTip {
-        text: control.tip
+        text: I18n.tr(control.tip, I18n.revision)
         visible: control.tip !== "" && control.hovered && !control.pressed
     }
 }

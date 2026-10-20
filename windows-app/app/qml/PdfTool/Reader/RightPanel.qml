@@ -30,7 +30,7 @@ Rectangle {
         anchors.leftMargin: 1
         spacing: 0
         PanelHeader {
-            title: root.titles[root.shown] || ""
+            title: I18n.tr(root.titles[root.shown] || "", I18n.revision)
             current: root.shown
             tabs: root.tabs
             onTabSelected: (key) => Reader.showRightPanel(key)
@@ -38,7 +38,7 @@ Rectangle {
             PText {
                 objectName: "readerCommentsCount"
                 visible: root.shown === "comments" && root.doc !== null && root.doc.annotationList.count > 0
-                text: root.doc ? String(root.doc.annotationList.count) : ""
+                text: I18n.tr(root.doc ? String(root.doc.annotationList.count) : "", I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
             }
@@ -48,7 +48,7 @@ Rectangle {
                 implicitWidth: Metrics.readerPanelTab
                 implicitHeight: Metrics.readerPanelTab
                 iconName: "arrow_reset"
-                tip: "Neues Gespräch"
+                tip: I18n.tr("Neues Gespräch", I18n.revision)
                 enabled: !Assistant.busy
                 onClicked: Assistant.clear()
             }

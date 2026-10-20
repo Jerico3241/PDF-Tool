@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // Einstellungskarte (wie Windows 11): Symbol, Titel und Beschreibung links, Steuerelement rechts.
 // Mit ``expandable`` klappt darunter ein weiterer Bereich weich auf.
@@ -56,11 +57,11 @@ Rectangle {
                     Layout.fillWidth: true
                     spacing: 1
                     PText {
-                        text: card.title
+                        text: I18n.tr(card.title, I18n.revision)
                         Layout.fillWidth: true
                     }
                     PText {
-                        text: card.description
+                        text: I18n.tr(card.description, I18n.revision)
                         textStyle: "caption"
                         tone: "secondary"
                         wrap: true
@@ -76,11 +77,11 @@ Rectangle {
                 PIconButton {
                     visible: card.expandable
                     iconName: "chevron_down"
-                    tip: card.expanded ? "Zuklappen" : "Aufklappen"
+                    tip: I18n.tr(card.expanded ? "Zuklappen" : "Aufklappen", I18n.revision)
                     rotation: card.expanded ? 180 : 0
                     Behavior on rotation { enabled: Motion.moves; NumberAnimation { duration: Motion.expand; easing.type: Motion.decelerate } }
                     onClicked: card.expanded = !card.expanded
-                    Accessible.name: card.title + (card.expanded ? " zuklappen" : " aufklappen")
+                    Accessible.name: I18n.tr(card.title + (card.expanded ? " zuklappen" : " aufklappen"), I18n.revision)
                 }
             }
         }

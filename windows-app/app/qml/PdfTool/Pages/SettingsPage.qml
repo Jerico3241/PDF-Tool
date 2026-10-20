@@ -10,7 +10,7 @@ import PdfTool.Controls
 PPage {
     id: page
     objectName: "settingsPage"
-    title: "Einstellungen"
+    title: I18n.tr("Einstellungen", I18n.revision)
     signal themeRequested(var apply)
 
     function indexOfValue(list, value) {
@@ -35,18 +35,37 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "general"
         spacing: 0
-        PSectionTitle { text: "Darstellung"; Layout.topMargin: 0 }
+        PSectionTitle { text: I18n.tr("Darstellung", I18n.revision); Layout.topMargin: 0 }
+
+        PSettingsCard {
+            objectName: "languageCard"
+            Layout.fillWidth: true
+            iconName: "local_language"
+            title: I18n.tr("Sprache", I18n.revision)
+            description: I18n.tr("Deutsch oder Englisch – ohne Neustart. Standard: wie die Sprache von Windows", I18n.revision)
+            PComboBox {
+                objectName: "languageCombo"
+                preferredWidth: 180
+                label: I18n.tr("Sprache", I18n.revision)
+                model: I18n.choices()
+                textRole: "label"
+                valueRole: "value"
+                currentIndex: page.indexOfValue(model, I18n.choice)
+                onActivated: (index) => I18n.setChoice(model[index].value)
+            }
+        }
 
         PSettingsCard {
             Layout.fillWidth: true
+            Layout.topMargin: 4
             iconName: "dark_theme"
-            title: "App-Design"
-            description: "Hell, Dunkel oder automatisch wie der Windows-App-Modus"
+            title: I18n.tr("App-Design", I18n.revision)
+            description: I18n.tr("Hell, Dunkel oder automatisch wie der Windows-App-Modus", I18n.revision)
             PComboBox {
                 id: themeCombo
                 objectName: "themeCombo"
                 preferredWidth: 180
-                label: "App-Design"
+                label: I18n.tr("App-Design", I18n.revision)
                 model: Settings.themes
                 textRole: "label"
                 valueRole: "value"
@@ -62,12 +81,12 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "color"
-            title: "Akzentfarbe"
-            description: "Für Schaltflächen, Auswahl, Hinweise und die Tabs"
+            title: I18n.tr("Akzentfarbe", I18n.revision)
+            description: I18n.tr("Für Schaltflächen, Auswahl, Hinweise und die Tabs", I18n.revision)
             expandable: true
             expanded: true
             PText {
-                text: ThemeBackend.accentName
+                text: I18n.tr(ThemeBackend.accentName, I18n.revision)
                 tone: "secondary"
                 height: 32
             }
@@ -81,7 +100,7 @@ PPage {
                         swatchColor: modelData.color
                         selected: String(ThemeBackend.accentChoice).toLowerCase() === String(modelData.value).toLowerCase()
                         iconName: modelData.system ? "desktop" : ""
-                        tip: modelData.name
+                        tip: I18n.tr(modelData.name, I18n.revision)
                         onClicked: {
                             var value = modelData.value
                             page.themeRequested(function() { Settings.setAccent(value) })
@@ -95,33 +114,33 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "lightbulb"
-            title: "Mica-Material"
-            description: ThemeBackend.micaDescription
+            title: I18n.tr("Mica-Material", I18n.revision)
+            description: I18n.tr(ThemeBackend.micaDescription, I18n.revision)
             PToggle {
                 objectName: "micaToggle"
-                label: "Mica-Material"
+                label: I18n.tr("Mica-Material", I18n.revision)
                 enabled: ThemeBackend.micaAvailable
                 checked: ThemeBackend.micaAvailable && ThemeBackend.micaEnabled
                 onToggled: Settings.setMica(checked)
             }
         }
 
-        PSectionTitle { text: "Verhalten" }
+        PSectionTitle { text: I18n.tr("Verhalten", I18n.revision) }
 
         PSettingsCard {
             Layout.fillWidth: true
             iconName: "play"
-            title: "Animationen"
-            description: {
+            title: I18n.tr("Animationen", I18n.revision)
+            description: I18n.tr((function() {
                 var profiles = Settings.profiles
                 var index = page.indexOfValue(profiles, ThemeBackend.profile)
                 var text = index >= 0 ? profiles[index].text : ""
                 return ThemeBackend.profileNote !== "" ? text + " " + ThemeBackend.profileNote : text
-            }
+            })(), I18n.revision)
             PComboBox {
                 objectName: "profileCombo"
                 preferredWidth: 180
-                label: "Animationen"
+                label: I18n.tr("Animationen", I18n.revision)
                 model: Settings.profiles
                 textRole: "label"
                 valueRole: "value"
@@ -136,12 +155,12 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "desktop"
-            title: Settings.texts.backgroundTitle
-            description: Settings.texts.backgroundText
+            title: I18n.tr(Settings.texts.backgroundTitle, I18n.revision)
+            description: I18n.tr(Settings.texts.backgroundText, I18n.revision)
             expandable: true
             PToggle {
                 objectName: "backgroundToggle"
-                label: Settings.texts.backgroundTitle
+                label: I18n.tr(Settings.texts.backgroundTitle, I18n.revision)
                 checked: Settings.background
                 onToggled: Settings.setBackground(checked)
             }
@@ -149,7 +168,7 @@ PPage {
                 width: parent ? parent.width - 68 : 300
                 spacing: 8
                 PIcon { name: "info"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
-                PText { text: Settings.texts.backgroundNote; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                PText { text: I18n.tr(Settings.texts.backgroundNote, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
             }
         }
     }
@@ -160,18 +179,18 @@ PPage {
         visible: Settings.section === "reader"
         spacing: 0
         // Ansicht neu geöffneter PDFs – »Zuletzt verwendet« (Standard) wie bisher
-        PSectionTitle { text: "PDF Reader" }
+        PSectionTitle { text: I18n.tr("PDF Reader", I18n.revision) }
 
         PSettingsCard {
             objectName: "readerZoomCard"
             Layout.fillWidth: true
             iconName: "zoom_in"
-            title: "Standardzoom beim Öffnen"
-            description: "Für neu geöffnete PDFs. »Zuletzt verwendet« übernimmt die zuletzt eingestellte Ansicht."
+            title: I18n.tr("Standardzoom beim Öffnen", I18n.revision)
+            description: I18n.tr("Für neu geöffnete PDFs. »Zuletzt verwendet« übernimmt die zuletzt eingestellte Ansicht.", I18n.revision)
             PComboBox {
                 objectName: "readerZoomCombo"
                 preferredWidth: 180
-                label: "Standardzoom beim Öffnen"
+                label: I18n.tr("Standardzoom beim Öffnen", I18n.revision)
                 model: Settings.readerZooms
                 textRole: "label"
                 valueRole: "value"
@@ -185,12 +204,12 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "panel_left"
-            title: "Seitenleiste beim Öffnen"
-            description: "Linke Seitenleiste, wenn ein PDF geöffnet wird. »Zuletzt verwendet« zeigt die zuletzt gewählte."
+            title: I18n.tr("Seitenleiste beim Öffnen", I18n.revision)
+            description: I18n.tr("Linke Seitenleiste, wenn ein PDF geöffnet wird. »Zuletzt verwendet« zeigt die zuletzt gewählte.", I18n.revision)
             PComboBox {
                 objectName: "readerPanelCombo"
                 preferredWidth: 180
-                label: "Seitenleiste beim Öffnen"
+                label: I18n.tr("Seitenleiste beim Öffnen", I18n.revision)
                 model: Settings.readerPanels
                 textRole: "label"
                 valueRole: "value"
@@ -205,11 +224,11 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "weather_moon"
-            title: "Nachtmodus"
-            description: "Seiten dunkelgrau mit heller Schrift – angenehmer bei wenig Licht. Nur die Anzeige: Datei, Drucken und Export bleiben unverändert."
+            title: I18n.tr("Nachtmodus", I18n.revision)
+            description: I18n.tr("Seiten dunkelgrau mit heller Schrift – angenehmer bei wenig Licht. Nur die Anzeige: Datei, Drucken und Export bleiben unverändert.", I18n.revision)
             PToggle {
                 objectName: "readerNightToggle"
-                label: "Nachtmodus"
+                label: I18n.tr("Nachtmodus", I18n.revision)
                 checked: Reader.nightMode
                 onToggled: Reader.setNightMode(checked)
             }
@@ -221,11 +240,11 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "history"
-            title: "PDFs der letzten Sitzung beim Start wieder öffnen"
-            description: "Beim Beenden merkt sich PDF Tool die geöffneten PDFs (nur Pfade, lokal auf diesem PC) und öffnet sie beim nächsten Start wieder – ungespeicherte Änderungen nicht."
+            title: I18n.tr("PDFs der letzten Sitzung beim Start wieder öffnen", I18n.revision)
+            description: I18n.tr("Beim Beenden merkt sich PDF Tool die geöffneten PDFs (nur Pfade, lokal auf diesem PC) und öffnet sie beim nächsten Start wieder – ungespeicherte Änderungen nicht.", I18n.revision)
             PToggle {
                 objectName: "readerSessionToggle"
-                label: "PDFs der letzten Sitzung beim Start wieder öffnen"
+                label: I18n.tr("PDFs der letzten Sitzung beim Start wieder öffnen", I18n.revision)
                 checked: Settings.readerRestoreSession
                 onToggled: Settings.setReaderRestoreSession(checked)
             }
@@ -237,7 +256,7 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "assistant"
         spacing: 0
-        PSectionTitle { text: "KI-Assistent" }
+        PSectionTitle { text: I18n.tr("KI-Assistent", I18n.revision) }
 
         // Optional und standardmäßig aus: Erst »Ein« und »Herunterladen« laden ein Sprachmodell (1,3 oder 2,7 GB), das sich
         // jederzeit wieder entfernen lässt. Dokumente, Fragen und Antworten bleiben auf diesem PC.
@@ -245,9 +264,9 @@ PPage {
             id: assistantCard
             objectName: "assistantCard"
             Layout.fillWidth: true
-            title: "KI-Assistent (optional)"
+            title: I18n.tr("KI-Assistent (optional)", I18n.revision)
             iconName: "sparkle"
-            subtitle: "Beantwortet Fragen zum geöffneten PDF und fasst Dokumente zusammen – mit Seitenangaben, vollständig auf diesem PC. Braucht ein Sprachmodell, das nur auf Wunsch geladen wird."
+            subtitle: I18n.tr("Beantwortet Fragen zum geöffneten PDF und fasst Dokumente zusammen – mit Seitenangaben, vollständig auf diesem PC. Braucht ein Sprachmodell, das nur auf Wunsch geladen wird.", I18n.revision)
             readonly property string phase: Assistant.state
             readonly property bool loading: phase === "download" || phase === "verify"
             // Welche Schaltflächen passen (eigene Werte, nicht ``visible`` der Schaltflächen: das hinge an der Zeile darüber)
@@ -258,7 +277,7 @@ PPage {
             readonly property bool canRemove: !loading && (Assistant.modelKey !== "" || Assistant.partial !== "")
             headerRight: PToggle {
                 objectName: "assistantToggle"
-                label: "KI-Assistent"
+                label: I18n.tr("KI-Assistent", I18n.revision)
                 checked: Assistant.enabled
                 enabled: Assistant.available || Assistant.enabled
                 onToggled: {
@@ -270,7 +289,7 @@ PPage {
             PText {
                 objectName: "assistantStatus"
                 Layout.fillWidth: true
-                text: Assistant.available || Assistant.enabled ? Assistant.statusText : "In dieser Installation nicht enthalten."
+                text: I18n.tr(Assistant.available || Assistant.enabled ? Assistant.statusText : "In dieser Installation nicht enthalten.", I18n.revision)
                 tone: Assistant.state === "ready" ? "" : "secondary"
                 wrap: true
             }
@@ -287,7 +306,7 @@ PPage {
                         value: Assistant.progress
                         indeterminate: assistantCard.phase === "verify"
                     }
-                    PText { objectName: "assistantProgressText"; Layout.fillWidth: true; text: Assistant.progressText; textStyle: "caption"; tone: "secondary"; wrap: true }
+                    PText { objectName: "assistantProgressText"; Layout.fillWidth: true; text: I18n.tr(Assistant.progressText, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true }
                 }
             }
             Flow {
@@ -300,8 +319,8 @@ PPage {
                     visible: assistantCard.canSetup
                     kind: "accent"
                     iconName: "arrow_download"
-                    text: "Einrichten …"
-                    tip: "Sprachmodell wählen und laden"
+                    text: I18n.tr("Einrichten …", I18n.revision)
+                    tip: I18n.tr("Sprachmodell wählen und laden", I18n.revision)
                     onClicked: Assistant.setup()
                 }
                 PButton {
@@ -309,21 +328,21 @@ PPage {
                     visible: assistantCard.canResume
                     kind: "accent"
                     iconName: "arrow_download"
-                    text: "Download fortsetzen"
+                    text: I18n.tr("Download fortsetzen", I18n.revision)
                     onClicked: Assistant.download(Assistant.partial)
                 }
                 PButton {
                     objectName: "assistantCancel"
                     visible: assistantCard.canPause
-                    text: "Anhalten"
-                    tip: "Download anhalten – er lässt sich später fortsetzen"
+                    text: I18n.tr("Anhalten", I18n.revision)
+                    tip: I18n.tr("Download anhalten – er lässt sich später fortsetzen", I18n.revision)
                     onClicked: Assistant.cancelDownload()
                 }
                 PButton {
                     objectName: "assistantChange"
                     visible: assistantCard.canChange
-                    text: "Anderes Modell …"
-                    tip: "Genaueres oder kleineres Sprachmodell wählen – das bisherige wird danach gelöscht"
+                    text: I18n.tr("Anderes Modell …", I18n.revision)
+                    tip: I18n.tr("Genaueres oder kleineres Sprachmodell wählen – das bisherige wird danach gelöscht", I18n.revision)
                     onClicked: Assistant.setup()
                 }
                 PButton {
@@ -331,8 +350,8 @@ PPage {
                     visible: assistantCard.canRemove
                     kind: "subtle"
                     iconName: "delete"
-                    text: "Modell entfernen …"
-                    tip: "Sprachmodell von diesem PC löschen und den Speicherplatz freigeben"
+                    text: I18n.tr("Modell entfernen …", I18n.revision)
+                    tip: I18n.tr("Sprachmodell von diesem PC löschen und den Speicherplatz freigeben", I18n.revision)
                     onClicked: Assistant.removeModel()
                 }
             }
@@ -344,7 +363,7 @@ PPage {
                 PIcon { Layout.alignment: Qt.AlignTop; name: "shield_checkmark"; size: 16; color: Theme.textSecondary }
                 PText {
                     Layout.fillWidth: true
-                    text: "Dokumente, Fragen und Antworten verlassen diesen PC nicht und werden nicht gespeichert. Nur das Sprachmodell wird einmal über HTTPS von Hugging Face geladen und vor der Nutzung geprüft."
+                    text: I18n.tr("Dokumente, Fragen und Antworten verlassen diesen PC nicht und werden nicht gespeichert. Nur das Sprachmodell wird einmal über HTTPS von Hugging Face geladen und vor der Nutzung geprüft.", I18n.revision)
                     textStyle: "caption"
                     tone: "secondary"
                     wrap: true
@@ -358,18 +377,18 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "contracts"
         spacing: 0
-        PSectionTitle { text: "Vertragsübersichten" }
+        PSectionTitle { text: I18n.tr("Vertragsübersichten", I18n.revision) }
 
         PSettingsCard {
             Layout.fillWidth: true
             iconName: "people"
-            title: Settings.texts.customerTitle
-            description: Settings.texts.customerText
+            title: I18n.tr(Settings.texts.customerTitle, I18n.revision)
+            description: I18n.tr(Settings.texts.customerText, I18n.revision)
             expandable: true
             expanded: true
             PToggle {
                 objectName: "customerRecordsToggle"
-                label: Settings.texts.customerTitle
+                label: I18n.tr(Settings.texts.customerTitle, I18n.revision)
                 checked: Settings.customerRecords
                 onToggled: Settings.setCustomerRecords(checked)
             }
@@ -377,13 +396,13 @@ PPage {
                 width: parent ? parent.width - 68 : 300
                 spacing: 8
                 PIcon { name: "shield"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
-                PText { text: Settings.texts.customerNote; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                PText { text: I18n.tr(Settings.texts.customerNote, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
             }
         }
         PText {
             Layout.fillWidth: true
             Layout.topMargin: 8
-            text: "Einstellungen der einzelnen Werkzeuge stehen im jeweiligen Werkzeug – z. B. Vorlagen und Verlauf unter »Vertragsübersichten · Darstellung«."
+            text: I18n.tr("Einstellungen der einzelnen Werkzeuge stehen im jeweiligen Werkzeug – z. B. Vorlagen und Verlauf unter »Vertragsübersichten · Darstellung«.", I18n.revision)
             textStyle: "caption"
             tone: "secondary"
             wrap: true
@@ -395,15 +414,15 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "data"
         spacing: 0
-        PSectionTitle { text: "Sicherung & Wiederherstellung" }
+        PSectionTitle { text: I18n.tr("Sicherung & Wiederherstellung", I18n.revision) }
 
         // Sicherung: Status, Jetzt sichern, Wiederherstellen, gesicherte Stände
         PCard {
             objectName: "backupCard"
             Layout.fillWidth: true
-            title: "Sicherung"
+            title: I18n.tr("Sicherung", I18n.revision)
             iconName: "shield_checkmark"
-            subtitle: "Einstellungen, Kundenakten mit Vertragsständen, Vorlagen und Regelwerke in einer Datei (.pdtbackup) – lokal auf diesem PC, keine Cloud."
+            subtitle: I18n.tr("Einstellungen, Kundenakten mit Vertragsständen, Vorlagen und Regelwerke in einer Datei (.pdtbackup) – lokal auf diesem PC, keine Cloud.", I18n.revision)
             PFactList {
                 objectName: "backupStatus"
                 Layout.fillWidth: true
@@ -419,7 +438,7 @@ PPage {
                 ColumnLayout {
                     width: parent.width
                     spacing: 6
-                    PText { objectName: "backupBusy"; text: Backup.busyText; Layout.topMargin: 10 }
+                    PText { objectName: "backupBusy"; text: I18n.tr(Backup.busyText, I18n.revision); Layout.topMargin: 10 }
                     PProgressBar { Layout.fillWidth: true; value: Backup.progress; indeterminate: Backup.progress <= 0 }
                 }
             }
@@ -427,9 +446,9 @@ PPage {
                 Layout.fillWidth: true
                 Layout.topMargin: 12
                 spacing: 8
-                PButton { objectName: "backupNow"; kind: "accent"; iconName: "save"; text: "Jetzt sichern …"; tip: "Sicherung in einen Ordner Ihrer Wahl (z. B. USB-Stick)"; enabled: !Backup.busy; onClicked: Backup.backupNow() }
-                PButton { objectName: "restoreBackup"; iconName: "arrow_undo"; text: "Wiederherstellen …"; tip: "Sicherung wählen, prüfen und Bereiche wiederherstellen"; enabled: !Backup.busy; onClicked: Backup.restoreFrom() }
-                PButton { kind: "subtle"; iconName: "folder_open"; text: "Ordner öffnen"; tip: "Ordner der automatischen Sicherungen öffnen"; onClicked: Backup.openFolder() }
+                PButton { objectName: "backupNow"; kind: "accent"; iconName: "save"; text: I18n.tr("Jetzt sichern …", I18n.revision); tip: I18n.tr("Sicherung in einen Ordner Ihrer Wahl (z. B. USB-Stick)", I18n.revision); enabled: !Backup.busy; onClicked: Backup.backupNow() }
+                PButton { objectName: "restoreBackup"; iconName: "arrow_undo"; text: I18n.tr("Wiederherstellen …", I18n.revision); tip: I18n.tr("Sicherung wählen, prüfen und Bereiche wiederherstellen", I18n.revision); enabled: !Backup.busy; onClicked: Backup.restoreFrom() }
+                PButton { kind: "subtle"; iconName: "folder_open"; text: I18n.tr("Ordner öffnen", I18n.revision); tip: I18n.tr("Ordner der automatischen Sicherungen öffnen", I18n.revision); onClicked: Backup.openFolder() }
             }
             PInfoBar { Layout.fillWidth: true; notice: Notices.area("sicherung_info") }
             PInfoBar {
@@ -438,7 +457,7 @@ PPage {
                 notice: null
                 shown: Backup.pending !== ""
                 severity: "info"
-                message: Backup.pending
+                message: I18n.tr(Backup.pending, I18n.revision)
                 closable: false
                 actions: ["Verwerfen"]
                 onActionTriggered: (index) => Backup.discardPending()
@@ -447,7 +466,7 @@ PPage {
                 Layout.fillWidth: true
                 Layout.topMargin: 14
                 visible: Backup.recentModel.count > 0
-                text: "Gesicherte Stände im Ordner der automatischen Sicherungen"
+                text: I18n.tr("Gesicherte Stände im Ordner der automatischen Sicherungen", I18n.revision)
                 textStyle: "bodyStrong"
             }
             Repeater {
@@ -470,9 +489,9 @@ PPage {
                         anchors.leftMargin: 12
                         anchors.rightMargin: 4
                         spacing: 10
-                        PText { text: date; Layout.preferredWidth: 140 }
-                        PText { text: kind + (version !== "" ? " · " + version : "") + " · " + size; textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
-                        PButton { kind: "subtle"; text: "Wiederherstellen …"; enabled: !Backup.busy; tip: name; onClicked: Backup.restore(path) }
+                        PText { text: I18n.tr(date, I18n.revision); Layout.preferredWidth: 140 }
+                        PText { text: I18n.tr(kind + (version !== "" ? " · " + version : "") + " · " + size, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
+                        PButton { kind: "subtle"; text: I18n.tr("Wiederherstellen …", I18n.revision); enabled: !Backup.busy; tip: I18n.tr(name, I18n.revision); onClicked: Backup.restore(path) }
                     }
                 }
             }
@@ -481,11 +500,11 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "clock"
-            title: "Automatisch sichern"
-            description: "Einmal am Tag, wenn sich etwas geändert hat, und vor jedem Update. Die letzten 10 automatischen Sicherungen bleiben erhalten – manuelle Sicherungen werden nie automatisch gelöscht."
+            title: I18n.tr("Automatisch sichern", I18n.revision)
+            description: I18n.tr("Einmal am Tag, wenn sich etwas geändert hat, und vor jedem Update. Die letzten 10 automatischen Sicherungen bleiben erhalten – manuelle Sicherungen werden nie automatisch gelöscht.", I18n.revision)
             PToggle {
                 objectName: "backupAutomaticToggle"
-                label: "Automatisch sichern"
+                label: I18n.tr("Automatisch sichern", I18n.revision)
                 checked: Backup.automatic
                 onToggled: Backup.setAutomatic(checked)
             }
@@ -494,12 +513,12 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "folder"
-            title: "Ordner der automatischen Sicherungen"
-            description: Backup.folderText
+            title: I18n.tr("Ordner der automatischen Sicherungen", I18n.revision)
+            description: I18n.tr(Backup.folderText, I18n.revision)
             Row {
                 spacing: 4
-                PButton { text: "Ändern …"; onClicked: Backup.pickAutoFolder() }
-                PIconButton { iconName: "arrow_reset"; tip: "Standardordner verwenden"; onClicked: Backup.resetAutoFolder() }
+                PButton { text: I18n.tr("Ändern …", I18n.revision); onClicked: Backup.pickAutoFolder() }
+                PIconButton { iconName: "arrow_reset"; tip: I18n.tr("Standardordner verwenden", I18n.revision); onClicked: Backup.resetAutoFolder() }
             }
         }
     }
@@ -509,7 +528,7 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "updates"
         spacing: 0
-        PSectionTitle { text: "Updates" }
+        PSectionTitle { text: I18n.tr("Updates", I18n.revision) }
 
         // Version, Zustand des Updaters, verfügbares Update mit Fortschritt und Aktionen
         Rectangle {
@@ -542,12 +561,12 @@ PPage {
                         spacing: 1
                         RowLayout {
                             spacing: 8
-                            PText { objectName: "updateCurrentVersion"; text: "PDF Tool " + Updates.currentVersion }
-                            PBadge { objectName: "updateCurrentBeta"; text: Updates.currentBeta ? "Beta" : ""; tone: "accent" }
+                            PText { objectName: "updateCurrentVersion"; text: I18n.tr("PDF Tool " + Updates.currentVersion, I18n.revision) }
+                            PBadge { objectName: "updateCurrentBeta"; text: I18n.tr(Updates.currentBeta ? "Beta" : "", I18n.revision); tone: "accent" }
                         }
                         PText {
                             objectName: "updateLastCheck"
-                            text: "Letzte Prüfung: " + Updates.lastCheck
+                            text: I18n.tr("Letzte Prüfung: " + Updates.lastCheck, I18n.revision)
                             textStyle: "caption"
                             tone: "secondary"
                             Layout.fillWidth: true
@@ -555,11 +574,11 @@ PPage {
                     }
                     PButton {
                         objectName: "updateCheckButton"
-                        text: "Nach Updates suchen"
+                        text: I18n.tr("Nach Updates suchen", I18n.revision)
                         iconName: "arrow_sync"
                         enabled: Updates.canCheck
                         busy: Updates.state === "checking"
-                        busyText: "Suche …"
+                        busyText: I18n.tr("Suche …", I18n.revision)
                         onClicked: Updates.checkNow()
                     }
                 }
@@ -588,8 +607,8 @@ PPage {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 1
-                        PText { objectName: "updateStatusTitle"; text: Updates.statusTitle; wrap: true; Layout.fillWidth: true }
-                        PText { text: Updates.statusText; textStyle: "caption"; tone: "secondary"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
+                        PText { objectName: "updateStatusTitle"; text: I18n.tr(Updates.statusTitle, I18n.revision); wrap: true; Layout.fillWidth: true }
+                        PText { text: I18n.tr(Updates.statusText, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
                     }
                 }
 
@@ -614,19 +633,19 @@ PPage {
                         RowLayout {
                             spacing: 8
                             Layout.fillWidth: true
-                            PText { objectName: "updateOfferTitle"; text: Updates.offerTitle; textStyle: "bodyStrong" }
-                            PBadge { text: Updates.offerBeta ? "Beta-Update" : ""; tone: "accent" }
+                            PText { objectName: "updateOfferTitle"; text: I18n.tr(Updates.offerTitle, I18n.revision); textStyle: "bodyStrong" }
+                            PBadge { text: I18n.tr(Updates.offerBeta ? "Beta-Update" : "", I18n.revision); tone: "accent" }
                             Item { Layout.fillWidth: true }
                         }
                         PText {
-                            text: [Updates.offerDate !== "" ? "Veröffentlicht am " + Updates.offerDate : "", Updates.offerSize !== "" ? "Größe: " + Updates.offerSize : ""].filter(function(part) { return part !== "" }).join(" · ")
+                            text: I18n.tr([Updates.offerDate !== "" ? "Veröffentlicht am " + Updates.offerDate : "", Updates.offerSize !== "" ? "Größe: " + Updates.offerSize : ""].filter(function(part) { return part !== "" }).join(" · "), I18n.revision)
                             textStyle: "caption"
                             tone: "secondary"
                             Layout.fillWidth: true
                         }
                         PText {
                             objectName: "updateOfferStatus"
-                            text: Updates.statusTitle
+                            text: I18n.tr(Updates.statusTitle, I18n.revision)
                             tone: Updates.statusKind === "error" ? "error" : (Updates.statusKind === "success" ? "success" : "")
                             wrap: true
                             visible: updateCard.phase !== "available"
@@ -642,7 +661,7 @@ PPage {
                         }
                         PText {
                             objectName: "updateProgressText"
-                            text: updateCard.phase === "downloading" ? Updates.progressText : Updates.statusText
+                            text: I18n.tr(updateCard.phase === "downloading" ? Updates.progressText : Updates.statusText, I18n.revision)
                             textStyle: "caption"
                             tone: "secondary"
                             wrap: true
@@ -653,7 +672,7 @@ PPage {
                             Layout.fillWidth: true
                             shown: Updates.workHint !== ""
                             severity: "warning"
-                            message: Updates.workHint
+                            message: I18n.tr(Updates.workHint, I18n.revision)
                             closable: false
                             topMargin: 4
                         }
@@ -661,10 +680,10 @@ PPage {
                             Layout.fillWidth: true
                             Layout.topMargin: 6
                             spacing: 8
-                            PButton { objectName: "updateNotesButton"; text: "Release Notes"; iconName: "document_bullet_list"; onClicked: Updates.showDetails() }
-                            PButton { objectName: "updateDownloadButton"; text: updateCard.phase === "error" ? "Erneut versuchen" : "Herunterladen"; kind: "accent"; visible: Updates.canDownload; onClicked: Updates.download() }
-                            PButton { objectName: "updateCancelButton"; text: "Abbrechen"; visible: Updates.canCancel; onClicked: Updates.cancel() }
-                            PButton { objectName: "updateInstallButton"; text: "Jetzt installieren"; kind: "accent"; visible: Updates.canInstall; onClicked: Updates.installNow() }
+                            PButton { objectName: "updateNotesButton"; text: I18n.tr("Release Notes", I18n.revision); iconName: "document_bullet_list"; onClicked: Updates.showDetails() }
+                            PButton { objectName: "updateDownloadButton"; text: I18n.tr(updateCard.phase === "error" ? "Erneut versuchen" : "Herunterladen", I18n.revision); kind: "accent"; visible: Updates.canDownload; onClicked: Updates.download() }
+                            PButton { objectName: "updateCancelButton"; text: I18n.tr("Abbrechen", I18n.revision); visible: Updates.canCancel; onClicked: Updates.cancel() }
+                            PButton { objectName: "updateInstallButton"; text: I18n.tr("Jetzt installieren", I18n.revision); kind: "accent"; visible: Updates.canInstall; onClicked: Updates.installNow() }
                         }
                     }
                 }
@@ -679,11 +698,11 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "branch_compare"
-            title: "Beta-Versionen erhalten"
-            description: "Vorabversionen zum Testen – sie können Fehler enthalten. Ausgeschaltet erhalten Sie nur freigegebene Versionen (empfohlen)."
+            title: I18n.tr("Beta-Versionen erhalten", I18n.revision)
+            description: I18n.tr("Vorabversionen zum Testen – sie können Fehler enthalten. Ausgeschaltet erhalten Sie nur freigegebene Versionen (empfohlen).", I18n.revision)
             PToggle {
                 objectName: "updateBetaToggle"
-                label: "Beta-Versionen erhalten"
+                label: I18n.tr("Beta-Versionen erhalten", I18n.revision)
                 checked: betaCard.beta
                 onToggled: {
                     Updates.setBeta(checked)
@@ -696,7 +715,7 @@ PPage {
             objectName: "updateChannelHint"
             Layout.fillWidth: true
             Layout.topMargin: 6
-            text: Updates.hint
+            text: I18n.tr(Updates.hint, I18n.revision)
             visible: text !== ""
             textStyle: "caption"
             tone: "secondary"
@@ -707,11 +726,11 @@ PPage {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "clock"
-            title: "Automatisch nach Updates suchen"
-            description: "Höchstens einmal täglich im Hintergrund – der Start wartet nie darauf. Installiert wird nur, wenn Sie es bestätigen."
+            title: I18n.tr("Automatisch nach Updates suchen", I18n.revision)
+            description: I18n.tr("Höchstens einmal täglich im Hintergrund – der Start wartet nie darauf. Installiert wird nur, wenn Sie es bestätigen.", I18n.revision)
             PToggle {
                 objectName: "updateAutomaticToggle"
-                label: "Automatisch nach Updates suchen"
+                label: I18n.tr("Automatisch nach Updates suchen", I18n.revision)
                 checked: Updates.automatic
                 onToggled: Updates.setAutomatic(checked)
             }
@@ -723,28 +742,28 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "data"
         spacing: 0
-        PSectionTitle { text: "Diagnose" }
+        PSectionTitle { text: I18n.tr("Diagnose", I18n.revision) }
 
         PCard {
             objectName: "diagnoseCard"
             Layout.fillWidth: true
-            title: "Diagnose"
+            title: I18n.tr("Diagnose", I18n.revision)
             iconName: "status"
-            subtitle: "Prüft Einstellungen und Daten von PDF Tool – lokal und ohne etwas zu verändern."
+            subtitle: I18n.tr("Prüft Einstellungen und Daten von PDF Tool – lokal und ohne etwas zu verändern.", I18n.revision)
             Flow {
                 Layout.fillWidth: true
                 spacing: 8
-                PButton { objectName: "runChecks"; kind: "accent"; iconName: "checkmark_circle"; text: "Daten prüfen"; busy: Diagnose.busy && Diagnose.busyText.indexOf("geprüft") >= 0; busyText: "Wird geprüft …"; enabled: !Diagnose.busy; onClicked: Diagnose.runChecks() }
-                PButton { objectName: "supportPackage"; iconName: "arrow_export"; text: "Support-Paket erstellen …"; tip: "ZIP mit Bericht und bereinigten Protokollen – ohne Kunden- oder Dokumentdaten, wird nicht versendet"; enabled: !Diagnose.busy; onClicked: Diagnose.createPackage() }
-                PButton { kind: "subtle"; iconName: "document_bullet_list"; text: "Protokolle öffnen"; tip: "Datenordner mit pdf-tool.log, fehler.log, stapel.log und pdf-repair.log"; onClicked: Diagnose.openLogs() }
-                PButton { kind: "subtle"; iconName: "delete"; text: "Temporäre Dateien aufräumen"; tip: "Entfernt nur eigene temporäre Dateien früherer Sitzungen"; onClicked: Diagnose.cleanupNow() }
+                PButton { objectName: "runChecks"; kind: "accent"; iconName: "checkmark_circle"; text: I18n.tr("Daten prüfen", I18n.revision); busy: Diagnose.busy && Diagnose.busyText.indexOf("geprüft") >= 0; busyText: I18n.tr("Wird geprüft …", I18n.revision); enabled: !Diagnose.busy; onClicked: Diagnose.runChecks() }
+                PButton { objectName: "supportPackage"; iconName: "arrow_export"; text: I18n.tr("Support-Paket erstellen …", I18n.revision); tip: I18n.tr("ZIP mit Bericht und bereinigten Protokollen – ohne Kunden- oder Dokumentdaten, wird nicht versendet", I18n.revision); enabled: !Diagnose.busy; onClicked: Diagnose.createPackage() }
+                PButton { kind: "subtle"; iconName: "document_bullet_list"; text: I18n.tr("Protokolle öffnen", I18n.revision); tip: I18n.tr("Datenordner mit pdf-tool.log, fehler.log, stapel.log und pdf-repair.log", I18n.revision); onClicked: Diagnose.openLogs() }
+                PButton { kind: "subtle"; iconName: "delete"; text: I18n.tr("Temporäre Dateien aufräumen", I18n.revision); tip: I18n.tr("Entfernt nur eigene temporäre Dateien früherer Sitzungen", I18n.revision); onClicked: Diagnose.cleanupNow() }
             }
             PCollapse {
                 Layout.fillWidth: true
                 expanded: Diagnose.busy
                 ColumnLayout {
                     width: parent.width
-                    PText { text: Diagnose.busyText; Layout.topMargin: 10 }
+                    PText { text: I18n.tr(Diagnose.busyText, I18n.revision); Layout.topMargin: 10 }
                     PProgressBar { Layout.fillWidth: true; indeterminate: true }
                 }
             }
@@ -758,8 +777,8 @@ PPage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    PText { text: Diagnose.verdict; textStyle: "bodyStrong"; wrap: true; Layout.fillWidth: true }
-                    PText { text: Diagnose.lastRun; textStyle: "caption"; tone: "secondary" }
+                    PText { text: I18n.tr(Diagnose.verdict, I18n.revision); textStyle: "bodyStrong"; wrap: true; Layout.fillWidth: true }
+                    PText { text: I18n.tr(Diagnose.lastRun, I18n.revision); textStyle: "caption"; tone: "secondary" }
                 }
             }
             Repeater {
@@ -770,12 +789,12 @@ PPage {
                     Layout.topMargin: 6
                     spacing: 8
                     PIcon { name: Theme.toneIcon(modelData.status); color: Theme.toneIconColor(modelData.status); size: 14; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
-                    PText { text: modelData.label; Layout.preferredWidth: 150; Layout.alignment: Qt.AlignTop }
-                    PText { text: modelData.detail; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                    PText { text: I18n.tr(modelData.label, I18n.revision); Layout.preferredWidth: 150; Layout.alignment: Qt.AlignTop }
+                    PText { text: I18n.tr(modelData.detail, I18n.revision); tone: "secondary"; wrap: true; Layout.fillWidth: true }
                 }
             }
             PInfoBar { Layout.fillWidth: true; notice: Notices.area("diagnose_info") }
-            PText { text: "Systeminformationen"; textStyle: "bodyStrong"; Layout.topMargin: 16 }
+            PText { text: I18n.tr("Systeminformationen", I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 16 }
             // Feste Zeilen (Diagnose.factModel) – beim ersten Öffnen kommen nur die Werte hinzu
             ColumnLayout {
                 objectName: "diagnoseFacts"
@@ -789,8 +808,8 @@ PPage {
                         required property string value
                         Layout.fillWidth: true
                         spacing: 12
-                        PText { text: label; textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 150; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
-                        PText { text: value; wrap: true; Layout.fillWidth: true }
+                        PText { text: I18n.tr(label, I18n.revision); textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 150; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
+                        PText { text: I18n.tr(value, I18n.revision); wrap: true; Layout.fillWidth: true }
                     }
                 }
             }
@@ -802,42 +821,42 @@ PPage {
         Layout.fillWidth: true
         visible: Settings.section === "info"
         spacing: 0
-        PSectionTitle { text: "Info" }
+        PSectionTitle { text: I18n.tr("Info", I18n.revision) }
 
         PSettingsCard {
             objectName: "infoCard"
             Layout.fillWidth: true
             iconName: "info"
-            title: App.appName
-            description: "Version " + App.version + " · Entwickler und Inhaber: " + App.developer
+            title: I18n.tr(App.appName, I18n.revision)
+            description: I18n.tr("Version " + App.version + " · Entwickler und Inhaber: " + App.developer, I18n.revision)
             // Beta-Version: dasselbe Etikett wie in der Karte »Updates«
-            PBadge { objectName: "infoBeta"; text: App.beta ? "Beta" : ""; tone: "accent"; anchors.verticalCenter: parent.verticalCenter }
-            PButton { text: "Über"; onClicked: App.showAbout() }
+            PBadge { objectName: "infoBeta"; text: I18n.tr(App.beta ? "Beta" : "", I18n.revision); tone: "accent"; anchors.verticalCenter: parent.verticalCenter }
+            PButton { text: I18n.tr("Über", I18n.revision); onClicked: App.showAbout() }
         }
         PSettingsCard {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "question_circle"
-            title: "Kurzanleitung"
-            description: "So arbeiten Sie mit den Werkzeugen von PDF Tool" + Shortcuts.hints["app.help"]
-            PButton { text: "Öffnen"; onClicked: App.showHelp() }
+            title: I18n.tr("Kurzanleitung", I18n.revision)
+            description: I18n.tr("So arbeiten Sie mit den Werkzeugen von PDF Tool" + Shortcuts.hints["app.help"], I18n.revision)
+            PButton { text: I18n.tr("Öffnen", I18n.revision); onClicked: App.showHelp() }
         }
         PSettingsCard {
             objectName: "settingsShortcuts"
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "keyboard"
-            title: "Tastenkürzel"
-            description: "Alle Kürzel auf einen Blick – und eigene festlegen" + Shortcuts.hints["app.shortcuts"]
-            PButton { objectName: "settingsShortcutsOpen"; text: "Anzeigen und ändern"; onClicked: Shortcuts.showOverview() }
+            title: I18n.tr("Tastenkürzel", I18n.revision)
+            description: I18n.tr("Alle Kürzel auf einen Blick – und eigene festlegen" + Shortcuts.hints["app.shortcuts"], I18n.revision)
+            PButton { objectName: "settingsShortcutsOpen"; text: I18n.tr("Anzeigen und ändern", I18n.revision); onClicked: Shortcuts.showOverview() }
         }
         PSettingsCard {
             Layout.fillWidth: true
             Layout.topMargin: 4
             iconName: "megaphone"
-            title: "Neuerungen"
-            description: "Was ist neu in Version " + App.version
-            PButton { text: "Anzeigen"; onClicked: App.showChangelog() }
+            title: I18n.tr("Neuerungen", I18n.revision)
+            description: I18n.tr("Was ist neu in Version " + App.version, I18n.revision)
+            PButton { text: I18n.tr("Anzeigen", I18n.revision); onClicked: App.showChangelog() }
         }
     }
 

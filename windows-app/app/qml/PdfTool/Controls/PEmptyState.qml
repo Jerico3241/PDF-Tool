@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Leerer Zustand einer Fläche (Seitenleiste, Liste): Symbol in einem ruhigen Kreis, kurzer Titel und ein
 // freundlicher Hinweis – im oberen Drittel statt verloren in der Mitte. Blendet beim Erscheinen kurz ein
@@ -15,7 +16,7 @@ Item {
     opacity: visible ? 1 : 0
     Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
     Accessible.role: Accessible.StaticText
-    Accessible.name: title + (text !== "" ? ". " + text : "")
+    Accessible.name: I18n.tr(title + (text !== "" ? ". " + text : ""), I18n.revision)
 
     Column {
         id: column
@@ -36,7 +37,7 @@ Item {
         PText {
             width: parent.width
             visible: root.title !== ""
-            text: root.title
+            text: I18n.tr(root.title, I18n.revision)
             textStyle: "bodyStrong"
             horizontalAlignment: Text.AlignHCenter
             wrap: true
@@ -45,7 +46,7 @@ Item {
         PText {
             width: parent.width
             visible: root.text !== ""
-            text: root.text
+            text: I18n.tr(root.text, I18n.revision)
             tone: "secondary"
             horizontalAlignment: Text.AlignHCenter
             wrap: true

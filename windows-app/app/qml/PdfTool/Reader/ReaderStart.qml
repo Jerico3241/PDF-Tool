@@ -29,14 +29,14 @@ Item {
         }
         PText {
             Layout.fillWidth: true
-            text: Reader.opening > 0 ? "Wird geöffnet …" : "Kein Dokument geöffnet"
+            text: I18n.tr(Reader.opening > 0 ? "Wird geöffnet …" : "Kein Dokument geöffnet", I18n.revision)
             textStyle: "bodyStrong"
             horizontalAlignment: Text.AlignHCenter
         }
         PText {
             Layout.fillWidth: true
             visible: Reader.opening === 0
-            text: "PDFs öffnen Sie auf der Startseite oder mit »+« in der Tab-Leiste" + (Shortcuts.labels["app.open"] ? " oder mit " + Shortcuts.labels["app.open"] : "") + "."
+            text: I18n.tr("PDFs öffnen Sie auf der Startseite oder mit »+« in der Tab-Leiste" + (Shortcuts.labels["app.open"] ? " oder mit " + Shortcuts.labels["app.open"] : "") + ".", I18n.revision)
             tone: "secondary"
             wrap: true
             horizontalAlignment: Text.AlignHCenter
@@ -46,8 +46,8 @@ Item {
             Layout.topMargin: Metrics.s4
             spacing: Metrics.s8
             visible: Reader.opening === 0
-            PButton { objectName: "readerOpenButton"; kind: "accent"; iconName: "folder_open"; text: "PDF öffnen"; tip: Shortcuts.labels["app.open"]; onClicked: Reader.openDialog() }
-            PButton { iconName: "home"; text: "Zur Startseite"; onClicked: App.navigate("home") }
+            PButton { objectName: "readerOpenButton"; kind: "accent"; iconName: "folder_open"; text: I18n.tr("PDF öffnen", I18n.revision); tip: I18n.tr(Shortcuts.labels["app.open"], I18n.revision); onClicked: Reader.openDialog() }
+            PButton { iconName: "home"; text: I18n.tr("Zur Startseite", I18n.revision); onClicked: App.navigate("home") }
         }
     }
 }

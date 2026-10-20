@@ -146,7 +146,7 @@ FocusScope {
                                 x: Metrics.s8 + 12  // wie der Name im Kopf rechts (Schaltfläche mit Innenrand)
                                 spacing: 8
                                 PIcon { anchors.verticalCenter: parent.verticalCenter; name: "document_pdf"; color: Theme.textPrimary }
-                                PText { anchors.verticalCenter: parent.verticalCenter; text: page.doc ? page.doc.name : "" }
+                                PText { anchors.verticalCenter: parent.verticalCenter; text: I18n.tr(page.doc ? page.doc.name : "", I18n.revision) }
                             }
                         }
                         DocumentView {
@@ -208,7 +208,7 @@ FocusScope {
                                 Layout.fillWidth: true
                                 shown: page.doc !== null && page.doc.tool === "objects" && page.doc.objectMessage !== "" && page.doc.objectMessage !== page.seenObjectMessage
                                 severity: "info"
-                                message: page.doc ? page.doc.objectMessage : ""
+                                message: I18n.tr(page.doc ? page.doc.objectMessage : "", I18n.revision)
                                 closable: false
                                 autoHide: page.noticeTime
                                 onClosed: page.seenObjectMessage = message
@@ -219,8 +219,8 @@ FocusScope {
                                 Layout.fillWidth: true
                                 shown: page.doc !== null && page.doc.scanHint && !page.doc.ocrRunning && !page.dismissedScans[page.doc.docId] && !Reader.fullScreen
                                 severity: "info"
-                                title: "Gescannte Seiten"
-                                message: "Dieses PDF enthält Seiten ohne erkannten Text – Suchen und Kopieren finden darauf nichts."
+                                title: I18n.tr("Gescannte Seiten", I18n.revision)
+                                message: I18n.tr("Dieses PDF enthält Seiten ohne erkannten Text – Suchen und Kopieren finden darauf nichts.", I18n.revision)
                                 actions: ["Text erkennen …"]
                                 autoHide: page.noticeTime
                                 onActionTriggered: page.doc.recognizeText([])
@@ -235,7 +235,7 @@ FocusScope {
                                 Layout.fillWidth: true
                                 shown: page.doc !== null && page.doc.notice !== "" && !page.dismissedNotices[page.doc.docId]
                                 severity: page.doc ? page.doc.noticeKind : "info"
-                                message: page.doc ? page.doc.notice : ""
+                                message: I18n.tr(page.doc ? page.doc.notice : "", I18n.revision)
                                 autoHide: page.noticeTime
                                 onClosed: {
                                     var next = Object.assign({}, page.dismissedNotices)
@@ -269,8 +269,8 @@ FocusScope {
                                 anchors.fill: parent
                                 highlighted: true
                                 iconName: "document_pdf"
-                                title: "PDF hier ablegen"
-                                text: "Jede abgelegte PDF öffnet sich in einem eigenen Tab."
+                                title: I18n.tr("PDF hier ablegen", I18n.revision)
+                                text: I18n.tr("Jede abgelegte PDF öffnet sich in einem eigenen Tab.", I18n.revision)
                             }
                         }
                     }

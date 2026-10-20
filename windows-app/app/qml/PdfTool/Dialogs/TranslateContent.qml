@@ -35,9 +35,9 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Der Assistent übersetzt den Text Seite für Seite auf diesem PC und speichert ihn als neues PDF. Das Layout des Originals wird nicht nachgebaut. Je Seite dauert das etwa eine halbe bis zwei Minuten."
+        text: I18n.tr("Der Assistent übersetzt den Text Seite für Seite auf diesem PC und speichert ihn als neues PDF. Das Layout des Originals wird nicht nachgebaut. Je Seite dauert das etwa eine halbe bis zwei Minuten.", I18n.revision)
     }
-    PFieldLabel { text: "Übersetzen ins" }
+    PFieldLabel { text: I18n.tr("Übersetzen ins", I18n.revision) }
     Flow {
         Layout.fillWidth: true
         spacing: 4
@@ -47,32 +47,32 @@ ColumnLayout {
                 required property var modelData
                 objectName: "translateLanguage_" + modelData.key
                 width: 150
-                text: modelData.label
+                text: I18n.tr(modelData.label, I18n.revision)
                 checked: root.language === modelData.key
                 onClicked: root.language = modelData.key
             }
         }
     }
-    PFieldLabel { text: "Seiten" }
+    PFieldLabel { text: I18n.tr("Seiten", I18n.revision) }
     RowLayout {
         spacing: 8
-        PText { text: "von" }
+        PText { text: I18n.tr("von", I18n.revision) }
         PTextField {
             id: fromBox
             objectName: "translateFrom"
             preferredWidth: 64
-            label: "Erste Seite"
+            label: I18n.tr("Erste Seite", I18n.revision)
             validator: IntValidator { bottom: 1; top: root.pageCount }
         }
-        PText { text: "bis" }
+        PText { text: I18n.tr("bis", I18n.revision) }
         PTextField {
             id: toBox
             objectName: "translateTo"
             preferredWidth: 64
-            label: "Letzte Seite"
+            label: I18n.tr("Letzte Seite", I18n.revision)
             validator: IntValidator { bottom: 1; top: root.pageCount }
         }
-        PText { text: "von " + root.pageCount; tone: "secondary" }
+        PText { text: I18n.tr("von " + root.pageCount, I18n.revision); tone: "secondary" }
     }
     PText {
         Layout.fillWidth: true
@@ -80,6 +80,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Scans ohne Text erkennt PDF Tool vorher mit der Texterkennung, wenn sie eingerichtet ist. Übersetzungen können Fehler enthalten – wichtige Stellen bitte im Original prüfen."
+        text: I18n.tr("Scans ohne Text erkennt PDF Tool vorher mit der Texterkennung, wenn sie eingerichtet ist. Übersetzungen können Fehler enthalten – wichtige Stellen bitte im Original prüfen.", I18n.revision)
     }
 }

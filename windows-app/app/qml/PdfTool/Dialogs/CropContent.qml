@@ -55,9 +55,9 @@ ColumnLayout {
         columnSpacing: 8
         rowSpacing: 6
         Item { implicitWidth: 1 }
-        ColumnLayout { spacing: 2; PText { text: "Oben (mm)"; textStyle: "caption" } Margin { id: topField; objectName: "cropTop"; label: "Oben" } }
+        ColumnLayout { spacing: 2; PText { text: I18n.tr("Oben (mm)", I18n.revision); textStyle: "caption" } Margin { id: topField; objectName: "cropTop"; label: I18n.tr("Oben", I18n.revision) } }
         Item { implicitWidth: 1 }
-        ColumnLayout { spacing: 2; PText { text: "Links (mm)"; textStyle: "caption" } Margin { id: leftField; objectName: "cropLeft"; label: "Links" } }
+        ColumnLayout { spacing: 2; PText { text: I18n.tr("Links (mm)", I18n.revision); textStyle: "caption" } Margin { id: leftField; objectName: "cropLeft"; label: I18n.tr("Links", I18n.revision) } }
         Rectangle {
             Layout.alignment: Qt.AlignHCenter
             implicitWidth: 70
@@ -76,9 +76,9 @@ ColumnLayout {
                 visible: !root.reset
             }
         }
-        ColumnLayout { spacing: 2; PText { text: "Rechts (mm)"; textStyle: "caption" } Margin { id: rightField; objectName: "cropRight"; label: "Rechts" } }
+        ColumnLayout { spacing: 2; PText { text: I18n.tr("Rechts (mm)", I18n.revision); textStyle: "caption" } Margin { id: rightField; objectName: "cropRight"; label: I18n.tr("Rechts", I18n.revision) } }
         Item { implicitWidth: 1 }
-        ColumnLayout { spacing: 2; PText { text: "Unten (mm)"; textStyle: "caption" } Margin { id: bottomField; objectName: "cropBottom"; label: "Unten" } }
+        ColumnLayout { spacing: 2; PText { text: I18n.tr("Unten (mm)", I18n.revision); textStyle: "caption" } Margin { id: bottomField; objectName: "cropBottom"; label: I18n.tr("Unten", I18n.revision) } }
         Item { implicitWidth: 1 }
     }
     RowLayout {
@@ -88,9 +88,9 @@ ColumnLayout {
         PButton {
             objectName: "cropAuto"
             iconName: "page_fit"
-            text: "An den Inhalt anpassen"
+            text: I18n.tr("An den Inhalt anpassen", I18n.revision)
             enabled: !root.reset
-            tip: "Weiße Ränder der aktuellen Seite erkennen"
+            tip: I18n.tr("Weiße Ränder der aktuellen Seite erkennen", I18n.revision)
             onClicked: root.useAuto()
         }
         PText {
@@ -98,27 +98,27 @@ ColumnLayout {
             wrap: true
             textStyle: "caption"
             tone: "secondary"
-            text: "Erkannt auf Seite " + ((root.data_.current || 0) + 1) + ": " + (root.data_.auto || [0, 0, 0, 0]).map(function(v) { return String(v).replace(".", ",") }).join(" · ") + " mm (links · oben · rechts · unten)"
+            text: I18n.tr("Erkannt auf Seite " + ((root.data_.current || 0) + 1) + ": " + (root.data_.auto || [0, 0, 0, 0]).map(function(v) { return String(v).replace(".", ",") }).join(" · ") + " mm (links · oben · rechts · unten)", I18n.revision)
         }
     }
 
-    PFieldLabel { text: "Seiten" }
+    PFieldLabel { text: I18n.tr("Seiten", I18n.revision) }
     ColumnLayout {
         spacing: 0
-        PRadioButton { text: "Alle Seiten (" + (root.data_.pageCount || 0) + ")"; checked: root.scope === "all"; onClicked: root.scope = "all" }
-        PRadioButton { text: "Aktuelle Seite (" + ((root.data_.current || 0) + 1) + ")"; checked: root.scope === "current"; onClicked: root.scope = "current" }
-        PRadioButton { visible: (root.data_.selected || 0) > 0; text: "Ausgewählte Seiten (" + (root.data_.selected || 0) + ")"; checked: root.scope === "selected"; onClicked: root.scope = "selected" }
+        PRadioButton { text: I18n.tr("Alle Seiten (" + (root.data_.pageCount || 0) + ")", I18n.revision); checked: root.scope === "all"; onClicked: root.scope = "all" }
+        PRadioButton { text: I18n.tr("Aktuelle Seite (" + ((root.data_.current || 0) + 1) + ")", I18n.revision); checked: root.scope === "current"; onClicked: root.scope = "current" }
+        PRadioButton { visible: (root.data_.selected || 0) > 0; text: I18n.tr("Ausgewählte Seiten (" + (root.data_.selected || 0) + ")", I18n.revision); checked: root.scope === "selected"; onClicked: root.scope = "selected" }
         RowLayout {
             spacing: 8
-            PRadioButton { text: "Nur:"; checked: root.scope === "range"; onClicked: { root.scope = "range"; rangeField.forceActiveFocus() } }
-            PTextField { id: rangeField; preferredWidth: 140; enabled: root.scope === "range"; label: "Seiten"; placeholderText: "z. B. 1-3, 5" }
+            PRadioButton { text: I18n.tr("Nur:", I18n.revision); checked: root.scope === "range"; onClicked: { root.scope = "range"; rangeField.forceActiveFocus() } }
+            PTextField { id: rangeField; preferredWidth: 140; enabled: root.scope === "range"; label: I18n.tr("Seiten", I18n.revision); placeholderText: I18n.tr("z. B. 1-3, 5", I18n.revision) }
         }
     }
     PCheckBox {
         objectName: "cropReset"
         Layout.topMargin: 8
         Layout.fillWidth: true
-        text: "Stattdessen den Zuschnitt zurücksetzen (ganze Seite zeigen)"
+        text: I18n.tr("Stattdessen den Zuschnitt zurücksetzen (ganze Seite zeigen)", I18n.revision)
         checked: root.reset
         onToggled: root.reset = checked
     }
@@ -128,6 +128,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Zugeschnitten wird die sichtbare Seite. Der Inhalt außerhalb bleibt in der Datei erhalten – zum Entfernen vertraulicher Inhalte »Schwärzen« verwenden."
+        text: I18n.tr("Zugeschnitten wird die sichtbare Seite. Der Inhalt außerhalb bleibt in der Datei erhalten – zum Entfernen vertraulicher Inhalte »Schwärzen« verwenden.", I18n.revision)
     }
 }

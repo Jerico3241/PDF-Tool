@@ -21,7 +21,7 @@ Item {
     objectName: "appTabs"
     implicitHeight: Metrics.appBarHeight
     Accessible.role: Accessible.PageTabList
-    Accessible.name: "Start, Werkzeuge und Dokumente"
+    Accessible.name: I18n.tr("Start, Werkzeuge und Dokumente", I18n.revision)
 
     function toolInfo(key) {
         if (key === "settings") return { title: "Einstellungen", icon: "settings" }
@@ -162,7 +162,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "navigation"
-            tip: "Menü"
+            tip: I18n.tr("Menü", I18n.revision)
             onClicked: appMenu.popup(menuButton, 0, menuButton.height + 4)
         }
         AppTab {
@@ -170,7 +170,7 @@ Item {
             objectName: "tabHome"
             Layout.alignment: Qt.AlignBottom
             iconName: "home"
-            tooltip: "Start" + Shortcuts.hints["app.home"]
+            tooltip: I18n.tr("Start" + Shortcuts.hints["app.home"], I18n.revision)
             active: bar.activeKey === "home"
             onClicked: App.navigate("home")
         }
@@ -189,9 +189,9 @@ Item {
                 // volle Breite, solange die Dokument-Tabs ihren Mindestplatz haben – sonst schmaler (Name gekürzt)
                 Layout.preferredWidth: Math.min(implicitWidth, Math.max(Metrics.appTabMinWidth, bar.toolTabCap))
                 iconName: info.icon
-                title: info.title
+                title: I18n.tr(info.title, I18n.revision)
                 closable: true
-                closeTip: "Tab schließen" + Shortcuts.hints["app.closeTab"] + " – Eingaben bleiben erhalten"
+                closeTip: I18n.tr("Tab schließen" + Shortcuts.hints["app.closeTab"] + " – Eingaben bleiben erhalten", I18n.revision)
                 active: bar.activeKey === modelData
                 onClicked: App.navigate(modelData)
                 onCloseRequested: App.closeTab(modelData)
@@ -225,7 +225,7 @@ Item {
                 implicitWidth: Metrics.appTabScroll
                 implicitHeight: 28
                 iconName: "chevron_left"
-                tip: "Vorherige Tabs"
+                tip: I18n.tr("Vorherige Tabs", I18n.revision)
                 focusPolicy: Qt.NoFocus
                 enabled: docs.contentX > docs.originX + 0.5
                 onClicked: docsWheel.move(true, -bar.docPitch, true)
@@ -245,7 +245,7 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 snapMode: bar.docsOverflow ? ListView.SnapToItem : ListView.NoSnap
                 Accessible.role: Accessible.PageTabList
-                Accessible.name: "Geöffnete Dokumente"
+                Accessible.name: I18n.tr("Geöffnete Dokumente", I18n.revision)
                 readonly property string activeKey: Reader.currentKey
                 function revealActive() {
                     var index = Reader.tabs.indexOf(activeKey)
@@ -307,14 +307,14 @@ Item {
                         elideMode: Text.ElideMiddle
                         iconName: "document_pdf"
                         // ohne ».pdf« (das Symbol zeigt es) – der vollständige Pfad steht im Tooltip
-                        title: docSlot.name.replace(/\.pdf$/i, "") || docSlot.name
-                        tooltip: docSlot.tip
+                        title: I18n.tr(docSlot.name.replace(/\.pdf$/i, "") || docSlot.name, I18n.revision)
+                        tooltip: I18n.tr(docSlot.tip, I18n.revision)
                         unsaved: docSlot.dirty
                         showDirty: true
                         closable: true
                         closeName: "readerTabClose"
                         dirtyName: "readerTabDirty"
-                        closeTip: "Schließen" + Shortcuts.hints["app.closeTab"]
+                        closeTip: I18n.tr("Schließen" + Shortcuts.hints["app.closeTab"], I18n.revision)
                         active: bar.activeKey === "doc:" + docSlot.key
                         onClicked: Reader.showTab(docSlot.key)
                         onCloseRequested: Reader.closeTab(docSlot.key)
@@ -365,7 +365,7 @@ Item {
                 implicitWidth: Metrics.appTabScroll
                 implicitHeight: 28
                 iconName: "chevron_right"
-                tip: "Weitere Tabs"
+                tip: I18n.tr("Weitere Tabs", I18n.revision)
                 focusPolicy: Qt.NoFocus
                 enabled: docs.contentX < docs.originX + docs.contentWidth - docs.width - 0.5
                 onClicked: docsWheel.move(true, bar.docPitch, true)
@@ -377,7 +377,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "add"
-            tip: "PDF öffnen" + Shortcuts.hints["app.open"]
+            tip: I18n.tr("PDF öffnen" + Shortcuts.hints["app.open"], I18n.revision)
             onClicked: Reader.openDialog()
         }
         Item { Layout.fillWidth: true }
@@ -387,7 +387,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "question_circle"
-            tip: "Kurzanleitung" + Shortcuts.hints["app.help"]
+            tip: I18n.tr("Kurzanleitung" + Shortcuts.hints["app.help"], I18n.revision)
             onClicked: App.showHelp()
         }
         PIconButton {
@@ -396,7 +396,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "settings"
-            tip: "Einstellungen" + Shortcuts.hints["app.settings"]
+            tip: I18n.tr("Einstellungen" + Shortcuts.hints["app.settings"], I18n.revision)
             onClicked: App.navigate("settings")
         }
     }
@@ -456,17 +456,17 @@ Item {
     PMenu {
         id: appMenu
         objectName: "appMenu"
-        PMenuItem { objectName: "menuOpen"; text: "PDF öffnen …"; iconName: "folder_open"; onTriggered: Reader.openDialog() }
-        PMenuItem { objectName: "menuHome"; text: "Start"; iconName: "home"; onTriggered: App.navigate("home") }
-        PMenuItem { objectName: "menuSettings"; text: "Einstellungen"; iconName: "settings"; onTriggered: App.navigate("settings") }
+        PMenuItem { objectName: "menuOpen"; text: I18n.tr("PDF öffnen …", I18n.revision); iconName: "folder_open"; onTriggered: Reader.openDialog() }
+        PMenuItem { objectName: "menuHome"; text: I18n.tr("Start", I18n.revision); iconName: "home"; onTriggered: App.navigate("home") }
+        PMenuItem { objectName: "menuSettings"; text: I18n.tr("Einstellungen", I18n.revision); iconName: "settings"; onTriggered: App.navigate("settings") }
         T.MenuSeparator {
             topPadding: 4
             bottomPadding: 4
             contentItem: Rectangle { implicitWidth: 180; implicitHeight: 1; color: Theme.divider }
         }
-        PMenuItem { objectName: "menuHelp"; text: "Kurzanleitung"; iconName: "question_circle"; onTriggered: App.showHelp() }
-        PMenuItem { objectName: "menuNews"; text: "Neu in dieser Version"; iconName: "megaphone"; onTriggered: App.showChangelog() }
-        PMenuItem { objectName: "menuAbout"; text: "Über PDF Tool"; iconName: "info"; onTriggered: App.showAbout() }
+        PMenuItem { objectName: "menuHelp"; text: I18n.tr("Kurzanleitung", I18n.revision); iconName: "question_circle"; onTriggered: App.showHelp() }
+        PMenuItem { objectName: "menuNews"; text: I18n.tr("Neu in dieser Version", I18n.revision); iconName: "megaphone"; onTriggered: App.showChangelog() }
+        PMenuItem { objectName: "menuAbout"; text: I18n.tr("Über PDF Tool", I18n.revision); iconName: "info"; onTriggered: App.showAbout() }
     }
 
     // Kontextmenü eines Dokument-Tabs. Die Aktion läuft erst nach dem Ausblenden (Rückfragen beim Schließen).
@@ -478,34 +478,34 @@ Item {
         property int row: -1
         PMenuItem {
             objectName: "tabMenuClose"
-            text: "Schließen"
+            text: I18n.tr("Schließen", I18n.revision)
             iconName: "dismiss"
             onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeTab(key) } }
         }
         PMenuItem {
             objectName: "tabMenuCloseOthers"
-            text: "Andere Tabs schließen"
+            text: I18n.tr("Andere Tabs schließen", I18n.revision)
             iconName: "dismiss_circle"
             enabled: Reader.tabs.count > 1
             onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeOtherTabs(key) } }
         }
         PMenuItem {
             objectName: "tabMenuCloseRight"
-            text: "Tabs rechts schließen"
+            text: I18n.tr("Tabs rechts schließen", I18n.revision)
             iconName: "arrow_next"
             enabled: tabMenu.row >= 0 && tabMenu.row < Reader.tabs.count - 1
             onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeTabsRight(key) } }
         }
         PMenuItem {
             objectName: "tabMenuCopyPath"
-            text: "Pfad kopieren"
+            text: I18n.tr("Pfad kopieren", I18n.revision)
             iconName: "copy"
             enabled: tabMenu.path !== ""
             onTriggered: App.copyPath(tabMenu.path)
         }
         PMenuItem {
             objectName: "tabMenuShowFolder"
-            text: "Im Ordner anzeigen"
+            text: I18n.tr("Im Ordner anzeigen", I18n.revision)
             iconName: "folder_open"
             enabled: tabMenu.path !== ""
             onTriggered: { var path = tabMenu.path; tabMenu.afterClose = function() { Reader.showInFolder(path) } }
@@ -517,7 +517,7 @@ Item {
         }
         PMenuItem {
             objectName: "tabMenuReopen"
-            text: "Geschlossenen Tab wieder öffnen"
+            text: I18n.tr("Geschlossenen Tab wieder öffnen", I18n.revision)
             iconName: "arrow_undo"
             enabled: Reader.canReopen
             onTriggered: tabMenu.afterClose = function() { Reader.reopenClosed() }

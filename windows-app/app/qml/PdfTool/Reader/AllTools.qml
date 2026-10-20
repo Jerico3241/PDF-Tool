@@ -172,8 +172,8 @@ T.Popup {
             Layout.preferredHeight: Metrics.readerPanelHeaderHeight
             Layout.leftMargin: Metrics.s16
             Layout.rightMargin: Metrics.s6
-            PText { text: "Alle Werkzeuge"; textStyle: "bodyStrong"; Layout.fillWidth: true }
-            PIconButton { objectName: "readerAllToolsClose"; iconName: "dismiss"; tip: "Schließen (Esc)"; onClicked: root.dismiss() }
+            PText { text: I18n.tr("Alle Werkzeuge", I18n.revision); textStyle: "bodyStrong"; Layout.fillWidth: true }
+            PIconButton { objectName: "readerAllToolsClose"; iconName: "dismiss"; tip: I18n.tr("Schließen (Esc)", I18n.revision); onClicked: root.dismiss() }
         }
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.divider }
         Flickable {
@@ -199,7 +199,7 @@ T.Popup {
                             x: Metrics.s16
                             topPadding: group.index === 0 ? Metrics.s4 : Metrics.s12
                             bottomPadding: Metrics.s4
-                            text: group.modelData.title
+                            text: I18n.tr(group.modelData.title, I18n.revision)
                             textStyle: "caption"
                             tone: "secondary"
                         }
@@ -216,9 +216,9 @@ T.Popup {
                                 visible: !modelData.onlyRestricted || root.restricted
                                 hoverEnabled: true
                                 focusPolicy: Qt.TabFocus
-                                text: modelData.text
+                                text: I18n.tr(modelData.text, I18n.revision)
                                 Accessible.role: modelData.tool !== undefined ? Accessible.RadioButton : Accessible.Button
-                                Accessible.name: text
+                                Accessible.name: I18n.tr(text, I18n.revision)
                                 Accessible.checkable: modelData.tool !== undefined
                                 Accessible.checked: active
                                 onClicked: root.choose(modelData)
@@ -238,14 +238,14 @@ T.Popup {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: entry.width - Metrics.s12 * 3 - Metrics.iconSize
-                                        text: entry.text
+                                        text: I18n.tr(entry.text, I18n.revision)
                                         font: entry.active ? Typography.bodyStrong : Typography.body
                                         color: Theme.textPrimary
                                         elide: Text.ElideRight
                                         textFormat: Text.PlainText
                                     }
                                 }
-                                PToolTip { text: entry.modelData.tip || ""; visible: text !== "" && entry.hovered && !entry.pressed; x: entry.width + Metrics.s8 }
+                                PToolTip { text: I18n.tr(entry.modelData.tip || "", I18n.revision); visible: text !== "" && entry.hovered && !entry.pressed; x: entry.width + Metrics.s8 }
                             }
                         }
                     }

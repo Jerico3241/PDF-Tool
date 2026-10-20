@@ -10,8 +10,8 @@ import PdfTool.Controls
 PPage {
     id: page
     objectName: "actionsPage"
-    title: "Stapel-Aktionen"
-    subtitle: "Dieselben Schritte auf viele PDFs anwenden – jede wird als neue Datei gespeichert."
+    title: I18n.tr("Stapel-Aktionen", I18n.revision)
+    subtitle: I18n.tr("Dieselben Schritte auf viele PDFs anwenden – jede wird als neue Datei gespeichert.", I18n.revision)
 
     PInfoBar { Layout.fillWidth: true; notice: Notices.area("actions_info"); topMargin: 0 }
 
@@ -23,10 +23,10 @@ PPage {
         visible: Actions.count === 0
         highlighted: Actions.dropHighlight
         iconName: "stack"
-        title: "PDFs hierher ziehen"
-        text: "oder auswählen – auch viele auf einmal."
+        title: I18n.tr("PDFs hierher ziehen", I18n.revision)
+        text: I18n.tr("oder auswählen – auch viele auf einmal.", I18n.revision)
         actions: [
-            PButton { objectName: "actionsPick"; kind: "accent"; iconName: "folder_open"; text: "PDFs wählen"; tip: Shortcuts.labels["app.open"]; onClicked: Actions.pick() }
+            PButton { objectName: "actionsPick"; kind: "accent"; iconName: "folder_open"; text: I18n.tr("PDFs wählen", I18n.revision); tip: I18n.tr(Shortcuts.labels["app.open"], I18n.revision); onClicked: Actions.pick() }
         ]
     }
     PCard {
@@ -34,11 +34,11 @@ PPage {
         Layout.fillWidth: true
         Layout.topMargin: 8
         visible: Actions.count > 0
-        title: Actions.count === 1 ? "1 PDF" : Actions.count + " PDFs"
+        title: I18n.tr(Actions.count === 1 ? "1 PDF" : Actions.count + " PDFs", I18n.revision)
         iconName: "document_multiple"
         headerRight: [
-            PButton { objectName: "actionsAdd"; kind: "subtle"; iconName: "add"; text: "Hinzufügen"; enabled: !Actions.running; onClicked: Actions.pick() },
-            PButton { objectName: "actionsClear"; kind: "subtle"; iconName: "delete"; text: "Alle entfernen"; enabled: !Actions.running; onClicked: Actions.removeAll() }
+            PButton { objectName: "actionsAdd"; kind: "subtle"; iconName: "add"; text: I18n.tr("Hinzufügen", I18n.revision); enabled: !Actions.running; onClicked: Actions.pick() },
+            PButton { objectName: "actionsClear"; kind: "subtle"; iconName: "delete"; text: I18n.tr("Alle entfernen", I18n.revision); enabled: !Actions.running; onClicked: Actions.removeAll() }
         ]
         Repeater {
             model: Actions.files
@@ -52,19 +52,19 @@ PPage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    PText { Layout.fillWidth: true; text: modelData.name; elide: Text.ElideMiddle }
+                    PText { Layout.fillWidth: true; text: I18n.tr(modelData.name, I18n.revision); elide: Text.ElideMiddle }
                     PText {
                         Layout.fillWidth: true
-                        text: modelData.message !== "" ? modelData.message : (modelData.outputName !== "" ? "→ " + modelData.outputName : modelData.sizeText + " · " + modelData.folder)
+                        text: I18n.tr(modelData.message !== "" ? modelData.message : (modelData.outputName !== "" ? "→ " + modelData.outputName : modelData.sizeText + " · " + modelData.folder), I18n.revision)
                         textStyle: "caption"
                         tone: modelData.state === "error" ? "critical" : "secondary"
                         elide: Text.ElideMiddle
                     }
                 }
-                PBadge { text: modelData.stateText; tone: modelData.tone; visible: modelData.state !== "waiting" }
-                PIconButton { iconName: "open"; tip: "Ergebnis im Reader öffnen"; visible: modelData.hasOutput; onClicked: Actions.openOutput(modelData.key) }
-                PIconButton { iconName: "folder_open"; tip: "Ordner öffnen"; onClicked: Actions.openFolder(modelData.key) }
-                PIconButton { iconName: "dismiss"; tip: "Aus der Liste nehmen"; enabled: !Actions.running; onClicked: Actions.remove(modelData.key) }
+                PBadge { text: I18n.tr(modelData.stateText, I18n.revision); tone: modelData.tone; visible: modelData.state !== "waiting" }
+                PIconButton { iconName: "open"; tip: I18n.tr("Ergebnis im Reader öffnen", I18n.revision); visible: modelData.hasOutput; onClicked: Actions.openOutput(modelData.key) }
+                PIconButton { iconName: "folder_open"; tip: I18n.tr("Ordner öffnen", I18n.revision); onClicked: Actions.openFolder(modelData.key) }
+                PIconButton { iconName: "dismiss"; tip: I18n.tr("Aus der Liste nehmen", I18n.revision); enabled: !Actions.running; onClicked: Actions.remove(modelData.key) }
             }
         }
     }
@@ -74,8 +74,8 @@ PPage {
         objectName: "actionsSteps"
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "Aktionen"
-        subtitle: Actions.summary !== "" ? Actions.summary : "Mindestens eine Aktion ankreuzen"
+        title: I18n.tr("Aktionen", I18n.revision)
+        subtitle: I18n.tr(Actions.summary !== "" ? Actions.summary : "Mindestens eine Aktion ankreuzen", I18n.revision)
         iconName: "checkbox_checked"
         Repeater {
             model: Actions.steps
@@ -86,12 +86,12 @@ PPage {
                 PCheckBox {
                     objectName: "actionsStep_" + modelData.key
                     Layout.fillWidth: true
-                    text: modelData.label
+                    text: I18n.tr(modelData.label, I18n.revision)
                     checked: modelData.checked
                     enabled: !Actions.running
                     onClicked: Actions.setStep(modelData.key, checked)
                 }
-                PText { Layout.fillWidth: true; Layout.leftMargin: 28; text: modelData.description; textStyle: "caption"; tone: "secondary"; wrap: true }
+                PText { Layout.fillWidth: true; Layout.leftMargin: 28; text: I18n.tr(modelData.description, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true }
                 // Einstellungen des Schritts, nur wenn er gewählt ist
                 RowLayout {
                     Layout.leftMargin: 28
@@ -99,7 +99,7 @@ PPage {
                     Layout.bottomMargin: 4
                     spacing: 8
                     visible: modelData.checked && modelData.key === Actions.texts.watermark
-                    PTextField { objectName: "actionsWatermarkText"; label: "Text des Wasserzeichens"; text: Actions.watermarkText; invalid: text.trim() === ""; onTextEdited: Actions.setWatermarkText(text) }
+                    PTextField { objectName: "actionsWatermarkText"; label: I18n.tr("Text des Wasserzeichens", I18n.revision); text: Actions.watermarkText; invalid: text.trim() === ""; onTextEdited: Actions.setWatermarkText(text) }
                 }
                 RowLayout {
                     Layout.leftMargin: 28
@@ -109,7 +109,7 @@ PPage {
                     visible: modelData.checked && modelData.key === Actions.texts.numbers
                     PComboBox {
                         objectName: "actionsNumberFormat"
-                        label: "Format der Seitenzahl"
+                        label: I18n.tr("Format der Seitenzahl", I18n.revision)
                         model: Actions.numberFormats()
                         textRole: "label"
                         valueRole: "key"
@@ -118,7 +118,7 @@ PPage {
                     }
                     PComboBox {
                         objectName: "actionsNumberPosition"
-                        label: "Position der Seitenzahl"
+                        label: I18n.tr("Position der Seitenzahl", I18n.revision)
                         preferredWidth: 170
                         model: [{ "key": "bc", "label": "Unten mittig" }, { "key": "br", "label": "Unten rechts" }, { "key": "bl", "label": "Unten links" }, { "key": "tc", "label": "Oben mittig" }, { "key": "tr", "label": "Oben rechts" }, { "key": "tl", "label": "Oben links" }]
                         textRole: "label"
@@ -135,7 +135,7 @@ PPage {
                     visible: modelData.checked && modelData.key === Actions.texts.optimize
                     PComboBox {
                         objectName: "actionsOptimizeLevel"
-                        label: "Qualität"
+                        label: I18n.tr("Qualität", I18n.revision)
                         preferredWidth: 260
                         model: [{ "key": "klein", "label": "Klein – E-Mail (110 dpi)" }, { "key": "mittel", "label": "Ausgewogen (150 dpi)" }, { "key": "hoch", "label": "Hoch – Druck (220 dpi)" }]
                         textRole: "label"
@@ -152,12 +152,12 @@ PPage {
                     visible: modelData.checked && modelData.key === Actions.texts.protect
                     PTextField {
                         objectName: "actionsPassword"
-                        label: "Kennwort zum Öffnen"
-                        placeholderText: "Kennwort (mind. 4 Zeichen)"
+                        label: I18n.tr("Kennwort zum Öffnen", I18n.revision)
+                        placeholderText: I18n.tr("Kennwort (mind. 4 Zeichen)", I18n.revision)
                         echoMode: TextInput.Password
                         onTextEdited: Actions.setPassword(text)
                     }
-                    PText { text: "Wird nicht gespeichert."; textStyle: "caption"; tone: "secondary" }
+                    PText { text: I18n.tr("Wird nicht gespeichert.", I18n.revision); textStyle: "caption"; tone: "secondary" }
                 }
             }
         }
@@ -168,34 +168,34 @@ PPage {
         objectName: "actionsOutput"
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "Ausgabe"
+        title: I18n.tr("Ausgabe", I18n.revision)
         iconName: "folder"
         Flow {
             Layout.fillWidth: true
             spacing: 16
-            PRadioButton { objectName: "actionsOutOriginal"; text: "Neben den Originalen"; checked: Actions.outMode === Actions.texts.outOriginal; enabled: !Actions.running; onClicked: Actions.setOutMode(Actions.texts.outOriginal) }
-            PRadioButton { objectName: "actionsOutFolder"; text: "Gemeinsamer Ordner"; checked: Actions.outMode === Actions.texts.outFolder; enabled: !Actions.running; onClicked: Actions.setOutMode(Actions.texts.outFolder) }
+            PRadioButton { objectName: "actionsOutOriginal"; text: I18n.tr("Neben den Originalen", I18n.revision); checked: Actions.outMode === Actions.texts.outOriginal; enabled: !Actions.running; onClicked: Actions.setOutMode(Actions.texts.outOriginal) }
+            PRadioButton { objectName: "actionsOutFolder"; text: I18n.tr("Gemeinsamer Ordner", I18n.revision); checked: Actions.outMode === Actions.texts.outFolder; enabled: !Actions.running; onClicked: Actions.setOutMode(Actions.texts.outFolder) }
         }
         PFileRow {
             Layout.fillWidth: true
             visible: Actions.outMode === Actions.texts.outFolder
             iconName: "folder"
-            label: "Ausgabeordner"
+            label: I18n.tr("Ausgabeordner", I18n.revision)
             value: Actions.outPath !== "" ? Actions.outPath : "Noch kein Ordner gewählt"
             fullPath: Actions.outPath
-            PButton { iconName: "folder_open"; text: "Durchsuchen"; enabled: !Actions.running; onClicked: Actions.pickOutDir() }
+            PButton { iconName: "folder_open"; text: I18n.tr("Durchsuchen", I18n.revision); enabled: !Actions.running; onClicked: Actions.pickOutDir() }
         }
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            PText { text: "Zusatz am Dateinamen"; tone: "secondary" }
-            PTextField { objectName: "actionsSuffix"; preferredWidth: 160; label: "Zusatz am Dateinamen"; text: Actions.suffix; enabled: !Actions.running; onTextEdited: Actions.setSuffix(text) }
-            PText { Layout.fillWidth: true; text: "Brief.pdf → Brief" + Actions.suffix + ".pdf"; textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle }
+            PText { text: I18n.tr("Zusatz am Dateinamen", I18n.revision); tone: "secondary" }
+            PTextField { objectName: "actionsSuffix"; preferredWidth: 160; label: I18n.tr("Zusatz am Dateinamen", I18n.revision); text: Actions.suffix; enabled: !Actions.running; onTextEdited: Actions.setSuffix(text) }
+            PText { Layout.fillWidth: true; text: I18n.tr("Brief.pdf → Brief" + Actions.suffix + ".pdf", I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle }
         }
     }
 
     // Start, Fortschritt, Ergebnis
-    PText { objectName: "actionsProblem"; Layout.fillWidth: true; Layout.topMargin: 12; visible: text !== "" && Actions.count > 0; text: Actions.problem; tone: "critical"; wrap: true }
+    PText { objectName: "actionsProblem"; Layout.fillWidth: true; Layout.topMargin: 12; visible: text !== "" && Actions.count > 0; text: I18n.tr(Actions.problem, I18n.revision); tone: "critical"; wrap: true }
     Flow {
         Layout.fillWidth: true
         Layout.topMargin: 12
@@ -206,13 +206,13 @@ PPage {
             large: true
             minimumWidth: 180
             iconName: "play"
-            text: Actions.count > 1 ? "Alle bearbeiten" : "Bearbeiten"
-            tip: Shortcuts.labels["app.primary"]
+            text: I18n.tr(Actions.count > 1 ? "Alle bearbeiten" : "Bearbeiten", I18n.revision)
+            tip: I18n.tr(Shortcuts.labels["app.primary"], I18n.revision)
             enabled: Actions.canStart
             onClicked: Actions.start()
         }
-        PButton { objectName: "actionsCancel"; large: true; iconName: "dismiss"; text: "Abbrechen"; tip: "Nach der laufenden Datei anhalten – fertige Dateien bleiben"; enabled: Actions.running; onClicked: Actions.cancel() }
-        PButton { objectName: "actionsOpenFolder"; large: true; iconName: "folder_open"; text: "Ordner öffnen"; visible: Actions.resultText !== "" && !Actions.running; onClicked: Actions.openOutputFolder() }
+        PButton { objectName: "actionsCancel"; large: true; iconName: "dismiss"; text: I18n.tr("Abbrechen", I18n.revision); tip: I18n.tr("Nach der laufenden Datei anhalten – fertige Dateien bleiben", I18n.revision); enabled: Actions.running; onClicked: Actions.cancel() }
+        PButton { objectName: "actionsOpenFolder"; large: true; iconName: "folder_open"; text: I18n.tr("Ordner öffnen", I18n.revision); visible: Actions.resultText !== "" && !Actions.running; onClicked: Actions.openOutputFolder() }
     }
     ColumnLayout {
         Layout.fillWidth: true
@@ -223,10 +223,10 @@ PPage {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            PText { text: Actions.progressText; textStyle: "bodyStrong" }
-            PText { Layout.fillWidth: true; text: Actions.currentText; textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle }
+            PText { text: I18n.tr(Actions.progressText, I18n.revision); textStyle: "bodyStrong" }
+            PText { Layout.fillWidth: true; text: I18n.tr(Actions.currentText, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle }
         }
     }
-    PText { objectName: "actionsResult"; Layout.fillWidth: true; Layout.topMargin: 8; visible: text !== "" && !Actions.running; text: Actions.resultText; tone: Actions.resultTone === "success" ? "success" : (Actions.resultTone === "critical" ? "critical" : "warning"); wrap: true }
+    PText { objectName: "actionsResult"; Layout.fillWidth: true; Layout.topMargin: 8; visible: text !== "" && !Actions.running; text: I18n.tr(Actions.resultText, I18n.revision); tone: Actions.resultTone === "success" ? "success" : (Actions.resultTone === "critical" ? "critical" : "warning"); wrap: true }
     Item { implicitHeight: 24 }
 }

@@ -31,11 +31,11 @@ Item {
         opacity: root.detail ? 0 : 1
         visible: opacity > 0
         Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
-        title: "Vertragsübersichten"
-        subtitle: "Kundenakten: bekannte Kunden verwalten und in Übersichten wiederverwenden."
+        title: I18n.tr("Vertragsübersichten", I18n.revision)
+        subtitle: I18n.tr("Kundenakten: bekannte Kunden verwalten und in Übersichten wiederverwenden.", I18n.revision)
         model: Customers.listModel
         Accessible.role: Accessible.List
-        Accessible.name: "Kundenakten"
+        Accessible.name: I18n.tr("Kundenakten", I18n.revision)
         Keys.onReturnPressed: if (currentIndex >= 0) Customers.showDetail(model.get(currentIndex).id)
         Keys.onEnterPressed: if (currentIndex >= 0) Customers.showDetail(model.get(currentIndex).id)
         Keys.onSpacePressed: if (currentIndex >= 0) Customers.showDetail(model.get(currentIndex).id)
@@ -55,8 +55,8 @@ Item {
                         id: searchField
                         objectName: "customerSearch"
                         preferredWidth: 300
-                        label: "Kundenakten durchsuchen"
-                        placeholderText: "Firma, Kundennummer oder E-Mail suchen"
+                        label: I18n.tr("Kundenakten durchsuchen", I18n.revision)
+                        placeholderText: I18n.tr("Firma, Kundennummer oder E-Mail suchen", I18n.revision)
                         text: Customers.search
                         onTextEdited: Customers.search = text
                         Keys.onDownPressed: { listPage.forceActiveFocus(); listPage.currentIndex = 0 }
@@ -65,11 +65,11 @@ Item {
                 }
                 Row {
                     spacing: 8
-                    PText { text: "Sortierung"; height: 32; leftPadding: 8 }
+                    PText { text: I18n.tr("Sortierung", I18n.revision); height: 32; leftPadding: 8 }
                     PComboBox {
                         preferredWidth: 180
-                        label: "Sortierung"
-                        tip: "Reihenfolge der Kundenliste"
+                        label: I18n.tr("Sortierung", I18n.revision)
+                        tip: I18n.tr("Reihenfolge der Kundenliste", I18n.revision)
                         model: Customers.orders
                         textRole: "label"
                         valueRole: "value"
@@ -81,14 +81,14 @@ Item {
                         onActivated: (index) => Customers.setOrder(Customers.orders[index].value)
                     }
                 }
-                PButton { iconName: "person_add"; text: "Neue Kundenakte"; tip: "Kundenakte manuell anlegen"; onClicked: Customers.newCustomer() }
+                PButton { iconName: "person_add"; text: I18n.tr("Neue Kundenakte", I18n.revision); tip: I18n.tr("Kundenakte manuell anlegen", I18n.revision); onClicked: Customers.newCustomer() }
             }
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 12
                 spacing: 8
                 PIcon { name: "shield"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
-                PText { text: Customers.texts.privacy; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                PText { text: I18n.tr(Customers.texts.privacy, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
             }
             PInfoBar { Layout.fillWidth: true; notice: Notices.area("kunden_info") }
             // Noch keine Kundenakten
@@ -107,16 +107,16 @@ Item {
                     width: parent.width - 48
                     spacing: 4
                     PIcon { name: "people"; size: Metrics.iconSizeLarge; color: Theme.textSecondary }
-                    PText { text: Customers.texts.emptyTitle; textStyle: "bodyStrong"; Layout.topMargin: 6 }
-                    PText { text: Customers.texts.emptyText; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-                    PButton { kind: "accent"; iconName: "document"; text: "Zur Vertragsübersicht"; Layout.topMargin: 10; onClicked: App.navigate("create") }
+                    PText { text: I18n.tr(Customers.texts.emptyTitle, I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 6 }
+                    PText { text: I18n.tr(Customers.texts.emptyText, I18n.revision); tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                    PButton { kind: "accent"; iconName: "document"; text: I18n.tr("Zur Vertragsübersicht", I18n.revision); Layout.topMargin: 10; onClicked: App.navigate("create") }
                 }
             }
             PText {
                 Layout.fillWidth: true
                 Layout.topMargin: 12
                 visible: Customers.total > 0 && !Customers.listShown
-                text: Customers.countText
+                text: I18n.tr(Customers.countText, I18n.revision)
                 tone: "secondary"
                 wrap: true
             }
@@ -148,7 +148,7 @@ Item {
             width: listPage.width
             height: 60
             Accessible.role: Accessible.ListItem
-            Accessible.name: company + ", " + subtitle
+            Accessible.name: I18n.tr(company + ", " + subtitle, I18n.revision)
             PListItem {
                 x: listPage.columnX + 6
                 y: 2
@@ -174,11 +174,11 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    PText { text: row.company; textStyle: "bodyStrong"; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                    PText { text: row.subtitle; textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                    PText { text: I18n.tr(row.company, I18n.revision); textStyle: "bodyStrong"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                    PText { text: I18n.tr(row.subtitle, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle; Layout.fillWidth: true }
                 }
-                PBadge { text: row.active ? "aktiv" : ""; tone: "accent" }
-                PText { text: row.when; textStyle: "caption"; tone: "secondary"; visible: listPage.columnWidth > 420 && text !== "" }
+                PBadge { text: I18n.tr(row.active ? "aktiv" : "", I18n.revision); tone: "accent" }
+                PText { text: I18n.tr(row.when, I18n.revision); textStyle: "caption"; tone: "secondary"; visible: listPage.columnWidth > 420 && text !== "" }
                 PIcon { name: "chevron_right"; size: 12; color: Theme.textSecondary }
             }
             MouseArea {
@@ -196,7 +196,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.topMargin: 14
                 visible: Customers.listShown
-                text: Customers.countText
+                text: I18n.tr(Customers.countText, I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 wrap: true
@@ -205,10 +205,10 @@ Item {
                 Layout.fillWidth: true
                 Layout.topMargin: 16
                 iconName: "arrow_sync"
-                title: "Bekannte Kunden automatisch übernehmen"
-                description: "Erkennt PDF Tool nach der Excel-Prüfung genau einen bekannten Kunden und sind noch keine Kundendaten eingetragen, werden sie ohne Nachfrage übernommen (rückgängig machbar). Standard: aus."
+                title: I18n.tr("Bekannte Kunden automatisch übernehmen", I18n.revision)
+                description: I18n.tr("Erkennt PDF Tool nach der Excel-Prüfung genau einen bekannten Kunden und sind noch keine Kundendaten eingetragen, werden sie ohne Nachfrage übernommen (rückgängig machbar). Standard: aus.", I18n.revision)
                 PToggle {
-                    label: "Bekannte Kunden automatisch übernehmen"
+                    label: I18n.tr("Bekannte Kunden automatisch übernehmen", I18n.revision)
                     checked: Customers.autoApply
                     onToggled: Customers.autoApply = checked
                 }
@@ -223,16 +223,16 @@ Item {
         opacity: root.detail ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
-        title: "Vertragsübersichten"
-        subtitle: "Kundenakten: bekannte Kunden verwalten und in Übersichten wiederverwenden."
+        title: I18n.tr("Vertragsübersichten", I18n.revision)
+        subtitle: I18n.tr("Kundenakten: bekannte Kunden verwalten und in Übersichten wiederverwenden.", I18n.revision)
 
         ContractViews {}
         RowLayout {
             Layout.fillWidth: true
-            PButton { kind: "subtle"; iconName: "arrow_left"; text: "Alle Kunden"; tip: "Zurück zur Kundenliste"; onClicked: Customers.showList() }
+            PButton { kind: "subtle"; iconName: "arrow_left"; text: I18n.tr("Alle Kunden", I18n.revision); tip: I18n.tr("Zurück zur Kundenliste", I18n.revision); onClicked: Customers.showList() }
         }
-        PText { text: Customers.detailTitle; textStyle: "subtitle"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 12 }
-        PText { text: Customers.detailCaption; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 2 }
+        PText { text: I18n.tr(Customers.detailTitle, I18n.revision); textStyle: "subtitle"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 12 }
+        PText { text: I18n.tr(Customers.detailCaption, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 2 }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("kunde_detail_info") }
 
         GridLayout {
@@ -247,31 +247,31 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 Layout.alignment: Qt.AlignTop
-                title: "Stammdaten"
+                title: I18n.tr("Stammdaten", I18n.revision)
                 iconName: "contact_card"
-                PFieldLabel { text: "Firmenname"; first: true }
+                PFieldLabel { text: I18n.tr("Firmenname", I18n.revision); first: true }
                 PTextField {
                     id: fieldCompany
                     Layout.fillWidth: true
-                    label: "Firmenname"
-                    placeholderText: "z. B. Muster GmbH"
+                    label: I18n.tr("Firmenname", I18n.revision)
+                    placeholderText: I18n.tr("z. B. Muster GmbH", I18n.revision)
                     text: Customers.company
                     invalid: Customers.companyError
                     onTextEdited: Customers.company = text
                 }
-                PFieldLabel { text: "Kundennummer" }
+                PFieldLabel { text: I18n.tr("Kundennummer", I18n.revision) }
                 PTextField {
                     Layout.fillWidth: true
-                    label: "Kundennummer"
-                    placeholderText: "z. B. 10042"
+                    label: I18n.tr("Kundennummer", I18n.revision)
+                    placeholderText: I18n.tr("z. B. 10042", I18n.revision)
                     text: Customers.number
                     onTextEdited: Customers.number = text
                 }
-                PFieldLabel { text: "Notiz (optional)" }
+                PFieldLabel { text: I18n.tr("Notiz (optional)", I18n.revision) }
                 PTextArea {
                     id: noteArea
                     Layout.fillWidth: true
-                    label: "Notiz"
+                    label: I18n.tr("Notiz", I18n.revision)
                     minLines: 3
                     Connections {
                         target: Customers
@@ -287,13 +287,13 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 Layout.alignment: Qt.AlignTop
-                title: "Rechnungsempfänger"
+                title: I18n.tr("Rechnungsempfänger", I18n.revision)
                 iconName: "mail"
-                subtitle: "Adressen, an denen PDF Tool diesen Kunden in einer Excel-Liste wiedererkennt."
+                subtitle: I18n.tr("Adressen, an denen PDF Tool diesen Kunden in einer Excel-Liste wiedererkennt.", I18n.revision)
                 PText {
                     Layout.fillWidth: true
                     visible: Customers.emailModel.count === 0
-                    text: "Keine E-Mail zugeordnet. Die Kundenakte kann weiterhin manuell ausgewählt werden."
+                    text: I18n.tr("Keine E-Mail zugeordnet. Die Kundenakte kann weiterhin manuell ausgewählt werden.", I18n.revision)
                     tone: "secondary"
                     wrap: true
                 }
@@ -314,11 +314,11 @@ Item {
                             anchors.leftMargin: 12
                             anchors.rightMargin: 4
                             spacing: 10
-                            PText { text: email; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                            PBadge { text: primary ? "primär" : ""; tone: "accent" }
-                            PText { text: ambiguous ? "auch anderen Kundenakten zugeordnet" : ""; textStyle: "caption"; tone: "warning"; visible: ambiguous }
-                            PIconButton { iconName: "chevron_up"; tip: "Als primäre Adresse festlegen"; visible: !primary; onClicked: Customers.makePrimary(email) }
-                            PIconButton { iconName: "delete"; tip: email + " entfernen"; onClicked: Customers.removeEmail(email) }
+                            PText { text: I18n.tr(email, I18n.revision); elide: Text.ElideMiddle; Layout.fillWidth: true }
+                            PBadge { text: I18n.tr(primary ? "primär" : "", I18n.revision); tone: "accent" }
+                            PText { text: I18n.tr(ambiguous ? "auch anderen Kundenakten zugeordnet" : "", I18n.revision); textStyle: "caption"; tone: "warning"; visible: ambiguous }
+                            PIconButton { iconName: "chevron_up"; tip: I18n.tr("Als primäre Adresse festlegen", I18n.revision); visible: !primary; onClicked: Customers.makePrimary(email) }
+                            PIconButton { iconName: "delete"; tip: I18n.tr(email + " entfernen", I18n.revision); onClicked: Customers.removeEmail(email) }
                         }
                     }
                 }
@@ -329,14 +329,14 @@ Item {
                     PTextField {
                         Layout.fillWidth: true
                         preferredWidth: 220
-                        label: "Weitere E-Mail-Adresse"
-                        placeholderText: "weitere E-Mail-Adresse"
+                        label: I18n.tr("Weitere E-Mail-Adresse", I18n.revision)
+                        placeholderText: I18n.tr("weitere E-Mail-Adresse", I18n.revision)
                         text: Customers.newEmail
                         invalid: Customers.emailError
                         onTextEdited: Customers.newEmail = text
                         onSubmitted: Customers.addEmail()
                     }
-                    PButton { iconName: "add"; text: "E-Mail hinzufügen"; onClicked: Customers.addEmail() }
+                    PButton { iconName: "add"; text: I18n.tr("E-Mail hinzufügen", I18n.revision); onClicked: Customers.addEmail() }
                 }
                 PInfoBar { Layout.fillWidth: true; notice: Notices.area("kunde_mail_info") }
             }
@@ -346,37 +346,37 @@ Item {
         PCard {
             Layout.fillWidth: true
             Layout.topMargin: 12
-            title: "Einstellungen für Vertragsübersichten"
+            title: I18n.tr("Einstellungen für Vertragsübersichten", I18n.revision)
             iconName: "settings"
-            subtitle: "Werden beim Übernehmen des Kunden verwendet – fehlt eine Datei, bleibt der aktuelle Wert."
+            subtitle: I18n.tr("Werden beim Übernehmen des Kunden verwendet – fehlt eine Datei, bleibt der aktuelle Wert.", I18n.revision)
             PFileRow {
                 Layout.fillWidth: true
                 iconName: "image"
-                label: "Bevorzugtes Logo"
+                label: I18n.tr("Bevorzugtes Logo", I18n.revision)
                 value: Customers.logoText
                 fullPath: Customers.logoPath
-                PButton { text: "Durchsuchen"; iconName: "folder_open"; onClicked: Customers.pickLogo() }
-                PIconButton { iconName: "dismiss"; tip: "Kein bevorzugtes Logo"; onClicked: Customers.clearLogo() }
+                PButton { text: I18n.tr("Durchsuchen", I18n.revision); iconName: "folder_open"; onClicked: Customers.pickLogo() }
+                PIconButton { iconName: "dismiss"; tip: I18n.tr("Kein bevorzugtes Logo", I18n.revision); onClicked: Customers.clearLogo() }
             }
             Rectangle { Layout.fillWidth: true; Layout.topMargin: 10; Layout.bottomMargin: 10; height: 1; color: Theme.divider }
             PFileRow {
                 Layout.fillWidth: true
                 iconName: "folder"
-                label: "Bevorzugter Zielordner"
+                label: I18n.tr("Bevorzugter Zielordner", I18n.revision)
                 value: Customers.targetText
                 fullPath: Customers.targetPath
-                PButton { text: "Durchsuchen"; iconName: "folder_open"; onClicked: Customers.pickTarget() }
-                PIconButton { iconName: "dismiss"; tip: "Kein bevorzugter Zielordner"; onClicked: Customers.clearTarget() }
+                PButton { text: I18n.tr("Durchsuchen", I18n.revision); iconName: "folder_open"; onClicked: Customers.pickTarget() }
+                PIconButton { iconName: "dismiss"; tip: I18n.tr("Kein bevorzugter Zielordner", I18n.revision); onClicked: Customers.clearTarget() }
             }
             Rectangle { Layout.fillWidth: true; Layout.topMargin: 10; Layout.bottomMargin: 10; height: 1; color: Theme.divider }
-            PFieldLabel { text: "Bevorzugte Vorlage"; first: true }
+            PFieldLabel { text: I18n.tr("Bevorzugte Vorlage", I18n.revision); first: true }
             Flow {
                 Layout.fillWidth: true
                 spacing: 16
                 PComboBox {
                     preferredWidth: 240
-                    label: "Bevorzugte Vorlage"
-                    tip: "Vorlage aus »Darstellung«"
+                    label: I18n.tr("Bevorzugte Vorlage", I18n.revision)
+                    tip: I18n.tr("Vorlage aus »Darstellung«", I18n.revision)
                     model: Customers.templateChoices
                     currentIndex: Customers.templateChoices.indexOf(Customers.templateValue)
                     onActivated: (index) => Customers.setTemplate(Customers.templateChoices[index])
@@ -387,11 +387,11 @@ Item {
                     PToggle {
                         anchors.verticalCenter: parent.verticalCenter
                         showState: false
-                        label: "Vorlage automatisch verwenden"
+                        label: I18n.tr("Vorlage automatisch verwenden", I18n.revision)
                         checked: Customers.templateAuto
                         onToggled: Customers.setTemplateAuto(checked)
                     }
-                    PText { text: "Vorlage automatisch verwenden"; anchors.verticalCenter: parent.verticalCenter }
+                    PText { text: I18n.tr("Vorlage automatisch verwenden", I18n.revision); anchors.verticalCenter: parent.verticalCenter }
                 }
             }
         }
@@ -400,16 +400,16 @@ Item {
         PCard {
             Layout.fillWidth: true
             Layout.topMargin: 12
-            title: "Dokumentdarstellung"
+            title: I18n.tr("Dokumentdarstellung", I18n.revision)
             iconName: "document"
-            subtitle: "Eigene Kopf- und Fußzeile dieses Kunden (mit Formatierung). Ohne eigene Fußzeile bleibt die gültige – nie eine leere."
+            subtitle: I18n.tr("Eigene Kopf- und Fußzeile dieses Kunden (mit Formatierung). Ohne eigene Fußzeile bleibt die gültige – nie eine leere.", I18n.revision)
             PFactList { Layout.fillWidth: true; labelWidth: 110; facts: Customers.textFacts }
             Flow {
                 Layout.fillWidth: true
                 Layout.topMargin: 10
                 spacing: 8
-                PButton { iconName: "save"; text: "Aktuelle Kopf- und Fußzeile übernehmen"; tip: "Kopf- und Fußzeile aus »Darstellung« in dieser Kundenakte speichern"; onClicked: Customers.takeTexts() }
-                PButton { iconName: "dismiss"; text: "Eigene entfernen"; onClicked: Customers.clearTexts() }
+                PButton { iconName: "save"; text: I18n.tr("Aktuelle Kopf- und Fußzeile übernehmen", I18n.revision); tip: I18n.tr("Kopf- und Fußzeile aus »Darstellung« in dieser Kundenakte speichern", I18n.revision); onClicked: Customers.takeTexts() }
+                PButton { iconName: "dismiss"; text: I18n.tr("Eigene entfernen", I18n.revision); onClicked: Customers.clearTexts() }
             }
         }
 
@@ -417,26 +417,26 @@ Item {
         PCard {
             Layout.fillWidth: true
             Layout.topMargin: 12
-            title: "Letzte Aktivität"
+            title: I18n.tr("Letzte Aktivität", I18n.revision)
             iconName: "history"
             PFileRow {
                 Layout.fillWidth: true
                 iconName: "document_table"
-                label: "Letzte Excel-Liste"
+                label: I18n.tr("Letzte Excel-Liste", I18n.revision)
                 value: Customers.excelText
                 fullPath: Customers.excelPath
-                PButton { visible: Customers.excelAvailable; text: "Als Quelle verwenden"; iconName: "folder_open"; tip: "Kunden übernehmen und diese Excel neu prüfen"; onClicked: Customers.useLastExcel() }
-                PIconButton { visible: Customers.excelAvailable; iconName: "open"; tip: "Excel öffnen"; onClicked: Customers.openLastExcel() }
+                PButton { visible: Customers.excelAvailable; text: I18n.tr("Als Quelle verwenden", I18n.revision); iconName: "folder_open"; tip: I18n.tr("Kunden übernehmen und diese Excel neu prüfen", I18n.revision); onClicked: Customers.useLastExcel() }
+                PIconButton { visible: Customers.excelAvailable; iconName: "open"; tip: I18n.tr("Excel öffnen", I18n.revision); onClicked: Customers.openLastExcel() }
             }
             Rectangle { Layout.fillWidth: true; Layout.topMargin: 10; Layout.bottomMargin: 10; height: 1; color: Theme.divider }
             PFileRow {
                 Layout.fillWidth: true
                 iconName: "document_pdf"
-                label: "Zuletzt erstellte Übersicht"
+                label: I18n.tr("Zuletzt erstellte Übersicht", I18n.revision)
                 value: Customers.pdfText
                 fullPath: Customers.pdfPath
-                PButton { visible: Customers.pdfAvailable; text: "Ordner öffnen"; iconName: "folder_open"; onClicked: Customers.openLastPdfFolder() }
-                PIconButton { visible: Customers.pdfAvailable; iconName: "open"; tip: "PDF öffnen"; onClicked: Customers.openLastPdf() }
+                PButton { visible: Customers.pdfAvailable; text: I18n.tr("Ordner öffnen", I18n.revision); iconName: "folder_open"; onClicked: Customers.openLastPdfFolder() }
+                PIconButton { visible: Customers.pdfAvailable; iconName: "open"; tip: I18n.tr("PDF öffnen", I18n.revision); onClicked: Customers.openLastPdf() }
             }
             PFactList { Layout.fillWidth: true; Layout.topMargin: 12; facts: Customers.activity }
         }
@@ -445,9 +445,9 @@ Item {
             Layout.fillWidth: true
             Layout.topMargin: 16
             spacing: 8
-            PButton { kind: "accent"; iconName: "checkmark"; text: "In Vertragsübersicht übernehmen"; tip: "Kundendaten in »Übersicht erstellen« übernehmen"; onClicked: Customers.applyDetail() }
-            PButton { iconName: "merge"; text: "Zusammenführen …"; tip: "Eine doppelte Kundenakte in diese übernehmen"; onClicked: Customers.merge() }
-            PButton { iconName: "delete"; text: "Kundenakte löschen"; tip: "Löscht nur die Kundenakte – keine PDF- oder Excel-Dateien"; onClicked: Customers.deleteRecord() }
+            PButton { kind: "accent"; iconName: "checkmark"; text: I18n.tr("In Vertragsübersicht übernehmen", I18n.revision); tip: I18n.tr("Kundendaten in »Übersicht erstellen« übernehmen", I18n.revision); onClicked: Customers.applyDetail() }
+            PButton { iconName: "merge"; text: I18n.tr("Zusammenführen …", I18n.revision); tip: I18n.tr("Eine doppelte Kundenakte in diese übernehmen", I18n.revision); onClicked: Customers.merge() }
+            PButton { iconName: "delete"; text: I18n.tr("Kundenakte löschen", I18n.revision); tip: I18n.tr("Löscht nur die Kundenakte – keine PDF- oder Excel-Dateien", I18n.revision); onClicked: Customers.deleteRecord() }
         }
     }
 }

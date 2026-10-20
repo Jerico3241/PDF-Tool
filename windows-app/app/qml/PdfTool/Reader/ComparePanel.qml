@@ -26,7 +26,7 @@ ColumnLayout {
         Layout.rightMargin: 12
         Layout.topMargin: 8
         visible: Reader.compareNames.length === 2
-        text: Reader.compareNames.length === 2 ? "Links (älter): " + Reader.compareNames[0] + "\nRechts (neuer): " + Reader.compareNames[1] : ""
+        text: I18n.tr(Reader.compareNames.length === 2 ? "Links (älter): " + Reader.compareNames[0] + "\nRechts (neuer): " + Reader.compareNames[1] : "", I18n.revision)
         textStyle: "caption"
         tone: "secondary"
         wrap: true
@@ -36,7 +36,7 @@ ColumnLayout {
         Layout.leftMargin: 12
         Layout.rightMargin: 12
         visible: Reader.compareItems.length > 0
-        text: Reader.compareSummary
+        text: I18n.tr(Reader.compareSummary, I18n.revision)
         textStyle: "caption"
         tone: "secondary"
         wrap: true
@@ -55,11 +55,11 @@ ColumnLayout {
         PText {
             objectName: "readerCompareSummary"
             Layout.fillWidth: true
-            text: Reader.compareItems.length > 0 && Reader.compareIndex >= 0 ? "Unterschied " + (Reader.compareIndex + 1) + " von " + Reader.compareItems.length : Reader.compareSummary
+            text: I18n.tr(Reader.compareItems.length > 0 && Reader.compareIndex >= 0 ? "Unterschied " + (Reader.compareIndex + 1) + " von " + Reader.compareItems.length : Reader.compareSummary, I18n.revision)
             wrap: true
         }
-        PIconButton { objectName: "readerComparePrevious"; iconName: "chevron_up"; tip: "Vorheriger Unterschied"; enabled: Reader.compareItems.length > 0; onClicked: Reader.previousCompare() }
-        PIconButton { objectName: "readerCompareNext"; iconName: "chevron_down"; tip: "Nächster Unterschied"; enabled: Reader.compareItems.length > 0; onClicked: Reader.nextCompare() }
+        PIconButton { objectName: "readerComparePrevious"; iconName: "chevron_up"; tip: I18n.tr("Vorheriger Unterschied", I18n.revision); enabled: Reader.compareItems.length > 0; onClicked: Reader.previousCompare() }
+        PIconButton { objectName: "readerCompareNext"; iconName: "chevron_down"; tip: I18n.tr("Nächster Unterschied", I18n.revision); enabled: Reader.compareItems.length > 0; onClicked: Reader.nextCompare() }
     }
     ListView {
         id: list
@@ -72,7 +72,7 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         T.ScrollBar.vertical: PScrollBar {}
         Accessible.role: Accessible.List
-        Accessible.name: "Unterschiede"
+        Accessible.name: I18n.tr("Unterschiede", I18n.revision)
         currentIndex: Reader.compareIndex
         onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
         delegate: Item {
@@ -82,7 +82,7 @@ ColumnLayout {
             width: list.width
             height: texts.implicitHeight + 14
             Accessible.role: Accessible.ListItem
-            Accessible.name: root.kindName(modelData.kind) + ": " + (modelData.before || "") + " " + (modelData.after || "")
+            Accessible.name: I18n.tr(root.kindName(modelData.kind) + ": " + (modelData.before || "") + " " + (modelData.after || ""), I18n.revision)
             PListItem {
                 anchors.fill: parent
                 anchors.leftMargin: 4
@@ -109,12 +109,12 @@ ColumnLayout {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2
                 PText {
-                    text: root.kindName(row.modelData.kind) + " · Seite " + ((row.modelData.kind === "removed" ? row.modelData.oldPage : row.modelData.newPage) + 1)
+                    text: I18n.tr(root.kindName(row.modelData.kind) + " · Seite " + ((row.modelData.kind === "removed" ? row.modelData.oldPage : row.modelData.newPage) + 1), I18n.revision)
                     textStyle: "caption"
                     tone: "secondary"
                 }
-                PText { width: parent.width; visible: row.modelData.before !== ""; text: (row.modelData.kind === "changed" ? "Vorher: " : "") + row.modelData.before; wrap: true; maximumLineCount: 2; elide: Text.ElideRight }
-                PText { width: parent.width; visible: row.modelData.after !== ""; text: (row.modelData.kind === "changed" ? "Nachher: " : "") + row.modelData.after; wrap: true; maximumLineCount: 2; elide: Text.ElideRight }
+                PText { width: parent.width; visible: row.modelData.before !== ""; text: I18n.tr((row.modelData.kind === "changed" ? "Vorher: " : "") + row.modelData.before, I18n.revision); wrap: true; maximumLineCount: 2; elide: Text.ElideRight }
+                PText { width: parent.width; visible: row.modelData.after !== ""; text: I18n.tr((row.modelData.kind === "changed" ? "Nachher: " : "") + row.modelData.after, I18n.revision); wrap: true; maximumLineCount: 2; elide: Text.ElideRight }
             }
             TapHandler { onTapped: Reader.showCompare(row.index) }
         }
@@ -124,8 +124,8 @@ ColumnLayout {
         Layout.leftMargin: 12
         Layout.rightMargin: 12
         Layout.bottomMargin: 10
-        PButton { objectName: "readerRecompare"; text: "Neu vergleichen"; iconName: "arrow_sync"; enabled: !Reader.compareRunning && Reader.compareActive; onClicked: Reader.recompare() }
+        PButton { objectName: "readerRecompare"; text: I18n.tr("Neu vergleichen", I18n.revision); iconName: "arrow_sync"; enabled: !Reader.compareRunning && Reader.compareActive; onClicked: Reader.recompare() }
         Item { Layout.fillWidth: true }
-        PButton { objectName: "readerEndCompare"; text: "Beenden"; onClicked: Reader.endCompare() }
+        PButton { objectName: "readerEndCompare"; text: I18n.tr("Beenden", I18n.revision); onClicked: Reader.endCompare() }
     }
 }

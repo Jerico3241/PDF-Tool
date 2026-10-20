@@ -100,29 +100,29 @@ ColumnLayout {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 0
-            PFieldLabel { text: "Vorlage"; first: true }
+            PFieldLabel { text: I18n.tr("Vorlage", I18n.revision); first: true }
             PComboBox {
                 objectName: "headerFooterPreset"
                 Layout.fillWidth: true
-                label: "Vorlage"
+                label: I18n.tr("Vorlage", I18n.revision)
                 model: ["Eigene Angaben", "Seite 1 von 3 – unten Mitte", "Seitenzahl – unten rechts", "Datum oben rechts, Seitenzahl unten", "Dateiname oben links, Seitenzahl unten rechts", "Bates-Nummer – unten rechts"]
                 onActivated: (index) => root.applyPreset(index)
             }
-            PFieldLabel { text: "Kopfzeile (links · Mitte · rechts)" }
+            PFieldLabel { text: I18n.tr("Kopfzeile (links · Mitte · rechts)", I18n.revision) }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                PositionField { key: "tl"; placeholderText: "links" }
-                PositionField { key: "tc"; placeholderText: "Mitte" }
-                PositionField { key: "tr"; placeholderText: "rechts" }
+                PositionField { key: "tl"; placeholderText: I18n.tr("links", I18n.revision) }
+                PositionField { key: "tc"; placeholderText: I18n.tr("Mitte", I18n.revision) }
+                PositionField { key: "tr"; placeholderText: I18n.tr("rechts", I18n.revision) }
             }
-            PFieldLabel { text: "Fußzeile (links · Mitte · rechts)" }
+            PFieldLabel { text: I18n.tr("Fußzeile (links · Mitte · rechts)", I18n.revision) }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                PositionField { key: "bl"; placeholderText: "links" }
-                PositionField { id: fieldBc; key: "bc"; placeholderText: "Mitte" }
-                PositionField { key: "br"; placeholderText: "rechts" }
+                PositionField { key: "bl"; placeholderText: I18n.tr("links", I18n.revision) }
+                PositionField { id: fieldBc; key: "bc"; placeholderText: I18n.tr("Mitte", I18n.revision) }
+                PositionField { key: "br"; placeholderText: I18n.tr("rechts", I18n.revision) }
             }
             Flow {
                 Layout.fillWidth: true
@@ -140,8 +140,8 @@ ColumnLayout {
                         required property var modelData
                         kind: "subtle"
                         iconName: "add"
-                        text: modelData.label
-                        tip: "Platzhalter " + modelData.token + " an der Schreibmarke einfügen"
+                        text: I18n.tr(modelData.label, I18n.revision)
+                        tip: I18n.tr("Platzhalter " + modelData.token + " an der Schreibmarke einfügen", I18n.revision)
                         onClicked: root.insert(modelData.token)
                     }
                 }
@@ -167,7 +167,7 @@ ColumnLayout {
                     x: 6
                     y: atTop ? 6 : parent.height - height - 6
                     horizontalAlignment: side === "l" ? Text.AlignLeft : (side === "c" ? Text.AlignHCenter : Text.AlignRight)
-                    text: root.preview(root.texts[modelData] || "")
+                    text: I18n.tr(root.preview(root.texts[modelData] || ""), I18n.revision)
                     font.pixelSize: Math.max(5, root.size * 0.62)
                     font.bold: root.font.indexOf("Bold") >= 0
                     font.family: root.font.indexOf("Times") === 0 ? "Times New Roman" : (root.font === "Courier" ? "Courier New" : "Arial")
@@ -192,14 +192,14 @@ ColumnLayout {
         columns: 4
         columnSpacing: 8
         rowSpacing: 0
-        PFieldLabel { text: "Schrift" }
-        PFieldLabel { text: "Größe" }
-        PFieldLabel { text: "Randabstand" }
-        PFieldLabel { text: "Beginnt bei" }
+        PFieldLabel { text: I18n.tr("Schrift", I18n.revision) }
+        PFieldLabel { text: I18n.tr("Größe", I18n.revision) }
+        PFieldLabel { text: I18n.tr("Randabstand", I18n.revision) }
+        PFieldLabel { text: I18n.tr("Beginnt bei", I18n.revision) }
         PComboBox {
             objectName: "headerFooterFont"
             Layout.fillWidth: true
-            label: "Schrift"
+            label: I18n.tr("Schrift", I18n.revision)
             model: [{ "label": "Helvetica", "value": "Helvetica" }, { "label": "Helvetica fett", "value": "Helvetica-Bold" }, { "label": "Times", "value": "Times-Roman" }, { "label": "Times fett", "value": "Times-Bold" }, { "label": "Courier", "value": "Courier" }]
             textRole: "label"
             valueRole: "value"
@@ -207,7 +207,7 @@ ColumnLayout {
         }
         PComboBox {
             Layout.fillWidth: true
-            label: "Größe"
+            label: I18n.tr("Größe", I18n.revision)
             model: [{ "label": "7 pt", "value": 7 }, { "label": "8 pt", "value": 8 }, { "label": "9 pt", "value": 9 }, { "label": "10 pt", "value": 10 }, { "label": "11 pt", "value": 11 }, { "label": "12 pt", "value": 12 }, { "label": "14 pt", "value": 14 }]
             textRole: "label"
             valueRole: "value"
@@ -216,7 +216,7 @@ ColumnLayout {
         }
         PComboBox {
             Layout.fillWidth: true
-            label: "Abstand zum Rand"
+            label: I18n.tr("Abstand zum Rand", I18n.revision)
             model: [{ "label": "5 mm", "value": 5 }, { "label": "10 mm", "value": 10 }, { "label": "15 mm", "value": 15 }, { "label": "20 mm", "value": 20 }]
             textRole: "label"
             valueRole: "value"
@@ -228,12 +228,12 @@ ColumnLayout {
             objectName: "headerFooterStart"
             Layout.fillWidth: true
             preferredWidth: 80
-            label: "Erste Seitenzahl"
+            label: I18n.tr("Erste Seitenzahl", I18n.revision)
             validator: IntValidator { bottom: 0; top: 99999 }
             text: "1"
         }
     }
-    PFieldLabel { text: "Farbe" }
+    PFieldLabel { text: I18n.tr("Farbe", I18n.revision) }
     Row {
         spacing: 8
         Repeater {
@@ -242,7 +242,7 @@ ColumnLayout {
                 required property var modelData
                 size: 28
                 swatchColor: modelData.value
-                tip: modelData.name
+                tip: I18n.tr(modelData.name, I18n.revision)
                 selected: root.color === modelData.value
                 onClicked: root.color = modelData.value
             }
@@ -257,36 +257,36 @@ ColumnLayout {
         columns: 4
         columnSpacing: 8
         rowSpacing: 0
-        PFieldLabel { text: "Bates: Präfix" }
-        PFieldLabel { text: "Stellen" }
-        PFieldLabel { text: "Startnummer" }
-        PFieldLabel { text: "Suffix" }
-        PTextField { id: batesPrefix; objectName: "batesPrefix"; Layout.fillWidth: true; preferredWidth: 100; label: "Präfix"; placeholderText: "z. B. AKTE-" }
+        PFieldLabel { text: I18n.tr("Bates: Präfix", I18n.revision) }
+        PFieldLabel { text: I18n.tr("Stellen", I18n.revision) }
+        PFieldLabel { text: I18n.tr("Startnummer", I18n.revision) }
+        PFieldLabel { text: I18n.tr("Suffix", I18n.revision) }
+        PTextField { id: batesPrefix; objectName: "batesPrefix"; Layout.fillWidth: true; preferredWidth: 100; label: I18n.tr("Präfix", I18n.revision); placeholderText: I18n.tr("z. B. AKTE-", I18n.revision) }
         PComboBox {
             id: batesDigits
             Layout.fillWidth: true
-            label: "Stellen"
+            label: I18n.tr("Stellen", I18n.revision)
             model: [{ "label": "4", "value": 4 }, { "label": "5", "value": 5 }, { "label": "6", "value": 6 }, { "label": "7", "value": 7 }, { "label": "8", "value": 8 }]
             textRole: "label"
             valueRole: "value"
             currentIndex: 2
         }
-        PTextField { id: batesStart; Layout.fillWidth: true; preferredWidth: 80; label: "Startnummer"; text: "1"; validator: IntValidator { bottom: 0; top: 999999999 } }
-        PTextField { id: batesSuffix; Layout.fillWidth: true; preferredWidth: 80; label: "Suffix" }
+        PTextField { id: batesStart; Layout.fillWidth: true; preferredWidth: 80; label: I18n.tr("Startnummer", I18n.revision); text: "1"; validator: IntValidator { bottom: 0; top: 999999999 } }
+        PTextField { id: batesSuffix; Layout.fillWidth: true; preferredWidth: 80; label: I18n.tr("Suffix", I18n.revision) }
     }
 
-    PFieldLabel { text: "Seiten" }
+    PFieldLabel { text: I18n.tr("Seiten", I18n.revision) }
     RowLayout {
         spacing: 12
-        PRadioButton { text: "Alle (" + (root.data_.pageCount || 0) + ")"; checked: root.scope === "all"; onClicked: root.scope = "all" }
-        PRadioButton { objectName: "headerFooterRange"; text: "Nur:"; checked: root.scope === "range"; onClicked: { root.scope = "range"; rangeField.forceActiveFocus() } }
-        PTextField { id: rangeField; preferredWidth: 140; enabled: root.scope === "range"; label: "Seiten"; placeholderText: "z. B. 2-10" }
+        PRadioButton { text: I18n.tr("Alle (" + (root.data_.pageCount || 0) + ")", I18n.revision); checked: root.scope === "all"; onClicked: root.scope = "all" }
+        PRadioButton { objectName: "headerFooterRange"; text: I18n.tr("Nur:", I18n.revision); checked: root.scope === "range"; onClicked: { root.scope = "range"; rangeField.forceActiveFocus() } }
+        PTextField { id: rangeField; preferredWidth: 140; enabled: root.scope === "range"; label: I18n.tr("Seiten", I18n.revision); placeholderText: I18n.tr("z. B. 2-10", I18n.revision) }
     }
     PCheckBox {
         Layout.topMargin: 8
         Layout.fillWidth: true
         visible: (root.data_.existing || 0) > 0
-        text: "Bisherige Kopf- und Fußzeile von PDF Tool ersetzen (" + (root.data_.existing || 0) + " Seiten)"
+        text: I18n.tr("Bisherige Kopf- und Fußzeile von PDF Tool ersetzen (" + (root.data_.existing || 0) + " Seiten)", I18n.revision)
         checked: root.replace
         onToggled: root.replace = checked
     }
@@ -296,6 +296,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Die Texte stehen aufrecht, wie man die Seite sieht – auch auf gedrehten Seiten. Entfernen lassen sie sich später über »Kopf-/Fußzeile und Wasserzeichen entfernen«."
+        text: I18n.tr("Die Texte stehen aufrecht, wie man die Seite sieht – auch auf gedrehten Seiten. Entfernen lassen sie sich später über »Kopf-/Fußzeile und Wasserzeichen entfernen«.", I18n.revision)
     }
 }

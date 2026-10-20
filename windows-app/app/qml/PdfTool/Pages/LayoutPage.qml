@@ -10,8 +10,8 @@ import PdfTool.Controls
 PPage {
     id: page
     objectName: "layoutPage"
-    title: "Vertragsübersichten"
-    subtitle: "Vorlage, Layout der PDF, Kopf- und Fußzeile, Zyklus-Regeln und Regelwerk."
+    title: I18n.tr("Vertragsübersichten", I18n.revision)
+    subtitle: I18n.tr("Vorlage, Layout der PDF, Kopf- und Fußzeile, Zyklus-Regeln und Regelwerk.", I18n.revision)
 
     Connections {
         target: Contracts
@@ -30,11 +30,11 @@ PPage {
     PCard {
         objectName: "templateCard"
         Layout.fillWidth: true
-        title: "Vorlage"
+        title: I18n.tr("Vorlage", I18n.revision)
         iconName: "library"
-        subtitle: "Hält die ganze Darstellung fest: Logo, Format, Titel, Dateiname, Kopf- und Fußzeile, Zyklus-Regeln und Regelwerk."
+        subtitle: I18n.tr("Hält die ganze Darstellung fest: Logo, Format, Titel, Dateiname, Kopf- und Fußzeile, Zyklus-Regeln und Regelwerk.", I18n.revision)
         headerRight: [
-            PButton { kind: "subtle"; iconName: "library"; text: "Vorlagen verwalten"; tip: "Ansicht »Vorlagen«: umbenennen, duplizieren, Standard festlegen, löschen"; onClicked: App.navigate("templates") }
+            PButton { kind: "subtle"; iconName: "library"; text: I18n.tr("Vorlagen verwalten", I18n.revision); tip: I18n.tr("Ansicht »Vorlagen«: umbenennen, duplizieren, Standard festlegen, löschen", I18n.revision); onClicked: App.navigate("templates") }
         ]
         RowLayout {
             Layout.fillWidth: true
@@ -42,16 +42,16 @@ PPage {
             PComboBox {
                 objectName: "templateCombo"
                 Layout.fillWidth: true
-                label: "Geladene Vorlage"
-                placeholder: Contracts.templateModel.count ? "Keine Vorlage geladen" : "Noch keine Vorlage gespeichert"
+                label: I18n.tr("Geladene Vorlage", I18n.revision)
+                placeholder: I18n.tr(Contracts.templateModel.count ? "Keine Vorlage geladen" : "Noch keine Vorlage gespeichert", I18n.revision)
                 model: Contracts.templateModel
                 textRole: "name"
                 currentIndex: { Contracts.templateRevision; return Contracts.templateModel.indexOf(Contracts.vorlageId) }
                 onActivated: (index) => Contracts.applyTemplate(Contracts.templateModel.get(index).id)
             }
-            PBadge { text: Contracts.vorlageId !== "" && Contracts.vorlageId === Contracts.defaultTemplate ? "Standard" : ""; tone: "accent" }
-            PBadge { objectName: "templateModifiedBadge"; text: Contracts.templateModified ? "Vorlage geändert" : ""; tone: "caution" }
-            PIconButton { iconName: "dismiss"; tip: "Vorlage lösen – die Darstellung bleibt, wie sie ist"; visible: Contracts.vorlageId !== ""; onClicked: Contracts.detachTemplate() }
+            PBadge { text: I18n.tr(Contracts.vorlageId !== "" && Contracts.vorlageId === Contracts.defaultTemplate ? "Standard" : "", I18n.revision); tone: "accent" }
+            PBadge { objectName: "templateModifiedBadge"; text: I18n.tr(Contracts.templateModified ? "Vorlage geändert" : "", I18n.revision); tone: "caution" }
+            PIconButton { iconName: "dismiss"; tip: I18n.tr("Vorlage lösen – die Darstellung bleibt, wie sie ist", I18n.revision); visible: Contracts.vorlageId !== ""; onClicked: Contracts.detachTemplate() }
         }
         PText {
             objectName: "templateState"
@@ -60,11 +60,11 @@ PPage {
             textStyle: "caption"
             tone: "secondary"
             wrap: true
-            text: Contracts.vorlageId === ""
+            text: I18n.tr(Contracts.vorlageId === ""
                   ? "Keine Vorlage geladen – Änderungen gelten für die aktuelle Darstellung."
                   : (Contracts.templateModified
                      ? "Die Darstellung weicht von der Vorlage „" + Contracts.templateLabel + "“ ab. Aktualisieren, als neue Vorlage speichern oder verwerfen."
-                     : "Die Darstellung entspricht der Vorlage „" + Contracts.templateLabel + "“.")
+                     : "Die Darstellung entspricht der Vorlage „" + Contracts.templateLabel + "“."), I18n.revision)
         }
         PCollapse {
             Layout.fillWidth: true
@@ -73,11 +73,11 @@ PPage {
                 width: parent.width
                 topPadding: 10
                 spacing: 8
-                PButton { objectName: "updateTemplate"; kind: "accent"; iconName: "save"; text: "Vorlage aktualisieren"; tip: "Die geladene Vorlage mit der aktuellen Darstellung überschreiben"; onClicked: Contracts.updateTemplate() }
-                PButton { iconName: "arrow_undo"; text: "Änderungen verwerfen"; tip: "Darstellung wieder auf den Stand der Vorlage setzen"; onClicked: Contracts.discardTemplateChanges() }
+                PButton { objectName: "updateTemplate"; kind: "accent"; iconName: "save"; text: I18n.tr("Vorlage aktualisieren", I18n.revision); tip: I18n.tr("Die geladene Vorlage mit der aktuellen Darstellung überschreiben", I18n.revision); onClicked: Contracts.updateTemplate() }
+                PButton { iconName: "arrow_undo"; text: I18n.tr("Änderungen verwerfen", I18n.revision); tip: I18n.tr("Darstellung wieder auf den Stand der Vorlage setzen", I18n.revision); onClicked: Contracts.discardTemplateChanges() }
             }
         }
-        PFieldLabel { text: "Als neue Vorlage speichern" }
+        PFieldLabel { text: I18n.tr("Als neue Vorlage speichern", I18n.revision) }
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
@@ -86,21 +86,21 @@ PPage {
                 objectName: "newTemplateName"
                 property string problem: text.trim() === "" ? "" : Contracts.templateNameProblem(text)
                 Layout.fillWidth: true
-                label: "Name der neuen Vorlage"
-                placeholderText: "Name der neuen Vorlage"
+                label: I18n.tr("Name der neuen Vorlage", I18n.revision)
+                placeholderText: I18n.tr("Name der neuen Vorlage", I18n.revision)
                 invalid: problem !== "" || Contracts.errors.vorlage === true
                 onTextEdited: if (text.trim() !== "") Contracts.clearError("vorlage")
                 onSubmitted: if (Contracts.saveAsTemplate(text)) text = ""
             }
             PButton {
                 iconName: "add"
-                text: "Speichern"
-                tip: "Aktuelle Darstellung als neue Vorlage speichern"
+                text: I18n.tr("Speichern", I18n.revision)
+                tip: I18n.tr("Aktuelle Darstellung als neue Vorlage speichern", I18n.revision)
                 enabled: fieldVorlage.text.trim() !== "" && fieldVorlage.problem === ""
                 onClicked: if (Contracts.saveAsTemplate(fieldVorlage.text)) fieldVorlage.text = ""
             }
         }
-        PText { text: fieldVorlage.problem; visible: text !== ""; textStyle: "caption"; tone: "warning"; Layout.fillWidth: true; Layout.topMargin: 4 }
+        PText { text: I18n.tr(fieldVorlage.problem, I18n.revision); visible: text !== ""; textStyle: "caption"; tone: "warning"; Layout.fillWidth: true; Layout.topMargin: 4 }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("vorlagen_info") }
     }
 
@@ -108,11 +108,11 @@ PPage {
     PCard {
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "PDF-Einstellungen"
+        title: I18n.tr("PDF-Einstellungen", I18n.revision)
         iconName: "document"
-        subtitle: "Titel, Dateiname, Logo und Seitenformat der erstellten PDF."
+        subtitle: I18n.tr("Titel, Dateiname, Logo und Seitenformat der erstellten PDF.", I18n.revision)
         headerRight: [
-            PIconButton { iconName: "arrow_undo"; tip: "Standardwerte wiederherstellen"; onClicked: Contracts.resetPdfSettings() }
+            PIconButton { iconName: "arrow_undo"; tip: I18n.tr("Standardwerte wiederherstellen", I18n.revision); onClicked: Contracts.resetPdfSettings() }
         ]
         GridLayout {
             Layout.fillWidth: true
@@ -124,36 +124,36 @@ PPage {
                 Layout.preferredWidth: 1
                 Layout.alignment: Qt.AlignTop
                 spacing: 0
-                PFieldLabel { text: "Titel"; first: true }
-                PTextField { Layout.fillWidth: true; label: "Titel"; placeholderText: "Vertragsübersicht"; text: Contracts.titel; onTextEdited: Contracts.titel = text }
-                PFieldLabel { text: "Dateiname" }
-                PTextField { Layout.fillWidth: true; label: "Dateiname"; placeholderText: "Vertragsuebersicht_Kd{kd}.pdf"; text: Contracts.dateiname; onTextEdited: Contracts.dateiname = text }
-                PText { text: Contracts.texts.filenamePlaceholders; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 4 }
+                PFieldLabel { text: I18n.tr("Titel", I18n.revision); first: true }
+                PTextField { Layout.fillWidth: true; label: I18n.tr("Titel", I18n.revision); placeholderText: I18n.tr("Vertragsübersicht", I18n.revision); text: Contracts.titel; onTextEdited: Contracts.titel = text }
+                PFieldLabel { text: I18n.tr("Dateiname", I18n.revision) }
+                PTextField { Layout.fillWidth: true; label: I18n.tr("Dateiname", I18n.revision); placeholderText: I18n.tr("Vertragsuebersicht_Kd{kd}.pdf", I18n.revision); text: Contracts.dateiname; onTextEdited: Contracts.dateiname = text }
+                PText { text: I18n.tr(Contracts.texts.filenamePlaceholders, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 4 }
             }
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 Layout.alignment: Qt.AlignTop
                 spacing: 0
-                PFieldLabel { text: "Untertitel"; first: page.contentWidth >= 620 }
-                PTextField { Layout.fillWidth: true; label: "Untertitel"; placeholderText: "Wartungs- und Nutzungsverträge"; text: Contracts.untertitel; onTextEdited: Contracts.untertitel = text }
-                PFieldLabel { text: "Logo-Breite (mm)" }
+                PFieldLabel { text: I18n.tr("Untertitel", I18n.revision); first: page.contentWidth >= 620 }
+                PTextField { Layout.fillWidth: true; label: I18n.tr("Untertitel", I18n.revision); placeholderText: I18n.tr("Wartungs- und Nutzungsverträge", I18n.revision); text: Contracts.untertitel; onTextEdited: Contracts.untertitel = text }
+                PFieldLabel { text: I18n.tr("Logo-Breite (mm)", I18n.revision) }
                 PTextField {
                     id: fieldBreite
                     preferredWidth: 120
-                    label: "Logo-Breite in Millimetern"
-                    placeholderText: "62"
+                    label: I18n.tr("Logo-Breite in Millimetern", I18n.revision)
+                    placeholderText: I18n.tr("62", I18n.revision)
                     text: Contracts.breite
                     invalid: !Contracts.validWidth(text) || Contracts.errors.breite === true
                     onTextEdited: { Contracts.breite = text; if (Contracts.validWidth(text)) Contracts.clearError("breite") }
                 }
             }
         }
-        PFieldLabel { text: "Seitenformat" }
+        PFieldLabel { text: I18n.tr("Seitenformat", I18n.revision) }
         Row {
             spacing: 24
-            PRadioButton { text: "Hochformat A4"; checked: Contracts.format === "hoch"; onClicked: Contracts.setFormat("hoch") }
-            PRadioButton { text: "Querformat A4"; checked: Contracts.format === "quer"; onClicked: Contracts.setFormat("quer") }
+            PRadioButton { text: I18n.tr("Hochformat A4", I18n.revision); checked: Contracts.format === "hoch"; onClicked: Contracts.setFormat("hoch") }
+            PRadioButton { text: I18n.tr("Querformat A4", I18n.revision); checked: Contracts.format === "quer"; onClicked: Contracts.setFormat("quer") }
         }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("pdf_settings_info") }
     }
@@ -162,23 +162,23 @@ PPage {
     PCard {
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "Kopfzeile"
+        title: I18n.tr("Kopfzeile", I18n.revision)
         iconName: "text_align_left"
-        subtitle: "Optional. Erscheint oben auf jeder Seite. Leer lassen, wenn keine Kopfzeile gewünscht ist."
+        subtitle: I18n.tr("Optional. Erscheint oben auf jeder Seite. Leer lassen, wenn keine Kopfzeile gewünscht ist.", I18n.revision)
         PRichTextEditor {
             objectName: "headerEditor"
             Layout.fillWidth: true
             document: Contracts.headerDocument
             lines: 3
-            label: "Kopfzeile"
-            placeholderText: "Keine Kopfzeile – hier Text eingeben, wenn oben auf jeder Seite etwas stehen soll"
+            label: I18n.tr("Kopfzeile", I18n.revision)
+            placeholderText: I18n.tr("Keine Kopfzeile – hier Text eingeben, wenn oben auf jeder Seite etwas stehen soll", I18n.revision)
         }
         Flow {
             Layout.fillWidth: true
             Layout.topMargin: 10
             spacing: 8
-            PButton { kind: "accent"; iconName: "save"; text: "Kopfzeile speichern"; onClicked: Contracts.saveHeader() }
-            PText { text: Contracts.texts.placeholders; textStyle: "caption"; tone: "secondary"; height: 32 }
+            PButton { kind: "accent"; iconName: "save"; text: I18n.tr("Kopfzeile speichern", I18n.revision); onClicked: Contracts.saveHeader() }
+            PText { text: I18n.tr(Contracts.texts.placeholders, I18n.revision); textStyle: "caption"; tone: "secondary"; height: 32 }
         }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("kopf_info") }
     }
@@ -187,9 +187,9 @@ PPage {
     PCard {
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "Fußzeile"
+        title: I18n.tr("Fußzeile", I18n.revision)
         iconName: "text_align_center"
-        subtitle: "Erscheint unten auf jeder Seite. Die Seitenzahl wird automatisch ergänzt."
+        subtitle: I18n.tr("Erscheint unten auf jeder Seite. Die Seitenzahl wird automatisch ergänzt.", I18n.revision)
         GridLayout {
             Layout.fillWidth: true
             columns: page.contentWidth >= 620 ? 2 : 1
@@ -199,11 +199,11 @@ PPage {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 spacing: 0
-                PFieldLabel { text: "Textbaustein"; first: true }
+                PFieldLabel { text: I18n.tr("Textbaustein", I18n.revision); first: true }
                 PComboBox {
                     Layout.fillWidth: true
-                    label: "Textbaustein"
-                    placeholder: Contracts.textBlockModel.count ? "Textbaustein wählen" : "Noch kein Textbaustein"
+                    label: I18n.tr("Textbaustein", I18n.revision)
+                    placeholder: I18n.tr(Contracts.textBlockModel.count ? "Textbaustein wählen" : "Noch kein Textbaustein", I18n.revision)
                     model: Contracts.textBlockModel
                     textRole: "name"
                     currentIndex: Contracts.textBlockModel.indexOf(Contracts.baustein)
@@ -214,27 +214,27 @@ PPage {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 spacing: 0
-                PFieldLabel { text: "Name des Textbausteins (optional)"; first: true; Layout.topMargin: page.contentWidth >= 620 ? 0 : 12 }
-                PTextField { Layout.fillWidth: true; label: "Name des Textbausteins"; placeholderText: "Zum Speichern als Textbaustein"; text: Contracts.baustein; onTextEdited: Contracts.baustein = text }
+                PFieldLabel { text: I18n.tr("Name des Textbausteins (optional)", I18n.revision); first: true; Layout.topMargin: page.contentWidth >= 620 ? 0 : 12 }
+                PTextField { Layout.fillWidth: true; label: I18n.tr("Name des Textbausteins", I18n.revision); placeholderText: I18n.tr("Zum Speichern als Textbaustein", I18n.revision); text: Contracts.baustein; onTextEdited: Contracts.baustein = text }
             }
         }
-        PFieldLabel { text: "Text" }
+        PFieldLabel { text: I18n.tr("Text", I18n.revision) }
         PRichTextEditor {
             objectName: "footerEditor"
             Layout.fillWidth: true
             document: Contracts.footerDocument
             lines: 5
-            label: "Fußzeile"
-            placeholderText: "Text der Fußzeile"
+            label: I18n.tr("Fußzeile", I18n.revision)
+            placeholderText: I18n.tr("Text der Fußzeile", I18n.revision)
         }
         Flow {
             Layout.fillWidth: true
             Layout.topMargin: 10
             spacing: 8
-            PButton { kind: "accent"; iconName: "save"; text: "Fußzeile speichern"; onClicked: Contracts.saveFooter() }
-            PButton { iconName: "arrow_undo"; text: "Standard wiederherstellen"; tip: "Setzt Text und Formatierung der Fußzeile auf den Standard der App zurück"; onClicked: Contracts.restoreDefaultFooter() }
-            PButton { iconName: "delete"; text: "Textbaustein löschen"; onClicked: Contracts.deleteBaustein() }
-            PText { text: Contracts.texts.placeholders; textStyle: "caption"; tone: "secondary"; height: 32 }
+            PButton { kind: "accent"; iconName: "save"; text: I18n.tr("Fußzeile speichern", I18n.revision); onClicked: Contracts.saveFooter() }
+            PButton { iconName: "arrow_undo"; text: I18n.tr("Standard wiederherstellen", I18n.revision); tip: I18n.tr("Setzt Text und Formatierung der Fußzeile auf den Standard der App zurück", I18n.revision); onClicked: Contracts.restoreDefaultFooter() }
+            PButton { iconName: "delete"; text: I18n.tr("Textbaustein löschen", I18n.revision); onClicked: Contracts.deleteBaustein() }
+            PText { text: I18n.tr(Contracts.texts.placeholders, I18n.revision); textStyle: "caption"; tone: "secondary"; height: 32 }
         }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("fuss_info") }
     }
@@ -243,16 +243,16 @@ PPage {
     PCard {
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "Zyklus-Regeln"
+        title: I18n.tr("Zyklus-Regeln", I18n.revision)
         iconName: "arrow_repeat_all"
-        subtitle: "Enthält die Beschreibung den Begriff, wird der Abrechnungszyklus in der PDF ersetzt. Das Datum bleibt stehen."
+        subtitle: I18n.tr("Enthält die Beschreibung den Begriff, wird der Abrechnungszyklus in der PDF ersetzt. Das Datum bleibt stehen.", I18n.revision)
         Rectangle {
             Layout.fillWidth: true
             visible: Contracts.ruleModel.count === 0
             implicitHeight: 40
             radius: Metrics.radiusControl
             color: Theme.surfaceSecondary
-            PText { x: 12; anchors.verticalCenter: parent.verticalCenter; text: "Keine Regeln. Neue Regel unten eintragen."; tone: "secondary" }
+            PText { x: 12; anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Keine Regeln. Neue Regel unten eintragen.", I18n.revision); tone: "secondary" }
         }
         Repeater {
             model: Contracts.ruleModel
@@ -270,11 +270,11 @@ PPage {
                     anchors.leftMargin: 12
                     anchors.rightMargin: 4
                     spacing: 10
-                    PText { text: enthaelt; textStyle: "bodyStrong" }
+                    PText { text: I18n.tr(enthaelt, I18n.revision); textStyle: "bodyStrong" }
                     PIcon { name: "arrow_right"; color: Theme.textSecondary; size: 14 }
-                    PText { text: zyklus; Layout.fillWidth: true }
-                    PIconButton { iconName: "edit"; tip: "In das Formular übernehmen"; onClicked: Contracts.editRegel(index) }
-                    PIconButton { iconName: "delete"; tip: "Regel „" + enthaelt + "“ löschen"; onClicked: Contracts.deleteRegel(index) }
+                    PText { text: I18n.tr(zyklus, I18n.revision); Layout.fillWidth: true }
+                    PIconButton { iconName: "edit"; tip: I18n.tr("In das Formular übernehmen", I18n.revision); onClicked: Contracts.editRegel(index) }
+                    PIconButton { iconName: "delete"; tip: I18n.tr("Regel „" + enthaelt + "“ löschen", I18n.revision); onClicked: Contracts.deleteRegel(index) }
                 }
             }
         }
@@ -288,12 +288,12 @@ PPage {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 spacing: 0
-                PFieldLabel { text: "Begriff"; first: true }
+                PFieldLabel { text: I18n.tr("Begriff", I18n.revision); first: true }
                 PTextField {
                     id: fieldSuch
                     Layout.fillWidth: true
-                    label: "Begriff"
-                    placeholderText: "z. B. Hott-KI"
+                    label: I18n.tr("Begriff", I18n.revision)
+                    placeholderText: I18n.tr("z. B. Hott-KI", I18n.revision)
                     text: Contracts.regelSuch
                     invalid: Contracts.errors.regelSuch === true
                     onTextEdited: { Contracts.regelSuch = text; if (text.trim() !== "") Contracts.clearError("regelSuch") }
@@ -304,12 +304,12 @@ PPage {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 spacing: 0
-                PFieldLabel { text: "Zyklus"; first: true; Layout.topMargin: page.contentWidth >= 580 ? 0 : 12 }
+                PFieldLabel { text: I18n.tr("Zyklus", I18n.revision); first: true; Layout.topMargin: page.contentWidth >= 580 ? 0 : 12 }
                 PTextField {
                     id: fieldZyk
                     Layout.fillWidth: true
-                    label: "Zyklus"
-                    placeholderText: "z. B. jährlich"
+                    label: I18n.tr("Zyklus", I18n.revision)
+                    placeholderText: I18n.tr("z. B. jährlich", I18n.revision)
                     text: Contracts.regelZyk
                     invalid: Contracts.errors.regelZyk === true
                     onTextEdited: { Contracts.regelZyk = text; if (text.trim() !== "") Contracts.clearError("regelZyk") }
@@ -320,7 +320,7 @@ PPage {
         Flow {
             Layout.fillWidth: true
             Layout.topMargin: 12
-            PButton { kind: "accent"; iconName: "add"; text: "Regel speichern"; onClicked: Contracts.addRegel() }
+            PButton { kind: "accent"; iconName: "add"; text: I18n.tr("Regel speichern", I18n.revision); onClicked: Contracts.addRegel() }
         }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("regeln_info") }
     }
@@ -330,11 +330,11 @@ PPage {
         objectName: "ruleSetCard"
         Layout.fillWidth: true
         Layout.topMargin: 12
-        title: "Regelwerk"
+        title: I18n.tr("Regelwerk", I18n.revision)
         iconName: "filter"
-        subtitle: "Ändert Werte der Übersicht nach eigenen Regeln (WENN … DANN …). Die Excel-Datei bleibt immer unverändert."
+        subtitle: I18n.tr("Ändert Werte der Übersicht nach eigenen Regeln (WENN … DANN …). Die Excel-Datei bleibt immer unverändert.", I18n.revision)
         headerRight: [
-            PButton { kind: "subtle"; iconName: "filter"; text: "Regeln verwalten"; tip: "Ansicht »Regeln«: Regelwerke anlegen und bearbeiten"; onClicked: App.navigate("rules") }
+            PButton { kind: "subtle"; iconName: "filter"; text: I18n.tr("Regeln verwalten", I18n.revision); tip: I18n.tr("Ansicht »Regeln«: Regelwerke anlegen und bearbeiten", I18n.revision); onClicked: App.navigate("rules") }
         ]
         RowLayout {
             Layout.fillWidth: true
@@ -342,7 +342,7 @@ PPage {
             PComboBox {
                 objectName: "ruleSetCombo"
                 Layout.fillWidth: true
-                label: "Regelwerk der Übersicht"
+                label: I18n.tr("Regelwerk der Übersicht", I18n.revision)
                 model: Contracts.ruleSetChoices
                 textRole: "label"
                 currentIndex: {
@@ -352,7 +352,7 @@ PPage {
                 }
                 onActivated: (index) => Contracts.setRuleSet(Contracts.ruleSetChoices[index].key)
             }
-            PButton { iconName: "edit"; text: "Bearbeiten"; enabled: Contracts.ruleSetId !== ""; tip: "Regeln dieses Regelwerks ansehen und bearbeiten"; onClicked: Rules.openActive() }
+            PButton { iconName: "edit"; text: I18n.tr("Bearbeiten", I18n.revision); enabled: Contracts.ruleSetId !== ""; tip: I18n.tr("Regeln dieses Regelwerks ansehen und bearbeiten", I18n.revision); onClicked: Rules.openActive() }
         }
         PText {
             objectName: "ruleSetSummary"
@@ -361,7 +361,7 @@ PPage {
             textStyle: "caption"
             wrap: true
             tone: Rules.activeTone === "caution" ? "warning" : "secondary"
-            text: Contracts.ruleSetId === "" ? "Kein Regelwerk – die Werte stehen so in der PDF, wie sie sich aus der Excel und den Zyklus-Regeln ergeben." : Rules.activeSummary
+            text: I18n.tr(Contracts.ruleSetId === "" ? "Kein Regelwerk – die Werte stehen so in der PDF, wie sie sich aus der Excel und den Zyklus-Regeln ergeben." : Rules.activeSummary, I18n.revision)
         }
     }
 
@@ -370,9 +370,9 @@ PPage {
         Layout.fillWidth: true
         Layout.topMargin: 12
         iconName: "history"
-        title: "Verlauf löschen"
-        description: "Leert die Liste »Zuletzt erstellt«. PDF-Dateien und Kundenakten bleiben erhalten – Kundenakten verwalten Sie in der Ansicht »Kunden«."
-        PButton { iconName: "delete"; text: "Löschen"; onClicked: Contracts.clearHistory() }
+        title: I18n.tr("Verlauf löschen", I18n.revision)
+        description: I18n.tr("Leert die Liste »Zuletzt erstellt«. PDF-Dateien und Kundenakten bleiben erhalten – Kundenakten verwalten Sie in der Ansicht »Kunden«.", I18n.revision)
+        PButton { iconName: "delete"; text: I18n.tr("Löschen", I18n.revision); onClicked: Contracts.clearHistory() }
     }
     PInfoBar { Layout.fillWidth: true; notice: Notices.area("daten_info") }
 }

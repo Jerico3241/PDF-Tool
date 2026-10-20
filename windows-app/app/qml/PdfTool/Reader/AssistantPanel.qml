@@ -51,7 +51,7 @@ ColumnLayout {
             Item { width: 1; height: Metrics.s4 }
             PText {
                 width: parent.width
-                text: root.loading ? "Sprachmodell wird geladen" : (Assistant.available ? "KI-Assistent einrichten" : "KI-Assistent nicht enthalten")
+                text: I18n.tr(root.loading ? "Sprachmodell wird geladen" : (Assistant.available ? "KI-Assistent einrichten" : "KI-Assistent nicht enthalten"), I18n.revision)
                 textStyle: "bodyStrong"
                 horizontalAlignment: Text.AlignHCenter
                 wrap: true
@@ -59,9 +59,9 @@ ColumnLayout {
             PText {
                 objectName: "readerAssistantSetupText"
                 width: parent.width
-                text: !Assistant.available ? "Diese Installation enthält den KI-Assistenten nicht."
+                text: I18n.tr(!Assistant.available ? "Diese Installation enthält den KI-Assistenten nicht."
                       : root.loading ? Assistant.statusText
-                      : "Fragen zum PDF beantworten und Dokumente zusammenfassen – vollständig auf diesem PC. Dafür wird einmal ein Sprachmodell geladen."
+                      : "Fragen zum PDF beantworten und Dokumente zusammenfassen – vollständig auf diesem PC. Dafür wird einmal ein Sprachmodell geladen.", I18n.revision)
                 tone: "secondary"
                 horizontalAlignment: Text.AlignHCenter
                 wrap: true
@@ -73,7 +73,7 @@ ColumnLayout {
                 visible: Assistant.available && !root.loading
                 kind: "accent"
                 iconName: Assistant.partial !== "" ? "arrow_download" : ""
-                text: Assistant.partial !== "" ? "Download fortsetzen" : "Einrichten …"
+                text: I18n.tr(Assistant.partial !== "" ? "Download fortsetzen" : "Einrichten …", I18n.revision)
                 onClicked: Assistant.partial !== "" ? Assistant.download(Assistant.partial) : Assistant.setup()
             }
             PProgressBar {
@@ -86,7 +86,7 @@ ColumnLayout {
             PText {
                 width: parent.width
                 visible: root.loading && Assistant.progressText !== ""
-                text: Assistant.progressText
+                text: I18n.tr(Assistant.progressText, I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 horizontalAlignment: Text.AlignHCenter
@@ -96,8 +96,8 @@ ColumnLayout {
                 objectName: "readerAssistantPause"
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: root.phase === "download"
-                text: "Anhalten"
-                tip: "Download anhalten – er lässt sich später fortsetzen"
+                text: I18n.tr("Anhalten", I18n.revision)
+                tip: I18n.tr("Download anhalten – er lässt sich später fortsetzen", I18n.revision)
                 onClicked: Assistant.cancelDownload()
             }
         }
@@ -123,10 +123,10 @@ ColumnLayout {
                 PIcon { anchors.centerIn: parent; name: "chat_sparkle"; size: Metrics.iconSizeLarge; color: Theme.accentText }
             }
             Item { width: 1; height: Metrics.s4 }
-            PText { width: parent.width; text: "Fragen zu diesem PDF"; textStyle: "bodyStrong"; horizontalAlignment: Text.AlignHCenter; wrap: true }
+            PText { width: parent.width; text: I18n.tr("Fragen zu diesem PDF", I18n.revision); textStyle: "bodyStrong"; horizontalAlignment: Text.AlignHCenter; wrap: true }
             PText {
                 width: parent.width
-                text: "Der Assistent antwortet nur anhand dieses Dokuments und nennt die Seiten, auf die er sich stützt."
+                text: I18n.tr("Der Assistent antwortet nur anhand dieses Dokuments und nennt die Seiten, auf die er sich stützt.", I18n.revision)
                 tone: "secondary"
                 horizontalAlignment: Text.AlignHCenter
                 wrap: true
@@ -136,7 +136,7 @@ ColumnLayout {
                 objectName: "readerAssistantSummarize"
                 width: parent.width
                 iconName: "text_bullet_list_square"
-                text: "Dokument zusammenfassen"
+                text: I18n.tr("Dokument zusammenfassen", I18n.revision)
                 enabled: !Assistant.busy && root.doc !== null
                 onClicked: { flick.stick = true; Assistant.summarize() }
             }
@@ -144,7 +144,7 @@ ColumnLayout {
                 objectName: "readerAssistantTranslate"
                 width: parent.width
                 iconName: "local_language"
-                text: "Dokument übersetzen …"
+                text: I18n.tr("Dokument übersetzen …", I18n.revision)
                 enabled: !Assistant.busy && root.doc !== null
                 onClicked: { flick.stick = true; Assistant.translate() }
             }
@@ -153,8 +153,8 @@ ColumnLayout {
                 objectName: "readerAssistantSeveral"
                 width: parent.width
                 iconName: "library"
-                text: "Mehrere PDFs fragen …"
-                tip: "Fragen an gewählte PDFs oder alle PDFs eines Ordners"
+                text: I18n.tr("Mehrere PDFs fragen …", I18n.revision)
+                tip: I18n.tr("Fragen an gewählte PDFs oder alle PDFs eines Ordners", I18n.revision)
                 enabled: !Assistant.busy
                 onClicked: severalMenu.popup(severalButton, 0, severalButton.height)
             }
@@ -169,8 +169,8 @@ ColumnLayout {
                     width: parent.width
                     kind: "subtle"
                     iconName: "chat_sparkle"
-                    text: modelData.label
-                    tip: modelData.question
+                    text: I18n.tr(modelData.label, I18n.revision)
+                    tip: I18n.tr(modelData.question, I18n.revision)
                     enabled: !Assistant.busy && root.doc !== null
                     onClicked: root.send(modelData.question)
                 }
@@ -192,7 +192,7 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         T.ScrollBar.vertical: PScrollBar {}
         Accessible.role: Accessible.List
-        Accessible.name: "Gespräch mit dem KI-Assistenten"
+        Accessible.name: I18n.tr("Gespräch mit dem KI-Assistenten", I18n.revision)
         // Am Ende bleiben, solange man dort ist: Eine wachsende Antwort bleibt sichtbar; wer nach oben scrollt,
         // liest dort ungestört weiter.
         readonly property real endY: Math.max(0, contentHeight - height)
@@ -228,7 +228,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     implicitHeight: kind === "question" ? bubble.height : details.implicitHeight
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: (kind === "question" ? "Frage: " : "") + text
+                    Accessible.name: I18n.tr((kind === "question" ? "Frage: " : "") + text, I18n.revision)
 
                     // Frage: rechts, in einer Blase
                     Rectangle {
@@ -245,7 +245,7 @@ ColumnLayout {
                             x: 12
                             y: 8
                             width: bubble.width - 24
-                            text: entry.kind === "question" ? entry.text : ""
+                            text: I18n.tr(entry.kind === "question" ? entry.text : "", I18n.revision)
                             wrap: true
                         }
                     }
@@ -260,7 +260,7 @@ ColumnLayout {
                             visible: entry.kind === "answer"
                             spacing: Metrics.s6
                             PIcon { name: "sparkle"; size: 16; color: Theme.accentText }
-                            PText { text: "KI-Assistent"; textStyle: "caption"; tone: "secondary" }
+                            PText { text: I18n.tr("KI-Assistent", I18n.revision); textStyle: "caption"; tone: "secondary" }
                         }
                         Text {
                             id: answerText
@@ -268,7 +268,7 @@ ColumnLayout {
                             Layout.fillWidth: true
                             visible: entry.kind === "answer" && entry.text !== ""
                             // ``rich`` ist maskiert und kennt nur fett, Stichpunkte und Seitenverweise (assistant.text.rich)
-                            text: entry.rich
+                            text: I18n.tr(entry.rich, I18n.revision)
                             textFormat: Text.StyledText
                             wrapMode: Text.Wrap
                             font: Typography.body
@@ -284,14 +284,14 @@ ColumnLayout {
                             }
                             HoverHandler { cursorShape: answerText.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
                             Accessible.role: Accessible.StaticText
-                            Accessible.name: entry.text
+                            Accessible.name: I18n.tr(entry.text, I18n.revision)
                         }
                         RowLayout {
                             objectName: "readerAssistantPending"
                             visible: entry.pending
                             spacing: Metrics.s8
                             PProgressRing { size: 14; running: entry.pending && root.visible }
-                            PText { Layout.fillWidth: true; text: entry.note; textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight }
+                            PText { Layout.fillWidth: true; text: I18n.tr(entry.note, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight }
                         }
                         PInfoBar {
                             objectName: "readerAssistantError"
@@ -300,13 +300,13 @@ ColumnLayout {
                             shown: entry.kind === "error"
                             topMargin: 0
                             severity: "error"
-                            message: entry.kind === "error" ? entry.text : ""
+                            message: I18n.tr(entry.kind === "error" ? entry.text : "", I18n.revision)
                             closable: false
                         }
                         PText {
                             Layout.fillWidth: true
                             visible: entry.kind === "note" || (!entry.pending && entry.kind === "answer" && entry.note !== "")
-                            text: entry.kind === "note" ? entry.text : entry.note
+                            text: I18n.tr(entry.kind === "note" ? entry.text : entry.note, I18n.revision)
                             textStyle: "caption"
                             tone: "tertiary"
                             horizontalAlignment: entry.kind === "note" ? Text.AlignHCenter : Text.AlignLeft
@@ -324,8 +324,8 @@ ColumnLayout {
                                     implicitHeight: 28
                                     leftPadding: 8
                                     rightPadding: 8
-                                    text: "S. " + modelData
-                                    tip: "Zur Seite " + modelData
+                                    text: I18n.tr("S. " + modelData, I18n.revision)
+                                    tip: I18n.tr("Zur Seite " + modelData, I18n.revision)
                                     onClicked: Assistant.openPage(modelData)
                                 }
                             }
@@ -337,8 +337,8 @@ ColumnLayout {
                                     implicitHeight: 28
                                     leftPadding: 8
                                     rightPadding: 8
-                                    text: modelData.label
-                                    tip: "Datei öffnen und zur Seite " + modelData.page + " springen"
+                                    text: I18n.tr(modelData.label, I18n.revision)
+                                    tip: I18n.tr("Datei öffnen und zur Seite " + modelData.page + " springen", I18n.revision)
                                     onClicked: Assistant.openSource(modelData.file, modelData.page)
                                 }
                             }
@@ -347,7 +347,7 @@ ColumnLayout {
                                 implicitWidth: 28
                                 implicitHeight: 28
                                 iconName: "copy"
-                                tip: "Antwort kopieren"
+                                tip: I18n.tr("Antwort kopieren", I18n.revision)
                                 onClicked: Assistant.copy(entry.key)
                             }
                         }
@@ -372,7 +372,7 @@ ColumnLayout {
             PText {
                 objectName: "readerAssistantScope"
                 Layout.fillWidth: true
-                text: "Fragen an: " + (root.several ? Assistant.scopeLabel : "dieses PDF")
+                text: I18n.tr("Fragen an: " + (root.several ? Assistant.scopeLabel : "dieses PDF"), I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 elide: Text.ElideRight
@@ -385,7 +385,7 @@ ColumnLayout {
                 leftPadding: 6
                 rightPadding: 6
                 kind: "subtle"
-                text: "Mehrere PDFs …"
+                text: I18n.tr("Mehrere PDFs …", I18n.revision)
                 enabled: !Assistant.busy
                 onClicked: severalMenu.popup(scopeButton, 0, scopeButton.height)
             }
@@ -395,7 +395,7 @@ ColumnLayout {
                 implicitWidth: 24
                 implicitHeight: 24
                 iconName: "dismiss"
-                tip: "Wieder nur dieses PDF fragen"
+                tip: I18n.tr("Wieder nur dieses PDF fragen", I18n.revision)
                 onClicked: Assistant.clearScope()
             }
         }
@@ -408,8 +408,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 minLines: 1
                 maxLines: 5
-                label: root.several ? "Frage an die gewählten PDFs" : "Frage zum Dokument"
-                placeholderText: root.several ? "Frage an die gewählten PDFs …" : "Frage zu diesem PDF …"
+                label: I18n.tr(root.several ? "Frage an die gewählten PDFs" : "Frage zum Dokument", I18n.revision)
+                placeholderText: I18n.tr(root.several ? "Frage an die gewählten PDFs …" : "Frage zu diesem PDF …", I18n.revision)
                 enabled: root.doc !== null
                 submitOnEnter: true
                 onSubmitted: if (root.send(input.text)) input.text = ""
@@ -419,7 +419,7 @@ ColumnLayout {
                 Layout.alignment: Qt.AlignBottom
                 visible: root.conversation.count > 0 && !Assistant.busy && !root.several
                 iconName: "text_bullet_list_square"
-                tip: "Dokument zusammenfassen"
+                tip: I18n.tr("Dokument zusammenfassen", I18n.revision)
                 enabled: root.doc !== null
                 onClicked: { flick.stick = true; Assistant.summarize() }
             }
@@ -428,7 +428,7 @@ ColumnLayout {
                 Layout.alignment: Qt.AlignBottom
                 visible: root.conversation.count > 0 && !Assistant.busy && !root.several
                 iconName: "local_language"
-                tip: "Dokument übersetzen"
+                tip: I18n.tr("Dokument übersetzen", I18n.revision)
                 enabled: root.doc !== null
                 onClicked: { flick.stick = true; Assistant.translate() }
             }
@@ -438,7 +438,7 @@ ColumnLayout {
                 visible: !Assistant.busy
                 kind: "accent"
                 iconName: "send"
-                tip: "Frage senden (Eingabetaste)"
+                tip: I18n.tr("Frage senden (Eingabetaste)", I18n.revision)
                 enabled: input.text.trim() !== "" && root.doc !== null
                 onClicked: if (root.send(input.text)) input.text = ""
             }
@@ -447,7 +447,7 @@ ColumnLayout {
                 Layout.alignment: Qt.AlignBottom
                 visible: Assistant.busy
                 iconName: "stop"
-                tip: "Antwort anhalten"
+                tip: I18n.tr("Antwort anhalten", I18n.revision)
                 onClicked: Assistant.stop()
             }
         }
@@ -457,7 +457,7 @@ ColumnLayout {
             PIcon { Layout.alignment: Qt.AlignTop; name: "shield_checkmark"; size: 14; color: Theme.textTertiary }
             PText {
                 Layout.fillWidth: true
-                text: "Läuft nur auf diesem PC. Antworten können Fehler enthalten – bitte auf den genannten Seiten prüfen."
+                text: I18n.tr("Läuft nur auf diesem PC. Antworten können Fehler enthalten – bitte auf den genannten Seiten prüfen.", I18n.revision)
                 textStyle: "caption"
                 tone: "tertiary"
                 wrap: true
@@ -468,7 +468,7 @@ ColumnLayout {
     PMenu {
         id: severalMenu
         objectName: "readerAssistantSeveralMenu"
-        PMenuItem { text: "PDFs wählen …"; iconName: "document_multiple"; onTriggered: severalMenu.afterClose = function() { flick.stick = true; Assistant.chooseFiles() } }
-        PMenuItem { text: "Ordner wählen (mit Unterordnern) …"; iconName: "folder_open"; onTriggered: severalMenu.afterClose = function() { flick.stick = true; Assistant.chooseFolder() } }
+        PMenuItem { text: I18n.tr("PDFs wählen …", I18n.revision); iconName: "document_multiple"; onTriggered: severalMenu.afterClose = function() { flick.stick = true; Assistant.chooseFiles() } }
+        PMenuItem { text: I18n.tr("Ordner wählen (mit Unterordnern) …", I18n.revision); iconName: "folder_open"; onTriggered: severalMenu.afterClose = function() { flick.stick = true; Assistant.chooseFolder() } }
     }
 }

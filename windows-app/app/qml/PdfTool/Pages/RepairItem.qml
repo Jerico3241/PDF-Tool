@@ -63,7 +63,7 @@ Item {
     implicitHeight: card.implicitHeight + 8
     height: implicitHeight
     Accessible.role: Accessible.ListItem
-    Accessible.name: name + ", " + stateText + (message !== "" ? ", " + message : "")
+    Accessible.name: I18n.tr(name + ", " + stateText + (message !== "" ? ", " + message : ""), I18n.revision)
 
     onBusyChanged: {
         if (busy) {
@@ -137,20 +137,20 @@ Item {
                     spacing: 0
                     PText {
                         objectName: "repairItemName"
-                        text: row.name
+                        text: I18n.tr(row.name, I18n.revision)
                         textStyle: "bodyStrong"
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
-                        PToolTip { text: row.path; visible: nameHover.hovered && row.path !== "" }
+                        PToolTip { text: I18n.tr(row.path, I18n.revision); visible: nameHover.hovered && row.path !== "" }
                         HoverHandler { id: nameHover }
                     }
-                    PText { objectName: "repairItemCaption"; text: row.sizeText + (row.signatures > 0 ? " · digital signiert" : ""); textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
+                    PText { objectName: "repairItemCaption"; text: I18n.tr(row.sizeText + (row.signatures > 0 ? " · digital signiert" : ""), I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
                 }
-                PBadge { objectName: "repairItemState"; text: row.stateText; tone: row.badgeTone; Layout.alignment: Qt.AlignTop }
+                PBadge { objectName: "repairItemState"; text: I18n.tr(row.stateText, I18n.revision); tone: row.badgeTone; Layout.alignment: Qt.AlignTop }
                 PIconButton {
                     objectName: "repairItemRemove"
                     iconName: "dismiss"
-                    tip: "Aus der Liste entfernen (die Datei bleibt unverändert)"
+                    tip: I18n.tr("Aus der Liste entfernen (die Datei bleibt unverändert)", I18n.revision)
                     enabled: row.state !== "repairing"
                     Layout.alignment: Qt.AlignTop
                     onClicked: Repair.remove(row.key)
@@ -165,7 +165,7 @@ Item {
                     width: parent.width
                     spacing: 4
                     Item { implicitHeight: 2 }
-                    PText { objectName: "repairItemPhase"; text: row.phaseText; textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
+                    PText { objectName: "repairItemPhase"; text: I18n.tr(row.phaseText, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true }
                     PProgressBar { Layout.fillWidth: true; indeterminate: row.progress < 0; value: Math.max(0, row.progress) }
                 }
             }
@@ -194,8 +194,8 @@ Item {
                 animate: Motion.enabled
                 shown: row.single && row.diagTitle !== ""
                 severity: row.diagSeverity !== "" ? row.diagSeverity : "info"
-                title: row.diagTitle
-                message: row.diagText
+                title: I18n.tr(row.diagTitle, I18n.revision)
+                message: I18n.tr(row.diagText, I18n.revision)
                 actions: row.rescue && row.state === "unreadable" ? [Repair.texts.rescueActionShort] : []
                 onActionTriggered: Repair.rescueItem(row.key)
             }
@@ -203,7 +203,7 @@ Item {
             // Hinweis oder Fehler (mehrere PDFs: auch die Erklärung des Zustands)
             PText {
                 objectName: "repairItemMessage"
-                text: row.message
+                text: I18n.tr(row.message, I18n.revision)
                 visible: text !== ""
                 wrap: true
                 tone: row.tone === "critical" ? "critical" : (row.tone === "caution" ? "caution" : "secondary")
@@ -218,7 +218,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: 8
                     PIcon { name: "warning"; color: Theme.warning; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
-                    PText { text: modelData; wrap: true; Layout.fillWidth: true }
+                    PText { text: I18n.tr(modelData, I18n.revision); wrap: true; Layout.fillWidth: true }
                 }
             }
 
@@ -236,17 +236,17 @@ Item {
                             id: passwordField
                             objectName: "repairPassword"
                             preferredWidth: 240
-                            label: "Passwort von " + row.name
-                            placeholderText: "Passwort der PDF"
+                            label: I18n.tr("Passwort von " + row.name, I18n.revision)
+                            placeholderText: I18n.tr("Passwort der PDF", I18n.revision)
                             echoMode: TextInput.Password
                             passwordCharacter: "•"
                             inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
                             enabled: !row.busy
                             onSubmitted: Repair.unlock(row.key, text)
                         }
-                        PButton { objectName: "repairUnlock"; iconName: "lock_closed"; text: "Entsperren"; tip: "Diese PDF mit dem Passwort öffnen"; enabled: !row.busy; onClicked: Repair.unlock(row.key, passwordField.text) }
+                        PButton { objectName: "repairUnlock"; iconName: "lock_closed"; text: I18n.tr("Entsperren", I18n.revision); tip: I18n.tr("Diese PDF mit dem Passwort öffnen", I18n.revision); enabled: !row.busy; onClicked: Repair.unlock(row.key, passwordField.text) }
                     }
-                    PText { text: "Das Passwort gilt nur für diese Datei und wird nicht gespeichert."; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 4 }
+                    PText { text: I18n.tr("Das Passwort gilt nur für diese Datei und wird nicht gespeichert.", I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 4 }
                 }
             }
 
@@ -255,25 +255,25 @@ Item {
                 Layout.fillWidth: true
                 spacing: 6
                 visible: !row.hasOutput
-                PText { text: "Ausgabe"; textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 56 }
+                PText { text: I18n.tr("Ausgabe", I18n.revision); textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 56 }
                 PTextField {
                     id: nameField
                     objectName: "repairOutputName"
                     Layout.fillWidth: true
                     Layout.maximumWidth: 480
                     preferredWidth: 320
-                    label: "Ausgabename für " + row.name
+                    label: I18n.tr("Ausgabename für " + row.name, I18n.revision)
                     text: row.outputBase
                     invalid: row.nameError !== ""
                     enabled: !row.busy && !row.inRun
                     onTextEdited: Repair.setOutputName(row.key, text)
                 }
-                PText { text: ".pdf"; tone: "secondary" }
+                PText { text: I18n.tr(".pdf", I18n.revision); tone: "secondary" }
                 PIconButton {
                     objectName: "repairOutputReset"
                     visible: row.nameManual || row.nameError !== ""
                     iconName: "arrow_reset"
-                    tip: "Automatischen Namen wiederherstellen"
+                    tip: I18n.tr("Automatischen Namen wiederherstellen", I18n.revision)
                     enabled: !row.busy && !row.inRun
                     onClicked: Repair.resetOutputName(row.key)
                 }
@@ -282,7 +282,7 @@ Item {
             PText {
                 objectName: "repairOutputNote"
                 visible: !row.hasOutput && text !== ""
-                text: row.nameError !== "" ? row.nameError : (row.numbered ? "Gespeichert wird als »" + row.outputName + "« – der Name ist schon vergeben." : "")
+                text: I18n.tr(row.nameError !== "" ? row.nameError : (row.numbered ? "Gespeichert wird als »" + row.outputName + "« – der Name ist schon vergeben." : ""), I18n.revision)
                 tone: row.nameError !== "" ? "critical" : "secondary"
                 textStyle: "caption"
                 wrap: true
@@ -292,7 +292,7 @@ Item {
             PText {
                 objectName: "repairOutputSaved"
                 visible: row.hasOutput
-                text: "Gespeichert als »" + row.outputName + "«"
+                text: I18n.tr("Gespeichert als »" + row.outputName + "«", I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 elide: Text.ElideMiddle
@@ -308,8 +308,8 @@ Item {
                 animate: Motion.enabled
                 shown: row.single && row.rescue && row.resultTitle !== ""
                 severity: "info"
-                title: Repair.texts.rescueTitle
-                message: Repair.texts.rescueText
+                title: I18n.tr(Repair.texts.rescueTitle, I18n.revision)
+                message: I18n.tr(Repair.texts.rescueText, I18n.revision)
                 actions: [Repair.texts.rescueAction]
                 onActionTriggered: Repair.rescueItem(row.key)
             }
@@ -322,27 +322,27 @@ Item {
                     objectName: "repairItemStart"
                     visible: !row.single && row.canRepair
                     iconName: "wrench"
-                    text: row.repairText === "PDF reparieren" ? "Nur diese Datei reparieren" : row.repairText
-                    tip: "Nur diese PDF reparieren"
+                    text: I18n.tr(row.repairText === "PDF reparieren" ? "Nur diese Datei reparieren" : row.repairText, I18n.revision)
+                    tip: I18n.tr("Nur diese PDF reparieren", I18n.revision)
                     onClicked: Repair.repairItem(row.key)
                 }
                 PButton {
                     objectName: "repairItemRescue"
                     visible: !row.single && row.rescue
                     iconName: "image"
-                    text: Repair.texts.rescueActionShort
-                    tip: "Rettungsmodus nur für diese Datei – lesbare Seiten als Bilder (mit Rückfrage)"
+                    text: I18n.tr(Repair.texts.rescueActionShort, I18n.revision)
+                    tip: I18n.tr("Rettungsmodus nur für diese Datei – lesbare Seiten als Bilder (mit Rückfrage)", I18n.revision)
                     onClicked: Repair.rescueItem(row.key)
                 }
-                PButton { objectName: "repairItemAnalyze"; visible: row.canAnalyze; iconName: "arrow_clockwise"; text: "Erneut prüfen"; onClicked: Repair.analyzeAgain(row.key) }
-                PButton { objectName: "repairItemOpen"; visible: !row.single && row.hasOutput; iconName: "window_new"; text: "Öffnen"; tip: "Reparierte PDF öffnen"; onClicked: Repair.openItemOutput(row.key) }
-                PButton { visible: !row.single && row.hasOutput; iconName: "folder_open"; text: "Ordner öffnen"; onClicked: Repair.openItemFolder(row.key) }
-                PButton { visible: !row.single && row.hasOutput; iconName: "copy"; text: "Pfad kopieren"; tip: "Pfad der reparierten PDF kopieren"; onClicked: Repair.copyItemOutput(row.key) }
+                PButton { objectName: "repairItemAnalyze"; visible: row.canAnalyze; iconName: "arrow_clockwise"; text: I18n.tr("Erneut prüfen", I18n.revision); onClicked: Repair.analyzeAgain(row.key) }
+                PButton { objectName: "repairItemOpen"; visible: !row.single && row.hasOutput; iconName: "window_new"; text: I18n.tr("Öffnen", I18n.revision); tip: I18n.tr("Reparierte PDF öffnen", I18n.revision); onClicked: Repair.openItemOutput(row.key) }
+                PButton { visible: !row.single && row.hasOutput; iconName: "folder_open"; text: I18n.tr("Ordner öffnen", I18n.revision); onClicked: Repair.openItemFolder(row.key) }
+                PButton { visible: !row.single && row.hasOutput; iconName: "copy"; text: I18n.tr("Pfad kopieren", I18n.revision); tip: I18n.tr("Pfad der reparierten PDF kopieren", I18n.revision); onClicked: Repair.copyItemOutput(row.key) }
                 PButton {
                     objectName: "repairItemDetails"
                     kind: "subtle"
                     iconName: row.detailsOpen ? "chevron_up" : "info"
-                    text: row.detailsOpen ? (row.single ? "Technische Details ausblenden" : "Details ausblenden") : (row.single ? "Technische Details anzeigen" : "Details anzeigen")
+                    text: I18n.tr(row.detailsOpen ? (row.single ? "Technische Details ausblenden" : "Details ausblenden") : (row.single ? "Technische Details anzeigen" : "Details anzeigen"), I18n.revision)
                     onClicked: row.toggleDetails()
                 }
             }
@@ -375,8 +375,8 @@ Item {
                 animate: false
                 shown: !row.single && row.diagTitle !== ""
                 severity: row.diagSeverity !== "" ? row.diagSeverity : "info"
-                title: row.diagTitle
-                message: row.diagText
+                title: I18n.tr(row.diagTitle, I18n.revision)
+                message: I18n.tr(row.diagText, I18n.revision)
             }
             PFactList { Layout.fillWidth: true; visible: !row.single; facts: row.facts }
             PInfoBar {
@@ -387,20 +387,20 @@ Item {
                 animate: false
                 shown: !row.single && row.resultTitle !== ""
                 severity: row.resultSeverity !== "" ? row.resultSeverity : "info"
-                title: row.resultTitle
-                message: row.resultText
+                title: I18n.tr(row.resultTitle, I18n.revision)
+                message: I18n.tr(row.resultText, I18n.revision)
             }
             PFactList { Layout.fillWidth: true; visible: !row.single && row.resultFacts.length > 0; facts: row.resultFacts }
-            PText { visible: row.details.length > 0; text: "Befunde der Analyse"; textStyle: "bodyStrong"; Layout.topMargin: 4 }
+            PText { visible: row.details.length > 0; text: I18n.tr("Befunde der Analyse", I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 4 }
             PFactList { objectName: "repairDetails"; Layout.fillWidth: true; labelWidth: 190; facts: row.details; visible: row.details.length > 0 }
-            PText { visible: row.resultActions.length > 0; text: "Durchgeführte Schritte"; textStyle: "bodyStrong"; Layout.topMargin: 4 }
+            PText { visible: row.resultActions.length > 0; text: I18n.tr("Durchgeführte Schritte", I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 4 }
             PFactList { objectName: "repairSteps"; Layout.fillWidth: true; labelWidth: 40; facts: row.resultActions; visible: row.resultActions.length > 0 }
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 4
                 spacing: 8
-                PText { text: row.path; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-                PIconButton { iconName: "copy"; tip: "Pfad der PDF kopieren"; onClicked: Repair.copyItemPath(row.key) }
+                PText { text: I18n.tr(row.path, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                PIconButton { iconName: "copy"; tip: I18n.tr("Pfad der PDF kopieren", I18n.revision); onClicked: Repair.copyItemPath(row.key) }
             }
         }
     }

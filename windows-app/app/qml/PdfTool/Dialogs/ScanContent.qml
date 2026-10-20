@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // »Scannen«: Scanner, Quelle (Vorlagenglas oder Einzug), Farbe und Auflösung, auf Wunsch gleich Text erkennen.
 // Gescannt wird über die Scanner-Schnittstelle von Windows, ohne Fenster des Treibers.
@@ -32,7 +33,7 @@ ColumnLayout {
     PComboBox {
         objectName: "scanScanner"
         Layout.fillWidth: true
-        label: "Scanner"
+        label: I18n.tr("Scanner", I18n.revision)
         model: root.data_.scanners || []
         textRole: "name"
         valueRole: "id"
@@ -41,22 +42,22 @@ ColumnLayout {
         focus: true
     }
 
-    PFieldLabel { text: "Quelle" }
+    PFieldLabel { text: I18n.tr("Quelle", I18n.revision) }
     RowLayout {
         spacing: 16
-        PRadioButton { objectName: "scanFlatbed"; text: "Vorlagenglas (Seite für Seite)"; checked: root.source === "flatbed"; onClicked: root.source = "flatbed" }
-        PRadioButton { objectName: "scanFeeder"; text: "Einzug (alle Blätter)"; checked: root.source === "feeder"; onClicked: root.source = "feeder" }
+        PRadioButton { objectName: "scanFlatbed"; text: I18n.tr("Vorlagenglas (Seite für Seite)", I18n.revision); checked: root.source === "flatbed"; onClicked: root.source = "flatbed" }
+        PRadioButton { objectName: "scanFeeder"; text: I18n.tr("Einzug (alle Blätter)", I18n.revision); checked: root.source === "feeder"; onClicked: root.source = "feeder" }
     }
 
-    PFieldLabel { text: "Farbe" }
+    PFieldLabel { text: I18n.tr("Farbe", I18n.revision) }
     RowLayout {
         spacing: 16
-        PRadioButton { objectName: "scanColor"; text: "Farbe"; checked: root.color === "color"; onClicked: root.color = "color" }
-        PRadioButton { objectName: "scanGray"; text: "Graustufen"; checked: root.color === "gray"; onClicked: root.color = "gray" }
-        PRadioButton { objectName: "scanBw"; text: "Schwarzweiß"; checked: root.color === "bw"; onClicked: root.color = "bw" }
+        PRadioButton { objectName: "scanColor"; text: I18n.tr("Farbe", I18n.revision); checked: root.color === "color"; onClicked: root.color = "color" }
+        PRadioButton { objectName: "scanGray"; text: I18n.tr("Graustufen", I18n.revision); checked: root.color === "gray"; onClicked: root.color = "gray" }
+        PRadioButton { objectName: "scanBw"; text: I18n.tr("Schwarzweiß", I18n.revision); checked: root.color === "bw"; onClicked: root.color = "bw" }
     }
 
-    PFieldLabel { text: "Auflösung" }
+    PFieldLabel { text: I18n.tr("Auflösung", I18n.revision) }
     PComboBox {
         objectName: "scanDpi"
         preferredWidth: 220
@@ -73,7 +74,7 @@ ColumnLayout {
         Layout.topMargin: 12
         Layout.fillWidth: true
         enabled: root.data_.ocrAvailable === true
-        text: "Text erkennen – die PDF wird durchsuchbar"
+        text: I18n.tr("Text erkennen – die PDF wird durchsuchbar", I18n.revision)
     }
     PText {
         Layout.fillWidth: true
@@ -81,6 +82,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Danach wählen Sie, wo die PDF gespeichert wird. Die Texterkennung läuft vollständig auf diesem PC."
+        text: I18n.tr("Danach wählen Sie, wo die PDF gespeichert wird. Die Texterkennung läuft vollständig auf diesem PC.", I18n.revision)
     }
 }

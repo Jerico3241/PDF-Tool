@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Optionsfeld: der innere Punkt wächst bzw. schrumpft beim Wechsel.
 T.RadioButton {
@@ -13,7 +14,7 @@ T.RadioButton {
     focusPolicy: Qt.StrongFocus
     font: Typography.body
     Accessible.role: Accessible.RadioButton
-    Accessible.name: text
+    Accessible.name: I18n.tr(text, I18n.revision)
     Accessible.checked: checked
 
     indicator: Rectangle {
@@ -46,7 +47,7 @@ T.RadioButton {
     contentItem: Text {
         id: label
         leftPadding: control.indicator.width + control.spacing
-        text: control.text
+        text: I18n.tr(control.text, I18n.revision)
         font: control.font
         color: control.enabled ? Theme.textPrimary : Theme.disabled
         verticalAlignment: Text.AlignVCenter

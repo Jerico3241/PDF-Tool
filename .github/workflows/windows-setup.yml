@@ -184,7 +184,7 @@ jobs:
         run: python -m pytest windows-app/tests/test_editor_redact.py windows-app/tests/test_editor_cleanup.py windows-app/tests/test_editor_protect.py windows-app/tests/test_editor_optimize.py windows-app/tests/test_editor_pagemarks.py windows-app/tests/test_editor_stamps.py windows-app/tests/test_editor_navigation.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (4.0 – Als PDF/A speichern, PDF aus Bildern, Stapel-Aktionen, Vergleichen, digitale Signatur mit dem Zertifikatspeicher von Windows, Umwandeln)
-        run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py windows-app/tests/test_compare.py windows-app/tests/test_digsig.py windows-app/tests/test_convert.py -q -rs -p no:cacheprovider
+        run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py windows-app/tests/test_compare.py windows-app/tests/test_digsig.py windows-app/tests/test_convert.py windows-app/tests/test_i18n.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
         run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider

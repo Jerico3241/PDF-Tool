@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Kopf eines Vergleichs: Hinweis, »Seit …« mit »Vergleichen mit« und die Anzahlen je Kategorie.
 ColumnLayout {
@@ -15,19 +16,19 @@ ColumnLayout {
         closable: false
         shown: root.view !== null && root.view.noteText !== ""
         severity: root.view ? root.view.noteSeverity : "info"
-        title: root.view ? root.view.noteTitle : ""
-        message: root.view ? root.view.noteText : ""
+        title: I18n.tr(root.view ? root.view.noteTitle : "", I18n.revision)
+        message: I18n.tr(root.view ? root.view.noteText : "", I18n.revision)
     }
     RowLayout {
         Layout.fillWidth: true
         visible: root.view !== null && root.view.mode === "comparison"
         spacing: 8
-        PText { text: root.view ? root.view.headline : ""; textStyle: "bodyStrong"; wrap: true; Layout.fillWidth: true }
-        PText { text: "Vergleichen mit"; textStyle: "caption"; tone: "secondary" }
+        PText { text: I18n.tr(root.view ? root.view.headline : "", I18n.revision); textStyle: "bodyStrong"; wrap: true; Layout.fillWidth: true }
+        PText { text: I18n.tr("Vergleichen mit", I18n.revision); textStyle: "caption"; tone: "secondary" }
         PComboBox {
             preferredWidth: 250
-            label: "Vergleichen mit"
-            tip: "Früheren Vertragsstand dieses Kunden zum Vergleich wählen"
+            label: I18n.tr("Vergleichen mit", I18n.revision)
+            tip: I18n.tr("Früheren Vertragsstand dieses Kunden zum Vergleich wählen", I18n.revision)
             model: root.view ? root.view.choices : []
             textRole: "label"
             valueRole: "value"

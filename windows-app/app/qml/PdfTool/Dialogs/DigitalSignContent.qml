@@ -43,16 +43,16 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Die Signatur bestätigt, wer das Dokument unterschrieben hat, und dass es danach nicht verändert wurde. Signiert wird eine Kopie – das Original bleibt unverändert."
+        text: I18n.tr("Die Signatur bestätigt, wer das Dokument unterschrieben hat, und dass es danach nicht verändert wurde. Signiert wird eine Kopie – das Original bleibt unverändert.", I18n.revision)
     }
 
-    PFieldLabel { text: "Zertifikat" }
+    PFieldLabel { text: I18n.tr("Zertifikat", I18n.revision) }
     PText {
         visible: root.certificates.length === 0
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "In Windows ist kein Zertifikat zum Signieren eingerichtet. Wählen Sie eine Zertifikatsdatei (.pfx oder .p12)."
+        text: I18n.tr("In Windows ist kein Zertifikat zum Signieren eingerichtet. Wählen Sie eine Zertifikatsdatei (.pfx oder .p12).", I18n.revision)
     }
     Repeater {
         model: root.certificates
@@ -61,7 +61,7 @@ ColumnLayout {
             required property int index
             objectName: "signCertificate_" + index
             Layout.fillWidth: true
-            text: modelData.subject + "  ·  " + (modelData.selfSigned ? "selbst ausgestellt" : "von " + modelData.issuer) + "  ·  gültig bis " + modelData.until
+            text: I18n.tr(modelData.subject + "  ·  " + (modelData.selfSigned ? "selbst ausgestellt" : "von " + modelData.issuer) + "  ·  gültig bis " + modelData.until, I18n.revision)
             checked: root.thumbprint === modelData.thumbprint
             onClicked: root.thumbprint = modelData.thumbprint
         }
@@ -69,7 +69,7 @@ ColumnLayout {
     PRadioButton {
         objectName: "signUseFile"
         Layout.fillWidth: true
-        text: "Zertifikatsdatei (.pfx, .p12)"
+        text: I18n.tr("Zertifikatsdatei (.pfx, .p12)", I18n.revision)
         checked: root.useFile
         onClicked: root.thumbprint = ""
     }
@@ -83,11 +83,11 @@ ColumnLayout {
             Layout.fillWidth: true
             elide: Text.ElideMiddle
             tone: root.file !== "" ? "primary" : "tertiary"
-            text: root.file !== "" ? root.file : "Keine Datei gewählt"
+            text: I18n.tr(root.file !== "" ? root.file : "Keine Datei gewählt", I18n.revision)
         }
         PButton {
             objectName: "signPickFile"
-            text: "Datei wählen …"
+            text: I18n.tr("Datei wählen …", I18n.revision)
             iconName: "folder_open"
             onClicked: {
                 var path = Reader.current ? Reader.current.pickCertificateFile() : ""
@@ -102,28 +102,28 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.leftMargin: 28
         Layout.topMargin: 4
-        label: "Kennwort der Zertifikatsdatei"
-        placeholderText: "Kennwort der Zertifikatsdatei"
+        label: I18n.tr("Kennwort der Zertifikatsdatei", I18n.revision)
+        placeholderText: I18n.tr("Kennwort der Zertifikatsdatei", I18n.revision)
         echoMode: TextInput.Password
         passwordCharacter: "●"
         inputMethodHints: Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
     }
 
-    PFieldLabel { text: "Grund (optional)" }
+    PFieldLabel { text: I18n.tr("Grund (optional)", I18n.revision) }
     PTextField {
         id: reason
         objectName: "signReason"
         Layout.fillWidth: true
-        label: "Grund"
-        placeholderText: "z. B. Ich stimme dem Inhalt zu"
+        label: I18n.tr("Grund", I18n.revision)
+        placeholderText: I18n.tr("z. B. Ich stimme dem Inhalt zu", I18n.revision)
     }
-    PFieldLabel { text: "Ort (optional)" }
+    PFieldLabel { text: I18n.tr("Ort (optional)", I18n.revision) }
     PTextField {
         id: location
         objectName: "signLocation"
         Layout.fillWidth: true
-        label: "Ort"
-        placeholderText: "z. B. Köln"
+        label: I18n.tr("Ort", I18n.revision)
+        placeholderText: I18n.tr("z. B. Köln", I18n.revision)
     }
 
     RowLayout {
@@ -132,17 +132,17 @@ ColumnLayout {
         PCheckBox {
             id: visible_
             objectName: "signVisible"
-            text: "Sichtbares Signaturfeld unten rechts auf Seite"
+            text: I18n.tr("Sichtbares Signaturfeld unten rechts auf Seite", I18n.revision)
         }
         PTextField {
             id: pageBox
             objectName: "signPage"
             preferredWidth: 64
             enabled: visible_.checked
-            label: "Seite"
+            label: I18n.tr("Seite", I18n.revision)
             validator: IntValidator { bottom: 1; top: Math.max(1, root.data_.pageCount || 1) }
         }
-        PText { text: "von " + (root.data_.pageCount || 1); tone: "secondary" }
+        PText { text: I18n.tr("von " + (root.data_.pageCount || 1), I18n.revision); tone: "secondary" }
     }
     PText {
         Layout.fillWidth: true
@@ -150,6 +150,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Das Feld zeigt Name, Datum und Grund. Ohne sichtbares Feld ist die Signatur nur in der Signaturprüfung zu sehen."
+        text: I18n.tr("Das Feld zeigt Name, Datum und Grund. Ohne sichtbares Feld ist die Signatur nur in der Signaturprüfung zu sehen.", I18n.revision)
     }
 }

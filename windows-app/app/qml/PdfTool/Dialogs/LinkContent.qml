@@ -30,32 +30,32 @@ ColumnLayout {
         else pageField.forceActiveFocus(Qt.OtherFocusReason)
     }
 
-    PRadioButton { objectName: "linkKindPage"; text: "Zu einer Seite dieses Dokuments"; checked: root.kind === "page"; onClicked: { root.kind = "page"; pageField.forceActiveFocus() } }
+    PRadioButton { objectName: "linkKindPage"; text: I18n.tr("Zu einer Seite dieses Dokuments", I18n.revision); checked: root.kind === "page"; onClicked: { root.kind = "page"; pageField.forceActiveFocus() } }
     RowLayout {
         Layout.leftMargin: 28
         spacing: 8
-        PText { text: "Seite" }
+        PText { text: I18n.tr("Seite", I18n.revision) }
         PTextField {
             id: pageField
             objectName: "linkPage"
             preferredWidth: 90
             enabled: root.kind === "page"
-            label: "Seite"
+            label: I18n.tr("Seite", I18n.revision)
             validator: IntValidator { bottom: 1; top: 999999 }
             invalid: root.kind === "page" && text !== "" && !root.acceptable
             Keys.onReturnPressed: (event) => { if (root.acceptable) Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
         }
-        PText { text: "von " + (root.data_.pageCount || 1); tone: "secondary" }
+        PText { text: I18n.tr("von " + (root.data_.pageCount || 1), I18n.revision); tone: "secondary" }
     }
-    PRadioButton { objectName: "linkKindWeb"; Layout.topMargin: 8; text: "Zu einer Webadresse oder E-Mail-Adresse"; checked: root.kind === "web"; onClicked: { root.kind = "web"; uriField.forceActiveFocus() } }
+    PRadioButton { objectName: "linkKindWeb"; Layout.topMargin: 8; text: I18n.tr("Zu einer Webadresse oder E-Mail-Adresse", I18n.revision); checked: root.kind === "web"; onClicked: { root.kind = "web"; uriField.forceActiveFocus() } }
     PTextField {
         id: uriField
         objectName: "linkUri"
         Layout.fillWidth: true
         Layout.leftMargin: 28
         enabled: root.kind === "web"
-        label: "Adresse"
-        placeholderText: "https://www.beispiel.de oder name@beispiel.de"
+        label: I18n.tr("Adresse", I18n.revision)
+        placeholderText: I18n.tr("https://www.beispiel.de oder name@beispiel.de", I18n.revision)
         maximumLength: 2000
         Keys.onReturnPressed: (event) => { if (root.acceptable) Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
     }
@@ -65,6 +65,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Erlaubt sind Webadressen (http, https) und E-Mail-Adressen. Beim Anklicken fragt PDF Tool nach, bevor eine Webadresse geöffnet wird."
+        text: I18n.tr("Erlaubt sind Webadressen (http, https) und E-Mail-Adressen. Beim Anklicken fragt PDF Tool nach, bevor eine Webadresse geöffnet wird.", I18n.revision)
     }
 }

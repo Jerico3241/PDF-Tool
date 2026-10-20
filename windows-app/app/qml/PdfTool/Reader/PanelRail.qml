@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Eingeklappte Seitenleiste: ein schmaler Streifen am Rand der Dokumentfläche mit den Inhalten *dieser*
 // Leiste als Symbole (links Seiten, Lesezeichen, Suchen; rechts Kommentare, Eigenschaften) – ein Klick
@@ -16,7 +17,7 @@ Rectangle {
 
     color: Theme.layer
     Accessible.role: Accessible.PageTabList
-    Accessible.name: side === "left" ? "Linke Seitenleiste" : "Rechte Seitenleiste"
+    Accessible.name: I18n.tr(side === "left" ? "Linke Seitenleiste" : "Rechte Seitenleiste", I18n.revision)
     Rectangle { x: root.side === "left" ? root.width - 1 : 0; width: 1; height: root.height; color: Theme.divider }
 
     Column {
@@ -39,7 +40,7 @@ Rectangle {
                 hoverEnabled: true
                 focusPolicy: Qt.TabFocus
                 Accessible.role: Accessible.PageTab
-                Accessible.name: modelData.tip
+                Accessible.name: I18n.tr(modelData.tip, I18n.revision)
                 onClicked: root.selected(modelData.key)
                 Keys.onReturnPressed: root.selected(modelData.key)
                 Keys.onEnterPressed: root.selected(modelData.key)
@@ -53,7 +54,7 @@ Rectangle {
                     PIcon { anchors.centerIn: parent; name: button.modelData.icon; color: Theme.textSecondary }
                 }
                 PToolTip {
-                    text: button.modelData.tip
+                    text: I18n.tr(button.modelData.tip, I18n.revision)
                     visible: button.hovered && !button.pressed
                     x: root.side === "left" ? button.width + Metrics.s8 : -implicitWidth - Metrics.s8
                     y: (button.height - implicitHeight) / 2

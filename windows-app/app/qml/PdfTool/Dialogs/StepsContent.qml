@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Kurzanleitung: nummerierte Schritte und Hinweise.
 ColumnLayout {
@@ -19,21 +20,21 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: 8
             PText {
-                text: (index + 1) + "."
+                text: I18n.tr((index + 1) + ".", I18n.revision)
                 textStyle: "bodyStrong"
                 tone: "accent"
                 Layout.alignment: Qt.AlignTop
                 Layout.preferredWidth: 20
             }
             PText {
-                text: modelData
+                text: I18n.tr(modelData, I18n.revision)
                 wrap: true
                 Layout.fillWidth: true
             }
         }
     }
     PText {
-        text: "Hinweise"
+        text: I18n.tr("Hinweise", I18n.revision)
         textStyle: "bodyStrong"
         visible: (root.data_.notes || []).length > 0
         Layout.topMargin: 10
@@ -43,7 +44,7 @@ ColumnLayout {
         model: root.data_.notes || []
         PText {
             required property var modelData
-            text: modelData
+            text: I18n.tr(modelData, I18n.revision)
             textStyle: "caption"
             tone: "secondary"
             wrap: true

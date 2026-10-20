@@ -2,6 +2,25 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.6
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.6.md).
+
+- Englische Oberfläche: `app/i18n` übersetzt fertige deutsche Texte über den Katalog `i18n/en.json` (ganze Texte und
+  Muster mit Platzhaltern, deren Inhalt rekursiv übersetzt wird; sonst Zeile für Zeile, Satz für Satz; Dateinamen
+  bleiben). Jede QML-Textbindung läuft über `I18n.tr(…, I18n.revision)` (`tools/i18n_qml.py`), neue Texte findet
+  `tools/i18n_extract.py`; `test_i18n.py` prüft beides. Einstellung `sprache` (system, de, en), Umschalten ohne
+  Neustart (`qtapp/language.py`). Tests laufen mit `PDFTOOL_SPRACHE=de`.
+- Digitale Signatur: `tools/pdf_editor/digsig.py` (PAdES-Basis mit cryptography und asn1crypto), Zertifikate aus dem
+  Windows-Speicher oder PKCS#12, Prüfen vorhandener Signaturen.
+- Umwandeln: `tools/pdf_editor/convert.py` (Text, Word als eigenes WordprocessingML, Excel mit openpyxl; Tabellen,
+  Überschriften, Zahlen und Datumswerte) und `office.py` (Office-Dateien über COM in PDF).
+- KI-Assistent: `assistant/library.py` (mehrere PDFs oder ein Ordner, Scans über Tesseract), `translation.py`
+  (übersetztes PDF), Quellen mit Datei und Seite (`src:`-Links).
+- Behoben: Dialoge aus einem Menü oder Popup öffnen erst nach dem Schließen (`Qt.callLater`) – »Text erkennen« blieb
+  sonst ohne Dialog.
+- Neue Laufzeitpakete: cryptography 50.0.2 mit cffi, asn1crypto 1.5.1.
+
 # PDF Tool 4.0.0-beta.5
 
 Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.5.md).

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // »Über«: Symbol, Name, Version, Entwickler, Beschreibung, Zitat und Namensnennung des Symbols.
 ColumnLayout {
@@ -26,17 +27,17 @@ ColumnLayout {
         ColumnLayout {
             spacing: 0
             Layout.fillWidth: true
-            PText { text: root.data_.name || ""; textStyle: "bodyLarge" }
+            PText { text: I18n.tr(root.data_.name || "", I18n.revision); textStyle: "bodyLarge" }
             RowLayout {
                 spacing: 8
-                PText { objectName: "aboutVersion"; text: "Version " + (root.data_.version || ""); tone: "secondary" }
-                PBadge { text: root.data_.beta ? "Beta" : ""; tone: "accent" }
+                PText { objectName: "aboutVersion"; text: I18n.tr("Version " + (root.data_.version || ""), I18n.revision); tone: "secondary" }
+                PBadge { text: I18n.tr(root.data_.beta ? "Beta" : "", I18n.revision); tone: "accent" }
             }
-            PText { text: "Entwickler und Inhaber: " + (root.data_.developer || ""); tone: "secondary"; Layout.topMargin: 2 }
+            PText { text: I18n.tr("Entwickler und Inhaber: " + (root.data_.developer || ""), I18n.revision); tone: "secondary"; Layout.topMargin: 2 }
         }
     }
     PText {
-        text: root.data_.text || ""
+        text: I18n.tr(root.data_.text || "", I18n.revision)
         wrap: true
         Layout.fillWidth: true
     }
@@ -52,14 +53,14 @@ ColumnLayout {
         ColumnLayout {
             spacing: 4
             Layout.fillWidth: true
-            PText { text: root.data_.quote || ""; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-            PText { text: root.data_.author || ""; textStyle: "caption"; tone: "tertiary" }
+            PText { text: I18n.tr(root.data_.quote || "", I18n.revision); tone: "secondary"; wrap: true; Layout.fillWidth: true }
+            PText { text: I18n.tr(root.data_.author || "", I18n.revision); textStyle: "caption"; tone: "tertiary" }
         }
     }
     // Namensnennung des App-Symbols, von der Flaticon-Lizenz verlangt (siehe THIRD_PARTY_LICENSES.md)
     PText {
         objectName: "aboutIconCredit"
-        text: "App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)"
+        text: I18n.tr("App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)", I18n.revision)
         textStyle: "caption"
         tone: "tertiary"
         wrap: true

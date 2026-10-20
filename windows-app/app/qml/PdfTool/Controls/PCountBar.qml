@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Zähler der Kategorien als farbige Punkte mit Text: »● 2 neu  ● 1 entfernt  ● 3 geändert«.
 // Neue oder geänderte Anzahlen blenden dezent ein.
@@ -22,7 +23,7 @@ Flow {
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.toneIconColor(modelData.tone)
             }
-            PText { text: modelData.text; anchors.verticalCenter: parent.verticalCenter }
+            PText { text: I18n.tr(modelData.text, I18n.revision); anchors.verticalCenter: parent.verticalCenter }
         }
     }
 }

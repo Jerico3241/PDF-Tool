@@ -43,7 +43,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 enabled: parent.modelData.count > 0
                 checked: root.chosen[parent.modelData.key] === true
-                text: parent.modelData.label + (parent.modelData.detail ? " – " + parent.modelData.detail : "")
+                text: I18n.tr(parent.modelData.label + (parent.modelData.detail ? " – " + parent.modelData.detail : ""), I18n.revision)
                 onToggled: {
                     var next = Object.assign({}, root.chosen)
                     next[parent.modelData.key] = checked
@@ -52,7 +52,7 @@ ColumnLayout {
             }
             PBadge {
                 Layout.alignment: Qt.AlignVCenter
-                text: parent.modelData.count > 0 ? (parent.modelData.count + (parent.modelData.unit ? " " + parent.modelData.unit : "")) : "nichts gefunden"
+                text: I18n.tr(parent.modelData.count > 0 ? (parent.modelData.count + (parent.modelData.unit ? " " + parent.modelData.unit : "")) : "nichts gefunden", I18n.revision)
                 tone: parent.modelData.count > 0 ? "info" : "neutral"
             }
         }

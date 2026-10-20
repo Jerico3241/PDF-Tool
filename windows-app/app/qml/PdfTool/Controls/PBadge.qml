@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Kleines Etikett (z. B. »Bereit«, »+2 neu«) in einem Statuston; Farbwechsel weich.
 Rectangle {
@@ -17,12 +18,12 @@ Rectangle {
     border.color: Theme.border
     Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.status } }
     Accessible.role: Accessible.StaticText
-    Accessible.name: text
+    Accessible.name: I18n.tr(text, I18n.revision)
 
     Text {
         id: label
         anchors.centerIn: parent
-        text: badge.text
+        text: I18n.tr(badge.text, I18n.revision)
         font: Typography.caption
         color: badge.strong ? Theme.textOnStatus : (badge.tone === "neutral" ? Theme.textSecondary : Theme.tone(badge.tone))
         textFormat: Text.PlainText

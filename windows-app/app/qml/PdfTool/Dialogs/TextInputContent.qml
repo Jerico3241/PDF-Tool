@@ -26,13 +26,13 @@ ColumnLayout {
         field.forceActiveFocus(Qt.OtherFocusReason)
     }
 
-    PFieldLabel { text: root.data_.label || "Name"; first: true }
+    PFieldLabel { text: I18n.tr(root.data_.label || "Name", I18n.revision); first: true }
     PTextField {
         id: field
         objectName: "dialogTextInput"
         Layout.fillWidth: true
-        label: root.data_.label || "Name"
-        placeholderText: root.data_.placeholder || ""
+        label: I18n.tr(root.data_.label || "Name", I18n.revision)
+        placeholderText: I18n.tr(root.data_.placeholder || "", I18n.revision)
         focus: true
         maximumLength: 120
         Keys.onReturnPressed: (event) => {
@@ -45,7 +45,7 @@ ColumnLayout {
         }
     }
     PText {
-        text: root.data_.hint || ""
+        text: I18n.tr(root.data_.hint || "", I18n.revision)
         visible: text !== ""
         textStyle: "caption"
         tone: "secondary"

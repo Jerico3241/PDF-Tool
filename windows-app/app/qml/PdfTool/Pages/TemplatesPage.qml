@@ -29,11 +29,11 @@ Item {
         opacity: root.detail ? 0 : 1
         visible: opacity > 0
         Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
-        title: "Vertragsübersichten"
-        subtitle: "Vorlagen: eine Darstellung einmal einrichten und mit einem Klick wiederverwenden."
+        title: I18n.tr("Vertragsübersichten", I18n.revision)
+        subtitle: I18n.tr("Vorlagen: eine Darstellung einmal einrichten und mit einem Klick wiederverwenden.", I18n.revision)
         model: Templates.listModel
         Accessible.role: Accessible.List
-        Accessible.name: "Vorlagen"
+        Accessible.name: I18n.tr("Vorlagen", I18n.revision)
         Keys.onReturnPressed: if (currentIndex >= 0) Templates.showDetail(model.get(currentIndex).id)
         Keys.onEnterPressed: if (currentIndex >= 0) Templates.showDetail(model.get(currentIndex).id)
         Keys.onSpacePressed: if (currentIndex >= 0) Templates.showDetail(model.get(currentIndex).id)
@@ -53,20 +53,20 @@ Item {
                         id: searchField
                         objectName: "templateSearch"
                         preferredWidth: 300
-                        label: "Vorlagen durchsuchen"
-                        placeholderText: "Name oder Beschreibung suchen"
+                        label: I18n.tr("Vorlagen durchsuchen", I18n.revision)
+                        placeholderText: I18n.tr("Name oder Beschreibung suchen", I18n.revision)
                         text: Templates.search
                         onTextEdited: Templates.search = text
                         Keys.onDownPressed: { listPage.forceActiveFocus(); listPage.currentIndex = 0 }
                         onSubmitted: if (listPage.count > 0) Templates.showDetail(Templates.listModel.get(0).id)
                     }
                 }
-                PButton { iconName: "save"; text: "Aktuelle Darstellung speichern …"; tip: "Die aktuelle Darstellung als neue Vorlage speichern"; onClicked: Templates.createFromCurrent() }
+                PButton { iconName: "save"; text: I18n.tr("Aktuelle Darstellung speichern …", I18n.revision); tip: I18n.tr("Die aktuelle Darstellung als neue Vorlage speichern", I18n.revision); onClicked: Templates.createFromCurrent() }
             }
             PText {
                 Layout.fillWidth: true
                 Layout.topMargin: 12
-                text: Templates.texts.editHint
+                text: I18n.tr(Templates.texts.editHint, I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 wrap: true
@@ -76,7 +76,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.topMargin: 8
                 visible: text !== ""
-                text: Templates.problemsText
+                text: I18n.tr(Templates.problemsText, I18n.revision)
                 textStyle: "caption"
                 tone: "warning"
                 wrap: true
@@ -97,14 +97,14 @@ Item {
                     width: parent.width - 48
                     spacing: 4
                     PIcon { name: "library"; size: Metrics.iconSizeLarge; color: Theme.textSecondary }
-                    PText { text: Templates.texts.emptyTitle; textStyle: "bodyStrong"; Layout.topMargin: 6 }
-                    PText { text: Templates.texts.emptyText; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                    PText { text: I18n.tr(Templates.texts.emptyTitle, I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 6 }
+                    PText { text: I18n.tr(Templates.texts.emptyText, I18n.revision); tone: "secondary"; wrap: true; Layout.fillWidth: true }
                     Flow {
                         Layout.fillWidth: true
                         Layout.topMargin: 10
                         spacing: 8
-                        PButton { kind: "accent"; iconName: "save"; text: "Aktuelle Darstellung speichern …"; onClicked: Templates.createFromCurrent() }
-                        PButton { iconName: "document"; text: "Zur Darstellung"; onClicked: App.navigate("layout") }
+                        PButton { kind: "accent"; iconName: "save"; text: I18n.tr("Aktuelle Darstellung speichern …", I18n.revision); onClicked: Templates.createFromCurrent() }
+                        PButton { iconName: "document"; text: I18n.tr("Zur Darstellung", I18n.revision); onClicked: App.navigate("layout") }
                     }
                 }
             }
@@ -112,7 +112,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.topMargin: 12
                 visible: Templates.total > 0
-                text: Templates.countText
+                text: I18n.tr(Templates.countText, I18n.revision)
                 tone: "secondary"
                 wrap: true
             }
@@ -146,7 +146,7 @@ Item {
             width: listPage.width
             height: 60
             Accessible.role: Accessible.ListItem
-            Accessible.name: name + (standard ? ", Standardvorlage" : "") + (loaded ? ", geladen" : "")
+            Accessible.name: I18n.tr(name + (standard ? ", Standardvorlage" : "") + (loaded ? ", geladen" : ""), I18n.revision)
             PListItem {
                 x: listPage.columnX + 6
                 y: 2
@@ -179,13 +179,13 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    PText { text: row.name; textStyle: "bodyStrong"; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                    PText { text: row.description; textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true; visible: text !== "" }
+                    PText { text: I18n.tr(row.name, I18n.revision); textStyle: "bodyStrong"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                    PText { text: I18n.tr(row.description, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideRight; Layout.fillWidth: true; visible: text !== "" }
                 }
-                PBadge { text: row.standard ? "Standard" : ""; tone: "accent" }
-                PBadge { text: row.loaded ? (row.modified ? "geladen · geändert" : "geladen") : ""; tone: row.modified ? "caution" : "success" }
-                PText { text: row.updated; textStyle: "caption"; tone: "secondary"; visible: listPage.columnWidth > 560 && text !== "" }
-                PIconButton { iconName: "checkmark"; tip: "„" + row.name + "“ in die Darstellung laden"; onClicked: Templates.apply(row.id) }
+                PBadge { text: I18n.tr(row.standard ? "Standard" : "", I18n.revision); tone: "accent" }
+                PBadge { text: I18n.tr(row.loaded ? (row.modified ? "geladen · geändert" : "geladen") : "", I18n.revision); tone: row.modified ? "caution" : "success" }
+                PText { text: I18n.tr(row.updated, I18n.revision); textStyle: "caption"; tone: "secondary"; visible: listPage.columnWidth > 560 && text !== "" }
+                PIconButton { iconName: "checkmark"; tip: I18n.tr("„" + row.name + "“ in die Darstellung laden", I18n.revision); onClicked: Templates.apply(row.id) }
                 PIcon { name: "chevron_right"; size: 12; color: Theme.textSecondary }
             }
         }
@@ -203,34 +203,34 @@ Item {
         opacity: root.detail ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
-        title: "Vertragsübersichten"
-        subtitle: "Vorlagen: eine Darstellung einmal einrichten und mit einem Klick wiederverwenden."
+        title: I18n.tr("Vertragsübersichten", I18n.revision)
+        subtitle: I18n.tr("Vorlagen: eine Darstellung einmal einrichten und mit einem Klick wiederverwenden.", I18n.revision)
 
         ContractViews {}
         RowLayout {
             Layout.fillWidth: true
-            PButton { kind: "subtle"; iconName: "arrow_left"; text: "Alle Vorlagen"; tip: "Zurück zur Liste der Vorlagen"; onClicked: Templates.showList() }
+            PButton { kind: "subtle"; iconName: "arrow_left"; text: I18n.tr("Alle Vorlagen", I18n.revision); tip: I18n.tr("Zurück zur Liste der Vorlagen", I18n.revision); onClicked: Templates.showList() }
         }
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 12
             spacing: 8
-            PText { objectName: "templateDetailName"; text: Templates.detailName; textStyle: "subtitle"; elide: Text.ElideRight; Layout.fillWidth: true }
-            PBadge { text: Templates.detailDefault ? "Standard" : ""; tone: "accent" }
-            PBadge { text: Templates.detailLoaded ? (Templates.detailModified ? "geladen · geändert" : "geladen") : ""; tone: Templates.detailModified ? "caution" : "success" }
+            PText { objectName: "templateDetailName"; text: I18n.tr(Templates.detailName, I18n.revision); textStyle: "subtitle"; elide: Text.ElideRight; Layout.fillWidth: true }
+            PBadge { text: I18n.tr(Templates.detailDefault ? "Standard" : "", I18n.revision); tone: "accent" }
+            PBadge { text: I18n.tr(Templates.detailLoaded ? (Templates.detailModified ? "geladen · geändert" : "geladen") : "", I18n.revision); tone: Templates.detailModified ? "caution" : "success" }
         }
-        PText { text: Templates.detailCaption; textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 2; visible: text !== "" }
+        PText { text: I18n.tr(Templates.detailCaption, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 2; visible: text !== "" }
         PInfoBar { Layout.fillWidth: true; notice: Notices.area("vorlagen_verwaltung") }
 
         Flow {
             Layout.fillWidth: true
             Layout.topMargin: 12
             spacing: 8
-            PButton { objectName: "applyTemplate"; kind: "accent"; iconName: "checkmark"; text: "In die Darstellung laden"; tip: "Logo, Format, Texte und Regeln dieser Vorlage übernehmen"; onClicked: Templates.apply(Templates.detailId) }
-            PButton { iconName: "edit"; text: "Laden und bearbeiten"; tip: "Vorlage laden und in der »Darstellung« ändern – danach »Vorlage aktualisieren«"; onClicked: Templates.edit(Templates.detailId) }
-            PButton { iconName: "text_font"; text: "Umbenennen …"; onClicked: Templates.rename(Templates.detailId) }
-            PButton { iconName: "copy"; text: "Duplizieren"; onClicked: Templates.duplicate(Templates.detailId) }
-            PButton { iconName: "delete"; text: "Löschen"; tip: "Vorlage löschen – Kundenakten und Stapel verwenden sie danach nicht mehr"; onClicked: Templates.remove(Templates.detailId) }
+            PButton { objectName: "applyTemplate"; kind: "accent"; iconName: "checkmark"; text: I18n.tr("In die Darstellung laden", I18n.revision); tip: I18n.tr("Logo, Format, Texte und Regeln dieser Vorlage übernehmen", I18n.revision); onClicked: Templates.apply(Templates.detailId) }
+            PButton { iconName: "edit"; text: I18n.tr("Laden und bearbeiten", I18n.revision); tip: I18n.tr("Vorlage laden und in der »Darstellung« ändern – danach »Vorlage aktualisieren«", I18n.revision); onClicked: Templates.edit(Templates.detailId) }
+            PButton { iconName: "text_font"; text: I18n.tr("Umbenennen …", I18n.revision); onClicked: Templates.rename(Templates.detailId) }
+            PButton { iconName: "copy"; text: I18n.tr("Duplizieren", I18n.revision); onClicked: Templates.duplicate(Templates.detailId) }
+            PButton { iconName: "delete"; text: I18n.tr("Löschen", I18n.revision); tip: I18n.tr("Vorlage löschen – Kundenakten und Stapel verwenden sie danach nicht mehr", I18n.revision); onClicked: Templates.remove(Templates.detailId) }
         }
 
         GridLayout {
@@ -244,9 +244,9 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
                 Layout.alignment: Qt.AlignTop
-                title: "Inhalt"
+                title: I18n.tr("Inhalt", I18n.revision)
                 iconName: "document"
-                subtitle: "Was diese Vorlage beim Laden setzt. Nicht festgelegte Werte bleiben, wie sie sind."
+                subtitle: I18n.tr("Was diese Vorlage beim Laden setzt. Nicht festgelegte Werte bleiben, wie sie sind.", I18n.revision)
                 PFactList { Layout.fillWidth: true; labelWidth: 120; facts: Templates.detailFacts }
             }
 
@@ -257,14 +257,14 @@ Item {
                 spacing: 12
                 PCard {
                     Layout.fillWidth: true
-                    title: "Beschreibung"
+                    title: I18n.tr("Beschreibung", I18n.revision)
                     iconName: "text_align_left"
                     PTextArea {
                         id: descriptionArea
                         objectName: "templateDescription"
                         Layout.fillWidth: true
-                        label: "Beschreibung der Vorlage"
-                        placeholderText: "Wofür ist diese Vorlage? (optional)"
+                        label: I18n.tr("Beschreibung der Vorlage", I18n.revision)
+                        placeholderText: I18n.tr("Wofür ist diese Vorlage? (optional)", I18n.revision)
                         minLines: 2
                         Connections {
                             target: Templates
@@ -277,11 +277,11 @@ Item {
                 }
                 PCard {
                     Layout.fillWidth: true
-                    title: "Verwendung"
+                    title: I18n.tr("Verwendung", I18n.revision)
                     iconName: "link"
                     PText {
                         visible: Templates.detailUses.length === 0
-                        text: "Wird derzeit nirgends verwendet."
+                        text: I18n.tr("Wird derzeit nirgends verwendet.", I18n.revision)
                         tone: "secondary"
                         wrap: true
                         Layout.fillWidth: true
@@ -293,18 +293,18 @@ Item {
                             Layout.fillWidth: true
                             spacing: 8
                             PIcon { name: "checkmark"; size: 12; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 4 }
-                            PText { text: modelData; wrap: true; Layout.fillWidth: true }
+                            PText { text: I18n.tr(modelData, I18n.revision); wrap: true; Layout.fillWidth: true }
                         }
                     }
                 }
                 PSettingsCard {
                     Layout.fillWidth: true
                     iconName: "checkmark_circle"
-                    title: "Standardvorlage"
-                    description: "Wird für jede neue Übersicht geladen – und im Stapel für Einträge ohne andere Vorlage verwendet."
+                    title: I18n.tr("Standardvorlage", I18n.revision)
+                    description: I18n.tr("Wird für jede neue Übersicht geladen – und im Stapel für Einträge ohne andere Vorlage verwendet.", I18n.revision)
                     PToggle {
                         objectName: "templateDefault"
-                        label: "Standardvorlage"
+                        label: I18n.tr("Standardvorlage", I18n.revision)
                         checked: Templates.detailDefault
                         onToggled: Templates.setDefault(Templates.detailId, checked)
                     }

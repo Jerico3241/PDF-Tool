@@ -21,27 +21,27 @@ ColumnLayout {
         columnSpacing: 20
         rowSpacing: 4
         Layout.fillWidth: true
-        PText { text: "Neue Version"; tone: "secondary" }
+        PText { text: I18n.tr("Neue Version", I18n.revision); tone: "secondary" }
         RowLayout {
             spacing: 8
-            PText { objectName: "updateDetailsVersion"; text: root.data_.version || ""; textStyle: "bodyStrong" }
-            PBadge { text: root.data_.beta ? "Beta" : ""; tone: "accent" }
+            PText { objectName: "updateDetailsVersion"; text: I18n.tr(root.data_.version || "", I18n.revision); textStyle: "bodyStrong" }
+            PBadge { text: I18n.tr(root.data_.beta ? "Beta" : "", I18n.revision); tone: "accent" }
         }
-        PText { text: "Kanal"; tone: "secondary" }
-        PText { text: root.data_.channel || "" }
-        PText { text: "Installiert"; tone: "secondary" }
-        PText { text: root.data_.installed || "" }
-        PText { text: "Veröffentlicht"; tone: "secondary"; visible: (root.data_.date || "") !== "" }
-        PText { text: root.data_.date || ""; visible: text !== "" }
-        PText { text: "Downloadgröße"; tone: "secondary"; visible: (root.data_.size || "") !== "" }
-        PText { text: root.data_.size || ""; visible: text !== "" }
+        PText { text: I18n.tr("Kanal", I18n.revision); tone: "secondary" }
+        PText { text: I18n.tr(root.data_.channel || "", I18n.revision) }
+        PText { text: I18n.tr("Installiert", I18n.revision); tone: "secondary" }
+        PText { text: I18n.tr(root.data_.installed || "", I18n.revision) }
+        PText { text: I18n.tr("Veröffentlicht", I18n.revision); tone: "secondary"; visible: (root.data_.date || "") !== "" }
+        PText { text: I18n.tr(root.data_.date || "", I18n.revision); visible: text !== "" }
+        PText { text: I18n.tr("Downloadgröße", I18n.revision); tone: "secondary"; visible: (root.data_.size || "") !== "" }
+        PText { text: I18n.tr(root.data_.size || "", I18n.revision); visible: text !== "" }
     }
 
     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.divider; Layout.topMargin: 4 }
 
-    PText { text: "Release Notes"; textStyle: "bodyStrong" }
+    PText { text: I18n.tr("Release Notes", I18n.revision); textStyle: "bodyStrong" }
     PText {
-        text: "Für diese Version liegen keine Release Notes vor."
+        text: I18n.tr("Für diese Version liegen keine Release Notes vor.", I18n.revision)
         tone: "secondary"
         visible: !root.data_.blocks || root.data_.blocks.length === 0
     }
@@ -70,7 +70,7 @@ ColumnLayout {
                 }
                 Text {
                     visible: block.kind === "bullet"
-                    text: block.modelData.marker
+                    text: I18n.tr(block.modelData.marker, I18n.revision)
                     font: Typography.body
                     color: Theme.textSecondary
                     textFormat: Text.PlainText
@@ -86,7 +86,7 @@ ColumnLayout {
                 Text {
                     visible: block.kind !== "rule"
                     Layout.fillWidth: true
-                    text: block.modelData.html
+                    text: I18n.tr(block.modelData.html, I18n.revision)
                     textFormat: Text.RichText
                     wrapMode: Text.Wrap
                     font: block.kind === "heading" ? (block.modelData.level <= 2 ? Typography.subtitle : Typography.bodyStrong) : Typography.body
@@ -94,7 +94,7 @@ ColumnLayout {
                     linkColor: Theme.accentText
                     onLinkActivated: (link) => Updates.openLink(link)
                     Accessible.role: block.kind === "heading" ? Accessible.Heading : Accessible.StaticText
-                    Accessible.name: block.modelData.html.replace(/<[^>]*>/g, "")
+                    Accessible.name: I18n.tr(block.modelData.html.replace(/<[^>]*>/g, ""), I18n.revision)
                     HoverHandler { cursorShape: parent.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
                 }
             }
@@ -103,7 +103,7 @@ ColumnLayout {
 
     PButton {
         visible: (root.data_.page || "") !== ""
-        text: "Release auf GitHub ansehen"
+        text: I18n.tr("Release auf GitHub ansehen", I18n.revision)
         kind: "subtle"
         iconName: "open"
         onClicked: Updates.openLink(root.data_.page)

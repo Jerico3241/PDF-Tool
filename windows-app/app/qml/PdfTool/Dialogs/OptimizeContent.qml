@@ -26,9 +26,9 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Aktuelle Größe: " + (root.data_.size || "–") + ". Fotos und Scans werden neu berechnet, Text und Grafiken bleiben scharf. Gespeichert wird als Kopie; das Original bleibt unverändert."
+        text: I18n.tr("Aktuelle Größe: " + (root.data_.size || "–") + ". Fotos und Scans werden neu berechnet, Text und Grafiken bleiben scharf. Gespeichert wird als Kopie; das Original bleibt unverändert.", I18n.revision)
     }
-    PFieldLabel { text: "Qualität" }
+    PFieldLabel { text: I18n.tr("Qualität", I18n.revision) }
     Repeater {
         model: [
             { "key": "klein", "label": "Klein – für E-Mail und Bildschirm (110 dpi)" },
@@ -38,7 +38,7 @@ ColumnLayout {
         PRadioButton {
             required property var modelData
             objectName: "optimize_" + modelData.key
-            text: modelData.label
+            text: I18n.tr(modelData.label, I18n.revision)
             checked: root.level === modelData.key
             onClicked: root.level = modelData.key
         }
@@ -49,6 +49,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Die Kopie enthält den aktuellen Stand – auch noch nicht gespeicherte Änderungen. Kennwortschutz bleibt erhalten."
+        text: I18n.tr("Die Kopie enthält den aktuellen Stand – auch noch nicht gespeicherte Änderungen. Kennwortschutz bleibt erhalten.", I18n.revision)
     }
 }

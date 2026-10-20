@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Seite: Titel, Untertitel und Inhalt mit höchstens 1180 px Breite; natürliches Scrollen
 // (Mausrad, Touchpad) ohne künstlich träges »Smooth Scrolling«.
@@ -70,13 +71,13 @@ Item {
                 spacing: 2
                 visible: page.title !== ""
                 PText {
-                    text: page.title
+                    text: I18n.tr(page.title, I18n.revision)
                     textStyle: "title"
                     Layout.fillWidth: true
                     Accessible.role: Accessible.Heading
                 }
                 PText {
-                    text: page.subtitle
+                    text: I18n.tr(page.subtitle, I18n.revision)
                     tone: "secondary"
                     wrap: true
                     visible: text !== ""

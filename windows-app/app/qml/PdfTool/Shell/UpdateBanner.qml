@@ -24,7 +24,7 @@ Item {
     implicitHeight: occupied ? bar.height + 16 : 0
     visible: occupied
     Accessible.role: Accessible.AlertMessage
-    Accessible.name: Updates.bannerTitle + (Updates.bannerText !== "" ? ": " + Updates.bannerText : "")
+    Accessible.name: I18n.tr(Updates.bannerTitle + (Updates.bannerText !== "" ? ": " + Updates.bannerText : ""), I18n.revision)
 
     Rectangle {
         id: bar
@@ -71,7 +71,7 @@ Item {
                 spacing: 2
                 PText {
                     objectName: "updateBannerTitle"
-                    text: Updates.bannerTitle
+                    text: I18n.tr(Updates.bannerTitle, I18n.revision)
                     textStyle: "bodyStrong"
                     wrap: true
                     Layout.fillWidth: true
@@ -80,11 +80,11 @@ Item {
                     spacing: 8
                     Layout.fillWidth: true
                     visible: Updates.offerBeta || Updates.bannerText !== ""  // nach den Daten, nicht nach der Sichtbarkeit der Kinder
-                    PBadge { id: betaBadge; objectName: "updateBannerBeta"; text: Updates.offerBeta ? "Beta" : ""; tone: "accent" }
+                    PBadge { id: betaBadge; objectName: "updateBannerBeta"; text: I18n.tr(Updates.offerBeta ? "Beta" : "", I18n.revision); tone: "accent" }
                     PText {
                         id: bannerText
                         objectName: "updateBannerText"
-                        text: Updates.bannerText
+                        text: I18n.tr(Updates.bannerText, I18n.revision)
                         textStyle: "caption"
                         tone: "secondary"
                         wrap: true
@@ -106,31 +106,31 @@ Item {
                 spacing: 8
                 Layout.alignment: Qt.AlignVCenter
                 PButton {
-                    text: "Details"
+                    text: I18n.tr("Details", I18n.revision)
                     visible: root.phase === "available"
                     onClicked: Updates.showDetails()
                 }
                 PButton {
                     objectName: "updateBannerDownload"
-                    text: root.phase === "error" ? "Erneut versuchen" : "Herunterladen"
+                    text: I18n.tr(root.phase === "error" ? "Erneut versuchen" : "Herunterladen", I18n.revision)
                     kind: "accent"
                     visible: Updates.canDownload
                     onClicked: Updates.download()
                 }
                 PButton {
                     objectName: "updateBannerCancel"
-                    text: "Abbrechen"
+                    text: I18n.tr("Abbrechen", I18n.revision)
                     visible: Updates.canCancel
                     onClicked: Updates.cancel()
                 }
                 PButton {
-                    text: "Später installieren"
+                    text: I18n.tr("Später installieren", I18n.revision)
                     visible: Updates.canInstall
                     onClicked: Updates.later()
                 }
                 PButton {
                     objectName: "updateBannerInstall"
-                    text: "Jetzt installieren"
+                    text: I18n.tr("Jetzt installieren", I18n.revision)
                     kind: "accent"
                     visible: Updates.canInstall
                     onClicked: Updates.installNow()
@@ -140,7 +140,7 @@ Item {
                 objectName: "updateBannerClose"
                 visible: root.phase !== "installing"
                 iconName: "dismiss"
-                tip: "Später"
+                tip: I18n.tr("Später", I18n.revision)
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: -4
                 onClicked: Updates.later()

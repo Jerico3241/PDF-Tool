@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // Dateizeile: Symbol, Beschriftung, Dateiname (voller Pfad im Tooltip) und Schaltflächen rechts.
 Item {
@@ -15,7 +16,7 @@ Item {
     implicitHeight: Math.max(44, layout.implicitHeight)
     implicitWidth: 320
     Accessible.role: Accessible.StaticText
-    Accessible.name: label + ": " + value
+    Accessible.name: I18n.tr(label + ": " + value, I18n.revision)
 
     RowLayout {
         id: layout
@@ -39,14 +40,14 @@ Item {
             Layout.fillWidth: true
             spacing: 0
             PText {
-                text: root.label
+                text: I18n.tr(root.label, I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 Layout.fillWidth: true
             }
             PText {
                 id: valueText
-                text: root.value
+                text: I18n.tr(root.value, I18n.revision)
                 tone: root.valueTone
                 elide: Text.ElideMiddle
                 Layout.fillWidth: true
@@ -57,7 +58,7 @@ Item {
                     acceptedButtons: Qt.NoButton
                 }
                 PToolTip {
-                    text: root.fullPath
+                    text: I18n.tr(root.fullPath, I18n.revision)
                     visible: root.fullPath !== "" && hover.containsMouse && (valueText.truncated || root.fullPath !== root.value)
                 }
             }

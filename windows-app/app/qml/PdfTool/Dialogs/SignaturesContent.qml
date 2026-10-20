@@ -34,26 +34,26 @@ ColumnLayout {
                     objectName: "signatureTitle_" + card.index
                     Layout.fillWidth: true
                     textStyle: "bodyStrong"
-                    text: card.modelData.title
+                    text: I18n.tr(card.modelData.title, I18n.revision)
                 }
                 PButton {
                     visible: card.modelData.visible && card.modelData.page >= 0
                     kind: "subtle"
-                    text: "Zum Feld"
+                    text: I18n.tr("Zum Feld", I18n.revision)
                     onClicked: { root.page = card.modelData.page; Dialogs.answer(root.request.id, "close", root.collect()) }
                 }
             }
             PText {
                 Layout.fillWidth: true
                 wrap: true
-                text: card.modelData.detail
+                text: I18n.tr(card.modelData.detail, I18n.revision)
             }
             PText {
                 visible: card.modelData.trustDetail !== ""
                 Layout.fillWidth: true
                 wrap: true
                 tone: card.modelData.trust === "trusted" ? "success" : "warning"
-                text: card.modelData.trustDetail
+                text: I18n.tr(card.modelData.trustDetail, I18n.revision)
             }
             PFactList {
                 Layout.fillWidth: true

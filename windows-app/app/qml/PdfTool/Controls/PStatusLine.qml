@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // Zustandszeile (z. B. »Bereit zum Erstellen«): Symbol bzw. Fortschrittsring und Text, weich
 // überblendet. Mit ``clickable`` führt ein Klick zum ersten offenen Punkt.
@@ -15,7 +16,7 @@ Item {
     implicitHeight: 36
     implicitWidth: row.implicitWidth + 24
     Accessible.role: clickable ? Accessible.Button : Accessible.StaticText
-    Accessible.name: text
+    Accessible.name: I18n.tr(text, I18n.revision)
 
     Rectangle {
         anchors.fill: parent
@@ -60,7 +61,7 @@ Item {
         PCrossfadeText {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: root.text
+            text: I18n.tr(root.text, I18n.revision)
             font: Typography.body
             color: Theme.textPrimary
         }

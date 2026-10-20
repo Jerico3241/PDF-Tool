@@ -51,40 +51,40 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Gescannte Seiten werden durchsuchbar: Der erkannte Text liegt unsichtbar über dem Scan – Suchen, Markieren und Kopieren finden ihn, das Aussehen der Seiten bleibt unverändert. Die Erkennung läuft vollständig auf diesem PC."
+        text: I18n.tr("Gescannte Seiten werden durchsuchbar: Der erkannte Text liegt unsichtbar über dem Scan – Suchen, Markieren und Kopieren finden ihn, das Aussehen der Seiten bleibt unverändert. Die Erkennung läuft vollständig auf diesem PC.", I18n.revision)
     }
 
-    PFieldLabel { text: "Seiten" }
+    PFieldLabel { text: I18n.tr("Seiten", I18n.revision) }
     ColumnLayout {
         spacing: 0
         PRadioButton {
             objectName: "ocrScopeAll"
-            text: "Alle Seiten (" + (root.data_.pageCount || 0) + ")"
+            text: I18n.tr("Alle Seiten (" + (root.data_.pageCount || 0) + ")", I18n.revision)
             checked: root.scope === "all"
             onClicked: root.scope = "all"
         }
         PRadioButton {
             objectName: "ocrScopeCurrent"
-            text: "Aktuelle Seite (" + ((root.data_.current || 0) + 1) + ")"
+            text: I18n.tr("Aktuelle Seite (" + ((root.data_.current || 0) + 1) + ")", I18n.revision)
             checked: root.scope === "current"
             onClicked: root.scope = "current"
         }
         PRadioButton {
             objectName: "ocrScopeSelected"
             visible: root.selected.length > 0
-            text: "Ausgewählte Seiten (" + root.selected.length + ")"
+            text: I18n.tr("Ausgewählte Seiten (" + root.selected.length + ")", I18n.revision)
             checked: root.scope === "selected"
             onClicked: root.scope = "selected"
         }
     }
 
-    PFieldLabel { text: "Sprache des Textes" }
+    PFieldLabel { text: I18n.tr("Sprache des Textes", I18n.revision) }
     PText {
         visible: !root.ready
         Layout.fillWidth: true
         wrap: true
         tone: Reader.ocrState === "fehlt" ? "warning" : "secondary"
-        text: Reader.ocrState === "fehlt" ? "Die Texterkennung wurde nicht gefunden. Bitte PDF Tool neu installieren." : "Die Texterkennung wird vorbereitet …"
+        text: I18n.tr(Reader.ocrState === "fehlt" ? "Die Texterkennung wurde nicht gefunden. Bitte PDF Tool neu installieren." : "Die Texterkennung wird vorbereitet …", I18n.revision)
     }
     Flow {
         Layout.fillWidth: true
@@ -95,7 +95,7 @@ ColumnLayout {
             PCheckBox {
                 required property var modelData
                 objectName: "ocrLanguage_" + modelData.code
-                text: modelData.label
+                text: I18n.tr(modelData.label, I18n.revision)
                 checked: root.languages.indexOf(modelData.code) >= 0
                 onToggled: root.toggle(modelData.code, checked)
             }
@@ -108,7 +108,7 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Mehrere Sprachen: für Seiten mit gemischtem Text – die Erkennung dauert etwas länger."
+        text: I18n.tr("Mehrere Sprachen: für Seiten mit gemischtem Text – die Erkennung dauert etwas länger.", I18n.revision)
     }
 
     PCheckBox {
@@ -116,7 +116,7 @@ ColumnLayout {
         objectName: "ocrRedo"
         Layout.topMargin: 12
         Layout.fillWidth: true
-        text: "Bereits erkannte Seiten erneut erkennen (ersetzt den früher erkannten Text)"
+        text: I18n.tr("Bereits erkannte Seiten erneut erkennen (ersetzt den früher erkannten Text)", I18n.revision)
     }
     PText {
         Layout.fillWidth: true
@@ -124,6 +124,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Seiten mit echtem PDF-Text werden nie erneut erkannt – sie sind bereits durchsuchbar. Rückgängig nimmt die Erkennung vollständig zurück."
+        text: I18n.tr("Seiten mit echtem PDF-Text werden nie erneut erkannt – sie sind bereits durchsuchbar. Rückgängig nimmt die Erkennung vollständig zurück.", I18n.revision)
     }
 }
