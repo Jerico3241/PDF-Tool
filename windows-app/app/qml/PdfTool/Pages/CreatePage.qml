@@ -98,7 +98,7 @@ PPage {
                         Layout.fillWidth: true
                         objectName: "customerPicker"
                         placeholder: Customers.pickerPlaceholder
-                        tip: "Kundenakte suchen und übernehmen (Strg+F)"
+                        tip: "Kundenakte suchen und übernehmen" + Shortcuts.hints["app.find"]
                         onClicked: Customers.pickCustomer()
                     }
                     Item { implicitHeight: 12 }
@@ -176,7 +176,7 @@ PPage {
                 label: "Excel-Liste"
                 value: Contracts.excelLabel
                 fullPath: Contracts.excelPath
-                PButton { text: "Durchsuchen"; iconName: "folder_open"; tip: "Excel-Datei wählen (Strg+O)"; onClicked: Contracts.pickExcel() }
+                PButton { text: "Durchsuchen"; iconName: "folder_open"; tip: "Excel-Datei wählen" + Shortcuts.hints["app.open"]; onClicked: Contracts.pickExcel() }
                 PIconButton { iconName: "copy"; tip: "Pfad der Excel-Datei kopieren"; onClicked: Contracts.copyExcelPath() }
             }
             // Gekündigte bzw. abgelaufene Verträge (Anwenderstatus) mit aufführen – je eigener Schalter, in der PDF mit Status
@@ -330,7 +330,7 @@ PPage {
                 text: "PDF erstellen"
                 busy: Contracts.busy
                 busyText: "PDF wird erstellt …"
-                tip: "PDF erstellen (Strg+Enter)"
+                tip: "PDF erstellen" + Shortcuts.hints["app.primary"]
                 onClicked: Contracts.startPdf()
             }
             PButton { large: true; iconName: "folder_open"; text: "Ordner öffnen"; tip: "Zielordner im Explorer öffnen"; onClicked: Contracts.openFolder() }

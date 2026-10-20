@@ -170,7 +170,7 @@ Item {
             objectName: "tabHome"
             Layout.alignment: Qt.AlignBottom
             iconName: "home"
-            tooltip: "Start (Strg+1)"
+            tooltip: "Start" + Shortcuts.hints["app.home"]
             active: bar.activeKey === "home"
             onClicked: App.navigate("home")
         }
@@ -191,7 +191,7 @@ Item {
                 iconName: info.icon
                 title: info.title
                 closable: true
-                closeTip: "Tab schließen (Strg+W) – Eingaben bleiben erhalten"
+                closeTip: "Tab schließen" + Shortcuts.hints["app.closeTab"] + " – Eingaben bleiben erhalten"
                 active: bar.activeKey === modelData
                 onClicked: App.navigate(modelData)
                 onCloseRequested: App.closeTab(modelData)
@@ -314,7 +314,7 @@ Item {
                         closable: true
                         closeName: "readerTabClose"
                         dirtyName: "readerTabDirty"
-                        closeTip: "Schließen (Strg+W)"
+                        closeTip: "Schließen" + Shortcuts.hints["app.closeTab"]
                         active: bar.activeKey === "doc:" + docSlot.key
                         onClicked: Reader.showTab(docSlot.key)
                         onCloseRequested: Reader.closeTab(docSlot.key)
@@ -377,7 +377,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "add"
-            tip: "PDF öffnen (Strg+O)"
+            tip: "PDF öffnen" + Shortcuts.hints["app.open"]
             onClicked: Reader.openDialog()
         }
         Item { Layout.fillWidth: true }
@@ -387,7 +387,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "question_circle"
-            tip: "Kurzanleitung (F1)"
+            tip: "Kurzanleitung" + Shortcuts.hints["app.help"]
             onClicked: App.showHelp()
         }
         PIconButton {
@@ -396,7 +396,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "settings"
-            tip: "Einstellungen (Strg+4)"
+            tip: "Einstellungen" + Shortcuts.hints["app.settings"]
             onClicked: App.navigate("settings")
         }
     }

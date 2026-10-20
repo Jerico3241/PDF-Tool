@@ -53,7 +53,7 @@ Rectangle {
         PIconButton { iconName: "chevron_right"; tip: "Nächste Seite (Bild ↓)"; enabled: root.doc !== null && root.doc.currentPage < root.doc.pageCount - 1; onClicked: root.doc.step(1) }
         PIconButton { objectName: "readerLastPage"; iconName: "arrow_next"; tip: "Letzte Seite (Ende)"; enabled: root.doc !== null && root.doc.currentPage < root.doc.pageCount - 1; onClicked: root.doc.goTo(root.doc.pageCount - 1) }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 4; Layout.rightMargin: 4; color: Theme.divider }
-        PIconButton { objectName: "readerZoomOut"; iconName: "zoom_out"; tip: "Verkleinern (Strg+−)"; onClicked: root.zoom(function() { root.doc.zoomOut() }) }
+        PIconButton { objectName: "readerZoomOut"; iconName: "zoom_out"; tip: "Verkleinern" + Shortcuts.hints["reader.zoomOut"]; onClicked: root.zoom(function() { root.doc.zoomOut() }) }
         // Zoom: eigenen Wert eintippen (Eingabetaste) oder eine Stufe aus dem Menü wählen
         PTextField {
             id: zoomField
@@ -83,14 +83,14 @@ Rectangle {
             tip: "Zoomstufe wählen"
             onClicked: zoomMenu.popup(zoomButton, 0, -zoomMenu.implicitHeight - 4)
         }
-        PIconButton { objectName: "readerZoomIn"; iconName: "zoom_in"; tip: "Vergrößern (Strg++)"; onClicked: root.zoom(function() { root.doc.zoomIn() }) }
+        PIconButton { objectName: "readerZoomIn"; iconName: "zoom_in"; tip: "Vergrößern" + Shortcuts.hints["reader.zoomIn"]; onClicked: root.zoom(function() { root.doc.zoomIn() }) }
         PIconButton { objectName: "readerFitWidth"; iconName: "arrow_autofit_width"; tip: "Seitenbreite"; toggle: true; checked: root.doc !== null && root.doc.fit === "width"; onClicked: root.zoom(function() { root.doc.fitWidth() }) }
-        PIconButton { objectName: "readerFitPage"; iconName: "page_fit"; tip: "Ganze Seite (Strg+0)"; toggle: true; checked: root.doc !== null && root.doc.fit === "page"; onClicked: root.zoom(function() { root.doc.fitPage() }) }
+        PIconButton { objectName: "readerFitPage"; iconName: "page_fit"; tip: "Ganze Seite" + Shortcuts.hints["reader.fitPage"]; toggle: true; checked: root.doc !== null && root.doc.fit === "page"; onClicked: root.zoom(function() { root.doc.fitPage() }) }
         Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.leftMargin: 4; Layout.rightMargin: 4; color: Theme.divider }
         PIconButton {
             objectName: "readerFullScreen"
             iconName: Reader.fullScreen ? "full_screen_minimize" : "full_screen_maximize"
-            tip: Reader.fullScreen ? "Vollbild beenden (F11, Esc)" : "Vollbild (F11)"
+            tip: Reader.fullScreen ? "Vollbild beenden (" + (Shortcuts.labels["reader.fullScreen"] ? Shortcuts.labels["reader.fullScreen"] + ", " : "") + "Esc)" : "Vollbild" + Shortcuts.hints["reader.fullScreen"]
             onClicked: Reader.toggleFullScreen()
         }
     }

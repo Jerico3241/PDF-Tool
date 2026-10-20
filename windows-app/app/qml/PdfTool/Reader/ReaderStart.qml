@@ -36,7 +36,7 @@ Item {
         PText {
             Layout.fillWidth: true
             visible: Reader.opening === 0
-            text: "PDFs öffnen Sie auf der Startseite, mit »+« in der Tab-Leiste oder mit Strg+O."
+            text: "PDFs öffnen Sie auf der Startseite oder mit »+« in der Tab-Leiste" + (Shortcuts.labels["app.open"] ? " oder mit " + Shortcuts.labels["app.open"] : "") + "."
             tone: "secondary"
             wrap: true
             horizontalAlignment: Text.AlignHCenter
@@ -46,7 +46,7 @@ Item {
             Layout.topMargin: Metrics.s4
             spacing: Metrics.s8
             visible: Reader.opening === 0
-            PButton { objectName: "readerOpenButton"; kind: "accent"; iconName: "folder_open"; text: "PDF öffnen"; tip: "Strg+O"; onClicked: Reader.openDialog() }
+            PButton { objectName: "readerOpenButton"; kind: "accent"; iconName: "folder_open"; text: "PDF öffnen"; tip: Shortcuts.labels["app.open"]; onClicked: Reader.openDialog() }
             PButton { iconName: "home"; text: "Zur Startseite"; onClicked: App.navigate("home") }
         }
     }

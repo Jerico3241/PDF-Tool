@@ -123,6 +123,11 @@ class Runtime(QObject):
         self.assistant = AssistantController(self.app, cfg, self)
         self.assistant.attach_reader(self.singletons["Reader"])
         self.singletons["Assistant"] = self.assistant
+        # Tastenkürzel: ein Verzeichnis aller Befehle, eigene Kürzel (Einstellungen › Tastenkürzel)
+        from .shortcuts import ShortcutsController
+
+        self.shortcuts = ShortcutsController(self.app, cfg, self)
+        self.singletons["Shortcuts"] = self.shortcuts
         # Vorlesen (Sprachausgabe von Windows) – richtet sich erst beim ersten Vorlesen ein
         from .speech import SpeechController
 

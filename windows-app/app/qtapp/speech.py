@@ -1,4 +1,4 @@
-"""Vorlesen in der Oberfläche (QML: ``Speech``, seit 4.0.0-beta.5): die Auswahl oder das Dokument ab der aktuellen
+"""Vorlesen in der Oberfläche (QML: ``Speech``, seit 4.0 Beta 5): die Auswahl oder das Dokument ab der aktuellen
 Seite mit den Stimmen von Windows sprechen.
 
 Gesprochen wird Seite für Seite; die Ansicht markiert das gerade gesprochene Wort und folgt ihm. Pause, Weiter,

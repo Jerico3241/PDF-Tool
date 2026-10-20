@@ -315,7 +315,7 @@ FocusScope {
                         items: [
                             { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerRailThumbs" },
                             { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerRailOutline" },
-                            { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerRailSearch" },
+                            { key: "search", icon: "search", tip: "Suchen" + Shortcuts.hints["app.find"], name: "readerRailSearch" },
                             { key: "attachments", icon: "attach", tip: "Anhänge", name: "readerRailAttachments" }
                         ]
                         onSelected: (key) => page.showLeft(key)
@@ -364,34 +364,34 @@ FocusScope {
             }
 
             // Tastenkürzel (zusätzlich zu Strg+O, Strg+F, F1 und Strg+Eingabe aus dem Fenster)
-            Shortcut { sequences: [StandardKey.Save]; enabled: page.active && page.editing; onActivated: page.doc.saveDocument() }
-            Shortcut { sequence: "Ctrl+Shift+S"; enabled: page.active && page.editing; onActivated: page.doc.saveDocumentAs() }
-            Shortcut { sequences: [StandardKey.Print]; enabled: page.active && page.editing; onActivated: page.doc.printDocument() }
-            Shortcut { sequences: [StandardKey.Undo]; enabled: page.active && page.editing && view.editing === null; onActivated: page.doc.undo() }
-            Shortcut { sequences: ["Ctrl+Y", "Ctrl+Shift+Z"]; enabled: page.active && page.editing && view.editing === null; onActivated: page.doc.redo() }
-            Shortcut { sequence: "Ctrl+W"; enabled: page.active && Reader.hasDocument; onActivated: Reader.closeCurrent() }
-            Shortcut { sequences: ["F11"]; enabled: page.active && page.editing; onActivated: Reader.toggleFullScreen() }
-            Shortcut { sequences: ["F5"]; enabled: page.active && page.editing && !Reader.presenting; onActivated: Reader.startPresentation() }
-            Shortcut { sequence: "Ctrl+Shift+Y"; enabled: page.active && Reader.hasDocument && !Reader.organize; onActivated: Speech.toggle() }
-            Shortcut { sequence: "Ctrl+G"; enabled: page.active && page.editing && !Reader.organize; onActivated: controls.focusPage() }
+            Shortcut { sequences: Shortcuts.keys["reader.save"] || []; enabled: page.active && page.editing; onActivated: page.doc.saveDocument() }
+            Shortcut { sequences: Shortcuts.keys["reader.saveAs"] || []; enabled: page.active && page.editing; onActivated: page.doc.saveDocumentAs() }
+            Shortcut { sequences: Shortcuts.keys["reader.print"] || []; enabled: page.active && page.editing; onActivated: page.doc.printDocument() }
+            Shortcut { sequences: Shortcuts.keys["reader.undo"] || []; enabled: page.active && page.editing && view.editing === null; onActivated: page.doc.undo() }
+            Shortcut { sequences: Shortcuts.keys["reader.redo"] || []; enabled: page.active && page.editing && view.editing === null; onActivated: page.doc.redo() }
+            Shortcut { sequences: Shortcuts.keys["app.closeTab"] || []; enabled: page.active && Reader.hasDocument; onActivated: Reader.closeCurrent() }
+            Shortcut { sequences: Shortcuts.keys["reader.fullScreen"] || []; enabled: page.active && page.editing; onActivated: Reader.toggleFullScreen() }
+            Shortcut { sequences: Shortcuts.keys["reader.present"] || []; enabled: page.active && page.editing && !Reader.presenting; onActivated: Reader.startPresentation() }
+            Shortcut { sequences: Shortcuts.keys["reader.speech"] || []; enabled: page.active && Reader.hasDocument && !Reader.organize; onActivated: Speech.toggle() }
+            Shortcut { sequences: Shortcuts.keys["reader.goToPage"] || []; enabled: page.active && page.editing && !Reader.organize; onActivated: controls.focusPage() }
             Shortcut {
-                sequences: [StandardKey.SelectAll]
+                sequences: Shortcuts.keys["reader.selectAll"] || []
                 enabled: page.active && page.editing && !Reader.organize && view.editing === null
                 onActivated: {
                     if (page.doc.tool === "objects") page.doc.selectAllObjects(page.doc.currentPage)
                     else page.doc.selectAll(page.doc.currentPage)
                 }
             }
-            Shortcut { sequence: "Ctrl+Tab"; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
-            Shortcut { sequence: "Ctrl+Shift+Tab"; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
-            Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomIn() }) }
-            Shortcut { sequences: [StandardKey.ZoomOut]; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomOut() }) }
-            Shortcut { sequence: "Ctrl+0"; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.fitPage() }) }
-            Shortcut { sequence: "F3"; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.nextHit() }
-            Shortcut { sequence: "Shift+F3"; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.previousHit() }
-            Shortcut { sequences: [StandardKey.Copy]; enabled: page.active && page.editing && page.doc.selectionPage >= 0 && page.doc.objectSelection.length === 0; onActivated: page.doc.copySelection() }
+            Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
+            Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
+            Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomIn() }) }
+            Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomOut() }) }
+            Shortcut { sequences: Shortcuts.keys["reader.fitPage"] || []; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.fitPage() }) }
+            Shortcut { sequences: Shortcuts.keys["reader.nextHit"] || []; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.nextHit() }
+            Shortcut { sequences: Shortcuts.keys["reader.previousHit"] || []; enabled: page.active && page.editing && page.doc.searchCount > 0; onActivated: page.doc.previousHit() }
+            Shortcut { sequences: Shortcuts.keys["reader.copy"] || []; enabled: page.active && page.editing && page.doc.selectionPage >= 0 && page.doc.objectSelection.length === 0; onActivated: page.doc.copySelection() }
             Shortcut {
-                sequences: [StandardKey.Delete]
+                sequences: Shortcuts.keys["reader.delete"] || []
                 enabled: page.active && page.editing && !Reader.organize && page.doc.tool !== "objects" && page.doc.selectedObject.kind !== undefined
                 onActivated: {
                     var chosen = page.doc.selectedObject

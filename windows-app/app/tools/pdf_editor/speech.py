@@ -1,4 +1,4 @@
-"""Vorlesen (seit 4.0.0-beta.5): Text einer PDF mit den Stimmen von Windows sprechen (SAPI).
+"""Vorlesen (seit 4.0 Beta 5): Text einer PDF mit den Stimmen von Windows sprechen (SAPI).
 
 Gesprochen wird mit den Stimmen, die Windows unter »Sprachausgabe« kennt (Deutsch z. B. »Hedda« oder »Katja«),
 ohne Netzwerk. ``prepare`` macht aus dem Text einer Seite einen Sprechtext: Zeilenumbrüche werden zu Leerzeichen,

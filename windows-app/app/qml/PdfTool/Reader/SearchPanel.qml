@@ -93,7 +93,7 @@ ColumnLayout {
             wrap: true
         }
         PIconButton { iconName: "chevron_up"; tip: "Vorheriger Treffer (Umschalt+F3)"; enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.previousHit() }
-        PIconButton { iconName: "chevron_down"; tip: "Nächster Treffer (F3)"; enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.nextHit() }
+        PIconButton { iconName: "chevron_down"; tip: "Nächster Treffer" + Shortcuts.hints["reader.nextHit"]; enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.nextHit() }
     }
     ListView {
         id: hitList

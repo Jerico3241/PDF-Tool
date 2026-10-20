@@ -87,7 +87,7 @@ class DocumentController(Observable):
     selectionPageChanged, selectionPage = prop(int, "selectionPage", -1)
     selectionRectsChanged, selectionRects = prop(list, "selectionRects", [])  # Rechtecke auf selectionPage
     speechWordChanged, speechWord = prop(dict, "speechWord", {})  # Vorlesen: gerade gesprochenes Wort {page, rects}
-    selectionPagesChanged, selectionPages = prop(dict, "selectionPages", {})  # Seite (Text) → Rechtecke (seit 4.0.0-beta.5 über Seiten)
+    selectionPagesChanged, selectionPages = prop(dict, "selectionPages", {})  # Seite (Text) → Rechtecke (seit 4.0 Beta 5 über Seiten)
     textPagesChanged, textPages = prop(list, "textPages", [])  # Seiten mit geladener Zeichentabelle
     # Suche
     searchTextChanged, searchText = prop(str, "searchText", "")

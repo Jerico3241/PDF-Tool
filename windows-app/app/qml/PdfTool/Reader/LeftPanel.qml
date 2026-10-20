@@ -32,7 +32,7 @@ Rectangle {
             tabs: [
                 { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerTabThumbs" },
                 { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerTabOutline" },
-                { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerTabSearch" },
+                { key: "search", icon: "search", tip: "Suchen" + Shortcuts.hints["app.find"], name: "readerTabSearch" },
                 { key: "attachments", icon: "attach", tip: "Anhänge", name: "readerTabAttachments" }
             ]
             onTabSelected: (key) => root.chosen(key)

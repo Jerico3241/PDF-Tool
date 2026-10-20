@@ -36,7 +36,7 @@ Item {
                 Layout.fillWidth: true
                 visible: Batch.hasItems
                 spacing: 8
-                PButton { iconName: "add"; text: "Excel-Dateien hinzufügen"; tip: "Mehrere Excel-Dateien wählen (Strg+O)"; onClicked: Batch.pickFiles() }
+                PButton { iconName: "add"; text: "Excel-Dateien hinzufügen"; tip: "Mehrere Excel-Dateien wählen" + Shortcuts.hints["app.open"]; onClicked: Batch.pickFiles() }
                 PButton { iconName: "folder_open"; text: "Ordner hinzufügen"; tip: "Alle Excel-Dateien eines Ordners hinzufügen (ohne Unterordner)"; onClicked: Batch.pickFolder() }
                 PButton { kind: "subtle"; iconName: "arrow_clockwise"; text: "Neuer Stapel"; visible: Batch.newVisible; tip: "Liste leeren – Dateien, Kundenakten, Vorlagen und Einstellungen bleiben"; onClicked: Batch.newBatch() }
             }
@@ -167,7 +167,7 @@ Item {
                             enabled: Batch.canRun
                             busy: Batch.running
                             busyText: "Wird erstellt …"
-                            tip: "Alle bereiten Einträge nacheinander erstellen (Strg+Enter)"
+                            tip: "Alle bereiten Einträge nacheinander erstellen" + Shortcuts.hints["app.primary"]
                             onClicked: Batch.run()
                         }
                         PButton { visible: Batch.running; large: true; iconName: "stop"; text: "Stapel abbrechen"; enabled: Batch.canCancel; tip: "Nach der laufenden PDF anhalten – fertige PDFs bleiben erhalten"; onClicked: Batch.cancel() }

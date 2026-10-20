@@ -69,13 +69,15 @@ T.Popup {
         { title: "Ansicht und Vergleichen", items: [
             { name: "readerAllCompare", text: "Mit anderer Fassung vergleichen …", icon: "branch_compare", run: "compare" },
             { name: "readerAllSplit", text: Reader.splitKey !== "" ? "Geteilte Ansicht schließen" : "Geteilte Ansicht (zwei PDFs nebeneinander)", icon: "layout_column_two", run: "split2" },
-            { name: "readerAllPresent", text: "Präsentation (F5)", icon: "play", run: "present" } ] }
+            { name: "readerAllPresent", text: "Präsentation" + Shortcuts.hints["reader.present"], icon: "play", run: "present" },
+            { name: "readerAllSpeech", text: "Vorlesen" + Shortcuts.hints["reader.speech"], icon: "speaker_2", run: "speech" } ] }
     ]
 
     function perform(command) {
         var d = root.doc
         switch (command) {
         case "present": Reader.startPresentation(); break
+        case "speech": Speech.readFromHere(); break
         case "split2": Reader.toggleSplit(); break
         case "compare": d.compareWith(); break
         case "newSignature": d.newSignature(); break

@@ -1,4 +1,4 @@
-"""Scannen (seit 4.0.0-beta.5): Seiten vom Scanner über die Scanner-Schnittstelle von Windows (WIA) holen.
+"""Scannen (seit 4.0 Beta 5): Seiten vom Scanner über die Scanner-Schnittstelle von Windows (WIA) holen.
 
 Jeder Scanner mit Windows-Treiber (WIA) erscheint in der Liste – dieselben, die »Windows-Fax und -Scan« kennt.
 Gescannt wird ohne Fenster des Treibers mit den Angaben aus PDF Tool:
