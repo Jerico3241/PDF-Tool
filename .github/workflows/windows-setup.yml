@@ -62,16 +62,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - gruppe: Start, Navigation, Einstellungen, Updates, Verlauf, optionale Kundenakte
-            dateien: resources bridge shell history optional updates background
+          - gruppe: Start, Navigation, Einstellungen, Tastenkürzel, Updates, Verlauf, optionale Kundenakte
+            dateien: resources bridge shell shortcuts history optional updates background
           - gruppe: Vertragsübersichten, Kopf- und Fußzeile, PDF reparieren
             dateien: contracts richtext repair
           - gruppe: Kundenakte, Stapel, Einfügemarke
             dateien: customers batch caret
           - gruppe: Vorlagen, Regelwerk, Sicherung und Diagnose, Stapel-Aktionen
             dateien: templates rules backup actions
-          - gruppe: PDF Reader – Ansicht, Seiten, Formulare
-            dateien: reader reader_layout reader_v31 pages_v31 forms_v31
+          - gruppe: PDF Reader – Ansicht, Seiten, Formulare, Vorlesen
+            dateien: reader reader_layout reader_v31 pages_v31 forms_v31 speech
           - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung
             dateien: objects objects_v31 edit_v31 reader_motion ocr
           - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen
@@ -92,7 +92,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
@@ -156,7 +156,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 

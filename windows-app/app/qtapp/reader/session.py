@@ -137,6 +137,18 @@ class Session:
     def text(self, page: int, start: int, count: int) -> str:
         return textlayer.text(self.document, page, start, count)
 
+    def raw_text(self, page: int, start: int = 0, count: int = -1) -> str:
+        """Text wie PDFium ihn liefert – ein Zeichen je Zeichen der Seite (Vorlesen: Wort markieren)."""
+        from pdfium_lock import PDFIUM_LOCK
+
+        if not 0 <= page < self.document.page_count:
+            return ""
+        with PDFIUM_LOCK:
+            textpage = self.document.textpage(page)
+            if count < 0:
+                count = textpage.count_chars() - start
+            return textpage.get_text_range(start, count) if count > 0 else ""
+
     def page_texts(self, limit: int = 2_000_000) -> list[str]:
         """Text aller Seiten (KI-Assistent) – zusammen höchstens ``limit`` Zeichen; danach folgen leere Seiten."""
         result: list[str] = []
@@ -509,6 +521,14 @@ class Session:
         geo = self.document.geometry(page)
         rects = [geo.rect_to_page(normalize(tuple(rect))) for rect in view_rects]
         return annotations.add_markup(self.document, self.history, page, kind, rects, style=annotations.Style(color=_rgb(color)), contents=contents)
+
+    def markup_pages(self, kind: str, pages: dict, color: str) -> None:
+        """Eine Auswahl über mehrere Seiten markieren – ein Schritt zum Rückgängigmachen."""
+        title = "Text " + {"highlight": "markieren", "underline": "unterstreichen", "strikeout": "durchstreichen"}.get(kind, "markieren")
+        with commands.group(self.document, self.history, title):
+            for page, rects in pages.items():
+                if rects:
+                    self.markup(int(page), kind, rects, color, "")
 
     def add_note(self, page: int, u: float, v: float, text: str, color: str) -> str:
         x, y = self.document.geometry(page).to_page(u, v)

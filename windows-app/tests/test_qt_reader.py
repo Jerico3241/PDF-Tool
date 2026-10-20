@@ -367,6 +367,59 @@ def test_text_selection_by_mouse_and_copy(reader_app, tmp_path: Path) -> None:
     assert doc.selectionPage == -1
 
 
+def test_text_selection_across_pages_copies_and_marks_both(reader_app, tmp_path: Path) -> None:
+    """Seit 4.0.0-beta.5: Ziehen von Seite 1 auf Seite 2 wählt über die Seitengrenze; Kopieren und Markieren gelten für beide."""
+    h = reader_app
+    doc = open_pdf(h, samples.standard_text(tmp_path / "seiten.pdf", pages=2))
+    doc.setZoom(40)
+    settle(h)
+    doc.loadText(0)
+    doc.loadText(1)
+    settle(h)
+    drag(h, page_point(h, 0, 70, 77), page_point(h, 1, 200, 107), steps=16)
+    settle(h)
+    assert doc.selectionPage == 0 and set(doc.selectionPages) == {"0", "1"}
+    assert len(doc.selectionPages["1"]) == 2  # zwei Zeilen auf Seite 2
+    QGuiApplication.clipboard().setText("")
+    key(h, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    settle(h)
+    copied = QGuiApplication.clipboard().text()
+    assert "Seite 1 von 2" in copied and copied.count("Rechnung Nr. 4711") == 2 and "Gesamtbetrag" in copied
+    # Rückwärts (von Seite 2 nach oben) ergibt dieselbe Ordnung
+    assert doc.selectAcross(1, 200, 107, 0, 70, 77)
+    assert doc.selectionPage == 0 and set(doc.selectionPages) == {"0", "1"}
+    doc.markSelection("highlight")
+    settle(h)
+    assert wait_until(lambda: doc.selectionPage == -1 and doc.undoText != "", 10)
+    marks = [entry for entry in doc.annotations if "Highlight" in str(entry.get("subtype", ""))]
+    assert sorted({entry["page"] for entry in marks}) == [0, 1]
+    doc.undo()
+    settle(h)
+    assert wait_until(lambda: not [entry for entry in doc.annotations if "Highlight" in str(entry.get("subtype", ""))], 10)
+
+
+def test_text_selection_scrolls_at_the_edge_of_the_view(reader_app, tmp_path: Path) -> None:
+    """Ziehen bis an den unteren Rand rollt weiter; die Auswahl wächst mit auf die nächste Seite."""
+    h = reader_app
+    doc = open_pdf(h, samples.standard_text(tmp_path / "rollen.pdf", pages=3))
+    for page in range(3):
+        doc.loadText(page)
+    settle(h)
+    view = h.item("readerView")
+    start = page_point(h, 0, 70, 77)
+    bottom = window_point(view, view.width() / 2, view.height() - 6)
+    before = view.property("contentY")
+    QTest.mousePress(h.window, LEFT, NO_MOD, start)
+    for step in range(1, 9):
+        QTest.mouseMove(h.window, QPoint(start.x() + (bottom.x() - start.x()) * step // 8, start.y() + (bottom.y() - start.y()) * step // 8))
+        pump(0.01)
+    assert wait_until(lambda: "1" in doc.selectionPages, 8)
+    assert view.property("contentY") > before
+    QTest.mouseRelease(h.window, LEFT, NO_MOD, bottom)
+    pump(0.1)
+    assert doc.selectionPage == 0 and "0" in doc.selectionPages
+
+
 def context_menu(h, page: int = 0):
     """Kontextmenü der Seite mit seinen Einträgen (Text → Eintrag). Seite und Menü mit zurückgeben:
     PySide verwirft die Python-Objekte der Kinder, sobald das des Elternobjekts freigegeben ist."""

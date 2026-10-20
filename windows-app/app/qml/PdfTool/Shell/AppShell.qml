@@ -146,19 +146,20 @@ FocusScope {
     }
 
     // Tastenkürzel (nicht, solange ein Dialog offen ist)
-    Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: !Dialogs.open; onActivated: App.primaryAction() }
-    Shortcut { sequence: "Ctrl+O"; enabled: !Dialogs.open; onActivated: App.openAction() }
-    Shortcut { sequence: "Ctrl+F"; enabled: !Dialogs.open; onActivated: App.findAction() }
-    Shortcut { sequence: "F1"; enabled: !Dialogs.open; onActivated: App.showHelp() }
-    Shortcut { sequence: "Ctrl+1"; enabled: !Dialogs.open; onActivated: App.openShortcut(1) }
-    Shortcut { sequence: "Ctrl+2"; enabled: !Dialogs.open; onActivated: App.openShortcut(2) }
-    Shortcut { sequence: "Ctrl+3"; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
-    Shortcut { sequence: "Ctrl+4"; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
-    Shortcut { sequence: "Ctrl+5"; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
-    Shortcut { sequence: "Ctrl+6"; enabled: !Dialogs.open; onActivated: App.openShortcut(6) }
+    Shortcut { sequences: Shortcuts.keys["app.primary"] || []; enabled: !Dialogs.open; onActivated: App.primaryAction() }
+    Shortcut { sequences: Shortcuts.keys["app.open"] || []; enabled: !Dialogs.open; onActivated: App.openAction() }
+    Shortcut { sequences: Shortcuts.keys["app.find"] || []; enabled: !Dialogs.open; onActivated: App.findAction() }
+    Shortcut { sequences: Shortcuts.keys["app.help"] || []; enabled: !Dialogs.open; onActivated: App.showHelp() }
+    Shortcut { sequences: Shortcuts.keys["app.shortcuts"] || []; enabled: !Dialogs.open; onActivated: Shortcuts.showOverview() }
+    Shortcut { sequences: Shortcuts.keys["app.home"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(1) }
+    Shortcut { sequences: Shortcuts.keys["app.contracts"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(2) }
+    Shortcut { sequences: Shortcuts.keys["app.repair"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
+    Shortcut { sequences: Shortcuts.keys["app.settings"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
+    Shortcut { sequences: Shortcuts.keys["app.reader"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
+    Shortcut { sequences: Shortcuts.keys["app.actions"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(6) }
     // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument)
     readonly property string currentTab: App.currentPage === "settings" ? "settings" : App.currentTool
-    Shortcut { sequence: "Ctrl+W"; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }
+    Shortcut { sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }
     // Zuletzt geschlossenes Dokument wieder öffnen – auf jeder Seite, wie im Browser
-    Shortcut { objectName: "reopenShortcut"; sequence: "Ctrl+Shift+T"; enabled: !Dialogs.open && Reader.canReopen; onActivated: Reader.reopenClosed() }
+    Shortcut { objectName: "reopenShortcut"; sequences: Shortcuts.keys["app.reopen"] || []; enabled: !Dialogs.open && Reader.canReopen; onActivated: Reader.reopenClosed() }
 }

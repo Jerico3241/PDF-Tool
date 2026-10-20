@@ -545,7 +545,8 @@ Flickable {
         case Qt.Key_End:
             view.doc.goTo(view.pageCount - 1); break
         case Qt.Key_Escape:
-            if (view.doc.selectionPage >= 0) view.doc.clearSelection()
+            if (Speech.active) Speech.stop()
+            else if (view.doc.selectionPage >= 0) view.doc.clearSelection()
             else if (view.doc.tool !== "select") view.doc.setTool("select")
             else if (Reader.fullScreen) Reader.leaveFullScreen()
             else { event.accepted = false; return }

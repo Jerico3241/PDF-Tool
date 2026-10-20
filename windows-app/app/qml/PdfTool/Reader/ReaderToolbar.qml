@@ -52,29 +52,29 @@ Rectangle {
             onClicked: root.allToolsRequested()
         }
         Separator {}
-        PIconButton { objectName: "readerOpen"; iconName: "folder_open"; tip: "Öffnen (Strg+O)"; onClicked: Reader.openDialog() }
+        PIconButton { objectName: "readerOpen"; iconName: "folder_open"; tip: "Öffnen" + Shortcuts.hints["app.open"]; onClicked: Reader.openDialog() }
         PIconButton {
             objectName: "readerSave"
             iconName: "save"
-            tip: "Speichern (Strg+S)"
+            tip: "Speichern" + Shortcuts.hints["reader.save"]
             enabled: root.doc !== null && !root.doc.busy && (root.doc.dirty || root.doc.path === "")
             busy: root.doc !== null && root.doc.saving
             onClicked: root.doc.saveDocument()
         }
-        PIconButton { objectName: "readerPrint"; iconName: "print"; tip: "Drucken (Strg+P)"; enabled: root.doc !== null; onClicked: root.doc.printDocument() }
+        PIconButton { objectName: "readerPrint"; iconName: "print"; tip: "Drucken" + Shortcuts.hints["reader.print"]; enabled: root.doc !== null; onClicked: root.doc.printDocument() }
         PIconButton { objectName: "readerMail"; iconName: "mail"; tip: "Per E-Mail senden"; enabled: root.doc !== null; onClicked: Reader.sendByMail() }
         Separator {}
         PIconButton {
             objectName: "readerUndo"
             iconName: "arrow_undo"
-            tip: root.doc && root.doc.undoText ? "Rückgängig: " + root.doc.undoText + " (Strg+Z)" : "Rückgängig (Strg+Z)"
+            tip: (root.doc && root.doc.undoText ? "Rückgängig: " + root.doc.undoText : "Rückgängig") + Shortcuts.hints["reader.undo"]
             enabled: root.doc !== null && root.doc.undoText !== "" && !root.doc.busy
             onClicked: root.doc.undo()
         }
         PIconButton {
             objectName: "readerRedo"
             iconName: "arrow_redo"
-            tip: root.doc && root.doc.redoText ? "Wiederholen: " + root.doc.redoText + " (Strg+Y)" : "Wiederholen (Strg+Y)"
+            tip: (root.doc && root.doc.redoText ? "Wiederholen: " + root.doc.redoText : "Wiederholen") + Shortcuts.hints["reader.redo"]
             enabled: root.doc !== null && root.doc.redoText !== "" && !root.doc.busy
             onClicked: root.doc.redo()
         }
@@ -92,7 +92,7 @@ Rectangle {
 
         Item { Layout.fillWidth: true }
 
-        PIconButton { objectName: "readerSearchButton"; iconName: "search"; tip: "Suchen (Strg+F)"; enabled: root.doc !== null; onClicked: root.searchRequested() }
+        PIconButton { objectName: "readerSearchButton"; iconName: "search"; tip: "Suchen" + Shortcuts.hints["app.find"]; enabled: root.doc !== null; onClicked: root.searchRequested() }
         PIconButton {
             id: viewButton
             objectName: "readerViewMode"
@@ -120,7 +120,7 @@ Rectangle {
         PMenuItem { text: "Zwei Seiten"; iconName: "book_open"; onTriggered: root.doc.setViewMode("two") }
         PMenuItem { text: "Fortlaufend, zwei Seiten"; iconName: "layout_column_two"; onTriggered: root.doc.setViewMode("continuousTwo") }
         PMenuItem { objectName: "readerMenuSplit"; text: Reader.splitKey !== "" ? "Geteilte Ansicht schließen" : "Geteilte Ansicht"; iconName: "layout_column_two"; onTriggered: viewMenu.afterClose = function() { Reader.toggleSplit() } }
-        PMenuItem { objectName: "readerMenuPresent"; text: "Präsentation (F5)"; iconName: "play"; onTriggered: viewMenu.afterClose = function() { Reader.startPresentation() } }
+        PMenuItem { objectName: "readerMenuPresent"; text: "Präsentation" + Shortcuts.hints["reader.present"]; iconName: "play"; onTriggered: viewMenu.afterClose = function() { Reader.startPresentation() } }
         PMenuItem {
             objectName: "readerNightMode"
             text: Reader.nightMode ? "Nachtmodus ausschalten" : "Nachtmodus (Seiten dunkel)"
@@ -134,9 +134,10 @@ Rectangle {
         PMenuItem { text: "Druckvorschau"; iconName: "eye"; enabled: root.doc !== null; onTriggered: root.doc.previewPrint() }
         PMenuItem { text: "Seiten organisieren"; iconName: "grid"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: Reader.setOrganize(!Reader.organize) }
         PMenuItem { text: "Seitenansicht …"; iconName: "document_one_page_multiple"; visible: !root.roomy; height: visible ? implicitHeight : 0; onTriggered: viewMenu.popup(moreButton, 0, moreButton.height) }
+        PMenuItem { objectName: "readerMenuSpeech"; text: (Speech.active ? "Vorlesen beenden" : "Vorlesen") + Shortcuts.hints["reader.speech"]; iconName: "speaker_2"; enabled: root.doc !== null; onTriggered: moreMenu.afterClose = function() { Speech.toggle() } }
         PMenuItem { text: "Eigenschaften"; iconName: "info"; enabled: root.doc !== null; onTriggered: root.doc.showProperties() }
         PMenuItem { text: "Pfad kopieren"; iconName: "copy"; enabled: root.doc !== null && root.doc.path !== ""; onTriggered: App.copyPath(root.doc.path) }
         PMenuItem { text: "Ordner öffnen"; iconName: "folder"; enabled: root.doc !== null && root.doc.path !== ""; onTriggered: Reader.showInFolder(root.doc.path) }
-        PMenuItem { text: "Schließen (Strg+W)"; iconName: "dismiss"; enabled: root.doc !== null; onTriggered: Reader.closeCurrent() }
+        PMenuItem { text: "Schließen" + Shortcuts.hints["app.closeTab"]; iconName: "dismiss"; enabled: root.doc !== null; onTriggered: Reader.closeCurrent() }
     }
 }

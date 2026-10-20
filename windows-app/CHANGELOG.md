@@ -2,6 +2,27 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.5
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.5.md).
+
+- Scannen: `tools/pdf_editor/scan.py` holt Seiten über WIA (`WIA.DeviceManager`, comtypes, dynamische
+  Automatisierung) – Vorlagenglas je Durchgang eine Seite, Einzug bis `WIA_ERROR_PAPER_EMPTY`; WIA-Fehlercodes
+  werden zu Meldungen, fertige Seiten bleiben bei einem Abbruch erhalten. Schnellwerkzeug »Scannen«, Dialog
+  `ScanContent.qml`, PDF über `imagepdf.create`, danach auf Wunsch `start_ocr_all`.
+- Vorlesen: `tools/pdf_editor/speech.py` (SAPI `SpVoice`, asynchron im GUI-Thread; `prepare` setzt getrennte Wörter
+  zusammen und ordnet den Sprechtext den Zeichen der Seite zu) und `qtapp/speech.py` (QML `Speech`: Seite für Seite,
+  Wortmarkierung über `speechWord`, Pause, Tempo, Stimme; endet bei Tabwechsel). Leiste `SpeechBar.qml`.
+- Texterkennung: Sprachdaten `fra`, `ita`, `spa`, `nld`, `por`, `pol`, `tur`, `rus` (tessdata_fast, gleicher Commit,
+  zusammen 27 MB); `ocr.display_order` stellt Deutsch und Englisch voran.
+- Auswahl über Seiten: `_selection` ist (erste Seite, Anfang, letzte Seite, Ende), `selectionPages` je Seite die
+  Rechtecke, `selectAcross` und Rollen am Rand der Ansicht (PageView). Markieren über mehrere Seiten in einer
+  `commands.group`.
+- Tastenkürzel: `qtapp/shortcuts.py` (QML `Shortcuts`) verzeichnet alle Befehle mit Standardkürzeln; alle
+  `Shortcut`-Elemente lesen `Shortcuts.keys`, Kurzinfos `Shortcuts.hints`, die Statuszeile `localize`. Eigene Kürzel
+  in `tastenkuerzel` (nur Abweichungen), Übersicht `ShortcutsContent.qml`.
+- Neues Laufzeitpaket: comtypes 1.4.17 (MIT, reines Python).
+
 # PDF Tool 4.0.0-beta.4
 
 Beta zum Testen, ohne neue Funktionen. Details in den [Release Notes](release-notes/4.0.0-beta.4.md).

@@ -252,8 +252,22 @@ Item {
             }
         }
     }
+    // Vorlesen: das gerade gesprochene Wort
     Repeater {
-        model: root.doc && root.doc.selectionPage === root.page ? root.doc.selectionRects : []
+        model: root.doc && root.doc.speechWord.page === root.page ? root.doc.speechWord.rects : []
+        Rectangle {
+            required property var modelData
+            objectName: "readerSpeechWord"
+            x: modelData[0] * root.s - 1
+            y: modelData[1] * root.s - 1
+            width: (modelData[2] - modelData[0]) * root.s + 2
+            height: (modelData[3] - modelData[1]) * root.s + 2
+            radius: 2
+            color: Theme.searchHit
+        }
+    }
+    Repeater {
+        model: root.doc && root.doc.selectionPage >= 0 ? (root.doc.selectionPages[String(root.page)] || []) : []
         Rectangle {
             required property var modelData
             x: modelData[0] * root.s
@@ -853,6 +867,8 @@ Item {
         property real drilledAt: 0
         property string narrowTo: ""    // Klick ohne Ziehen auf ein Objekt einer Mehrfachauswahl: nur noch dieses
         property bool additive: false
+        property int startPage: -1     // Textauswahl: Seite, auf der das Ziehen begann (die Auswahl kann darüber hinausgehen)
+        property var lastHost: null     // letzter Zeigerpunkt in der Ansicht (Rollen am Rand)
         property real startU: 0
         property real startV: 0
         property real endU: 0
@@ -948,6 +964,8 @@ Item {
         host.focusByPointer()
         pointer.startU = pointer.endU = p.u
         pointer.startV = pointer.endV = p.v
+        pointer.startPage = page
+        pointer.lastHost = null
         pointer.du = pointer.dv = 0
         pointer.action = ""
         if (mouse.button === Qt.RightButton) {
@@ -1184,7 +1202,8 @@ Item {
         pointer.dv = p.v - pointer.startV
         switch (pointer.action) {
         case "text":
-            doc.selectRange(page, pointer.startU, pointer.startV, p.u, p.v)
+            pointer.lastHost = host ? mapToItem(host, mouse.x, mouse.y) : null
+            selectText(mouse.x, mouse.y)
             break
         case "moveImage": {
             var r = pointer.target.view
@@ -1221,6 +1240,37 @@ Item {
         }
         }
     }
+    // Textauswahl bis zum Zeiger – außerhalb dieser Seite auf der Seite darunter bzw. darüber (über Seitengrenzen)
+    function selectText(mx, my) {
+        if (!doc || pointer.startPage < 0) return
+        var target = null
+        if (host && (my < 0 || my > height || mx < 0 || mx > width)) {
+            var hp = mapToItem(host, mx, my)
+            target = host.pointAt(hp.x, hp.y)
+        }
+        if (target && target.page !== pointer.startPage)
+            doc.selectAcross(pointer.startPage, pointer.startU, pointer.startV, target.page, target.u, target.v)
+        else if (page === pointer.startPage)
+            doc.selectRange(page, pointer.startU, pointer.startV, Math.max(0, Math.min(width, mx)) / s, Math.max(0, Math.min(height, my)) / s)
+    }
+    // Ziehen am oberen oder unteren Rand der Ansicht: weiterrollen und die Auswahl mitnehmen
+    Timer {
+        id: edgeScroll
+        interval: 30
+        repeat: true
+        running: pointer.pressed && pointer.action === "text" && pointer.lastHost !== null && root.host !== null
+        onTriggered: {
+            var hp = pointer.lastHost, edge = 28, step = 0
+            if (hp.y < edge) step = -Math.min(40, (edge - hp.y) * 1.5 + 4)
+            else if (hp.y > root.host.height - edge) step = Math.min(40, (hp.y - root.host.height + edge) * 1.5 + 4)
+            if (step === 0) return
+            var before = root.host.contentY
+            root.host.contentY = root.host.clampY(before + step)
+            if (root.host.contentY === before) return
+            var m = root.host.mapToItem(root, hp.x, hp.y)
+            root.selectText(m.x, m.y)
+        }
+    }
     function release(p, mouse) {
         var action = pointer.action
         pointer.action = ""
@@ -1231,8 +1281,8 @@ Item {
         switch (action) {
         case "text":
             if (tool === "redact") {
-                if (doc.selectionPage === page) doc.redactSelection()
-            } else if (tool !== "select" && doc.selectionPage === page) {
+                if (doc.selectionPage >= 0) doc.redactSelection()
+            } else if (tool !== "select" && doc.selectionPage >= 0) {
                 doc.markSelection(tool)
             } else if (tool === "select" && !moved && pointer.pressedLink) {
                 doc.clearSelection()
@@ -1360,6 +1410,7 @@ Item {
         property real v: 0
         PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
         PMenuItem { text: "Hier einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
+        PMenuItem { text: contextMenu.hasSelection ? "Auswahl vorlesen" : "Ab dieser Seite vorlesen"; iconName: "speaker_2"; onTriggered: { var d = root.doc, p = root.page; contextMenu.afterClose = function() { if (d.selectionPage < 0) d.setCurrentPage(p); Speech.readFromHere() } } }
         PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
     }
 
@@ -1417,7 +1468,7 @@ Item {
             visible: contextMenu.link !== null
             onTriggered: { var d = root.doc, l = contextMenu.link, page = root.page; contextMenu.afterClose = function() { d.followLink(page, l.key) } }
         }
-        readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage === root.page
+        readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage >= 0 && root.doc.selectionPages[String(root.page)] !== undefined
         PMenuItem { text: "Kopieren"; iconName: "copy"; enabled: contextMenu.hasSelection; onTriggered: root.doc.copySelection() }
         PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAll(root.page) }
         PMenuItem { text: "Markieren"; iconName: "highlight"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("highlight") }

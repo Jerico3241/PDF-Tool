@@ -819,8 +819,17 @@ PPage {
             Layout.topMargin: 4
             iconName: "question_circle"
             title: "Kurzanleitung"
-            description: "So arbeiten Sie mit den Werkzeugen von PDF Tool (F1)"
+            description: "So arbeiten Sie mit den Werkzeugen von PDF Tool" + Shortcuts.hints["app.help"]
             PButton { text: "Öffnen"; onClicked: App.showHelp() }
+        }
+        PSettingsCard {
+            objectName: "settingsShortcuts"
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            iconName: "keyboard"
+            title: "Tastenkürzel"
+            description: "Alle Kürzel auf einen Blick – und eigene festlegen" + Shortcuts.hints["app.shortcuts"]
+            PButton { objectName: "settingsShortcutsOpen"; text: "Anzeigen und ändern"; onClicked: Shortcuts.showOverview() }
         }
         PSettingsCard {
             Layout.fillWidth: true

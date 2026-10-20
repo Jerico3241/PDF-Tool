@@ -220,7 +220,7 @@ PPage {
                             iconName: modelData.icon
                             title: modelData.title
                             description: modelData.description
-                            shortcut: modelData.shortcut
+                            shortcut: Shortcuts.labels["app." + modelData.key] || ""
                             // Reader ohne geöffnetes Dokument: Dateiauswahl (er zeigt Dokumente, keine eigene Seite)
                             onClicked: App.openTool(modelData.key)
                             onMinimumWidthChanged: toolGrid.measure()
@@ -308,7 +308,7 @@ PPage {
                     kind: "accent"
                     iconName: "folder_open"
                     text: "Datei öffnen"
-                    tip: "Strg+O"
+                    tip: Shortcuts.labels["app.open"]
                     busy: Reader.opening > 0
                     onClicked: Reader.openDialog()
                 }

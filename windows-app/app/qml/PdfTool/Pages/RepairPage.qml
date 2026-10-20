@@ -160,7 +160,7 @@ Item {
                     minimumWidth: 180
                     iconName: "wrench"
                     text: Repair.primaryText
-                    tip: Repair.single ? "PDF reparieren (Strg+Enter)" : "Alle beschädigten PDFs nacheinander reparieren (Strg+Enter)"
+                    tip: (Repair.single ? "PDF reparieren" : "Alle beschädigten PDFs nacheinander reparieren") + Shortcuts.hints["app.primary"]
                     enabled: Repair.canStart
                     onClicked: Repair.startRepair()
                 }
@@ -291,7 +291,7 @@ Item {
                         kind: "accent"
                         iconName: "folder_open"
                         text: "PDFs auswählen"
-                        tip: "Eine oder mehrere PDFs auswählen (Strg+O)"
+                        tip: "Eine oder mehrere PDFs auswählen" + Shortcuts.hints["app.open"]
                         onClicked: Repair.pick()
                     }
                 ]
@@ -308,7 +308,7 @@ Item {
                     objectName: "repairAdd"
                     iconName: "add"
                     text: "PDFs hinzufügen"
-                    tip: "Weitere PDFs zur Liste hinzufügen (Strg+O) – auch per Ziehen und Ablegen"
+                    tip: "Weitere PDFs zur Liste hinzufügen" + Shortcuts.hints["app.open"] + " – auch per Ziehen und Ablegen"
                     onClicked: Repair.pick()
                 }
                 PButton {

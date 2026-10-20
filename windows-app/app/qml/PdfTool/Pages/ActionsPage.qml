@@ -26,7 +26,7 @@ PPage {
         title: "PDFs hierher ziehen"
         text: "oder auswählen – auch viele auf einmal."
         actions: [
-            PButton { objectName: "actionsPick"; kind: "accent"; iconName: "folder_open"; text: "PDFs wählen"; tip: "Strg+O"; onClicked: Actions.pick() }
+            PButton { objectName: "actionsPick"; kind: "accent"; iconName: "folder_open"; text: "PDFs wählen"; tip: Shortcuts.labels["app.open"]; onClicked: Actions.pick() }
         ]
     }
     PCard {
@@ -207,7 +207,7 @@ PPage {
             minimumWidth: 180
             iconName: "play"
             text: Actions.count > 1 ? "Alle bearbeiten" : "Bearbeiten"
-            tip: "Strg+Enter"
+            tip: Shortcuts.labels["app.primary"]
             enabled: Actions.canStart
             onClicked: Actions.start()
         }

@@ -116,6 +116,7 @@ class AppController(Observable):
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.cfg = cfg
+        self.key_text: Callable[[str], str] = lambda text: text  # Statuszeile: eigene Tastenkürzel (shortcuts.py)
         self.state = State(cfg)
         self.timers = Timers(self, on_exception=self.report_exception)
         self.worker = Worker(self, on_exception=self.report_exception)
@@ -289,7 +290,7 @@ class AppController(Observable):
 
     def refresh_hint(self) -> None:
         _key, hooks = self._page_tool()
-        self.hint = hooks.hint(self.currentPage) if hooks is not None else HOME_HINT
+        self.hint = self.key_text(hooks.hint(self.currentPage) if hooks is not None else HOME_HINT)
 
     # Tastenkürzel ------------------------------------------------------------------------------------
     @Slot()

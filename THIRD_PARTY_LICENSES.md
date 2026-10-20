@@ -37,6 +37,7 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | ↳ PDFium (in pypdfium2 enthalten) | 153.0.7999.0 | BSD-3-Clause | PDF-Engine 2 | https://pdfium.googlesource.com/pdfium |
 | ↳ Bibliotheken von PDFium | – | Apache-2.0 (abseil, llvm-libc mit LLVM-Exception), FTL (FreeType), Unicode-3.0 (ICU), MIT (lcms, simdutf), BSD (agg, OpenJPEG, libjpeg-turbo), libpng, libtiff, Zlib, MIT/Apache-2.0 (fast_float) | Schriften, Bilder, Farbprofile | https://github.com/bblanchon/pdfium-binaries |
 | fontTools | 4.66.1 | MIT | PDF Reader & Editor: Teilmengen lokaler Schriften einbetten (nur wenn die Schrift es erlaubt) | https://github.com/fonttools/fonttools |
+| comtypes | 1.4.17 | MIT | Scannen über die Scanner-Schnittstelle von Windows (WIA) | https://github.com/enthought/comtypes |
 | pypdf | 6.19.0 | BSD-3-Clause | PDF reparieren (dritte, tolerante Engine der erweiterten Wiederherstellung) | https://github.com/py-pdf/pypdf |
 | packaging | 26.3 | Apache-2.0 oder BSD-2-Clause | von pikepdf benötigt | https://github.com/pypa/packaging |
 | pandas | 2.3.3 | BSD-3-Clause | Vertragsübersichten (Excel lesen) | https://pandas.pydata.org |
@@ -77,7 +78,7 @@ Versionsfunktion oder Versionstext); »–«: in der Datei nicht vermerkt.
 | Komponente (Datei in `ocr\`) | Version | Lizenz | Verwendet für | Quelle |
 | --- | --- | --- | --- | --- |
 | Tesseract OCR (`tesseract.exe`, `libtesseract-5.dll`, `tessdata\pdf.ttf`) | 5.5.3 (Build 5.5.3.20260724) | Apache-2.0 | Texterkennung, Text-only-PDF | https://github.com/tesseract-ocr/tesseract |
-| Sprachdaten `deu`, `eng`, `osd` (`tessdata\*.traineddata`, tessdata_fast) | Commit 87416418657359cb625c412a48b6e1d6d41c29bd | Apache-2.0 | Deutsch, Englisch, Lageerkennung | https://github.com/tesseract-ocr/tessdata_fast |
+| Sprachdaten `deu`, `eng`, `fra`, `ita`, `spa`, `nld`, `por`, `pol`, `tur`, `rus`, `osd` (`tessdata\*.traineddata`, tessdata_fast) | Commit 87416418657359cb625c412a48b6e1d6d41c29bd | Apache-2.0 | Deutsch, Englisch, Französisch, Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch, Russisch, Lageerkennung | https://github.com/tesseract-ocr/tessdata_fast |
 | Leptonica (`libleptonica-6.dll`) | 1.87.0 | BSD-2-Clause | Bildverarbeitung für Tesseract | http://www.leptonica.org |
 | GCC-Laufzeit (`libgcc_s_seh-1.dll`, `libstdc++-6.dll`) | GCC 14 (mingw-w64, POSIX-Threads) | GPL-3.0-or-later WITH GCC-exception-3.1 | C/C++-Laufzeit | https://gcc.gnu.org |
 | winpthreads (`libwinpthread-1.dll`) | – (mingw-w64) | MIT, Teile BSD-3-Clause | POSIX-Threads | https://www.mingw-w64.org |
@@ -205,7 +206,7 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
   kein Bestandteil des App-Brandings.
 - **Schriften der Oberfläche** (Segoe UI Variable, Segoe UI) werden nicht mitgeliefert, sondern aus
   Windows verwendet.
-- **Symbole der Oberfläche** (seit 2.7.0): 175 SVG-Symbole aus **Fluent UI System Icons** von
+- **Symbole der Oberfläche** (seit 2.7.0): 180 SVG-Symbole aus **Fluent UI System Icons** von
   Microsoft (Paket `@fluentui/svg-icons` 1.1.343, https://github.com/microsoft/fluentui-system-icons),
   unverändert unter `windows-app/app/qml/icons/`, im Setup als Teil der QML-Ressource. Lizenz: MIT.
 

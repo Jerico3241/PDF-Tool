@@ -155,6 +155,8 @@ T.Popup {
                             case "protect": return protectContent
                             case "optimize": return optimizeContent
                             case "images": return imagesContent
+                            case "scan": return scanContent
+                            case "shortcuts": return shortcutsContent
                             case "header_footer": return headerFooterContent
                             case "watermark": return watermarkContent
                             case "redact_search": return redactSearchContent
@@ -235,6 +237,8 @@ T.Popup {
     Component { id: protectContent; ProtectContent {} }
     Component { id: optimizeContent; OptimizeContent {} }
     Component { id: imagesContent; ImagesContent {} }
+    Component { id: scanContent; ScanContent {} }
+    Component { id: shortcutsContent; ShortcutsContent {} }
     Component { id: headerFooterContent; HeaderFooterContent {} }
     Component { id: watermarkContent; WatermarkContent {} }
     Component { id: redactSearchContent; RedactSearchContent {} }

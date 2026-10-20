@@ -108,6 +108,15 @@ TESSDATA = {
     "deu.traineddata": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
     "eng.traineddata": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
     "osd.traineddata": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff",
+    # seit 4.0.0-beta.5: weitere Sprachen (zusammen 27 MB)
+    "fra.traineddata": "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
+    "ita.traineddata": "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827",
+    "spa.traineddata": "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
+    "nld.traineddata": "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6",
+    "por.traineddata": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
+    "pol.traineddata": "c4476cdbc0e33d898d32345122b7be1cbf85ace15f920f06c7714756e1ef79b2",
+    "tur.traineddata": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7",
+    "rus.traineddata": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225",
 }
 OCR = PAYLOAD / "ocr"  # passt zu tools/pdf_editor/ocr.py (BUNDLED_DIR)
 
@@ -165,6 +174,7 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/packaging/__init__.py",
     "runtime/Lib/site-packages/pypdfium2/__init__.py",
     "runtime/Lib/site-packages/pypdf/__init__.py",
+    "runtime/Lib/site-packages/comtypes/client/__init__.py",
     "runtime/Lib/site-packages/pypdfium2_raw/pdfium.dll",
     "runtime/Lib/site-packages/shiboken6/__init__.py",
     "runtime/Lib/site-packages/shiboken6/Shiboken.pyd",
@@ -267,6 +277,14 @@ REQUIRED_PAYLOAD = [
     "ocr/tessdata/deu.traineddata",
     "ocr/tessdata/eng.traineddata",
     "ocr/tessdata/osd.traineddata",
+    "ocr/tessdata/fra.traineddata",
+    "ocr/tessdata/ita.traineddata",
+    "ocr/tessdata/spa.traineddata",
+    "ocr/tessdata/nld.traineddata",
+    "ocr/tessdata/por.traineddata",
+    "ocr/tessdata/pol.traineddata",
+    "ocr/tessdata/tur.traineddata",
+    "ocr/tessdata/rus.traineddata",
     "app/assistant/runtime.py",
     "app/qtapp/assistant.py",
     "ai/llama-server.exe",

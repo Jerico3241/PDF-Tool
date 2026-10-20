@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.4
+Version 4.0.0-beta.5
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,17 +34,35 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.4.exe
+PDF-Tool-Setup-4.0.0-beta.5.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
-qpdf, pypdfium2 mit PDFium, pypdf, fontTools) und die Texterkennung
-Tesseract mit deutschen und englischen Sprachdaten sowie die Laufzeit des
+qpdf, pypdfium2 mit PDFium, pypdf, fontTools, comtypes) und die
+Texterkennung Tesseract mit Sprachdaten für Deutsch, Englisch, Französisch,
+Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch und
+Russisch sowie die Laufzeit des
 optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
 qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
+
+Neu in Version 4.0 Beta 5 – Scannen, Vorlesen, Sprachen, Tastenkürzel
+---------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Scannen: Startseite → „Scannen“. Scanner wählen, Vorlagenglas oder Einzug,
+  Farbe und Auflösung; die Seiten werden direkt eine PDF, auf Wunsch gleich
+  durchsuchbar (Texterkennung).
+- Vorlesen: Strg+Umschalt+Y liest die Auswahl oder das Dokument ab der
+  aktuellen Seite mit den Stimmen von Windows vor. Das gesprochene Wort ist
+  markiert; Pause, Tempo und Stimme in der Leiste über dem Dokument.
+- Texterkennung in zehn Sprachen: neu Französisch, Italienisch, Spanisch,
+  Niederländisch, Portugiesisch, Polnisch, Türkisch und Russisch.
+- Text über Seitengrenzen markieren: einfach über die Seite hinaus ziehen;
+  Kopieren, Hervorheben und Schwärzen gelten für alle gewählten Seiten.
+- Tastenkürzel: Übersicht aller Kürzel (Strg+F1, Einstellungen →
+  Tastenkürzel), jedes lässt sich ändern oder entfernen.
 
 Neu in Version 4.0 Beta 4 – Outlook, Taskleiste, Symbol
 --------------------------------------------------------
@@ -490,6 +508,9 @@ Installation. Ihre Daten bleiben erhalten.
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
 einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.4 auf 4.0.0-beta.5 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent.
 
 Update von PDF Tool 4.0.0-beta.3 auf 4.0.0-beta.4 (Kanal „Beta“): mit einem
 Klick, ohne Setup-Assistent (unter Windows getestet: Beta 3 läuft im
