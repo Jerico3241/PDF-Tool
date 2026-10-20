@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Zeile eines geänderten, neuen, entfernten oder unveränderten Vertrags. Geänderte Verträge
 // klappen weich auf und zeigen die geänderten Felder (»Netto: 250,00 € → 270,00 €«).
@@ -32,7 +33,7 @@ Item {
     }
     ListView.onReused: animateHeight = false
     Accessible.role: Accessible.ListItem
-    Accessible.name: kindLabel + ": " + title + (summary !== "" ? ", " + summary : "")
+    Accessible.name: I18n.tr(kindLabel + ": " + title + (summary !== "" ? ", " + summary : ""), I18n.revision)
 
     function toggle() {
         if (!expandable || !view) return
@@ -62,13 +63,13 @@ Item {
         height: 44
         spacing: 12
         PBadge {
-            text: row.kindLabel
+            text: I18n.tr(row.kindLabel, I18n.revision)
             tone: row.tone
             Layout.preferredWidth: 96
             scale: 1
         }
-        PText { text: row.title; elide: Text.ElideRight; Layout.fillWidth: true }
-        PText { text: row.summary; tone: "secondary"; elide: Text.ElideRight; Layout.maximumWidth: row.columnWidth * 0.45 }
+        PText { text: I18n.tr(row.title, I18n.revision); elide: Text.ElideRight; Layout.fillWidth: true }
+        PText { text: I18n.tr(row.summary, I18n.revision); tone: "secondary"; elide: Text.ElideRight; Layout.maximumWidth: row.columnWidth * 0.45 }
         PIcon {
             visible: row.expandable
             name: "chevron_down"
@@ -92,8 +93,8 @@ Item {
                 required property var modelData
                 Layout.fillWidth: true
                 spacing: 12
-                PText { text: modelData.field; textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 120 }
-                PText { text: modelData.change; textStyle: "caption"; wrap: true; Layout.fillWidth: true }
+                PText { text: I18n.tr(modelData.field, I18n.revision); textStyle: "caption"; tone: "secondary"; Layout.preferredWidth: 120 }
+                PText { text: I18n.tr(modelData.change, I18n.revision); textStyle: "caption"; wrap: true; Layout.fillWidth: true }
             }
         }
     }

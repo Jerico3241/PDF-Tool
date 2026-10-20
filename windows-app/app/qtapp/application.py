@@ -81,6 +81,10 @@ class Runtime(QObject):
         self.cfg = cfg
         self.theme = ThemeController(cfg, self)
         self.app = AppController(cfg, self)
+        # Sprache zuerst: alle weiteren Controller und die Oberfläche übersetzen über ``i18n``
+        from .language import LanguageController
+
+        self.language = LanguageController(self.app, cfg, self)
         self.app.theme = self.theme
         self.settings = SettingsController(self.app, self.theme, self)
         self.app.settings = self.settings
@@ -97,6 +101,7 @@ class Runtime(QObject):
             "Settings": self.settings,
             "Dialogs": self.app.dialogs,
             "Notices": self.app.notices,
+            "I18n": self.language,
         }
         self.preview_lookup: Callable[[str], object] = lambda _ident: None
         self.image_providers: dict[str, Callable[[], object]] = {}  # weitere Bildquellen der Werkzeuge (je Engine neu)

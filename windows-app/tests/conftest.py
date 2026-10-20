@@ -24,6 +24,10 @@ if not os.environ.get("UE_DATA_DIR"):
 
     os.environ["UE_DATA_DIR"] = tempfile.mkdtemp(prefix="pdf-tool-testdaten-")
 
+# Oberfläche auf Deutsch, wie in den Erwartungen der Tests – unabhängig von der Sprache des Systems (CI: Englisch).
+# Die englische Oberfläche prüft test_i18n.py ausdrücklich.
+os.environ.setdefault("PDFTOOL_SPRACHE", "de")
+
 COLUMNS = [
     "Vertrag-Nr.",
     "Beginnt am",

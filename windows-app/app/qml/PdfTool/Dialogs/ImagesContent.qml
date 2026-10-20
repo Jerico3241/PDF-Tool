@@ -46,9 +46,9 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Jedes Bild wird eine Seite – in dieser Reihenfolge. Fotos behalten ihre Qualität, gedrehte Aufnahmen stehen richtig herum."
+        text: I18n.tr("Jedes Bild wird eine Seite – in dieser Reihenfolge. Fotos behalten ihre Qualität, gedrehte Aufnahmen stehen richtig herum.", I18n.revision)
     }
-    PFieldLabel { text: root.items.length === 1 ? "1 Bild" : root.items.length + " Bilder" }
+    PFieldLabel { text: I18n.tr(root.items.length === 1 ? "1 Bild" : root.items.length + " Bilder", I18n.revision) }
     ListView {
         id: list
         objectName: "imagesList"
@@ -65,15 +65,15 @@ ColumnLayout {
             width: ListView.view.width
             height: Metrics.controlHeight + 4
             spacing: 4
-            PText { text: (index + 1) + "."; tone: "tertiary"; Layout.preferredWidth: 28 }
+            PText { text: I18n.tr((index + 1) + ".", I18n.revision); tone: "tertiary"; Layout.preferredWidth: 28 }
             PIcon { name: "image"; size: 16 }
-            PText { Layout.fillWidth: true; text: modelData.name; elide: Text.ElideMiddle }
-            PIconButton { objectName: "imagesUp_" + index; iconName: "chevron_up"; tip: "Nach oben"; enabled: index > 0; onClicked: root.move(index, -1) }
-            PIconButton { objectName: "imagesDown_" + index; iconName: "chevron_down"; tip: "Nach unten"; enabled: index < root.items.length - 1; onClicked: root.move(index, 1) }
-            PIconButton { objectName: "imagesRemove_" + index; iconName: "dismiss"; tip: "Aus der Liste nehmen"; onClicked: root.remove(index) }
+            PText { Layout.fillWidth: true; text: I18n.tr(modelData.name, I18n.revision); elide: Text.ElideMiddle }
+            PIconButton { objectName: "imagesUp_" + index; iconName: "chevron_up"; tip: I18n.tr("Nach oben", I18n.revision); enabled: index > 0; onClicked: root.move(index, -1) }
+            PIconButton { objectName: "imagesDown_" + index; iconName: "chevron_down"; tip: I18n.tr("Nach unten", I18n.revision); enabled: index < root.items.length - 1; onClicked: root.move(index, 1) }
+            PIconButton { objectName: "imagesRemove_" + index; iconName: "dismiss"; tip: I18n.tr("Aus der Liste nehmen", I18n.revision); onClicked: root.remove(index) }
         }
     }
-    PFieldLabel { text: "Seitengröße" }
+    PFieldLabel { text: I18n.tr("Seitengröße", I18n.revision) }
     Repeater {
         model: [
             { "key": "auto", "label": "Wie das Bild" },
@@ -83,12 +83,12 @@ ColumnLayout {
         PRadioButton {
             required property var modelData
             objectName: "imagesSize_" + modelData.key
-            text: modelData.label
+            text: I18n.tr(modelData.label, I18n.revision)
             checked: root.pageSize === modelData.key
             onClicked: root.pageSize = modelData.key
         }
     }
-    PFieldLabel { text: "Rand" }
+    PFieldLabel { text: I18n.tr("Rand", I18n.revision) }
     RowLayout {
         spacing: 16
         Repeater {
@@ -96,7 +96,7 @@ ColumnLayout {
             PRadioButton {
                 required property var modelData
                 objectName: "imagesMargin_" + modelData.key
-                text: modelData.label
+                text: I18n.tr(modelData.label, I18n.revision)
                 checked: root.margin === modelData.key
                 onClicked: root.margin = modelData.key
             }

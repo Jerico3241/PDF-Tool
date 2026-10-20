@@ -1,5 +1,6 @@
 """KI-Assistent in der Oberfläche (QML: ``Assistant``): einrichten, Modell laden und entfernen (Einstellungen), Fragen
-und Zusammenfassungen zum geöffneten PDF (rechte Seitenleiste des Readers).
+und Zusammenfassungen zum geöffneten PDF (rechte Seitenleiste des Readers). Seit 4.0 Beta 6 auch: Fragen über mehrere
+PDFs oder einen Ordner (Scans über die Texterkennung) und »Dokument übersetzen« als neues PDF.
 
 Standardmäßig aus. Eingeschaltet lädt »Einrichten …« ein Modell aus ``assistant.catalog`` – nur nach ausdrücklicher
 Wahl, über HTTPS von Hugging Face (Weiterleitungen nur dorthin), fortsetzbar, mit SHA-256-Prüfung vor der ersten
@@ -17,9 +18,11 @@ import time
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from assistant import catalog, runtime, store
+from assistant import library as pdflibrary
 from assistant import text as doctext
 from assistant.client import AssistantError, Cancelled, Chat
-from assistant.prompts import ANSWER_TOKENS, PART_TOKENS, QUESTION_CHARS, combine_messages, part_messages, plan_summary, question_messages, summary_messages
+from assistant.prompts import (ANSWER_TOKENS, LANGUAGES, PART_TOKENS, QUESTION_CHARS, combine_messages, library_messages, part_messages, plan_summary, question_messages,
+                               summary_messages, translate_messages, translation_parts, translation_tokens)
 
 from .base import Observable, prop
 from .models import KeyedListModel
@@ -33,8 +36,10 @@ MAX_QUESTION = 1000
 HF_HOSTS = frozenset({catalog.SOURCE_HOST})
 HF_SUFFIXES = (".hf.co", ".huggingface.co")  # Speicher von Hugging Face (Weiterleitungen beim Download)
 # Einträge des Gesprächs: question, answer, error oder note; ``rich`` ist die Antwort zum Anzeigen (siehe
-# ``assistant.text.rich``), ``pages`` die genannten Seiten (1-basiert)
-ENTRY_ROLES = ("key", "kind", "text", "rich", "pending", "note", "pages")
+# ``assistant.text.rich``), ``pages`` die genannten Seiten (1-basiert), ``sources`` bei mehreren PDFs die genannten
+# Stellen ({label, file, page})
+ENTRY_ROLES = ("key", "kind", "text", "rich", "pending", "note", "pages", "sources")
+LIBRARY = "__mehrere__"  # Gespräch über mehrere PDFs (statt eines Dokument-Tabs)
 
 
 def _gb(value: int) -> str:
@@ -61,6 +66,8 @@ class AssistantController(Observable):
     statusTextChanged, statusText = prop(str, "statusText", "")
     partialChanged, partial = prop(str, "partial", "")  # unterbrochener Download: Modell-Schlüssel
     busyChanged, busy = prop(bool, "busy", False)  # eine Antwort läuft
+    # Fragen an mehrere PDFs: Bezeichnung (»12 PDFs aus »Verträge««, leer = das geöffnete Dokument)
+    scopeLabelChanged, scopeLabel = prop(str, "scopeLabel", "")
 
     def __init__(self, app, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -79,6 +86,9 @@ class AssistantController(Observable):
         self.conversation = KeyedListModel(ENTRY_ROLES, key="key", parent=self)
         self._indexes: dict[str, tuple[int, doctext.Index, int]] = {}  # Dokument → (Stand, Index, Zeichen)
         self._answer_owner = ""
+        self._library: pdflibrary.Library | None = None
+        self._library_index: doctext.Index | None = None
+        self._translate_language = "en"
         self._download_started = 0.0
         self._download_offset = 0
         self.set_quietly("available", runtime.server_path() is not None and runtime.platform_supported())
@@ -371,11 +381,19 @@ class AssistantController(Observable):
     def _document(self):
         return self.reader.current if self.reader is not None else None
 
+    def _current_key(self) -> str:
+        """Gespräch, das die Seitenleiste zeigt: mehrere PDFs oder das aktive Dokument."""
+        if self.scopeLabel:
+            return LIBRARY
+        doc = self._document()
+        return doc.ident if doc is not None else ""
+
     def _show_current(self) -> None:
         """Anderer Tab: dessen Gespräch zeigen; Gespräche geschlossener Dokumente verfallen."""
-        doc = self._document()
-        self.conversation.set_items(self._conversations.get(doc.ident, []) if doc is not None else [])
+        key = self._current_key()
+        self.conversation.set_items(self._conversations.get(key, []) if key else [])
         open_docs = set(self.reader.tabs.keys()) if self.reader is not None else set()
+        open_docs.add(LIBRARY)
         for ident in [ident for ident in list(self._conversations) + list(self._indexes) if ident not in open_docs]:
             self._conversations.pop(ident, None)
             self._indexes.pop(ident, None)
@@ -385,7 +403,7 @@ class AssistantController(Observable):
     def _push(self, ident: str, entry: dict) -> int:
         conversation = self._conversations.setdefault(ident, [])
         self._serial += 1
-        conversation.append({"key": f"e{self._serial}", "rich": "", "pending": False, "note": "", "pages": [], **entry})
+        conversation.append({"key": f"e{self._serial}", "rich": "", "pending": False, "note": "", "pages": [], "sources": [], **entry})
         self._publish(ident)
         return len(conversation) - 1
 
@@ -397,27 +415,36 @@ class AssistantController(Observable):
         self._publish(ident)
 
     def _publish(self, ident: str) -> None:
-        doc = self._document()
-        if doc is not None and doc.ident == ident:
+        if ident and ident == self._current_key():
             self.conversation.set_items(self._conversations.get(ident, []))
 
     @Slot(str)
     def ask(self, question: str) -> None:
         question = " ".join(str(question or "").split())[:MAX_QUESTION]
-        if question:
+        if question and self.scopeLabel:
+            self._ask_library(question)
+        elif question:
             self._start("question", question)
 
     @Slot()
     def summarize(self) -> None:
         self._start("summary", "")
 
-    def _start(self, kind: str, question: str) -> None:
-        doc = self._document()
+    def _can_answer(self) -> catalog.Model | None:
         model = self._model()
-        if doc is None or self.busy or not self.enabled or model is None or not store.installed(model):
-            return
+        if self.busy or not self.enabled or model is None or not store.installed(model):
+            return None
         if not self.available:
             self.app.notify("assistant", "warning", "Der KI-Assistent ist in dieser Installation nicht enthalten.", title="KI-Assistent")
+            return None
+        return model
+
+    def _start(self, kind: str, question: str) -> None:
+        doc = self._document()
+        if doc is None or self.scopeLabel:
+            return
+        model = self._can_answer()
+        if model is None:
             return
         ident = doc.ident
         self._push(ident, {"kind": "question", "text": question if kind == "question" else "Dokument zusammenfassen"})
@@ -527,7 +554,7 @@ class AssistantController(Observable):
         note("Antwort wird geschrieben …")
         return endpoint
 
-    def _finish(self, ident: str, index: int, *, text: str = "", page_count: int = 0, scope: str = "", error: str = "", cancelled: bool = False) -> None:
+    def _finish(self, ident: str, index: int, *, text: str = "", page_count: int = 0, scope: str = "", error: str = "", cancelled: bool = False, plain: bool = False) -> None:
         if error:
             self._update(ident, index, kind="error", text=error, rich="", pending=False, note="")
         elif cancelled:
@@ -537,12 +564,289 @@ class AssistantController(Observable):
                 self._update(ident, index, pending=False, note="Abgebrochen.")
             else:
                 self._update(ident, index, kind="note", text="Abgebrochen.", rich="", pending=False, note="")
+        elif ident == LIBRARY and self._library is not None and not plain:
+            names, counts = self._library_names(), self._library.page_counts
+            sources = [{"label": f"{names[file]} · S. {page}", "file": file, "page": page} for file, page in doctext.cited_sources(text, counts)[:12]]
+            self._update(ident, index, text=text, rich=doctext.rich(text, 0, names, counts), pending=False, note=scope, sources=sources)
         else:
-            pages = doctext.cited_pages(text, page_count)
+            pages = doctext.cited_pages(text, page_count) if not plain else []
             self._update(ident, index, text=text, rich=doctext.rich(text, page_count), pending=False, note=scope, pages=pages)
         self.busy = False
         self._answer_owner = ""
         self.app.timers.later("assistant:idle", IDLE_MS, self._stop_server)
+
+    # Mehrere PDFs -------------------------------------------------------------------------------------------------
+    def _library_names(self) -> list[str]:
+        return [path.name for path in self._library.files] if self._library is not None else []
+
+    def _ocr(self, cancel: threading.Event):
+        """Texterkennung für Scans, wenn der Reader sie gefunden hat – sonst ``None``."""
+        engine = getattr(self.reader, "_ocr_engine", None) if self.reader is not None else None
+        if engine is None:
+            return None
+        languages = [code for code in ("deu", "eng") if code in engine.languages] or list(engine.languages[:1])
+        return pdflibrary.tesseract_text(engine, languages, cancel) if languages else None
+
+    @Slot()
+    def chooseFiles(self) -> None:  # noqa: N802
+        from . import files
+
+        if self.busy:
+            return
+        start = self.app.initial_dir("assistant", self.reader.source_dir if self.reader is not None else "")
+        paths = files.open_files("Mehrere PDFs fragen – PDFs wählen", start, files.PDF_FILTER)
+        if paths:
+            self._load_library(paths)
+
+    @Slot()
+    def chooseFolder(self) -> None:  # noqa: N802
+        from . import files
+
+        if self.busy:
+            return
+        start = self.app.initial_dir("assistant", self.reader.source_dir if self.reader is not None else "")
+        folder = files.pick_folder("Mehrere PDFs fragen – Ordner wählen", start)
+        if folder:
+            self._load_library([folder])
+
+    @Slot()
+    def clearScope(self) -> None:  # noqa: N802
+        """Zurück zu Fragen an das geöffnete Dokument."""
+        if self.busy:
+            self.stop()
+        self._library = None
+        self._library_index = None
+        self._conversations.pop(LIBRARY, None)
+        self.scopeLabel = ""
+        self._show_current()
+
+    def _load_library(self, paths: list[str]) -> None:
+        """PDFs lesen (im Hintergrund, mit Fortschritt im Gespräch) – danach gehen Fragen an alle."""
+        model = self._can_answer()
+        if model is None:
+            return
+        self._conversations[LIBRARY] = []
+        self._library = None
+        self._library_index = None
+        self.scopeLabel = "PDFs werden gelesen …"
+        self._show_current()
+        index = self._push(LIBRARY, {"kind": "answer", "text": "", "pending": True, "note": "PDFs werden gesucht …"})
+        self.busy = True
+        self._answer_owner = LIBRARY
+        self._cancel = threading.Event()
+        cancel = self._cancel
+        worker = self.app.worker
+        ocr = self._ocr(cancel)
+
+        def work() -> pdflibrary.Library:
+            found = pdflibrary.collect(paths)
+            if not found:
+                return pdflibrary.Library([], [], [])
+            note = lambda done, total, name: worker.post(self._note, LIBRARY, index, f"Datei {done + 1} von {total}: {name}")  # noqa: E731
+            return pdflibrary.read(found, ocr=ocr, cancel=cancel, progress=note)
+
+        def done(result: pdflibrary.Library) -> None:
+            if not result.files:
+                self.scopeLabel = ""
+                self._conversations.pop(LIBRARY, None)
+                self.busy = False
+                self._answer_owner = ""
+                self._show_current()
+                message = f"Keine lesbare PDF gefunden{' (' + ', '.join(result.unreadable[:3]) + ')' if result.unreadable else ''}."
+                self.app.notify("assistant", "warning", message, title="Mehrere PDFs fragen")
+                return
+            self._library = result
+            self._library_index = doctext.Index(result.items)
+            self.scopeLabel = result.label
+            pages = sum(result.page_counts)
+            parts = [f"{len(result.files)} {'PDF' if len(result.files) == 1 else 'PDFs'} mit {pages} {'Seite' if pages == 1 else 'Seiten'} gelesen. Fragen gehen jetzt an alle; die Antwort nennt Datei und Seite."]
+            if result.recognized:
+                parts.append(f"{result.recognized} {'Scan-Seite' if result.recognized == 1 else 'Scan-Seiten'} per Texterkennung gelesen.")
+            if result.scans:
+                parts.append(f"Ohne lesbaren Text: {', '.join(result.scans[:4])}{' …' if len(result.scans) > 4 else ''}" + ("" if ocr is not None else " – für Scans die Texterkennung einrichten (»Text erkennen (OCR)«)."))
+            if result.unreadable:
+                parts.append(f"Nicht lesbar (beschädigt oder mit Kennwort): {', '.join(result.unreadable[:4])}{' …' if len(result.unreadable) > 4 else ''}.")
+            if result.truncated:
+                parts.append(f"Gelesen wurden höchstens {pdflibrary.MAX_FILES} Dateien bzw. etwa {pdflibrary.MAX_CHARS // 1_000_000} Millionen Zeichen.")
+            self._update(LIBRARY, index, kind="note", text=" ".join(parts), pending=False, note="")
+            self.busy = False
+            self._answer_owner = ""
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self.busy = False
+            self._answer_owner = ""
+            self._library = None
+            self.scopeLabel = ""
+            self._conversations.pop(LIBRARY, None)
+            self._show_current()
+            if not (isinstance(exc, Cancelled) or cancel.is_set()):
+                self._log().warning("KI-Assistent: PDFs nicht lesbar (%s)", type(exc).__name__)
+                self.app.notify("assistant", "error", "Die PDFs konnten nicht gelesen werden.", title="Mehrere PDFs fragen")
+
+        worker.run(work, done, failed)
+
+    def _ask_library(self, question: str) -> None:
+        model = self._can_answer()
+        if model is None or self._library is None or self._library_index is None:
+            return
+        self._push(LIBRARY, {"kind": "question", "text": question})
+        index = self._push(LIBRARY, {"kind": "answer", "text": "", "pending": True, "note": "Passende Stellen werden gesucht …"})
+        self.busy = True
+        self._answer_owner = LIBRARY
+        self._cancel = threading.Event()
+        cancel = self._cancel
+        worker = self.app.worker
+        names, counts, search = self._library_names(), list(self._library.page_counts), self._library_index
+        self.app.timers.cancel("assistant:idle")
+
+        def work() -> str:
+            if sum(len(item.text) for item in search.items) < MIN_TEXT:
+                return ""
+            excerpts = search.search(question, QUESTION_CHARS)
+            endpoint = self._ensure_server(model, cancel, lambda note: worker.post(self._note, LIBRARY, index, note))
+            stream = _Stream(worker, lambda value: self._update(LIBRARY, index, text=value, rich=doctext.rich(value, 0, names, counts), note=""))
+            return self._chat(endpoint, library_messages(question, excerpts, names), ANSWER_TOKENS, cancel, stream)
+
+        def done(text: str) -> None:
+            if not text and sum(len(item.text) for item in search.items) < MIN_TEXT:
+                self._finish(LIBRARY, index, error="Die gewählten PDFs enthalten keinen lesbaren Text (vermutlich Scans).")
+                return
+            self._finish(LIBRARY, index, text=text.strip() or "Der Assistent hat keine Antwort geliefert.")
+
+        def failed(exc: BaseException, _details: str) -> None:
+            if isinstance(exc, Cancelled) or cancel.is_set():
+                self._finish(LIBRARY, index, cancelled=True)
+                return
+            self._finish(LIBRARY, index, error=str(exc) if isinstance(exc, AssistantError) else "Der KI-Assistent konnte nicht antworten.")
+
+        worker.run(work, done, failed)
+
+    @Slot(int, int)
+    def openSource(self, file: int, page: int) -> None:  # noqa: N802
+        """Stelle aus einer Antwort über mehrere PDFs: Datei im Reader öffnen und zur Seite springen."""
+        if self._library is None or self.reader is None or not 0 <= file < len(self._library.files):
+            return
+        path = str(self._library.files[file])
+
+        def show(doc) -> None:
+            if doc is not None and 1 <= page <= doc.pageCount:
+                doc.goTo(page - 1)
+
+        self.reader.open_paths([path], then=show)
+
+    # Übersetzen ---------------------------------------------------------------------------------------------------
+    @Slot()
+    def translate(self) -> None:
+        """»Dokument übersetzen«: Sprache und Seiten wählen, Ziel bestimmen, Seite für Seite übersetzen, als neues PDF
+        speichern und öffnen. Abbrechen verwirft die Übersetzung."""
+        doc = self._document()
+        if doc is None or self.scopeLabel or self._can_answer() is None:
+            return
+        data = {"languages": [{"key": key, "label": value[0]} for key, value in LANGUAGES.items()], "pageCount": doc.pageCount, "language": self._translate_language}
+        answer, result = self.app.dialogs.ask("assistant_translate", "Dokument übersetzen", "", primary="Übersetzen …", close="Abbrechen", data=data, width=560)
+        result = result or {}
+        language = str(result.get("language") or "")
+        if answer != "primary" or language not in LANGUAGES:
+            return
+        self._translate_language = language
+        first = max(0, min(doc.pageCount - 1, int(result.get("first") or 0)))
+        last = max(first, min(doc.pageCount - 1, int(result.get("last", doc.pageCount - 1))))
+        label = LANGUAGES[language][0]
+        stem = doc.name[:-4] if doc.name.lower().endswith(".pdf") else doc.name
+        target = self.reader.pick_save_pdf(f"{stem} ({label}).pdf", "Übersetzung speichern")
+        if not target:
+            return
+        import os
+
+        if doc.path and os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(doc.path)):
+            self.app.notify("assistant", "warning", "Die Übersetzung braucht einen eigenen Dateinamen – das Original bleibt unverändert.", title="Nicht übersetzt")
+            return
+        model = self._can_answer()
+        if model is None or self._document() is not doc:
+            return
+        ident = doc.ident
+        pages_text = f"Seite {first + 1}" if first == last else f"Seiten {first + 1}–{last + 1}"
+        self._push(ident, {"kind": "question", "text": f"{pages_text} ins {LANGUAGES[language][1]} übersetzen"})
+        index = self._push(ident, {"kind": "answer", "text": "", "pending": True, "note": "Dokument wird gelesen …"})
+        self.busy = True
+        self._answer_owner = ident
+        self._cancel = threading.Event()
+        self.app.timers.cancel("assistant:idle")
+
+        def fail(exc: BaseException) -> None:
+            self._finish(ident, index, error="Der Text des Dokuments konnte nicht gelesen werden.")
+
+        doc.assistant_texts(lambda texts: self._translate_texts(doc, ident, index, model, texts, first, last, language, target), fail)
+
+    def _translate_texts(self, doc, ident: str, index: int, model: catalog.Model, texts: list[str], first: int, last: int, language: str, target: str) -> None:
+        cancel = self._cancel
+        if cancel.is_set():
+            self._finish(ident, index, cancelled=True)
+            return
+        worker = self.app.worker
+        label = LANGUAGES[language][0]
+        source = doc.path if doc.path and not doc.dirty else ""
+        ocr = self._ocr(cancel) if source else None
+        name = doc.name
+
+        def work() -> dict:
+            from assistant import translation
+
+            pages: list[str] = []
+            endpoint = None
+            empty = 0
+            total = last - first + 1
+            for number, page in enumerate(range(first, last + 1), start=1):
+                if cancel.is_set():
+                    raise Cancelled()
+                text = doctext.clean(texts[page] if page < len(texts) else "")
+                if len(text) < pdflibrary.MIN_PAGE_TEXT and ocr is not None:
+                    worker.post(self._note, ident, index, f"Seite {number} von {total}: Text wird erkannt …")
+                    text = doctext.clean(_recognize_page(source, page, ocr))
+                if len(text) < pdflibrary.MIN_PAGE_TEXT:
+                    pages.append("")
+                    empty += 1
+                    continue
+                if endpoint is None:
+                    endpoint = self._ensure_server(model, cancel, lambda note: worker.post(self._note, ident, index, note))
+                done_parts = []
+                parts = translation_parts(text)
+                for part_number, part in enumerate(parts, start=1):
+                    step = f" (Teil {part_number} von {len(parts)})" if len(parts) > 1 else ""
+                    worker.post(self._note, ident, index, f"Seite {number} von {total} wird übersetzt{step} …")
+                    done_parts.append(self._chat(endpoint, translate_messages(part, language), translation_tokens(part), cancel, None).strip())
+                pages.append("\n\n".join(done_parts))
+            if cancel.is_set():
+                raise Cancelled()
+            if empty == total:
+                return {"empty": True}
+            path = translation.write_pdf(pages, target, source_name=name, language=label)
+            return {"path": str(path), "pages": total, "empty": empty}
+
+        def done(result: dict) -> None:
+            if result.get("empty"):
+                self._finish(ident, index, error="Diese Seiten enthalten keinen lesbaren Text (vermutlich ein Scan). Erst »Text erkennen (OCR)« ausführen – danach lässt sich das Dokument übersetzen.")
+                return
+            path = result["path"]
+            import os
+
+            text = f"Übersetzung ins {LANGUAGES[language][1]} gespeichert: **{os.path.basename(path)}** ({result['pages']} {'Seite' if result['pages'] == 1 else 'Seiten'})."
+            if result["empty"]:
+                text += f" {result['empty']} {'Seite' if result['empty'] == 1 else 'Seiten'} ohne Text blieben leer."
+            self._finish(ident, index, text=text, plain=True)
+            if self.reader is not None:
+                self.reader.open_paths([path])
+
+        def failed(exc: BaseException, _details: str) -> None:
+            if isinstance(exc, Cancelled) or cancel.is_set():
+                self._finish(ident, index, cancelled=True)
+                return
+            message = str(exc) if isinstance(exc, AssistantError) else "Die Übersetzung konnte nicht gespeichert werden."
+            if not isinstance(exc, AssistantError):
+                self._log().warning("KI-Assistent: Übersetzung fehlgeschlagen (%s)", type(exc).__name__)
+            self._finish(ident, index, error=message)
+
+        worker.run(work, done, failed)
 
     @Slot()
     def stop(self) -> None:
@@ -627,6 +931,25 @@ class _Stream:
 
 class _Cancelled:
     kind = "cancelled"
+
+
+def _recognize_page(path: str, page: int, ocr) -> str:
+    """Eine Seite der gespeicherten Datei als Bild erkennen (Übersetzen eines Scans)."""
+    import io
+
+    import pypdfium2 as pdfium
+
+    from pdfium_lock import PDFIUM_LOCK
+
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument(path)
+        try:
+            image = document[page].render(scale=pdflibrary.OCR_DPI / 72).to_pil()
+        finally:
+            document.close()
+    buffer = io.BytesIO()
+    image.save(buffer, "PNG")
+    return ocr(buffer.getvalue(), pdflibrary.OCR_DPI)
 
 
 def _copy(value: str) -> None:

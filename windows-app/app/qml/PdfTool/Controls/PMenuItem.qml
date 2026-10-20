@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 T.MenuItem {
     id: control
@@ -13,7 +14,7 @@ T.MenuItem {
     hoverEnabled: true
     font: Typography.body
     Accessible.role: Accessible.MenuItem
-    Accessible.name: text
+    Accessible.name: I18n.tr(text, I18n.revision)
 
     contentItem: Row {
         spacing: 12
@@ -24,7 +25,7 @@ T.MenuItem {
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: control.text
+            text: I18n.tr(control.text, I18n.revision)
             font: control.font
             color: control.enabled ? Theme.textPrimary : Theme.disabled
             textFormat: Text.PlainText

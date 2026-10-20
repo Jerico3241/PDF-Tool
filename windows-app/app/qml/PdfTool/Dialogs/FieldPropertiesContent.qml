@@ -80,7 +80,7 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: root.kindLabel(root.kind) + (root.kind === "radio" ? " »" + String(root.field.name || "") + "« – Name, Kurzinfo, Pflicht und Schreibschutz gelten für die ganze Gruppe, der Exportwert nur für diese Option." : ".") + " Mit »Rückgängig« (Strg+Z) lässt sich alles zurücknehmen."
+        text: I18n.tr(root.kindLabel(root.kind) + (root.kind === "radio" ? " »" + String(root.field.name || "") + "« – Name, Kurzinfo, Pflicht und Schreibschutz gelten für die ganze Gruppe, der Exportwert nur für diese Option." : ".") + " Mit »Rückgängig« (Strg+Z) lässt sich alles zurücknehmen.", I18n.revision)
     }
 
     GridLayout {
@@ -89,44 +89,44 @@ ColumnLayout {
         columns: 2
         columnSpacing: 12
         rowSpacing: 8
-        PText { text: "Name"; tone: "secondary" }
-        PTextField { id: nameField; objectName: "fieldName"; Layout.fillWidth: true; label: "Name"; maximumLength: 120; invalid: root.problem !== "" && (text.trim() === "" || text.indexOf(".") >= 0) }
-        PText { text: "Kurzinfo"; tone: "secondary" }
-        PTextField { id: tooltipField; objectName: "fieldTooltip"; Layout.fillWidth: true; label: "Kurzinfo"; placeholderText: "erscheint beim Zeigen auf das Feld"; maximumLength: 500 }
-        PText { text: "Exportwert"; tone: "secondary"; visible: root.buttonKind }
-        PTextField { id: exportField; objectName: "fieldExport"; visible: root.buttonKind; Layout.fillWidth: true; label: "Exportwert"; maximumLength: 60; placeholderText: "Wert, wenn gewählt (z. B. Ja)" }
-        PText { text: "Höchstens"; tone: "secondary"; visible: root.textKind }
+        PText { text: I18n.tr("Name", I18n.revision); tone: "secondary" }
+        PTextField { id: nameField; objectName: "fieldName"; Layout.fillWidth: true; label: I18n.tr("Name", I18n.revision); maximumLength: 120; invalid: root.problem !== "" && (text.trim() === "" || text.indexOf(".") >= 0) }
+        PText { text: I18n.tr("Kurzinfo", I18n.revision); tone: "secondary" }
+        PTextField { id: tooltipField; objectName: "fieldTooltip"; Layout.fillWidth: true; label: I18n.tr("Kurzinfo", I18n.revision); placeholderText: I18n.tr("erscheint beim Zeigen auf das Feld", I18n.revision); maximumLength: 500 }
+        PText { text: I18n.tr("Exportwert", I18n.revision); tone: "secondary"; visible: root.buttonKind }
+        PTextField { id: exportField; objectName: "fieldExport"; visible: root.buttonKind; Layout.fillWidth: true; label: I18n.tr("Exportwert", I18n.revision); maximumLength: 60; placeholderText: I18n.tr("Wert, wenn gewählt (z. B. Ja)", I18n.revision) }
+        PText { text: I18n.tr("Höchstens", I18n.revision); tone: "secondary"; visible: root.textKind }
         RowLayout {
             visible: root.textKind
             spacing: 8
-            PTextField { id: maxField; objectName: "fieldMaxLength"; preferredWidth: 90; label: "Höchstzahl Zeichen"; placeholderText: "beliebig"; inputMethodHints: Qt.ImhDigitsOnly; maximumLength: 6 }
-            PText { text: "Zeichen"; tone: "secondary" }
+            PTextField { id: maxField; objectName: "fieldMaxLength"; preferredWidth: 90; label: I18n.tr("Höchstzahl Zeichen", I18n.revision); placeholderText: I18n.tr("beliebig", I18n.revision); inputMethodHints: Qt.ImhDigitsOnly; maximumLength: 6 }
+            PText { text: I18n.tr("Zeichen", I18n.revision); tone: "secondary" }
         }
-        PText { text: "Schriftgröße"; tone: "secondary"; visible: root.sizeKind }
+        PText { text: I18n.tr("Schriftgröße", I18n.revision); tone: "secondary"; visible: root.sizeKind }
         PComboBox {
             id: fontSize
             objectName: "fieldFontSize"
             visible: root.sizeKind
             preferredWidth: 140
-            label: "Schriftgröße"
+            label: I18n.tr("Schriftgröße", I18n.revision)
             model: [{ "label": "Automatisch", "value": 0 }, { "label": "8 pt", "value": 8 }, { "label": "9 pt", "value": 9 }, { "label": "10 pt", "value": 10 }, { "label": "11 pt", "value": 11 }, { "label": "12 pt", "value": 12 }, { "label": "14 pt", "value": 14 }, { "label": "16 pt", "value": 16 }, { "label": "18 pt", "value": 18 }, { "label": "24 pt", "value": 24 }]
             textRole: "label"
             valueRole: "value"
         }
-        PText { text: "Ausrichtung"; tone: "secondary"; visible: root.textKind || root.kind === "combo" }
+        PText { text: I18n.tr("Ausrichtung", I18n.revision); tone: "secondary"; visible: root.textKind || root.kind === "combo" }
         PComboBox {
             id: align
             objectName: "fieldAlign"
             visible: root.textKind || root.kind === "combo"
             preferredWidth: 140
-            label: "Ausrichtung"
+            label: I18n.tr("Ausrichtung", I18n.revision)
             model: [{ "label": "Links", "value": "left" }, { "label": "Zentriert", "value": "center" }, { "label": "Rechts", "value": "right" }]
             textRole: "label"
             valueRole: "value"
         }
     }
 
-    PFieldLabel { visible: root.choiceKind; text: "Optionen (eine je Zeile)" }
+    PFieldLabel { visible: root.choiceKind; text: I18n.tr("Optionen (eine je Zeile)", I18n.revision) }
     PTextArea {
         id: optionsArea
         objectName: "fieldOptions"
@@ -134,17 +134,17 @@ ColumnLayout {
         Layout.fillWidth: true
         minLines: 3
         maxLines: 8
-        label: "Optionen"
+        label: I18n.tr("Optionen", I18n.revision)
     }
 
     ColumnLayout {
         Layout.topMargin: 12
         spacing: 0
-        PCheckBox { id: multiline; objectName: "fieldMultiline"; visible: root.textKind; text: "Mehrzeilig (Zeilenumbrüche erlaubt)" }
-        PCheckBox { id: required; objectName: "fieldRequired"; text: "Pflichtfeld" }
-        PCheckBox { id: readOnly; objectName: "fieldReadOnly"; text: "Schreibgeschützt (lässt sich nicht ausfüllen)" }
-        PCheckBox { id: border; objectName: "fieldBorder"; visible: root.kind !== "signature" && root.kind !== "button"; text: "Rahmen" }
-        PCheckBox { id: background; objectName: "fieldBackground"; visible: root.kind !== "signature" && root.kind !== "button"; text: "Weißer Hintergrund" }
+        PCheckBox { id: multiline; objectName: "fieldMultiline"; visible: root.textKind; text: I18n.tr("Mehrzeilig (Zeilenumbrüche erlaubt)", I18n.revision) }
+        PCheckBox { id: required; objectName: "fieldRequired"; text: I18n.tr("Pflichtfeld", I18n.revision) }
+        PCheckBox { id: readOnly; objectName: "fieldReadOnly"; text: I18n.tr("Schreibgeschützt (lässt sich nicht ausfüllen)", I18n.revision) }
+        PCheckBox { id: border; objectName: "fieldBorder"; visible: root.kind !== "signature" && root.kind !== "button"; text: I18n.tr("Rahmen", I18n.revision) }
+        PCheckBox { id: background; objectName: "fieldBackground"; visible: root.kind !== "signature" && root.kind !== "button"; text: I18n.tr("Weißer Hintergrund", I18n.revision) }
     }
 
     PText {
@@ -155,6 +155,6 @@ ColumnLayout {
         wrap: true
         tone: "warning"
         textStyle: "caption"
-        text: root.problem
+        text: I18n.tr(root.problem, I18n.revision)
     }
 }

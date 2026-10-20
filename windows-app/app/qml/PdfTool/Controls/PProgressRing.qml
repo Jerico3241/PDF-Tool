@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Unbestimmter Fortschritt als drehender Bogen. Die Drehung läuft im Render-Thread und nur,
 // solange der Ring sichtbar ist (keine Dauer-Animation auf verborgenen Seiten).
@@ -16,7 +17,7 @@ Item {
     width: size
     height: size
     Accessible.role: Accessible.Animation
-    Accessible.name: "Wird bearbeitet"
+    Accessible.name: I18n.tr("Wird bearbeitet", I18n.revision)
     onColorChanged: arc.requestPaint()
     onSizeChanged: arc.requestPaint()
 

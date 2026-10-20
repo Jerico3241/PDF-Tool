@@ -35,7 +35,7 @@ Item {
     height: area.height
     objectName: "readerPage_" + page
     Accessible.role: Accessible.Graphic
-    Accessible.name: "Seite " + (page + 1)
+    Accessible.name: I18n.tr("Seite " + (page + 1), I18n.revision)
 
     // --- Seitenbild ----------------------------------------------------------------------------------------
     property int shownPage: -1
@@ -499,7 +499,7 @@ Item {
             width: parent.width - 16
             elide: Text.ElideMiddle
             textStyle: "caption"
-            text: (linkTip.shown && linkTip.shown.target < 0 && linkTip.shown.uri !== "" ? "↗ " : "→ ") + root.linkLabel(linkTip.shown)
+            text: I18n.tr((linkTip.shown && linkTip.shown.target < 0 && linkTip.shown.uri !== "" ? "↗ " : "→ ") + root.linkLabel(linkTip.shown), I18n.revision)
         }
     }
 
@@ -695,7 +695,7 @@ Item {
             height: Math.max(4, (r[3] - r[1]) * root.s)
             z: chosen ? 9 : 8
             Accessible.role: Accessible.Button
-            Accessible.name: modelData.name
+            Accessible.name: I18n.tr(modelData.name, I18n.revision)
             Rectangle {
                 anchors.fill: parent
                 radius: designBox.modelData.kind === "radio" ? Math.min(width, height) / 2 : 2
@@ -722,7 +722,7 @@ Item {
                     textStyle: "caption"
                     color: Theme.textOnAccent
                     // Optionen einer Gruppe liegen oft dicht beieinander: sonst nur ihr (kurzer) Exportwert
-                    text: designBox.modelData.kind !== "radio" ? designBox.modelData.name : (designBox.chosen || designBox.hovered ? designBox.modelData.name + " · " + designBox.modelData.export : designBox.modelData.export)
+                    text: I18n.tr(designBox.modelData.kind !== "radio" ? designBox.modelData.name : (designBox.chosen || designBox.hovered ? designBox.modelData.name + " · " + designBox.modelData.export : designBox.modelData.export), I18n.revision)
                 }
             }
             // Anfasser an den Ecken: Größe ändern (frei; Umschalt: Seitenverhältnis halten)
@@ -1382,7 +1382,7 @@ Item {
         // Text lässt sich immer ändern (sonst als Überlagerung); Bilder und Vektorobjekte nur, wenn sicher möglich
         readonly property bool changeable: chosen.length > 0 && chosen.every(function(item) { return root.isText(item) || item.editable === true })
         PMenuItem {
-            text: "Bearbeiten"
+            text: I18n.tr("Bearbeiten", I18n.revision)
             iconName: "edit"
             visible: objectMenu.oneText
             onTriggered: {
@@ -1390,28 +1390,28 @@ Item {
                 objectMenu.afterClose = function() { root.editObject(item, u) }
             }
         }
-        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; visible: objectMenu.oneText; onTriggered: root.editParagraph(objectMenu.first) }
-        PMenuItem { text: "Ersetzen …"; iconName: "image"; visible: objectMenu.oneImage; enabled: objectMenu.changeable; onTriggered: root.doc.replaceImage(root.page, objectMenu.first.index) }
-        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyObjects() }
-        PMenuItem { text: "Ausschneiden"; iconName: "cut"; enabled: objectMenu.changeable; onTriggered: root.doc.cutObjects() }
-        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; visible: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: objectMenu.changeable; onTriggered: root.doc.duplicateObject() }
-        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: objectMenu.changeable; onTriggered: root.doc.deleteObjects() }
-        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(90) }
-        PMenuItem { text: "Drehen (90° gegen den Uhrzeigersinn)"; iconName: "arrow_rotate_counterclockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(-90) }
-        PMenuItem { text: "In den Vordergrund"; iconName: "position_to_front"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(true) }
-        PMenuItem { text: "In den Hintergrund"; iconName: "position_to_back"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(false) }
-        PMenuItem { text: "Eigenschaften"; iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
+        PMenuItem { text: I18n.tr("Text bearbeiten (ganzer Absatz)", I18n.revision); iconName: "text_edit_style"; visible: objectMenu.oneText; onTriggered: root.editParagraph(objectMenu.first) }
+        PMenuItem { text: I18n.tr("Ersetzen …", I18n.revision); iconName: "image"; visible: objectMenu.oneImage; enabled: objectMenu.changeable; onTriggered: root.doc.replaceImage(root.page, objectMenu.first.index) }
+        PMenuItem { text: I18n.tr("Kopieren", I18n.revision); iconName: "copy"; onTriggered: root.doc.copyObjects() }
+        PMenuItem { text: I18n.tr("Ausschneiden", I18n.revision); iconName: "cut"; enabled: objectMenu.changeable; onTriggered: root.doc.cutObjects() }
+        PMenuItem { text: I18n.tr("Einfügen", I18n.revision); iconName: "clipboard_paste"; visible: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: I18n.tr("Duplizieren", I18n.revision); iconName: "document_copy"; enabled: objectMenu.changeable; onTriggered: root.doc.duplicateObject() }
+        PMenuItem { text: I18n.tr("Löschen", I18n.revision); iconName: "delete"; enabled: objectMenu.changeable; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: I18n.tr("Drehen (90° im Uhrzeigersinn)", I18n.revision); iconName: "arrow_rotate_clockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(90) }
+        PMenuItem { text: I18n.tr("Drehen (90° gegen den Uhrzeigersinn)", I18n.revision); iconName: "arrow_rotate_counterclockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(-90) }
+        PMenuItem { text: I18n.tr("In den Vordergrund", I18n.revision); iconName: "position_to_front"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(true) }
+        PMenuItem { text: I18n.tr("In den Hintergrund", I18n.revision); iconName: "position_to_back"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(false) }
+        PMenuItem { text: I18n.tr("Eigenschaften", I18n.revision); iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
     }
     PMenu {
         id: objectPageMenu
         objectName: "readerObjectPageMenu"
         property real u: 0
         property real v: 0
-        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
-        PMenuItem { text: "Hier einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
-        PMenuItem { text: contextMenu.hasSelection ? "Auswahl vorlesen" : "Ab dieser Seite vorlesen"; iconName: "speaker_2"; onTriggered: { var d = root.doc, p = root.page; contextMenu.afterClose = function() { if (d.selectionPage < 0) d.setCurrentPage(p); Speech.readFromHere() } } }
-        PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
+        PMenuItem { text: I18n.tr("Einfügen", I18n.revision); iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: I18n.tr("Hier einfügen", I18n.revision); iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
+        PMenuItem { text: I18n.tr(contextMenu.hasSelection ? "Auswahl vorlesen" : "Ab dieser Seite vorlesen", I18n.revision); iconName: "speaker_2"; onTriggered: { var d = root.doc, p = root.page; contextMenu.afterClose = function() { if (d.selectionPage < 0) d.setCurrentPage(p); Speech.readFromHere() } } }
+        PMenuItem { text: I18n.tr("Alles auswählen (Seite)", I18n.revision); iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
     }
 
     // Formular gestalten: Befehle des gewählten Feldes und »… hier anlegen« auf freier Fläche
@@ -1420,20 +1420,20 @@ Item {
         objectName: "readerFieldMenu"
         readonly property var chosen: root.doc ? root.doc.fieldSelection : ({})
         readonly property bool copyable: chosen.kind !== "signature" && chosen.kind !== "button"
-        PMenuItem { text: "Eigenschaften …"; iconName: "text_box_settings"; onTriggered: { var d = root.doc; fieldMenu.afterClose = function() { d.editFieldProperties("") } } }
-        PMenuItem { text: "Option hinzufügen"; iconName: "radio_button"; visible: fieldMenu.chosen.kind === "radio"; onTriggered: root.doc.addFieldOption("") }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; visible: fieldMenu.copyable; onTriggered: root.doc.duplicateField("") }
-        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.doc.deleteField("") }
+        PMenuItem { text: I18n.tr("Eigenschaften …", I18n.revision); iconName: "text_box_settings"; onTriggered: { var d = root.doc; fieldMenu.afterClose = function() { d.editFieldProperties("") } } }
+        PMenuItem { text: I18n.tr("Option hinzufügen", I18n.revision); iconName: "radio_button"; visible: fieldMenu.chosen.kind === "radio"; onTriggered: root.doc.addFieldOption("") }
+        PMenuItem { text: I18n.tr("Duplizieren", I18n.revision); iconName: "document_copy"; visible: fieldMenu.copyable; onTriggered: root.doc.duplicateField("") }
+        PMenuItem { text: I18n.tr("Löschen", I18n.revision); iconName: "delete"; onTriggered: root.doc.deleteField("") }
     }
     PMenu {
         id: fieldPageMenu
         objectName: "readerFieldPageMenu"
         property string at: ""
-        PMenuItem { text: "Textfeld hier"; iconName: "textbox"; onTriggered: root.doc.createFieldAt("text", fieldPageMenu.at) }
-        PMenuItem { text: "Kontrollkästchen hier"; iconName: "checkbox_checked"; onTriggered: root.doc.createFieldAt("checkbox", fieldPageMenu.at) }
-        PMenuItem { text: "Optionsfeld hier"; iconName: "radio_button"; onTriggered: root.doc.createFieldAt("radio", fieldPageMenu.at) }
-        PMenuItem { text: "Dropdown hier"; iconName: "chevron_down"; onTriggered: root.doc.createFieldAt("combo", fieldPageMenu.at) }
-        PMenuItem { text: "Liste hier"; iconName: "list"; onTriggered: root.doc.createFieldAt("list", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Textfeld hier", I18n.revision); iconName: "textbox"; onTriggered: root.doc.createFieldAt("text", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Kontrollkästchen hier", I18n.revision); iconName: "checkbox_checked"; onTriggered: root.doc.createFieldAt("checkbox", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Optionsfeld hier", I18n.revision); iconName: "radio_button"; onTriggered: root.doc.createFieldAt("radio", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Dropdown hier", I18n.revision); iconName: "chevron_down"; onTriggered: root.doc.createFieldAt("combo", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Liste hier", I18n.revision); iconName: "list"; onTriggered: root.doc.createFieldAt("list", fieldPageMenu.at) }
     }
 
     // Schwärzen: eine vorgemerkte Stelle
@@ -1441,18 +1441,18 @@ Item {
         id: markMenu
         objectName: "readerRedactMarkMenu"
         property var mark: null
-        PMenuItem { text: "Markierung entfernen"; iconName: "dismiss"; onTriggered: if (markMenu.mark) root.doc.removeRedactMark(root.page, markMenu.mark.id) }
-        PMenuItem { text: "Alle Markierungen verwerfen"; iconName: "dismiss_circle"; onTriggered: root.doc.clearRedactMarks() }
-        PMenuItem { text: "Schwärzen anwenden …"; iconName: "eye_off"; onTriggered: { var d = root.doc; markMenu.afterClose = function() { d.applyRedaction() } } }
+        PMenuItem { text: I18n.tr("Markierung entfernen", I18n.revision); iconName: "dismiss"; onTriggered: if (markMenu.mark) root.doc.removeRedactMark(root.page, markMenu.mark.id) }
+        PMenuItem { text: I18n.tr("Alle Markierungen verwerfen", I18n.revision); iconName: "dismiss_circle"; onTriggered: root.doc.clearRedactMarks() }
+        PMenuItem { text: I18n.tr("Schwärzen anwenden …", I18n.revision); iconName: "eye_off"; onTriggered: { var d = root.doc; markMenu.afterClose = function() { d.applyRedaction() } } }
     }
     // Link-Werkzeug: ein vorhandener Link
     PMenu {
         id: linkMenu
         objectName: "readerLinkMenu"
         property var link: null
-        PMenuItem { text: "Link bearbeiten …"; iconName: "link_edit"; onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.editLink(page, l.key) } } }
-        PMenuItem { text: "Ziel öffnen"; iconName: "open"; enabled: linkMenu.link !== null && (linkMenu.link.target >= 0 || linkMenu.link.uri !== ""); onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.followLink(page, l.key) } } }
-        PMenuItem { text: "Link entfernen"; iconName: "delete"; onTriggered: root.doc.removeLink(root.page, linkMenu.link.key) }
+        PMenuItem { text: I18n.tr("Link bearbeiten …", I18n.revision); iconName: "link_edit"; onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.editLink(page, l.key) } } }
+        PMenuItem { text: I18n.tr("Ziel öffnen", I18n.revision); iconName: "open"; enabled: linkMenu.link !== null && (linkMenu.link.target >= 0 || linkMenu.link.uri !== ""); onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.followLink(page, l.key) } } }
+        PMenuItem { text: I18n.tr("Link entfernen", I18n.revision); iconName: "delete"; onTriggered: root.doc.removeLink(root.page, linkMenu.link.key) }
     }
 
     // Kontextmenü der Seite
@@ -1463,25 +1463,25 @@ Item {
         property real v: 0
         property var link: null
         PMenuItem {
-            text: contextMenu.link ? "Link öffnen: " + root.linkLabel(contextMenu.link) : ""
+            text: I18n.tr(contextMenu.link ? "Link öffnen: " + root.linkLabel(contextMenu.link) : "", I18n.revision)
             iconName: "open"
             visible: contextMenu.link !== null
             onTriggered: { var d = root.doc, l = contextMenu.link, page = root.page; contextMenu.afterClose = function() { d.followLink(page, l.key) } }
         }
         readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage >= 0 && root.doc.selectionPages[String(root.page)] !== undefined
-        PMenuItem { text: "Kopieren"; iconName: "copy"; enabled: contextMenu.hasSelection; onTriggered: root.doc.copySelection() }
-        PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAll(root.page) }
-        PMenuItem { text: "Markieren"; iconName: "highlight"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("highlight") }
-        PMenuItem { text: "Unterstreichen"; iconName: "text_underline"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("underline") }
-        PMenuItem { text: "Durchstreichen"; iconName: "text_strikethrough"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("strikeout") }
+        PMenuItem { text: I18n.tr("Kopieren", I18n.revision); iconName: "copy"; enabled: contextMenu.hasSelection; onTriggered: root.doc.copySelection() }
+        PMenuItem { text: I18n.tr("Alles auswählen (Seite)", I18n.revision); iconName: "select_all_on"; onTriggered: root.doc.selectAll(root.page) }
+        PMenuItem { text: I18n.tr("Markieren", I18n.revision); iconName: "highlight"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("highlight") }
+        PMenuItem { text: I18n.tr("Unterstreichen", I18n.revision); iconName: "text_underline"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("underline") }
+        PMenuItem { text: I18n.tr("Durchstreichen", I18n.revision); iconName: "text_strikethrough"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("strikeout") }
         PMenuItem {
-            text: "Notiz hier hinzufügen"
+            text: I18n.tr("Notiz hier hinzufügen", I18n.revision)
             iconName: "comment"
             onTriggered: {
                 var request = { kind: "note", page: root.page, rect: [contextMenu.u, contextMenu.v, contextMenu.u + 220, contextMenu.v + 80], text: "" }
                 contextMenu.afterClose = function() { root.host.openEditor(request) }
             }
         }
-        PMenuItem { text: "Seite drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages([root.page], 90) }
+        PMenuItem { text: I18n.tr("Seite drehen", I18n.revision); iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages([root.page], 90) }
     }
 }

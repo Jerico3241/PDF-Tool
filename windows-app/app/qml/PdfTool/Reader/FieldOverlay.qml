@@ -27,7 +27,7 @@ Item {
     height: Math.max(4, (r[3] - r[1]) * s)
     objectName: "readerField_" + (field.name || "")
     Accessible.role: kind === "checkbox" ? Accessible.CheckBox : (kind === "radio" ? Accessible.RadioButton : (kind === "combo" || kind === "list" ? Accessible.ComboBox : Accessible.EditableText))
-    Accessible.name: field.name || ""
+    Accessible.name: I18n.tr(field.name || "", I18n.revision)
     Accessible.checked: checked
 
     function commit() {
@@ -93,7 +93,7 @@ Item {
         selectedTextColor: Theme.textOnAccent
         clip: true
         textFormat: TextEdit.PlainText
-        Accessible.name: root.field.name || ""
+        Accessible.name: I18n.tr(root.field.name || "", I18n.revision)
         onActiveFocusChanged: if (!activeFocus) root.commit()
         onTextChanged: if (root.field.maxLength > 0 && length > root.field.maxLength) remove(root.field.maxLength, length)
         Keys.onPressed: (event) => {
@@ -114,7 +114,7 @@ Item {
         model: root.kind === "combo" || root.kind === "list" ? root.field.options : []
         delegate: PMenuItem {
             required property var modelData
-            text: modelData.label || modelData.value
+            text: I18n.tr(modelData.label || modelData.value, I18n.revision)
             iconName: modelData.value === String(root.field.value) ? "checkmark" : ""
             onTriggered: if (root.doc) root.doc.setField(root.field.key, modelData.value)
         }
@@ -122,7 +122,7 @@ Item {
         onObjectRemoved: (index, object) => options.removeItem(object)
     }
     PToolTip {
-        text: root.editable ? (root.field.name || "") + (root.field.required ? " (Pflichtfeld)" : "") : (root.field.reason || "")
+        text: I18n.tr(root.editable ? (root.field.name || "") + (root.field.required ? " (Pflichtfeld)" : "") : (root.field.reason || ""), I18n.revision)
         visible: hover.hovered && text !== "" && !root.editing
     }
 }

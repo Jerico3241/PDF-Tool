@@ -15,7 +15,7 @@ ApplicationWindow {
     width: 1140
     height: 800
     visible: false
-    title: App.windowTitle
+    title: I18n.tr(App.windowTitle, I18n.revision)
     color: Theme.background
     font: Typography.body
 

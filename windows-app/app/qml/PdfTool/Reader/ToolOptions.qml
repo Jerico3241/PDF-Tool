@@ -108,7 +108,7 @@ Item {
                 id: colorButton
                 visible: root.coloredTool || (root.annotationSelected && !root.stampSelected)
                 iconName: "color"
-                tip: "Farbe"
+                tip: I18n.tr("Farbe", I18n.revision)
                 onClicked: colors.open()
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -133,7 +133,7 @@ Item {
             PComboBox {
                 visible: root.strokeTool
                 preferredWidth: 96
-                label: "Strichstärke"
+                label: I18n.tr("Strichstärke", I18n.revision)
                 model: [{ "label": "1 pt", "value": 1 }, { "label": "2 pt", "value": 2 }, { "label": "3 pt", "value": 3 }, { "label": "5 pt", "value": 5 }, { "label": "8 pt", "value": 8 }]
                 textRole: "label"
                 valueRole: "value"
@@ -144,7 +144,7 @@ Item {
             PComboBox {
                 visible: root.sizeTool
                 preferredWidth: 96
-                label: "Schriftgröße"
+                label: I18n.tr("Schriftgröße", I18n.revision)
                 model: [{ "label": "8 pt", "value": 8 }, { "label": "10 pt", "value": 10 }, { "label": "12 pt", "value": 12 }, { "label": "14 pt", "value": 14 }, { "label": "18 pt", "value": 18 }, { "label": "24 pt", "value": 24 }, { "label": "36 pt", "value": 36 }]
                 textRole: "label"
                 valueRole: "value"
@@ -156,11 +156,11 @@ Item {
                 objectName: "readerAnnotationWidth"
                 visible: root.ownAnnotation && root.annotation.width >= 0
                 preferredWidth: 96
-                label: "Linienstärke"
+                label: I18n.tr("Linienstärke", I18n.revision)
                 model: [{ "label": "1 pt", "value": 1 }, { "label": "2 pt", "value": 2 }, { "label": "3 pt", "value": 3 }, { "label": "5 pt", "value": 5 }, { "label": "8 pt", "value": 8 }]
                 textRole: "label"
                 valueRole: "value"
-                displayText: root.annotation && root.annotation.width >= 0 ? (Math.round(root.annotation.width * 10) / 10) + " pt" : currentText
+                displayText: I18n.tr(root.annotation && root.annotation.width >= 0 ? (Math.round(root.annotation.width * 10) / 10) + " pt" : currentText, I18n.revision)
                 currentIndex: root.annotation ? Math.max(0, indexOfValue(Math.round(root.annotation.width))) : 1
                 onActivated: (index) => root.doc.styleAnnotation(root.selected.key, "width", model[index].value)
             }
@@ -169,7 +169,7 @@ Item {
                 objectName: "readerAnnotationFill"
                 visible: root.ownAnnotation && ["/Square", "/Circle", "/FreeText"].indexOf(root.annotation.subtype) >= 0
                 iconName: "square"
-                tip: root.annotation && root.annotation.fill !== "" ? "Füllung ändern" : "Füllen"
+                tip: I18n.tr(root.annotation && root.annotation.fill !== "" ? "Füllung ändern" : "Füllen", I18n.revision)
                 onClicked: fills.open()
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -192,18 +192,18 @@ Item {
                 objectName: "readerAnnotationNoFill"
                 visible: root.ownAnnotation && root.annotation.fill !== ""
                 iconName: "dismiss_circle"
-                tip: "Ohne Füllung"
+                tip: I18n.tr("Ohne Füllung", I18n.revision)
                 onClicked: root.doc.styleAnnotation(root.selected.key, "fill", "")
             }
             PComboBox {
                 objectName: "readerAnnotationOpacity"
                 visible: root.ownAnnotation
                 preferredWidth: 96
-                label: "Deckkraft"
+                label: I18n.tr("Deckkraft", I18n.revision)
                 model: [{ "label": "100 %", "value": 1 }, { "label": "75 %", "value": 0.75 }, { "label": "50 %", "value": 0.5 }, { "label": "25 %", "value": 0.25 }]
                 textRole: "label"
                 valueRole: "value"
-                displayText: root.annotation ? Math.round(root.annotation.opacity * 100) + " %" : currentText
+                displayText: I18n.tr(root.annotation ? Math.round(root.annotation.opacity * 100) + " %" : currentText, I18n.revision)
                 currentIndex: root.annotation ? Math.max(0, indexOfValue(root.annotation.opacity)) : 0
                 onActivated: (index) => root.doc.styleAnnotation(root.selected.key, "opacity", model[index].value)
             }
@@ -211,28 +211,28 @@ Item {
                 objectName: "readerAnnotationFontSize"
                 visible: root.ownAnnotation && root.annotation.fontSize > 0
                 preferredWidth: 96
-                label: "Schriftgröße"
+                label: I18n.tr("Schriftgröße", I18n.revision)
                 model: [{ "label": "8 pt", "value": 8 }, { "label": "10 pt", "value": 10 }, { "label": "12 pt", "value": 12 }, { "label": "14 pt", "value": 14 }, { "label": "18 pt", "value": 18 }, { "label": "24 pt", "value": 24 }, { "label": "36 pt", "value": 36 }]
                 textRole: "label"
                 valueRole: "value"
-                displayText: root.annotation && root.annotation.fontSize > 0 ? (Math.round(root.annotation.fontSize * 10) / 10) + " pt" : currentText
+                displayText: I18n.tr(root.annotation && root.annotation.fontSize > 0 ? (Math.round(root.annotation.fontSize * 10) / 10) + " pt" : currentText, I18n.revision)
                 currentIndex: root.annotation ? Math.max(0, indexOfValue(Math.round(root.annotation.fontSize))) : 2
                 onActivated: (index) => root.doc.styleAnnotation(root.selected.key, "fontSize", model[index].value)
             }
-            PButton { visible: root.annotationSelected; iconName: "delete"; text: root.stampSelected ? (root.annotation.label === "Unterschrift" ? "Unterschrift löschen" : "Stempel löschen") : "Kommentar löschen"; onClicked: root.doc.deleteAnnotation(root.selected.key) }
+            PButton { visible: root.annotationSelected; iconName: "delete"; text: I18n.tr(root.stampSelected ? (root.annotation.label === "Unterschrift" ? "Unterschrift löschen" : "Stempel löschen") : "Kommentar löschen", I18n.revision); onClicked: root.doc.deleteAnnotation(root.selected.key) }
 
             // Schwärzen: Bereich oder Text markieren, Suchen, Markierungen verwerfen, anwenden
-            PIconButton { objectName: "readerRedactArea"; visible: root.tool === "redact"; toggle: true; checked: root.doc !== null && root.doc.redactMode === "area"; iconName: "square"; tip: "Bereiche aufziehen"; onClicked: root.doc.setRedactMode("area") }
-            PIconButton { objectName: "readerRedactText"; visible: root.tool === "redact"; toggle: true; checked: root.doc !== null && root.doc.redactMode === "text"; iconName: "text_edit_style"; tip: "Text markieren"; onClicked: root.doc.setRedactMode("text") }
-            PButton { objectName: "readerRedactSearch"; visible: root.tool === "redact"; kind: "subtle"; iconName: "document_search"; text: "Suchen …"; onClicked: root.doc.searchRedact() }
-            PIconButton { objectName: "readerRedactClear"; visible: root.tool === "redact" && root.doc.redactCount > 0; iconName: "dismiss_circle"; tip: "Alle Markierungen verwerfen"; onClicked: root.doc.clearRedactMarks() }
+            PIconButton { objectName: "readerRedactArea"; visible: root.tool === "redact"; toggle: true; checked: root.doc !== null && root.doc.redactMode === "area"; iconName: "square"; tip: I18n.tr("Bereiche aufziehen", I18n.revision); onClicked: root.doc.setRedactMode("area") }
+            PIconButton { objectName: "readerRedactText"; visible: root.tool === "redact"; toggle: true; checked: root.doc !== null && root.doc.redactMode === "text"; iconName: "text_edit_style"; tip: I18n.tr("Text markieren", I18n.revision); onClicked: root.doc.setRedactMode("text") }
+            PButton { objectName: "readerRedactSearch"; visible: root.tool === "redact"; kind: "subtle"; iconName: "document_search"; text: I18n.tr("Suchen …", I18n.revision); onClicked: root.doc.searchRedact() }
+            PIconButton { objectName: "readerRedactClear"; visible: root.tool === "redact" && root.doc.redactCount > 0; iconName: "dismiss_circle"; tip: I18n.tr("Alle Markierungen verwerfen", I18n.revision); onClicked: root.doc.clearRedactMarks() }
             PButton {
                 objectName: "readerRedactApply"
                 visible: root.tool === "redact"
                 kind: "danger"
                 iconName: "eye_off"
                 enabled: root.doc !== null && root.doc.redactCount > 0
-                text: root.doc && root.doc.redactCount > 0 ? "Schwärzen anwenden (" + root.doc.redactCount + ")" : "Schwärzen anwenden"
+                text: I18n.tr(root.doc && root.doc.redactCount > 0 ? "Schwärzen anwenden (" + root.doc.redactCount + ")" : "Schwärzen anwenden", I18n.revision)
                 onClicked: root.doc.applyRedaction()
             }
 
@@ -241,7 +241,7 @@ Item {
                 objectName: "readerStampPreset"
                 visible: root.tool === "stamp"
                 preferredWidth: 170
-                label: "Stempel"
+                label: I18n.tr("Stempel", I18n.revision)
                 model: root.doc ? root.doc.stampPresets.concat([{ "key": "custom", "label": root.doc.stampText !== "" ? root.doc.stampText + " (eigener)" : "Eigener Text …" }]) : []
                 textRole: "label"
                 valueRole: "key"
@@ -252,7 +252,7 @@ Item {
                 objectName: "readerStampSubtitle"
                 visible: root.tool === "stamp"
                 preferredWidth: 170
-                label: "Zweite Zeile"
+                label: I18n.tr("Zweite Zeile", I18n.revision)
                 readonly property var options: [{ "key": "", "label": "Ohne zweite Zeile" }, { "key": "{datum}", "label": "Datum" }, { "key": "{datum} {zeit}", "label": "Datum und Uhrzeit" }]
                 readonly property bool customLine: root.doc !== null && root.doc.stampSubtitle !== "" && root.doc.stampSubtitle !== "{datum}" && root.doc.stampSubtitle !== "{datum} {zeit}"
                 model: options.concat([{ "key": "custom", "label": customLine ? root.doc.stampSubtitle : "Eigener Text …" }])
@@ -273,7 +273,7 @@ Item {
                     toggle: true
                     checked: root.doc.signatureChoice === modelData.id
                     implicitWidth: Math.min(150, Math.max(64, 30 * modelData.aspect)) + 12
-                    tip: modelData.label + (modelData.stored ? "" : " (nicht gespeichert)")
+                    tip: I18n.tr(modelData.label + (modelData.stored ? "" : " (nicht gespeichert)"), I18n.revision)
                     onClicked: root.doc.chooseSignature(modelData.id)
                     Rectangle {
                         anchors.fill: parent
@@ -286,23 +286,23 @@ Item {
                     }
                 }
             }
-            PButton { objectName: "readerSignatureNew"; visible: root.tool === "signature"; kind: "subtle"; iconName: "add"; text: root.doc && root.doc.signatures.length > 0 ? "Neu …" : "Unterschrift erstellen …"; onClicked: root.doc.newSignature() }
-            PIconButton { objectName: "readerSignatureDelete"; visible: root.tool === "signature" && root.doc && root.doc.signatureChoice !== ""; iconName: "delete"; tip: "Gewählte Unterschrift löschen"; onClicked: root.doc.deleteSignature(root.doc.signatureChoice) }
+            PButton { objectName: "readerSignatureNew"; visible: root.tool === "signature"; kind: "subtle"; iconName: "add"; text: I18n.tr(root.doc && root.doc.signatures.length > 0 ? "Neu …" : "Unterschrift erstellen …", I18n.revision); onClicked: root.doc.newSignature() }
+            PIconButton { objectName: "readerSignatureDelete"; visible: root.tool === "signature" && root.doc && root.doc.signatureChoice !== ""; iconName: "delete"; tip: I18n.tr("Gewählte Unterschrift löschen", I18n.revision); onClicked: root.doc.deleteSignature(root.doc.signatureChoice) }
             // Bilder
             PButton {
                 objectName: "readerInsertImage"
                 visible: root.tool === "image"
                 iconName: "image_add"
-                text: "Bild einfügen"
+                text: I18n.tr("Bild einfügen", I18n.revision)
                 onClicked: root.doc.insertImage(root.doc.currentPage, [])
             }
             Rectangle { visible: root.imageSelected; Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.divider }
-            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "arrow_rotate_counterclockwise"; tip: "Nach links drehen"; onClicked: root.doc.rotateImage(root.selected.page, root.selected.index, false) }
-            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "arrow_rotate_clockwise"; tip: "Nach rechts drehen"; onClicked: root.doc.rotateImage(root.selected.page, root.selected.index, true) }
-            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "arrow_swap"; tip: "Bild ersetzen"; onClicked: root.doc.replaceImage(root.selected.page, root.selected.index) }
-            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "chevron_up"; tip: "In den Vordergrund"; onClicked: root.doc.arrangeImage(root.selected.page, root.selected.index, true) }
-            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "chevron_down"; tip: "In den Hintergrund"; onClicked: root.doc.arrangeImage(root.selected.page, root.selected.index, false) }
-            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "delete"; tip: "Bild löschen (Entf)"; onClicked: root.doc.deleteImage(root.selected.page, root.selected.index) }
+            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "arrow_rotate_counterclockwise"; tip: I18n.tr("Nach links drehen", I18n.revision); onClicked: root.doc.rotateImage(root.selected.page, root.selected.index, false) }
+            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "arrow_rotate_clockwise"; tip: I18n.tr("Nach rechts drehen", I18n.revision); onClicked: root.doc.rotateImage(root.selected.page, root.selected.index, true) }
+            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "arrow_swap"; tip: I18n.tr("Bild ersetzen", I18n.revision); onClicked: root.doc.replaceImage(root.selected.page, root.selected.index) }
+            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "chevron_up"; tip: I18n.tr("In den Vordergrund", I18n.revision); onClicked: root.doc.arrangeImage(root.selected.page, root.selected.index, true) }
+            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "chevron_down"; tip: I18n.tr("In den Hintergrund", I18n.revision); onClicked: root.doc.arrangeImage(root.selected.page, root.selected.index, false) }
+            PIconButton { visible: root.imageSelected && root.selected.editable; iconName: "delete"; tip: I18n.tr("Bild löschen (Entf)", I18n.revision); onClicked: root.doc.deleteImage(root.selected.page, root.selected.index) }
 
             // Formular gestalten: Feldart wählen (dann Rahmen aufziehen) bzw. »Auswählen«; Befehle des gewählten Feldes
             Repeater {
@@ -318,7 +318,7 @@ Item {
                     required property var modelData
                     objectName: "readerFormKind_" + (modelData.kind !== "" ? modelData.kind : "select")
                     iconName: modelData.icon
-                    tip: modelData.tip
+                    tip: I18n.tr(modelData.tip, I18n.revision)
                     toggle: true
                     checked: root.formKind === modelData.kind
                     // erneuter Klick auf die gewählte Feldart: zurück zum Auswählen der Felder
@@ -326,10 +326,10 @@ Item {
                 }
             }
             Rectangle { visible: root.designTool && root.fieldChosen; Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.divider }
-            PIconButton { objectName: "readerFieldProperties"; visible: root.designTool && root.fieldChosen; iconName: "text_box_settings"; tip: "Eigenschaften … (Doppelklick, Eingabetaste)"; onClicked: root.doc.editFieldProperties("") }
-            PIconButton { objectName: "readerFieldAddOption"; visible: root.designTool && root.chosenField.kind === "radio"; iconName: "add"; tip: "Option hinzufügen"; onClicked: root.doc.addFieldOption("") }
-            PIconButton { objectName: "readerFieldDuplicate"; visible: root.designTool && root.fieldChosen && root.chosenField.kind !== "signature" && root.chosenField.kind !== "button"; iconName: "document_copy"; tip: "Duplizieren (Strg+D)"; onClicked: root.doc.duplicateField("") }
-            PIconButton { objectName: "readerFieldDelete"; visible: root.designTool && root.fieldChosen; iconName: "delete"; tip: "Löschen (Entf)"; onClicked: root.doc.deleteField("") }
+            PIconButton { objectName: "readerFieldProperties"; visible: root.designTool && root.fieldChosen; iconName: "text_box_settings"; tip: I18n.tr("Eigenschaften … (Doppelklick, Eingabetaste)", I18n.revision); onClicked: root.doc.editFieldProperties("") }
+            PIconButton { objectName: "readerFieldAddOption"; visible: root.designTool && root.chosenField.kind === "radio"; iconName: "add"; tip: I18n.tr("Option hinzufügen", I18n.revision); onClicked: root.doc.addFieldOption("") }
+            PIconButton { objectName: "readerFieldDuplicate"; visible: root.designTool && root.fieldChosen && root.chosenField.kind !== "signature" && root.chosenField.kind !== "button"; iconName: "document_copy"; tip: I18n.tr("Duplizieren (Strg+D)", I18n.revision); onClicked: root.doc.duplicateField("") }
+            PIconButton { objectName: "readerFieldDelete"; visible: root.designTool && root.fieldChosen; iconName: "delete"; tip: I18n.tr("Löschen (Entf)", I18n.revision); onClicked: root.doc.deleteField("") }
 
             PText {
                 objectName: "readerToolHint"
@@ -337,7 +337,7 @@ Item {
                 Layout.leftMargin: root.hasControls ? 8 : 0
                 Layout.rightMargin: root.hasControls ? 0 : 6
                 visible: text !== ""
-                text: root.hint
+                text: I18n.tr(root.hint, I18n.revision)
                 textStyle: "caption"
                 tone: root.imageSelected && !root.selected.editable ? "warning" : "secondary"
                 elide: Text.ElideRight

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Tooltip: blendet kurz ein und aus, ohne lange Verzögerung.
 T.ToolTip {
@@ -19,7 +20,7 @@ T.ToolTip {
     font: Typography.caption
 
     contentItem: Text {
-        text: control.text
+        text: I18n.tr(control.text, I18n.revision)
         font: control.font
         color: Theme.textPrimary
         wrapMode: Text.Wrap

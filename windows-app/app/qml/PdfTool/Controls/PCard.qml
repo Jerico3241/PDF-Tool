@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // Karte mit optionaler Kopfzeile (Symbol, Titel, Beschreibung, Aktionen rechts).
 Rectangle {
@@ -47,13 +48,13 @@ Rectangle {
                 spacing: 2
                 PText {
                     id: titleText
-                    text: card.title
+                    text: I18n.tr(card.title, I18n.revision)
                     textStyle: "bodyStrong"
                     Layout.fillWidth: true
                     Accessible.role: Accessible.Heading
                 }
                 PText {
-                    text: card.subtitle
+                    text: I18n.tr(card.subtitle, I18n.revision)
                     textStyle: "caption"
                     tone: "secondary"
                     wrap: true

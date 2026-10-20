@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // InfoBar (Hinweis) mit Stufe, Titel, Text und Aktionen. Erscheint mit Höhe, Deckkraft und
 // leichter Bewegung, verschwindet ebenso – ohne hektische Sprünge. Ein neuer Inhalt in einem
@@ -51,7 +52,7 @@ Item {
     clip: animating
     opacity: shown ? 1 : 0
     Accessible.role: Accessible.AlertMessage
-    Accessible.name: (title !== "" ? title + ": " : "") + message
+    Accessible.name: I18n.tr((title !== "" ? title + ": " : "") + message, I18n.revision)
 
     Behavior on implicitHeight {
         enabled: root.animate && Motion.infoBar > 0
@@ -112,7 +113,7 @@ Item {
                 Text {
                     id: text
                     width: Math.min(implicitWidth, flow.width)
-                    text: root.title !== "" ? "<b>" + root.escapeHtml(root.title) + "</b>&nbsp;&nbsp;" + root.escapeHtml(root.message) : root.escapeHtml(root.message)
+                    text: I18n.tr(root.title !== "" ? "<b>" + root.escapeHtml(root.title) + "</b>&nbsp;&nbsp;" + root.escapeHtml(root.message) : root.escapeHtml(root.message), I18n.revision)
                     textFormat: Text.StyledText
                     font: Typography.body
                     color: Theme.textPrimary
@@ -124,7 +125,7 @@ Item {
                     PButton {
                         required property int index
                         required property var modelData
-                        text: String(modelData)
+                        text: I18n.tr(String(modelData), I18n.revision)
                         onClicked: {
                             // Die Aktion kann denselben Hinweis mit anderen Aktionen ersetzen – dann
                             // entsteht diese Schaltfläche neu. Danach nur noch lokale Werte verwenden.
@@ -139,7 +140,7 @@ Item {
             PIconButton {
                 visible: root.closable
                 iconName: "dismiss"
-                tip: "Schließen"
+                tip: I18n.tr("Schließen", I18n.revision)
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: -4
                 onClicked: root.dismiss()

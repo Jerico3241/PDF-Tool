@@ -459,8 +459,8 @@ def test_quick_tools_open_a_pdf_and_start_the_tool(ui_app, tmp_path: Path, monke
     monkeypatch.setattr(DocumentController, "runAction", lambda self, name: calls.append((self.ident, name, r.current is self)), raising=False)
     monkeypatch.setattr(DocumentController, "mergeFiles", lambda self: calls.append((self.ident, "merge", r.current is self)))
     tiles = {entry["action"]: entry for entry in r.quickTools}
-    assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Als PDF/A speichern", "PDF aus Bildern", "Scannen", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
-    assert list(tiles) == ["optimize", "pdfa", "images", "scan", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
+    assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Als PDF/A speichern", "PDF aus Bildern", "Scannen", "Office in PDF", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
+    assert list(tiles) == ["optimize", "pdfa", "images", "scan", "office", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
     h.navigate("home", 0.3)
     for action in tiles:
         tile = h.item(f"quickTool_{action}")

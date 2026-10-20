@@ -44,16 +44,16 @@ ColumnLayout {
 
     RowLayout {
         spacing: 4
-        PButton { objectName: "signatureDraw"; toggle: true; checked: root.mode === "draw"; iconName: "pen"; text: "Zeichnen"; onClicked: root.mode = "draw" }
-        PButton { objectName: "signatureImage"; toggle: true; checked: root.mode === "image"; iconName: "image"; text: "Bild verwenden"; onClicked: root.mode = "image" }
+        PButton { objectName: "signatureDraw"; toggle: true; checked: root.mode === "draw"; iconName: "pen"; text: I18n.tr("Zeichnen", I18n.revision); onClicked: root.mode = "draw" }
+        PButton { objectName: "signatureImage"; toggle: true; checked: root.mode === "image"; iconName: "image"; text: I18n.tr("Bild verwenden", I18n.revision); onClicked: root.mode = "image" }
         Item { Layout.fillWidth: true }
         Row {
             visible: root.mode === "draw"
             spacing: 6
-            PSwatch { size: 24; swatchColor: "#162E78"; tip: "Blau"; selected: root.ink === "#162E78"; onClicked: { root.ink = "#162E78"; pad.requestPaint() } }
-            PSwatch { size: 24; swatchColor: "#141414"; tip: "Schwarz"; selected: root.ink === "#141414"; onClicked: { root.ink = "#141414"; pad.requestPaint() } }
+            PSwatch { size: 24; swatchColor: "#162E78"; tip: I18n.tr("Blau", I18n.revision); selected: root.ink === "#162E78"; onClicked: { root.ink = "#162E78"; pad.requestPaint() } }
+            PSwatch { size: 24; swatchColor: "#141414"; tip: I18n.tr("Schwarz", I18n.revision); selected: root.ink === "#141414"; onClicked: { root.ink = "#141414"; pad.requestPaint() } }
         }
-        PButton { visible: root.mode === "draw"; kind: "subtle"; iconName: "eraser"; text: "Neu beginnen"; enabled: root.strokes.length > 0; onClicked: root.clear() }
+        PButton { visible: root.mode === "draw"; kind: "subtle"; iconName: "eraser"; text: I18n.tr("Neu beginnen", I18n.revision); enabled: root.strokes.length > 0; onClicked: root.clear() }
     }
 
     // Zeichenfläche: Papierweiß (auch im dunklen Design), Linie zum Unterschreiben
@@ -71,7 +71,7 @@ ColumnLayout {
             x: 24
             y: parent.height - 40
             visible: root.mode === "draw" && root.strokes.length === 0
-            text: "Hier unterschreiben"
+            text: I18n.tr("Hier unterschreiben", I18n.revision)
             color: "#8A8A8A"
             font: Typography.caption
         }
@@ -138,19 +138,19 @@ ColumnLayout {
             anchors.centerIn: parent
             visible: root.mode === "image" && root.picked.preview === undefined
             spacing: 8
-            PButton { anchors.horizontalCenter: parent.horizontalCenter; objectName: "signaturePick"; iconName: "image_add"; text: "Bild auswählen …"; onClicked: {
+            PButton { anchors.horizontalCenter: parent.horizontalCenter; objectName: "signaturePick"; iconName: "image_add"; text: I18n.tr("Bild auswählen …", I18n.revision); onClicked: {
                     var result = Reader.current ? Reader.current.pickSignatureImage() : ({})
                     if (result.error) { root.pickError = result.error; return }
                     if (result.data) { root.picked = result; root.pickError = "" }
                 } }
-            Text { anchors.horizontalCenter: parent.horizontalCenter; text: "PNG oder JPEG, am besten auf weißem Papier"; color: "#6E6E6E"; font: Typography.caption }
+            Text { anchors.horizontalCenter: parent.horizontalCenter; text: I18n.tr("PNG oder JPEG, am besten auf weißem Papier", I18n.revision); color: "#6E6E6E"; font: Typography.caption }
         }
     }
     RowLayout {
         Layout.fillWidth: true
         visible: root.mode === "image" && (root.picked.preview !== undefined || root.pickError !== "")
-        PText { Layout.fillWidth: true; wrap: true; tone: root.pickError !== "" ? "warning" : "secondary"; textStyle: "caption"; text: root.pickError !== "" ? root.pickError : "Der Hintergrund wurde entfernt; die Tinte behält ihre Farbe." }
-        PButton { kind: "subtle"; text: "Anderes Bild …"; onClicked: { root.picked = ({}); root.pickError = "" } }
+        PText { Layout.fillWidth: true; wrap: true; tone: root.pickError !== "" ? "warning" : "secondary"; textStyle: "caption"; text: I18n.tr(root.pickError !== "" ? root.pickError : "Der Hintergrund wurde entfernt; die Tinte behält ihre Farbe.", I18n.revision) }
+        PButton { kind: "subtle"; text: I18n.tr("Anderes Bild …", I18n.revision); onClicked: { root.picked = ({}); root.pickError = "" } }
     }
 
     PCheckBox {
@@ -159,15 +159,15 @@ ColumnLayout {
         Layout.topMargin: 12
         Layout.fillWidth: true
         enabled: !root.storeFull
-        text: root.storeFull ? "Speichern nicht möglich – es sind schon " + (root.data_.limit || 6) + " Unterschriften gespeichert." : "Für später auf diesem PC speichern"
+        text: I18n.tr(root.storeFull ? "Speichern nicht möglich – es sind schon " + (root.data_.limit || 6) + " Unterschriften gespeichert." : "Für später auf diesem PC speichern", I18n.revision)
     }
     PTextField {
         id: labelField
         Layout.fillWidth: true
         Layout.leftMargin: 28
         visible: saveBox.checked
-        label: "Name der Unterschrift"
-        placeholderText: "z. B. Unterschrift oder Kürzel"
+        label: I18n.tr("Name der Unterschrift", I18n.revision)
+        placeholderText: I18n.tr("z. B. Unterschrift oder Kürzel", I18n.revision)
         maximumLength: 40
     }
     PText {
@@ -176,6 +176,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Gespeicherte Unterschriften bleiben nur auf diesem PC (nicht in Sicherungen oder Support-Paketen) und lassen sich jederzeit löschen. Eine sichtbare Unterschrift ist keine digitale Signatur."
+        text: I18n.tr("Gespeicherte Unterschriften bleiben nur auf diesem PC (nicht in Sicherungen oder Support-Paketen) und lassen sich jederzeit löschen. Eine sichtbare Unterschrift ist keine digitale Signatur.", I18n.revision)
     }
 }

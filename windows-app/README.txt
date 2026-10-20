@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.5
+Version 4.0.0-beta.6
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,11 +34,12 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.5.exe
+PDF-Tool-Setup-4.0.0-beta.6.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
-qpdf, pypdfium2 mit PDFium, pypdf, fontTools, comtypes) und die
+qpdf, pypdfium2 mit PDFium, pypdf, fontTools, comtypes, cryptography,
+asn1crypto) und die
 Texterkennung Tesseract mit Sprachdaten für Deutsch, Englisch, Französisch,
 Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch und
 Russisch sowie die Laufzeit des
@@ -47,6 +48,22 @@ qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
+
+Neu in Version 4.0 Beta 6 – Englisch, Signatur, Umwandeln, KI
+----------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Englische Oberfläche: Einstellungen → Sprache (Deutsch, Englisch oder wie
+  Windows). Umschalten ohne Neustart. Standard ist die Sprache von Windows.
+- Digitale Signatur: PDF mit einem Zertifikat (Windows-Zertifikatspeicher oder
+  .pfx-Datei) signieren; vorhandene Signaturen werden geprüft und angezeigt.
+- Umwandeln: PDF in Word, Excel oder Text (Alle Werkzeuge → „Text erkennen,
+  umwandeln und exportieren“); Word-, Excel- und PowerPoint-Dateien in PDF
+  (braucht Microsoft Office).
+- KI-Assistent: Dokument übersetzen (als neues PDF), Fragen an mehrere PDFs
+  oder einen ganzen Ordner; die Antwort nennt Datei und Seite. Gescannte
+  Seiten liest er über die Texterkennung.
+- Behoben: „Text erkennen“ dunkelte in Beta 5 nur den Bildschirm ab, ohne
+  den Dialog zu zeigen.
 
 Neu in Version 4.0 Beta 5 – Scannen, Vorlesen, Sprachen, Tastenkürzel
 ---------------------------------------------------------------------
@@ -508,6 +525,9 @@ Installation. Ihre Daten bleiben erhalten.
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
 einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.5 auf 4.0.0-beta.6 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent.
 
 Update von PDF Tool 4.0.0-beta.4 auf 4.0.0-beta.5 (Kanal „Beta“): mit einem
 Klick, ohne Setup-Assistent.

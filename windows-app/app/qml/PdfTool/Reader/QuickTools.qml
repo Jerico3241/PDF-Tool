@@ -84,7 +84,7 @@ Rectangle {
     border.color: Theme.divider
     enabled: doc !== null
     Accessible.role: Accessible.ToolBar
-    Accessible.name: "Schnellwerkzeuge"
+    Accessible.name: I18n.tr("Schnellwerkzeuge", I18n.revision)
 
     component Separator: Rectangle {
         Layout.preferredWidth: 20
@@ -119,7 +119,7 @@ Rectangle {
         hoverEnabled: true
         focusPolicy: Qt.NoFocus
         Accessible.role: Accessible.ButtonMenu
-        Accessible.name: tip
+        Accessible.name: I18n.tr(tip, I18n.revision)
         onClicked: menu.popup(parent, parent.width + Metrics.s4, 0)
         contentItem: Item {
             Canvas {
@@ -144,7 +144,7 @@ Rectangle {
                 }
             }
         }
-        PToolTip { text: corner.tip; visible: corner.hovered && !corner.pressed; x: corner.width + Metrics.s8; y: (corner.height - implicitHeight) / 2 }
+        PToolTip { text: I18n.tr(corner.tip, I18n.revision); visible: corner.hovered && !corner.pressed; x: corner.width + Metrics.s8; y: (corner.height - implicitHeight) / 2 }
     }
     component MenuTool: ToolButton {
         id: menuTool
@@ -158,33 +158,33 @@ Rectangle {
         y: Metrics.s4
         spacing: 2
 
-        ToolButton { objectName: "readerToolSelect"; toolKey: "select"; iconName: "cursor"; tip: "Auswählen: Text markieren und kopieren, Kommentare verschieben" }
-        ToolButton { objectName: "readerToolHand"; toolKey: "hand"; iconName: "hand_left"; tip: "Verschieben: das Dokument mit gedrückter Maustaste bewegen" }
+        ToolButton { objectName: "readerToolSelect"; toolKey: "select"; iconName: "cursor"; tip: I18n.tr("Auswählen: Text markieren und kopieren, Kommentare verschieben", I18n.revision) }
+        ToolButton { objectName: "readerToolHand"; toolKey: "hand"; iconName: "hand_left"; tip: I18n.tr("Verschieben: das Dokument mit gedrückter Maustaste bewegen", I18n.revision) }
         Separator {}
         MenuTool {
             objectName: "readerToolComment"; toolKey: root.lastComment; iconName: root.toolIcon(root.lastComment); menu: commentMenu
-            tip: "Kommentieren: " + root.toolName(root.lastComment) + " (Auswahl: Dreieck oder Rechtsklick)"
-            MenuCorner { objectName: "readerCommentMenu"; menu: commentMenu; tip: "Kommentarwerkzeug wählen" }
+            tip: I18n.tr("Kommentieren: " + root.toolName(root.lastComment) + " (Auswahl: Dreieck oder Rechtsklick)", I18n.revision)
+            MenuCorner { objectName: "readerCommentMenu"; menu: commentMenu; tip: I18n.tr("Kommentarwerkzeug wählen", I18n.revision) }
         }
         MenuTool {
             objectName: "readerToolDraw"; toolKey: root.lastDraw; iconName: root.toolIcon(root.lastDraw); menu: drawMenu
-            tip: "Zeichnen: " + root.toolName(root.lastDraw) + " (Auswahl: Dreieck oder Rechtsklick)"
-            MenuCorner { objectName: "readerDrawMenu"; menu: drawMenu; tip: "Zeichenwerkzeug wählen" }
+            tip: I18n.tr("Zeichnen: " + root.toolName(root.lastDraw) + " (Auswahl: Dreieck oder Rechtsklick)", I18n.revision)
+            MenuCorner { objectName: "readerDrawMenu"; menu: drawMenu; tip: I18n.tr("Zeichenwerkzeug wählen", I18n.revision) }
         }
-        ToolButton { objectName: "readerToolAddText"; toolKey: "addText"; iconName: "text_add"; tip: "Text hinzufügen" }
-        ToolButton { objectName: "readerToolEditText"; toolKey: "editText"; iconName: "text_edit_style"; tip: "Text bearbeiten: Absätze mit Cursor ändern, ergänzen, umbrechen" }
-        ToolButton { objectName: "readerToolObjects"; toolKey: "objects"; iconName: "select_object"; tip: "Objekt bearbeiten: Text und andere PDF-Inhalte einzeln auswählen und bearbeiten." }
+        ToolButton { objectName: "readerToolAddText"; toolKey: "addText"; iconName: "text_add"; tip: I18n.tr("Text hinzufügen", I18n.revision) }
+        ToolButton { objectName: "readerToolEditText"; toolKey: "editText"; iconName: "text_edit_style"; tip: I18n.tr("Text bearbeiten: Absätze mit Cursor ändern, ergänzen, umbrechen", I18n.revision) }
+        ToolButton { objectName: "readerToolObjects"; toolKey: "objects"; iconName: "select_object"; tip: I18n.tr("Objekt bearbeiten: Text und andere PDF-Inhalte einzeln auswählen und bearbeiten.", I18n.revision) }
         MenuTool {
             objectName: "readerToolSign"; toolKey: root.lastSign; iconName: root.toolIcon(root.lastSign); menu: signMenu
-            tip: root.lastSign === "stamp" ? "Stempel setzen (GENEHMIGT, ENTWURF, eigener Text …)" : "Unterschreiben: Unterschrift zeichnen oder einlesen und auf die Seite setzen (keine digitale Signatur)"
-            MenuCorner { objectName: "readerSignMenu"; menu: signMenu; tip: "Unterschrift oder Stempel wählen" }
+            tip: I18n.tr(root.lastSign === "stamp" ? "Stempel setzen (GENEHMIGT, ENTWURF, eigener Text …)" : "Unterschreiben: Unterschrift zeichnen oder einlesen und auf die Seite setzen (keine digitale Signatur)", I18n.revision)
+            MenuCorner { objectName: "readerSignMenu"; menu: signMenu; tip: I18n.tr("Unterschrift oder Stempel wählen", I18n.revision) }
         }
         Separator {}
         PIconButton {
             id: allButton
             objectName: "readerQuickAllTools"
             iconName: "apps"
-            tip: "Alle Werkzeuge"
+            tip: I18n.tr("Alle Werkzeuge", I18n.revision)
             toggle: true
             checked: root.allToolsOpen || (root.doc !== null && !root.quickTool)
             onCheckedChanged: if (checked && !root.quickTool) root.activeTool = allButton
@@ -215,26 +215,26 @@ Rectangle {
     PMenu {
         id: commentMenu
         objectName: "readerCommentToolMenu"
-        PMenuItem { text: "Markieren"; iconName: "highlight"; onTriggered: root.doc.setTool("highlight") }
-        PMenuItem { text: "Unterstreichen"; iconName: "text_underline"; onTriggered: root.doc.setTool("underline") }
-        PMenuItem { text: "Durchstreichen"; iconName: "text_strikethrough"; onTriggered: root.doc.setTool("strikeout") }
-        PMenuItem { text: "Notiz"; iconName: "comment"; onTriggered: root.doc.setTool("note") }
-        PMenuItem { text: "Textfeld"; iconName: "textbox"; onTriggered: root.doc.setTool("textbox") }
+        PMenuItem { text: I18n.tr("Markieren", I18n.revision); iconName: "highlight"; onTriggered: root.doc.setTool("highlight") }
+        PMenuItem { text: I18n.tr("Unterstreichen", I18n.revision); iconName: "text_underline"; onTriggered: root.doc.setTool("underline") }
+        PMenuItem { text: I18n.tr("Durchstreichen", I18n.revision); iconName: "text_strikethrough"; onTriggered: root.doc.setTool("strikeout") }
+        PMenuItem { text: I18n.tr("Notiz", I18n.revision); iconName: "comment"; onTriggered: root.doc.setTool("note") }
+        PMenuItem { text: I18n.tr("Textfeld", I18n.revision); iconName: "textbox"; onTriggered: root.doc.setTool("textbox") }
     }
     PMenu {
         id: drawMenu
         objectName: "readerDrawToolMenu"
-        PMenuItem { text: "Freihand (auch für eine sichtbare Unterschrift)"; iconName: "pen"; onTriggered: root.doc.setTool("ink") }
-        PMenuItem { text: "Rechteck"; iconName: "square"; onTriggered: root.doc.setTool("rect") }
-        PMenuItem { text: "Ellipse"; iconName: "circle"; onTriggered: root.doc.setTool("ellipse") }
-        PMenuItem { text: "Linie"; iconName: "line"; onTriggered: root.doc.setTool("line") }
-        PMenuItem { text: "Pfeil"; iconName: "arrow_up_right"; onTriggered: root.doc.setTool("arrow") }
+        PMenuItem { text: I18n.tr("Freihand (auch für eine sichtbare Unterschrift)", I18n.revision); iconName: "pen"; onTriggered: root.doc.setTool("ink") }
+        PMenuItem { text: I18n.tr("Rechteck", I18n.revision); iconName: "square"; onTriggered: root.doc.setTool("rect") }
+        PMenuItem { text: I18n.tr("Ellipse", I18n.revision); iconName: "circle"; onTriggered: root.doc.setTool("ellipse") }
+        PMenuItem { text: I18n.tr("Linie", I18n.revision); iconName: "line"; onTriggered: root.doc.setTool("line") }
+        PMenuItem { text: I18n.tr("Pfeil", I18n.revision); iconName: "arrow_up_right"; onTriggered: root.doc.setTool("arrow") }
     }
     PMenu {
         id: signMenu
         objectName: "readerSignToolMenu"
-        PMenuItem { objectName: "readerToolSignature"; text: "Unterschrift setzen"; iconName: "signature"; onTriggered: root.doc.setTool("signature") }
-        PMenuItem { text: "Neue Unterschrift …"; iconName: "pen"; onTriggered: { var d = root.doc; signMenu.afterClose = function() { d.newSignature() } } }
-        PMenuItem { objectName: "readerToolStamp"; text: "Stempel"; iconName: "document_checkmark"; onTriggered: root.doc.setTool("stamp") }
+        PMenuItem { objectName: "readerToolSignature"; text: I18n.tr("Unterschrift setzen", I18n.revision); iconName: "signature"; onTriggered: root.doc.setTool("signature") }
+        PMenuItem { text: I18n.tr("Neue Unterschrift …", I18n.revision); iconName: "pen"; onTriggered: { var d = root.doc; signMenu.afterClose = function() { d.newSignature() } } }
+        PMenuItem { objectName: "readerToolStamp"; text: I18n.tr("Stempel", I18n.revision); iconName: "document_checkmark"; onTriggered: root.doc.setTool("stamp") }
     }
 }

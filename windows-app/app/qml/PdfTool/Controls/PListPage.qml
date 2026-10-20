@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Seite mit langer Liste: Titel und Kopfbereich scrollen mit, die Zeilen sind virtualisiert
 // (nur sichtbare Zeilen existieren – auch 500 Einträge bleiben flüssig).
@@ -94,8 +95,8 @@ ListView {
                 Layout.bottomMargin: 20
                 spacing: 2
                 visible: page.title !== ""
-                PText { text: page.title; textStyle: "title"; Layout.fillWidth: true; Accessible.role: Accessible.Heading }
-                PText { text: page.subtitle; tone: "secondary"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
+                PText { text: I18n.tr(page.title, I18n.revision); textStyle: "title"; Layout.fillWidth: true; Accessible.role: Accessible.Heading }
+                PText { text: I18n.tr(page.subtitle, I18n.revision); tone: "secondary"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
             }
             Loader {
                 Layout.fillWidth: true

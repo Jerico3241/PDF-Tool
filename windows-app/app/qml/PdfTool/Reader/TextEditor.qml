@@ -174,12 +174,12 @@ Item {
                     objectName: "readerEditorFamily"
                     visible: root.styled
                     preferredWidth: 190
-                    label: "Schriftart"
+                    label: I18n.tr("Schriftart", I18n.revision)
                     model: Reader.fontFamilies
                     textRole: "label"
                     valueRole: "value"
                     // Ein bestehender Block zeigt seine Schrift, solange keine andere gewählt ist
-                    displayText: root.kind === "block" && !root.familyTouched ? String(root.family).split("+").pop() : currentText
+                    displayText: I18n.tr(root.kind === "block" && !root.familyTouched ? String(root.family).split("+").pop() : currentText, I18n.revision)
                     currentIndex: Math.max(0, indexOfValue(root.family))
                     onActivated: (index) => { root.family = Reader.fontFamilies[index].value; root.familyTouched = true; root.styleTouched = true }
                 }
@@ -187,7 +187,7 @@ Item {
                     visible: root.styled
                     objectName: "readerEditorSize"
                     preferredWidth: 64
-                    label: "Schriftgröße (pt)"
+                    label: I18n.tr("Schriftgröße (pt)", I18n.revision)
                     text: (Math.round(root.size * 10) / 10).toLocaleString(Qt.locale("de_DE"), "f", root.size % 1 === 0 ? 0 : 1)
                     validator: DoubleValidator { bottom: 4; top: 144; decimals: 1; locale: "de_DE" }
                     onEditingFinished: {
@@ -198,7 +198,7 @@ Item {
                 PIconButton {
                     visible: root.styled
                     iconName: "text_bold"
-                    tip: "Fett"
+                    tip: I18n.tr("Fett", I18n.revision)
                     toggle: true
                     checked: root.bold
                     onClicked: { root.bold = !root.bold; root.styleTouched = true }
@@ -206,7 +206,7 @@ Item {
                 PIconButton {
                     visible: root.styled
                     iconName: "text_italic"
-                    tip: "Kursiv"
+                    tip: I18n.tr("Kursiv", I18n.revision)
                     toggle: true
                     checked: root.italic
                     onClicked: { root.italic = !root.italic; root.styleTouched = true }
@@ -215,7 +215,7 @@ Item {
                     objectName: "readerEditorUnderline"
                     visible: root.styled
                     iconName: "text_underline"
-                    tip: "Unterstreichen (zeichnet eine Linie in der Textfarbe)"
+                    tip: I18n.tr("Unterstreichen (zeichnet eine Linie in der Textfarbe)", I18n.revision)
                     toggle: true
                     checked: root.underline
                     onClicked: { root.underline = !root.underline; root.styleTouched = true }
@@ -224,7 +224,7 @@ Item {
                     objectName: "readerEditorStrike"
                     visible: root.styled
                     iconName: "text_strikethrough"
-                    tip: "Durchstreichen (zeichnet eine Linie in der Textfarbe)"
+                    tip: I18n.tr("Durchstreichen (zeichnet eine Linie in der Textfarbe)", I18n.revision)
                     toggle: true
                     checked: root.strike
                     onClicked: { root.strike = !root.strike; root.styleTouched = true }
@@ -236,7 +236,7 @@ Item {
                         required property var modelData
                         objectName: "readerEditorAlign_" + modelData.value
                         iconName: modelData.icon
-                        tip: modelData.tip
+                        tip: I18n.tr(modelData.tip, I18n.revision)
                         toggle: true
                         checked: root.align === modelData.value
                         onClicked: { root.align = modelData.value; root.styleTouched = true }
@@ -246,7 +246,7 @@ Item {
                     id: colorButton
                     visible: root.styled
                     iconName: "text_color"
-                    tip: "Textfarbe"
+                    tip: I18n.tr("Textfarbe", I18n.revision)
                     onClicked: colors.open()
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -265,14 +265,14 @@ Item {
                 }
                 Rectangle { visible: root.styled; width: 1; height: Metrics.controlHeight; color: Theme.divider }
                 PButton {
-                    text: "Abbrechen"
+                    text: I18n.tr("Abbrechen", I18n.revision)
                     onClicked: root.cancel()
                 }
                 PButton {
                     objectName: "readerEditorApply"
                     kind: "accent"
-                    text: "Übernehmen"
-                    tip: "Strg+Eingabe"
+                    text: I18n.tr("Übernehmen", I18n.revision)
+                    tip: I18n.tr("Strg+Eingabe", I18n.revision)
                     onClicked: root.commit()
                 }
             }
@@ -306,7 +306,7 @@ Item {
                 selectedTextColor: Theme.textOnAccent
                 textFormat: TextEdit.PlainText
                 Accessible.role: Accessible.EditableText
-                Accessible.name: root.kind === "note" ? "Notiz" : "Text"
+                Accessible.name: I18n.tr(root.kind === "note" ? "Notiz" : "Text", I18n.revision)
                 Keys.onShortcutOverride: (event) => {
                     if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (root.kind === "object" || (event.modifiers & Qt.ControlModifier))) event.accepted = true
                     else if (event.key === Qt.Key_Escape) event.accepted = true
@@ -329,7 +329,7 @@ Item {
             textStyle: "caption"
             readonly property var o: root.request && root.kind === "object" ? root.request.object : null
             tone: o && o.native ? "secondary" : "warning"
-            text: !o ? "" : o.font + " · " + (Math.round(o.size * 10) / 10) + " pt · " + (o.native ? "Nur dieses Objekt wird geändert – direkt im PDF, wenn die Originalschrift alle Zeichen hat" : "Direkt nicht möglich: " + o.reason + ". Der Text wird überlagert – der Hinweis nennt danach den Weg.")
+            text: I18n.tr(!o ? "" : o.font + " · " + (Math.round(o.size * 10) / 10) + " pt · " + (o.native ? "Nur dieses Objekt wird geändert – direkt im PDF, wenn die Originalschrift alle Zeichen hat" : "Direkt nicht möglich: " + o.reason + ". Der Text wird überlagert – der Hinweis nennt danach den Weg."), I18n.revision)
             Rectangle { anchors.fill: parent; anchors.margins: -4; z: -1; color: Theme.flyout; radius: Metrics.radiusControl; border.color: Theme.flyoutStroke }
         }
         PText {
@@ -338,7 +338,7 @@ Item {
             wrap: true
             textStyle: "caption"
             tone: root.block && root.block.native ? "secondary" : "warning"
-            text: !root.block ? "" : root.block.font + " · " + (Math.round(root.block.size * 10) / 10) + " pt · " + (root.block.native ? "Änderung direkt im PDF möglich (Originalschrift)" : "Direkt nicht möglich: " + root.block.reason + ". Der Text wird neu gesetzt oder überlagert – der Hinweis nennt danach den Weg.")
+            text: I18n.tr(!root.block ? "" : root.block.font + " · " + (Math.round(root.block.size * 10) / 10) + " pt · " + (root.block.native ? "Änderung direkt im PDF möglich (Originalschrift)" : "Direkt nicht möglich: " + root.block.reason + ". Der Text wird neu gesetzt oder überlagert – der Hinweis nennt danach den Weg."), I18n.revision)
             Rectangle { anchors.fill: parent; anchors.margins: -4; z: -1; color: Theme.flyout; radius: Metrics.radiusControl; border.color: Theme.flyoutStroke }
         }
     }

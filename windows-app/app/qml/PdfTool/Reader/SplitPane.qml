@@ -38,14 +38,14 @@ Rectangle {
                     Layout.maximumWidth: implicitWidth
                     kind: "subtle"
                     iconName: "document_pdf"
-                    text: root.doc ? root.doc.name + "  ▾" : ""
-                    tip: "Anderes geöffnetes PDF rechts zeigen"
+                    text: I18n.tr(root.doc ? root.doc.name + "  ▾" : "", I18n.revision)
+                    tip: I18n.tr("Anderes geöffnetes PDF rechts zeigen", I18n.revision)
                     onClicked: chooseMenu.popup(chooser, 0, chooser.height)
                 }
                 Item { Layout.fillWidth: true }
-                PIconButton { objectName: "readerSplitSwap"; iconName: "arrow_swap"; tip: "Seiten tauschen"; onClicked: Reader.swapSplit() }
-                PIconButton { objectName: "readerSplitOpen"; iconName: "folder_open"; tip: "PDF rechts öffnen …"; onClicked: Reader.openSplitDialog() }
-                PIconButton { objectName: "readerSplitClose"; iconName: "dismiss"; tip: "Geteilte Ansicht schließen"; onClicked: Reader.toggleSplit() }
+                PIconButton { objectName: "readerSplitSwap"; iconName: "arrow_swap"; tip: I18n.tr("Seiten tauschen", I18n.revision); onClicked: Reader.swapSplit() }
+                PIconButton { objectName: "readerSplitOpen"; iconName: "folder_open"; tip: I18n.tr("PDF rechts öffnen …", I18n.revision); onClicked: Reader.openSplitDialog() }
+                PIconButton { objectName: "readerSplitClose"; iconName: "dismiss"; tip: I18n.tr("Geteilte Ansicht schließen", I18n.revision); onClicked: Reader.toggleSplit() }
             }
         }
         DocumentView {
@@ -65,7 +65,7 @@ Rectangle {
             delegate: PMenuItem {
                 required property string key
                 required property string name
-                text: name
+                text: I18n.tr(name, I18n.revision)
                 iconName: "document_pdf"
                 visible: key !== Reader.currentKey
                 checkable: true

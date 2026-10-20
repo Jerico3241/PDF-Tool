@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Eingabefeld mit den Zuständen Normal, Hover, Fokus, Ungültig und Deaktiviert (weiche Übergänge).
 T.TextField {
@@ -25,7 +26,7 @@ T.TextField {
     selectByMouse: true
     hoverEnabled: true
     Accessible.role: Accessible.EditableText
-    Accessible.name: label !== "" ? label : placeholderText
+    Accessible.name: I18n.tr(label !== "" ? label : placeholderText, I18n.revision)
     onAccepted: submitted()
 
     TapHandler {
@@ -42,7 +43,7 @@ T.TextField {
         y: control.topPadding
         width: control.width - control.leftPadding - control.rightPadding
         height: control.height - control.topPadding - control.bottomPadding
-        text: control.placeholderText
+        text: I18n.tr(control.placeholderText, I18n.revision)
         font: control.font
         color: control.placeholderTextColor
         verticalAlignment: Text.AlignVCenter

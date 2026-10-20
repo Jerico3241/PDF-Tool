@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Umschaltfläche der Formatleiste (Fett, Kursiv, Ausrichtung …): zeigt ihren Zustand an.
 T.AbstractButton {
@@ -16,7 +17,7 @@ T.AbstractButton {
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
     Accessible.role: Accessible.CheckBox
-    Accessible.name: tip
+    Accessible.name: I18n.tr(tip, I18n.revision)
     Accessible.checked: active
     Accessible.checkStateMixed: mixed && !active
 
@@ -42,10 +43,10 @@ T.AbstractButton {
         Text {
             anchors.centerIn: parent
             visible: control.iconName === ""
-            text: control.glyph
+            text: I18n.tr(control.glyph, I18n.revision)
             font: control.glyphFont
             color: control.active ? Theme.accentText : Theme.textPrimary
         }
     }
-    PToolTip { text: control.tip; visible: control.tip !== "" && control.hovered }
+    PToolTip { text: I18n.tr(control.tip, I18n.revision); visible: control.tip !== "" && control.hovered }
 }

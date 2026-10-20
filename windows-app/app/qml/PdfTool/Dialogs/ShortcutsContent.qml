@@ -54,7 +54,7 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Eigene Kürzel gelten sofort und bleiben gespeichert. Ein Kürzel gehört immer nur einem Befehl."
+        text: I18n.tr("Eigene Kürzel gelten sofort und bleiben gespeichert. Ein Kürzel gehört immer nur einem Befehl.", I18n.revision)
     }
 
     Repeater {
@@ -65,7 +65,7 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.topMargin: 12
             spacing: 2
-            PText { text: group.modelData.title; textStyle: "bodyStrong"; Accessible.role: Accessible.Heading }
+            PText { text: I18n.tr(group.modelData.title, I18n.revision); textStyle: "bodyStrong"; Accessible.role: Accessible.Heading }
             Repeater {
                 model: group.modelData.items
                 ColumnLayout {
@@ -79,7 +79,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Layout.minimumHeight: 36
                         spacing: 8
-                        PText { Layout.fillWidth: true; text: entry.modelData.label; elide: Text.ElideRight }
+                        PText { Layout.fillWidth: true; text: I18n.tr(entry.modelData.label, I18n.revision); elide: Text.ElideRight }
                         PText {
                             objectName: "shortcutKeys_" + entry.modelData.key
                             Layout.preferredWidth: 300
@@ -87,25 +87,25 @@ ColumnLayout {
                             elide: Text.ElideRight
                             textStyle: entry.waiting ? "body" : "bodyStrong"
                             tone: entry.waiting ? "accent" : (entry.modelData.keys.length ? "primary" : "tertiary")
-                            text: entry.waiting ? "Tasten drücken … (Esc: abbrechen)" : (entry.modelData.keys.length ? entry.modelData.keys.join("  oder  ") : "ohne Kürzel")
+                            text: I18n.tr(entry.waiting ? "Tasten drücken … (Esc: abbrechen)" : (entry.modelData.keys.length ? entry.modelData.keys.join("  oder  ") : "ohne Kürzel"), I18n.revision)
                         }
                         PIconButton {
                             objectName: "shortcutChange_" + entry.modelData.key
                             iconName: "edit"
-                            tip: "Ändern"
+                            tip: I18n.tr("Ändern", I18n.revision)
                             onClicked: entry.waiting ? root.stopCapture() : root.startCapture(entry.modelData.key)
                         }
                         PIconButton {
                             objectName: "shortcutClear_" + entry.modelData.key
                             iconName: "dismiss"
-                            tip: "Kürzel entfernen"
+                            tip: I18n.tr("Kürzel entfernen", I18n.revision)
                             enabled: entry.modelData.keys.length > 0
                             onClicked: { root.note = ""; Shortcuts.clear(entry.modelData.key) }
                         }
                         PIconButton {
                             objectName: "shortcutReset_" + entry.modelData.key
                             iconName: "arrow_reset"
-                            tip: "Standard wiederherstellen"
+                            tip: I18n.tr("Standard wiederherstellen", I18n.revision)
                             opacity: entry.modelData.custom ? 1 : 0
                             enabled: entry.modelData.custom
                             onClicked: { root.note = ""; Shortcuts.reset(entry.modelData.key) }
@@ -119,7 +119,7 @@ ColumnLayout {
                         wrap: true
                         textStyle: "caption"
                         tone: "warning"
-                        text: root.note
+                        text: I18n.tr(root.note, I18n.revision)
                     }
                 }
             }
@@ -131,12 +131,12 @@ ColumnLayout {
                     Layout.fillWidth: true
                     Layout.minimumHeight: 30
                     spacing: 8
-                    PText { Layout.fillWidth: true; text: fixed.modelData.label; tone: "secondary"; wrap: true }
+                    PText { Layout.fillWidth: true; text: I18n.tr(fixed.modelData.label, I18n.revision); tone: "secondary"; wrap: true }
                     PText {
                         Layout.preferredWidth: 300
                         horizontalAlignment: Text.AlignRight
                         tone: "secondary"
-                        text: fixed.modelData.keys
+                        text: I18n.tr(fixed.modelData.keys, I18n.revision)
                     }
                     // Platz der drei Schaltflächen oben, damit die Spalten bündig bleiben
                     Item { Layout.preferredWidth: 3 * Metrics.controlHeight + 16; Layout.preferredHeight: 1 }
@@ -148,7 +148,7 @@ ColumnLayout {
     PButton {
         objectName: "shortcutsResetAll"
         Layout.topMargin: 12
-        text: "Alle Tastenkürzel zurücksetzen"
+        text: I18n.tr("Alle Tastenkürzel zurücksetzen", I18n.revision)
         iconName: "arrow_reset"
         onClicked: { root.note = ""; root.stopCapture(); Shortcuts.resetAll() }
     }

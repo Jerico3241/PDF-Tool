@@ -272,7 +272,7 @@ class DocumentController(Observable):
         notes = []
         kind = "info"
         if state.get("signed"):
-            notes.append("Dieses PDF ist digital signiert. Jede Änderung macht die Signatur ungültig – PDF Tool fragt vor der ersten Bearbeitung nach.")
+            notes.append("Dieses PDF ist digital signiert. Jede Änderung macht die Signatur ungültig – PDF Tool fragt vor der ersten Bearbeitung nach. Prüfen: »Alle Werkzeuge« › »Signaturen prüfen«.")
             kind = "warning"
         if state.get("readOnly"):
             notes.append(state["readOnly"])
@@ -2084,6 +2084,38 @@ class DocumentController(Observable):
         stem = self._stem()
         self.run(lambda session: session.export_images(chosen, folder, stem, fmt, dpi), lambda written: self.app.notify("reader", "success", f"{len(written)} {'Bild' if len(written) == 1 else 'Bilder'} gespeichert in {folder}", title="Exportiert", auto_hide=8000), refresh=False, busy="Seiten werden exportiert …")
 
+    @Slot(str)
+    def convertDocument(self, fmt: str) -> None:  # noqa: N802
+        """In Word (.docx), Excel (.xlsx) oder Text (.txt) umwandeln: neue Datei neben dem PDF, danach öffnen oder zeigen."""
+        from tools.pdf_editor import convert
+
+        if fmt not in convert.FORMATS:
+            return
+        if not (self.permissions or {}).get("copy", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben keinen Export von Inhalten.", title="Nicht möglich")
+            return
+        label = {"docx": "Word", "xlsx": "Excel", "txt": "Text"}[fmt]
+        target = self.reader.pick_save_file(self._stem() + convert.FORMATS[fmt], f"Als {label} speichern")
+        if not target:
+            return
+        if not target.lower().endswith(convert.FORMATS[fmt]):
+            target += convert.FORMATS[fmt]
+        if self.path and os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(self.path)):
+            self.app.notify("reader", "warning", "Die umgewandelte Datei braucht einen eigenen Namen.", title="Nicht gespeichert")
+            return
+
+        def done(result) -> None:
+            path = str(result.path)
+            message = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'} gespeichert als {os.path.basename(path)}."
+            if result.empty:
+                where = ", ".join(str(i + 1) for i in result.empty[:6]) + (" …" if len(result.empty) > 6 else "")
+                scanned = " als Bild übernommen" if fmt == "docx" else " ohne Inhalt"
+                message += f" Seite {where} ohne Text{scanned} – für Scans vorher »Text erkennen (OCR)« verwenden."
+            self.app.notify("reader", "warning" if result.empty else "success", message, title=f"In {label} umgewandelt", auto_hide=12000,
+                            actions=[("Öffnen", lambda: self.reader.openExternal(path)), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+
+        self.run(lambda session: session.convert(fmt, target, []), done, refresh=False, busy=f"Wird in {label} umgewandelt …")
+
     @Slot()
     def showProperties(self) -> None:  # noqa: N802
         def done(props) -> None:
@@ -2292,6 +2324,87 @@ class DocumentController(Observable):
             self.app.notify("reader", "success", message, title="PDF/A-Kopie gespeichert", auto_hide=12000, actions=[("Öffnen", lambda: self.reader.open_paths([path])), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
 
         self.run(lambda session: session.pdfa_copy(target), done, refresh=False, busy="PDF/A wird erstellt …")
+
+    # Digitale Signatur (seit 4.0 Beta 6) -----------------------------------------------------------------------------
+    @Slot()
+    def digitalSign(self) -> None:  # noqa: N802
+        """Mit einem Zertifikat (Windows oder .pfx-Datei) signieren. Signiert wird die gespeicherte Datei; das Ergebnis
+        ist eine neue Datei, die gleich geöffnet wird – das Original bleibt unverändert."""
+        if self.session is None or self.pageCount == 0:
+            return
+        if self.state.get("encrypted"):
+            self.app.notify("reader", "warning", "Kennwortgeschützte PDFs lassen sich nicht signieren. Bitte zuerst den Kennwortschutz entfernen (Schützen › Kennwortschutz).", title="Signieren nicht möglich")
+            return
+        if self.dirty or not self.path:
+            answer, _data = self.app.dialogs.ask("confirm", "Zuerst speichern?", "Signiert wird die gespeicherte Datei. Ihre Änderungen werden vorher gespeichert.", primary="Speichern und signieren", close="Abbrechen")
+            if answer != "primary":
+                return
+            self.save(then=lambda ok: self.app.timers.later(f"reader:sign:{self.ident}", 0, self._sign_dialog) if ok else None)
+            return
+        self._sign_dialog()
+
+    def _sign_dialog(self) -> None:
+        from tools.pdf_editor import digsig
+
+        if self.session is None:
+            return
+        reader = self.reader
+        data = {
+            "certificates": digsig.store_certificates(), "pageCount": self.pageCount, "current": self.currentPage,
+            "reason": reader.sign_defaults.get("reason", ""), "location": reader.sign_defaults.get("location", ""),
+            "visible": bool(reader.sign_defaults.get("visible", True)), "thumbprint": reader.sign_defaults.get("thumbprint", ""),
+        }
+        answer, result = self.app.dialogs.ask("digital_sign", "Digital signieren", "", primary="Signieren …", close="Abbrechen", data=data, width=600)
+        if answer != "primary" or self.session is None:
+            return
+        result = dict(result or {})
+        spec = {"thumbprint": str(result.get("thumbprint") or ""), "file": str(result.get("file") or ""), "password": str(result.get("password") or "")}
+        if not spec["thumbprint"] and not spec["file"]:
+            return
+        options = {"reason": str(result.get("reason") or ""), "location": str(result.get("location") or ""),
+                   "visible": bool(result.get("visible")), "visiblePage": int(result.get("page", self.currentPage))}
+        reader.remember_sign_defaults({"reason": options["reason"], "location": options["location"], "visible": options["visible"], "thumbprint": spec["thumbprint"]})
+        target = reader.pick_save_pdf(f"{self._stem()} (signiert).pdf", "Signierte Datei speichern")
+        if not target:
+            return
+        if self.path and os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(self.path)):
+            self.app.notify("reader", "warning", "Bitte einen anderen Dateinamen wählen – das geöffnete Original bleibt unverändert.", title="Signieren nicht möglich")
+            return
+
+        def done(info: dict) -> None:
+            path = info["path"]
+            self.app.notify("reader", "success", f"Signiert von {info['signer']}. Die signierte Datei ist geöffnet; jede weitere Änderung macht die Signatur ungültig.", title="Digital signiert", auto_hide=12000, actions=[("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+            self.reader.open_paths([path])
+
+        self.run(lambda session: session.sign_copy(target, spec, options), done, refresh=False, busy="Wird signiert …")
+
+    @Slot(result=str)
+    def pickCertificateFile(self) -> str:  # noqa: N802
+        """Zertifikatsdatei für »Digital signieren« wählen (aus dem Dialog)."""
+        from .. import files
+
+        return files.open_file("Zertifikatsdatei wählen", self.app.initial_dir("zertifikat", self.reader.source_dir), "Zertifikate (*.pfx *.p12);;Alle Dateien (*.*)")
+
+    @Slot()
+    def checkSignatures(self) -> None:  # noqa: N802
+        """Alle Signaturen der gespeicherten Datei prüfen und anzeigen."""
+        if self.session is None:
+            return
+        if not self.path:
+            self.app.notify("reader", "info", "Dieses Dokument ist noch nicht gespeichert und enthält keine Signatur.", title="Keine Signatur")
+            return
+
+        def done(found: list) -> None:
+            if not found:
+                self.app.notify("reader", "info", "Dieses PDF enthält keine digitale Signatur.", title="Keine Signatur", auto_hide=8000)
+                return
+            message = "Geprüft wird die gespeicherte Datei – ohne Internet." + (" Ungespeicherte Änderungen sind nicht berücksichtigt." if self.dirty else "")
+            _answer, result = self.app.dialogs.ask("signatures", "Signaturen", message, primary="", close="Schließen", data={"signatures": found}, width=640)
+            page = int((result or {}).get("page", -1))  # »Zum Feld«
+            if 0 <= page < self.pageCount:
+                self.goTo(page)
+
+        self.run(lambda session: session.verify_signatures(), done, refresh=False, busy="Signaturen werden geprüft …")
 
     # Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen ----------------------------------------------------------------
     @Slot()

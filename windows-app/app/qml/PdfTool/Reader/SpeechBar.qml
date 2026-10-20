@@ -46,19 +46,19 @@ Item {
                 Layout.minimumWidth: 60
                 elide: Text.ElideRight
                 textStyle: "bodyStrong"
-                text: Speech.paused ? "Pausiert · " + Speech.status : (Speech.status !== "" ? "Vorlesen · " + Speech.status : "Vorlesen …")
+                text: I18n.tr(Speech.paused ? "Pausiert · " + Speech.status : (Speech.status !== "" ? "Vorlesen · " + Speech.status : "Vorlesen …"), I18n.revision)
             }
             PIconButton {
                 objectName: "readerSpeechPause"
                 iconName: Speech.paused ? "play" : "pause"
-                tip: Speech.paused ? "Weiter" : "Pause"
+                tip: I18n.tr(Speech.paused ? "Weiter" : "Pause", I18n.revision)
                 onClicked: Speech.togglePause()
             }
             PComboBox {
                 objectName: "readerSpeechRate"
                 preferredWidth: 92
-                label: "Tempo"
-                tip: "Tempo"
+                label: I18n.tr("Tempo", I18n.revision)
+                tip: I18n.tr("Tempo", I18n.revision)
                 model: Speech.rates
                 textRole: "label"
                 valueRole: "value"
@@ -69,8 +69,8 @@ Item {
                 objectName: "readerSpeechVoice"
                 visible: Speech.voices.length > 1
                 preferredWidth: 200
-                label: "Stimme"
-                tip: "Stimme"
+                label: I18n.tr("Stimme", I18n.revision)
+                tip: I18n.tr("Stimme", I18n.revision)
                 model: Speech.voices
                 textRole: "name"
                 valueRole: "ident"
@@ -79,7 +79,7 @@ Item {
             }
             PButton {
                 objectName: "readerSpeechStop"
-                text: "Beenden"
+                text: I18n.tr("Beenden", I18n.revision)
                 onClicked: Speech.stop()
             }
         }

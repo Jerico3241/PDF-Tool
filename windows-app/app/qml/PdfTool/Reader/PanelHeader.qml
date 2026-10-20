@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Kopf einer Reader-Seitenleiste – in allen Leisten gleich aufgebaut: Titel links (wechselt weich),
 // Zusätze wie eine Anzahl daneben, rechts die Umschalter dieser Leiste (PanelTabs) und Schließen;
@@ -28,7 +29,7 @@ Item {
             objectName: "readerPanelTitle"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: root.title
+            text: I18n.tr(root.title, I18n.revision)
             font: Typography.bodyStrong
         }
         RowLayout { id: trailing; spacing: Metrics.s4 }
@@ -45,7 +46,7 @@ Item {
             implicitWidth: Metrics.readerPanelTab
             implicitHeight: Metrics.readerPanelTab
             iconName: "dismiss"
-            tip: "Seitenleiste schließen"
+            tip: I18n.tr("Seitenleiste schließen", I18n.revision)
             onClicked: root.closeRequested()
         }
     }

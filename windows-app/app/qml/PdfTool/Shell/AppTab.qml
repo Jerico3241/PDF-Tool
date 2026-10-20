@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Templates as T
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Ein Tab der Leiste oben: ⌂ Start, ein Werkzeug oder ein Dokument. Der aktive Tab hat die Farbe der
 // Inhaltsebene und geht nahtlos in sie über (wie Tabs in Windows 11); die übrigen liegen auf dem Hintergrund,
@@ -38,7 +39,7 @@ T.AbstractButton {
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
     Accessible.role: Accessible.PageTab
-    Accessible.name: (iconOnly ? tooltip : title) + (unsaved ? " (ungespeichert)" : "")
+    Accessible.name: I18n.tr((iconOnly ? tooltip : title) + (unsaved ? " (ungespeichert)" : ""), I18n.revision)
     Accessible.selected: active
     Keys.onReturnPressed: clicked()
     Keys.onSpacePressed: clicked()
@@ -97,7 +98,7 @@ T.AbstractButton {
                 id: label
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
-                text: tab.title
+                text: I18n.tr(tab.title, I18n.revision)
                 tone: tab.active ? "primary" : "secondary"
                 elide: tab.elideMode
                 visible: !tab.iconOnly
@@ -121,7 +122,7 @@ T.AbstractButton {
                 implicitHeight: 24
                 visible: tab.closable && (!tab.narrow || tab.active || tab.hovered)
                 iconName: "dismiss"
-                tip: tab.closeTip
+                tip: I18n.tr(tab.closeTip, I18n.revision)
                 focusPolicy: Qt.NoFocus
                 onClicked: tab.closeRequested()
             }
@@ -129,7 +130,7 @@ T.AbstractButton {
     }
 
     PToolTip {
-        text: tab.tooltip
+        text: I18n.tr(tab.tooltip, I18n.revision)
         visible: tab.hovered && tab.tooltip !== "" && (tab.iconOnly || tab.tooltip !== tab.title)
         y: parent.height + 6
     }

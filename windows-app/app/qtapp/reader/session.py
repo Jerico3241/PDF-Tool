@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, compare, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, compare, convert, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
@@ -731,6 +731,10 @@ class Session:
     def export_images(self, indexes: list[int], folder: str, stem: str, fmt: str, dpi: int) -> list[str]:
         return [str(path) for path in export.export_pages(self.document, indexes, folder, stem, fmt=fmt, dpi=dpi)]
 
+    def convert(self, fmt: str, target: str, indexes: list[int]) -> convert.Result:
+        """In Word, Excel oder Text umwandeln (neue Datei ``target``)."""
+        return convert.convert(self.document, target, fmt, indexes)
+
     # Eigenschaften ---------------------------------------------------------------------------------------------
     def properties(self) -> dict:
         """Eigenschaften für den Dialog: bearbeitbare Felder und fertige Angaben (nur Struktur)."""
@@ -811,6 +815,35 @@ class Session:
 
     def marks_present(self) -> dict:
         return pagemarks.present(self.document)
+
+    # Digitale Signaturen (seit 4.0 Beta 6) ---------------------------------------------------------------------
+    def file_bytes(self) -> bytes:
+        """Die Datei, wie sie gespeichert ist – signiert und geprüft wird immer die gespeicherte Fassung."""
+        path = self.document.path
+        if not path:
+            raise EditorError("Das Dokument ist noch nicht gespeichert.")
+        return Path(path).read_bytes()
+
+    def sign_copy(self, target: str, signer_spec: dict, options: dict) -> dict:
+        from tools.pdf_editor import digsig
+
+        signer = make_signer(signer_spec)
+        try:
+            data = digsig.sign_pdf(self.file_bytes(), signer, digsig.SignOptions(
+                reason=str(options.get("reason") or ""), location=str(options.get("location") or ""),
+                visible_page=int(options.get("visiblePage", -1)) if options.get("visible") else -1,
+            ))
+        finally:
+            close = getattr(signer, "close", None)
+            if close is not None:
+                close()
+        save.write_copy(self.document, data, Path(target))
+        return {"path": str(target), "signer": digsig.cert_info(signer.certificate).subject}
+
+    def verify_signatures(self) -> list[dict]:
+        from tools.pdf_editor import digsig
+
+        return [digsig.summary(report) for report in digsig.verify_pdf(self.file_bytes())]
 
     def add_header_footer(self, spec: dict) -> dict:
         items = [pagemarks.TextMark(str(text), position) for position, text in (spec.get("items") or {}).items() if position in pagemarks.POSITIONS and str(text).strip()]
@@ -1047,3 +1080,21 @@ def _text_style(style: dict | None):
         underline=bool(style["underline"]) if style.get("underline") is not None else None,
         strike=bool(style["strike"]) if style.get("strike") is not None else None,
     )
+
+
+def make_signer(spec: dict):
+    """Signierer aus der Auswahl im Dialog: Zertifikat aus Windows (Fingerabdruck) oder Datei mit Kennwort."""
+    from tools.pdf_editor import digsig
+
+    if spec.get("file"):
+        try:
+            data = Path(str(spec["file"])).read_bytes()
+        except OSError as exc:
+            raise digsig.SignError("Die Zertifikatsdatei lässt sich nicht lesen.") from exc
+        return digsig.FileSigner(data, str(spec.get("password") or ""))
+    if digsig.TEST_SIGNER is not None:
+        return digsig.TEST_SIGNER(str(spec.get("thumbprint") or ""))
+    from tools.pdf_editor import winsign
+
+    return winsign.StoreSigner(str(spec.get("thumbprint") or ""))
+

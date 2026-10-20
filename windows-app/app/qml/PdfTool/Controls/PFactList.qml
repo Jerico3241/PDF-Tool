@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // Angaben als Zeilen »Beschriftung · Wert« – ``facts``: Liste aus {label, value, tone}.
 ColumnLayout {
@@ -15,7 +16,7 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: 12
             PText {
-                text: modelData.label || ""
+                text: I18n.tr(modelData.label || "", I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 Layout.preferredWidth: root.labelWidth
@@ -23,7 +24,7 @@ ColumnLayout {
                 Layout.topMargin: 2
             }
             PText {
-                text: modelData.value || ""
+                text: I18n.tr(modelData.value || "", I18n.revision)
                 tone: modelData.tone === "caution" ? "warning" : (modelData.tone === "muted" ? "secondary" : (modelData.tone || ""))
                 wrap: true
                 Layout.fillWidth: true

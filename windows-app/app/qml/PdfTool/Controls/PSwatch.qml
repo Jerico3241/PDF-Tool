@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Farbfeld (Akzentfarben, Schriftfarben) mit Auswahlrahmen und Tooltip.
 T.AbstractButton {
@@ -15,7 +16,7 @@ T.AbstractButton {
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.RadioButton
-    Accessible.name: tip
+    Accessible.name: I18n.tr(tip, I18n.revision)
     Accessible.checked: selected
 
     background: Item {
@@ -46,7 +47,7 @@ T.AbstractButton {
         PFocusRing { visible: control.visualFocus; inset: -2 }
     }
     PToolTip {
-        text: control.tip
+        text: I18n.tr(control.tip, I18n.revision)
         visible: control.tip !== "" && control.hovered
     }
 }

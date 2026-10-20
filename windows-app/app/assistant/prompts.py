@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .text import Passage, excerpt_block
+from .text import Passage, excerpt_block, library_block
 
 QUESTION_CHARS = 9000  # Auszüge für eine Frage (rund 2800 Tokens)
 SUMMARY_PART_CHARS = 12000  # ein Teil einer Zusammenfassung (rund 3800 Tokens)
@@ -30,6 +30,23 @@ SYSTEM = (
 )
 
 
+LIBRARY_SYSTEM = (
+    "Du bist der Assistent im Programm PDF Tool. Du hilfst beim Durchsuchen mehrerer PDF-Dateien, die der Benutzer "
+    "gewählt hat. Du kennst von den Dateien nur die Auszüge in der Nachricht; jeder Auszug beginnt mit Datei und "
+    "Seite, etwa [Datei 2 »Vertrag.pdf«, Seite 3]. Antworte ausschließlich anhand dieser Auszüge – erfinde nichts und "
+    "ergänze kein Wissen von außen. Steht die Antwort nicht in den Auszügen, sage das ausdrücklich. Nenne nach jeder "
+    "Aussage die Quelle in Klammern, etwa (Datei 2, S. 3). Antworte auf Deutsch, sachlich und knapp; Zahlen, Beträge, "
+    "Daten und Fristen genau wie in den Dateien."
+)
+TRANSLATE_PART_CHARS = 2400  # ein Stück einer Übersetzung (rund 750 Tokens hin, etwas mehr zurück)
+# Zielsprachen der Übersetzung: Schlüssel → (Anzeige, Sprache im Auftrag an das Modell)
+LANGUAGES = {
+    "en": ("Englisch", "Englische"), "de": ("Deutsch", "Deutsche"), "fr": ("Französisch", "Französische"),
+    "es": ("Spanisch", "Spanische"), "it": ("Italienisch", "Italienische"), "nl": ("Niederländisch", "Niederländische"),
+    "pl": ("Polnisch", "Polnische"), "pt": ("Portugiesisch", "Portugiesische"), "tr": ("Türkisch", "Türkische"),
+}
+
+
 @dataclass(frozen=True)
 class SummaryPlan:
     parts: list[list[Passage]]  # je Teil die Abschnitte
@@ -43,6 +60,51 @@ def question_messages(question: str, excerpts: list[Passage]) -> list[dict]:
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": f"Auszüge aus dem Dokument:\n<<<\n{text}\n>>>\n\nFrage: {question.strip()}"},
     ]
+
+
+def library_messages(question: str, excerpts: list[Passage], names: list[str]) -> list[dict]:
+    text = library_block(excerpts, names) if excerpts else "(Die Dateien enthalten keinen lesbaren Text.)"
+    return [
+        {"role": "system", "content": LIBRARY_SYSTEM},
+        {"role": "user", "content": f"Auszüge aus den Dateien:\n<<<\n{text}\n>>>\n\nFrage: {question.strip()}"},
+    ]
+
+
+def translate_messages(text: str, language: str) -> list[dict]:
+    """Ein Stück Text übersetzen – nur die Übersetzung, Absätze wie im Original."""
+    target = LANGUAGES[language][1]
+    return [
+        {"role": "system", "content": (
+            f"Du bist ein Übersetzer. Übersetze den Text des Benutzers vollständig und genau ins {target}. Gib nur die "
+            "Übersetzung aus – ohne Einleitung, Erklärung oder Anmerkungen. Behalte Absätze, Aufzählungen, Zahlen, "
+            "Beträge, Daten, Namen und Abkürzungen bei. Ist der Text schon in der Zielsprache, gib ihn unverändert aus.")},
+        {"role": "user", "content": text},
+    ]
+
+
+def translation_parts(text: str, size: int = TRANSLATE_PART_CHARS) -> list[str]:
+    """Seitentext in Stücke für die Übersetzung: an Absätzen, zu lange Absätze an Satzgrenzen."""
+    from .text import _split_long
+
+    parts: list[str] = []
+    current = ""
+    for paragraph in [p.strip() for p in text.split("\n\n") if p.strip()]:
+        pieces = [paragraph] if len(paragraph) <= size else _split_long(paragraph, size)
+        for piece in pieces:
+            if current and len(current) + 2 + len(piece) > size:
+                parts.append(current)
+                current = ""
+            current = f"{current}\n\n{piece}" if current else piece
+    if current:
+        parts.append(current)
+    return parts
+
+
+def translation_tokens(text: str) -> int:
+    """Antwortlänge für ein Stück: großzügig, Übersetzungen werden oft länger als das Original."""
+    from .text import estimate_tokens
+
+    return max(200, int(estimate_tokens(text) * 1.6) + 64)
 
 
 def plan_summary(items: list[Passage]) -> SummaryPlan:

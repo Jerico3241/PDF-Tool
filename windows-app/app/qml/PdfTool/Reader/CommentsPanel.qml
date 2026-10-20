@@ -24,8 +24,8 @@ ColumnLayout {
         Layout.fillHeight: true
         visible: root.doc !== null && root.doc.annotationList.count === 0
         iconName: "comment"
-        title: "Noch keine Kommentare"
-        text: "Markieren, Notizen und Formen über »Kommentieren« und »Zeichnen« in der Befehlsleiste."
+        title: I18n.tr("Noch keine Kommentare", I18n.revision)
+        text: I18n.tr("Markieren, Notizen und Formen über »Kommentieren« und »Zeichnen« in der Befehlsleiste.", I18n.revision)
     }
     ListView {
         id: list
@@ -41,7 +41,7 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         T.ScrollBar.vertical: PScrollBar {}
         Accessible.role: Accessible.List
-        Accessible.name: "Kommentare"
+        Accessible.name: I18n.tr("Kommentare", I18n.revision)
 
         delegate: Item {
             id: row
@@ -61,7 +61,7 @@ ColumnLayout {
             width: list.width
             height: body.implicitHeight + 16
             Accessible.role: Accessible.ListItem
-            Accessible.name: label + ", Seite " + (page + 1)
+            Accessible.name: I18n.tr(label + ", Seite " + (page + 1), I18n.revision)
 
             PListItem {
                 anchors.fill: parent
@@ -92,15 +92,15 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
                     Rectangle { Layout.preferredWidth: 10; Layout.preferredHeight: 10; radius: 5; color: row.color !== "" ? row.color : Theme.neutral; border.color: Theme.border }
-                    PText { text: row.depth > 0 ? "Antwort" : row.label + " · Seite " + (row.page + 1); textStyle: "caption"; tone: "secondary"; Layout.fillWidth: true }
-                    PIconButton { objectName: "readerCommentReply"; implicitWidth: 28; implicitHeight: 28; iconName: "comment"; tip: "Antworten"; visible: row.depth === 0 && !row.editing && !row.replying && row.subtype !== "/Link"; onClicked: { root.replyingKey = row.key; replyEditor.text = ""; replyEditor.area.forceActiveFocus() } }
-                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "edit"; tip: "Text ändern"; visible: !row.editing && row.subtype !== "/Link"; onClicked: { root.editingKey = row.key; editor.text = row.contents; editor.area.forceActiveFocus() } }
-                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "delete"; tip: "Kommentar löschen"; visible: !row.editing; onClicked: root.doc.deleteAnnotation(row.key) }
+                    PText { text: I18n.tr(row.depth > 0 ? "Antwort" : row.label + " · Seite " + (row.page + 1), I18n.revision); textStyle: "caption"; tone: "secondary"; Layout.fillWidth: true }
+                    PIconButton { objectName: "readerCommentReply"; implicitWidth: 28; implicitHeight: 28; iconName: "comment"; tip: I18n.tr("Antworten", I18n.revision); visible: row.depth === 0 && !row.editing && !row.replying && row.subtype !== "/Link"; onClicked: { root.replyingKey = row.key; replyEditor.text = ""; replyEditor.area.forceActiveFocus() } }
+                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "edit"; tip: I18n.tr("Text ändern", I18n.revision); visible: !row.editing && row.subtype !== "/Link"; onClicked: { root.editingKey = row.key; editor.text = row.contents; editor.area.forceActiveFocus() } }
+                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "delete"; tip: I18n.tr("Kommentar löschen", I18n.revision); visible: !row.editing; onClicked: root.doc.deleteAnnotation(row.key) }
                 }
                 PText {
                     Layout.fillWidth: true
                     visible: !row.editing && row.contents !== ""
-                    text: row.contents
+                    text: I18n.tr(row.contents, I18n.revision)
                     wrap: true
                     maximumLineCount: 6
                     elide: Text.ElideRight
@@ -111,13 +111,13 @@ ColumnLayout {
                     visible: row.editing
                     minLines: 2
                     maxLines: 8
-                    label: "Kommentartext"
+                    label: I18n.tr("Kommentartext", I18n.revision)
                 }
                 RowLayout {
                     visible: row.editing
                     Layout.alignment: Qt.AlignRight
-                    PButton { text: "Abbrechen"; onClicked: root.editingKey = "" }
-                    PButton { kind: "accent"; text: "Speichern"; onClicked: { root.doc.updateAnnotation(row.key, editor.text, ""); root.editingKey = "" } }
+                    PButton { text: I18n.tr("Abbrechen", I18n.revision); onClicked: root.editingKey = "" }
+                    PButton { kind: "accent"; text: I18n.tr("Speichern", I18n.revision); onClicked: { root.doc.updateAnnotation(row.key, editor.text, ""); root.editingKey = "" } }
                 }
                 PTextArea {
                     id: replyEditor
@@ -126,18 +126,18 @@ ColumnLayout {
                     visible: row.replying
                     minLines: 2
                     maxLines: 6
-                    label: "Antwort"
+                    label: I18n.tr("Antwort", I18n.revision)
                 }
                 RowLayout {
                     visible: row.replying
                     Layout.alignment: Qt.AlignRight
-                    PButton { text: "Abbrechen"; onClicked: root.replyingKey = "" }
-                    PButton { objectName: "readerCommentReplySend"; kind: "accent"; text: "Antworten"; enabled: replyEditor.text.trim() !== ""; onClicked: { root.doc.replyAnnotation(row.key, replyEditor.text); root.replyingKey = "" } }
+                    PButton { text: I18n.tr("Abbrechen", I18n.revision); onClicked: root.replyingKey = "" }
+                    PButton { objectName: "readerCommentReplySend"; kind: "accent"; text: I18n.tr("Antworten", I18n.revision); enabled: replyEditor.text.trim() !== ""; onClicked: { root.doc.replyAnnotation(row.key, replyEditor.text); root.replyingKey = "" } }
                 }
                 PText {
                     Layout.fillWidth: true
                     visible: row.author !== "" || row.modified !== ""
-                    text: [row.author, row.modified].filter(function(v) { return v !== "" }).join(" · ")
+                    text: I18n.tr([row.author, row.modified].filter(function(v) { return v !== "" }).join(" · "), I18n.revision)
                     textStyle: "caption"
                     tone: "tertiary"
                     elide: Text.ElideRight

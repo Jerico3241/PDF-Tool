@@ -9,7 +9,7 @@ Item {
     id: bar
     implicitHeight: Metrics.statusBarHeight
     Accessible.role: Accessible.StatusBar
-    Accessible.name: App.statusText
+    Accessible.name: I18n.tr(App.statusText, I18n.revision)
 
     Rectangle {
         anchors.left: parent.left
@@ -54,7 +54,7 @@ Item {
             id: status
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: App.statusText
+            text: I18n.tr(App.statusText, I18n.revision)
             font: Typography.caption
             color: Theme.textSecondary
             // Gekürzte Meldung: vollständig als Tooltip (wie bis 2.6.1)
@@ -65,14 +65,14 @@ Item {
                 acceptedButtons: Qt.NoButton
             }
             PToolTip {
-                text: App.statusText
+                text: I18n.tr(App.statusText, I18n.revision)
                 visible: statusHover.containsMouse && status.truncated
             }
         }
         Text {
             // Tastenhinweise behalten ihren Platz (wie 2.6.1) – gekürzt wird die Meldung links
             Layout.minimumWidth: implicitWidth
-            text: App.hint
+            text: I18n.tr(App.hint, I18n.revision)
             font: Typography.caption
             color: Theme.textTertiary
             elide: Text.ElideLeft

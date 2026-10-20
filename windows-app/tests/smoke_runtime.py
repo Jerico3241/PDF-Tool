@@ -101,6 +101,8 @@ def main() -> int:
     import PySide6
     from PySide6 import QtCore, QtGui, QtNetwork, QtPrintSupport, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
     import comtypes.client  # noqa: F401 - Scannen (WIA)
+    import asn1crypto.cms  # noqa: F401 - digitale Signatur (CMS)
+    from cryptography.hazmat.primitives.serialization import pkcs12  # noqa: F401 - digitale Signatur (.pfx)
     import fontTools
     import numpy
     import openpyxl

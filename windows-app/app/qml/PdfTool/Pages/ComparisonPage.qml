@@ -10,13 +10,13 @@ import PdfTool.Controls
 PListPage {
     id: page
     objectName: "comparisonPage"
-    title: "Vertragsübersichten"
-    subtitle: "Vertragsvergleich: was sich seit einem gespeicherten Stand dieses Kunden geändert hat."
+    title: I18n.tr("Vertragsübersichten", I18n.revision)
+    subtitle: I18n.tr("Vertragsvergleich: was sich seit einem gespeicherten Stand dieses Kunden geändert hat.", I18n.revision)
     readonly property QtObject view: Comparison.single
     readonly property bool hasComparison: view.mode === "comparison"
     model: hasComparison ? view.changeModel : null
     Accessible.role: Accessible.List
-    Accessible.name: "Vertragsänderungen"
+    Accessible.name: I18n.tr("Vertragsänderungen", I18n.revision)
     Keys.onReturnPressed: toggleCurrent()
     Keys.onEnterPressed: toggleCurrent()
     Keys.onSpacePressed: toggleCurrent()
@@ -43,17 +43,17 @@ PListPage {
                 width: parent.width - 48
                 spacing: 4
                 PIcon { name: "branch_compare"; size: Metrics.iconSizeLarge; color: Theme.textSecondary }
-                PText { text: "Noch kein Vergleich"; textStyle: "bodyStrong"; Layout.topMargin: 6 }
-                PText { text: "Der Vergleich erscheint, sobald in »Übersicht erstellen« eine geprüfte Excel-Liste und eine Kundenakte vorliegen."; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-                PButton { kind: "accent"; iconName: "document"; text: "Zu »Übersicht erstellen«"; Layout.topMargin: 10; onClicked: App.navigate("create") }
+                PText { text: I18n.tr("Noch kein Vergleich", I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 6 }
+                PText { text: I18n.tr("Der Vergleich erscheint, sobald in »Übersicht erstellen« eine geprüfte Excel-Liste und eine Kundenakte vorliegen.", I18n.revision); tone: "secondary"; wrap: true; Layout.fillWidth: true }
+                PButton { kind: "accent"; iconName: "document"; text: I18n.tr("Zu »Übersicht erstellen«", I18n.revision); Layout.topMargin: 10; onClicked: App.navigate("create") }
             }
         }
         PCard {
             Layout.fillWidth: true
             visible: Comparison.visible
-            title: "Vertragsänderungen"
+            title: I18n.tr("Vertragsänderungen", I18n.revision)
             iconName: "history"
-            subtitle: "Vergleich mit einem gespeicherten Vertragsstand dieses Kunden – nur zur Kontrolle, die PDF bleibt unverändert."
+            subtitle: I18n.tr("Vergleich mit einem gespeicherten Vertragsstand dieses Kunden – nur zur Kontrolle, die PDF bleibt unverändert.", I18n.revision)
             ComparisonHead { Layout.fillWidth: true; view: page.view }
         }
         Item { implicitHeight: page.hasComparison && page.count > 0 ? 12 : 0 }

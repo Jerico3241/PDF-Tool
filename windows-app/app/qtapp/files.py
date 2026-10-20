@@ -7,12 +7,24 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from appstate import desktop_dir
+from i18n import tr
 
 import winsys
 
 EXCEL_FILTER = "Excel (*.xlsx *.xlsm *.xls);;Alle Dateien (*.*)"
 IMAGE_FILTER = "Bilder (*.png *.jpg *.jpeg *.webp);;Alle Dateien (*.*)"
 PDF_FILTER = "PDF (*.pdf);;Alle Dateien (*.*)"
+
+
+
+def _filters(filters: str) -> str:
+    """Dateitypen in der Sprache der Oberfläche (»Alle Dateien (*.*)« → »All files (*.*)«)."""
+    parts = []
+    for part in filters.split(";;"):
+        name, bracket, patterns = part.partition(" (")
+        parts.append(tr(name) + bracket + patterns)
+    return ";;".join(parts)
+
 
 # Tests: Antworten der Dateiauswahl vorgeben (Liste wird von vorn abgearbeitet); ``None`` = echter Dialog.
 RESPONSES: list | None = None
@@ -42,7 +54,7 @@ def open_file(title: str, directory: str, filters: str) -> str:
         return str(answer)
     from PySide6.QtWidgets import QFileDialog
 
-    path, _filter = QFileDialog.getOpenFileName(None, title, directory, filters)
+    path, _filter = QFileDialog.getOpenFileName(None, tr(title), directory, _filters(filters))
     return path or ""
 
 
@@ -52,7 +64,7 @@ def open_files(title: str, directory: str, filters: str) -> list[str]:
         return [str(p) for p in (answer if isinstance(answer, (list, tuple)) else [answer])]
     from PySide6.QtWidgets import QFileDialog
 
-    paths, _filter = QFileDialog.getOpenFileNames(None, title, directory, filters)
+    paths, _filter = QFileDialog.getOpenFileNames(None, tr(title), directory, _filters(filters))
     return list(paths or [])
 
 
@@ -63,7 +75,7 @@ def save_file(title: str, suggestion: str, filters: str) -> str:
         return str(answer)
     from PySide6.QtWidgets import QFileDialog
 
-    path, _filter = QFileDialog.getSaveFileName(None, title, suggestion, filters)
+    path, _filter = QFileDialog.getSaveFileName(None, tr(title), suggestion, _filters(filters))
     return path or ""
 
 
@@ -73,7 +85,7 @@ def pick_folder(title: str, directory: str) -> str:
         return str(answer)
     from PySide6.QtWidgets import QFileDialog
 
-    return QFileDialog.getExistingDirectory(None, title, directory) or ""
+    return QFileDialog.getExistingDirectory(None, tr(title), directory) or ""
 
 
 def open_path(path: str | Path) -> None:

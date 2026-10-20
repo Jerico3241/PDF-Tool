@@ -22,8 +22,8 @@ ColumnLayout {
         Layout.fillHeight: true
         visible: root.doc !== null && root.doc.attachmentCount === 0
         iconName: "attach"
-        title: "Keine Anhänge"
-        text: "Dieses PDF enthält keine angehängten Dateien. Über »Datei anhängen« lässt sich eine Datei hinzufügen."
+        title: I18n.tr("Keine Anhänge", I18n.revision)
+        text: I18n.tr("Dieses PDF enthält keine angehängten Dateien. Über »Datei anhängen« lässt sich eine Datei hinzufügen.", I18n.revision)
     }
     ListView {
         id: list
@@ -42,7 +42,7 @@ ColumnLayout {
         activeFocusOnTab: true
         T.ScrollBar.vertical: PScrollBar {}
         Accessible.role: Accessible.List
-        Accessible.name: "Anhänge"
+        Accessible.name: I18n.tr("Anhänge", I18n.revision)
 
         delegate: Item {
             id: row
@@ -57,7 +57,7 @@ ColumnLayout {
             width: list.width
             height: body.implicitHeight + 16
             Accessible.role: Accessible.ListItem
-            Accessible.name: name + (sizeText !== "" ? ", " + sizeText : "")
+            Accessible.name: I18n.tr(name + (sizeText !== "" ? ", " + sizeText : ""), I18n.revision)
 
             PListItem {
                 anchors.fill: parent
@@ -84,14 +84,14 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
                     PIcon { name: "attach"; color: Theme.textSecondary; size: 16 }
-                    PText { text: row.name; Layout.fillWidth: true; elide: Text.ElideMiddle }
-                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "open"; tip: row.openable ? "Öffnen" : "Dieser Dateityp wird nicht geöffnet – nur speichern"; enabled: row.openable; onClicked: root.doc.openAttachment(row.key) }
-                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "save"; tip: "Speichern unter …"; onClicked: root.doc.saveAttachment(row.key) }
+                    PText { text: I18n.tr(row.name, I18n.revision); Layout.fillWidth: true; elide: Text.ElideMiddle }
+                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "open"; tip: I18n.tr(row.openable ? "Öffnen" : "Dieser Dateityp wird nicht geöffnet – nur speichern", I18n.revision); enabled: row.openable; onClicked: root.doc.openAttachment(row.key) }
+                    PIconButton { implicitWidth: 28; implicitHeight: 28; iconName: "save"; tip: I18n.tr("Speichern unter …", I18n.revision); onClicked: root.doc.saveAttachment(row.key) }
                     PIconButton {
                         implicitWidth: 28
                         implicitHeight: 28
                         iconName: "delete"
-                        tip: "Anhang entfernen"
+                        tip: I18n.tr("Anhang entfernen", I18n.revision)
                         visible: row.page < 0 && root.canEdit
                         onClicked: root.doc.removeAttachment(row.key)
                     }
@@ -99,7 +99,7 @@ ColumnLayout {
                 PText {
                     Layout.fillWidth: true
                     visible: row.description !== ""
-                    text: row.description
+                    text: I18n.tr(row.description, I18n.revision)
                     wrap: true
                     maximumLineCount: 3
                     elide: Text.ElideRight
@@ -107,7 +107,7 @@ ColumnLayout {
                 }
                 PText {
                     Layout.fillWidth: true
-                    text: [row.sizeText, row.modified, row.page >= 0 ? "auf Seite " + (row.page + 1) : ""].filter(function(v) { return v !== "" }).join(" · ")
+                    text: I18n.tr([row.sizeText, row.modified, row.page >= 0 ? "auf Seite " + (row.page + 1) : ""].filter(function(v) { return v !== "" }).join(" · "), I18n.revision)
                     visible: text !== ""
                     textStyle: "caption"
                     tone: "tertiary"
@@ -124,7 +124,7 @@ ColumnLayout {
         Layout.margins: Metrics.s12
         visible: root.canEdit
         iconName: "add"
-        text: "Datei anhängen …"
+        text: I18n.tr("Datei anhängen …", I18n.revision)
         onClicked: root.doc.addAttachment()
     }
 }

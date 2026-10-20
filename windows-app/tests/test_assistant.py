@@ -336,3 +336,45 @@ def test_release_check_finds_an_incomplete_ai_runtime(tmp_path: Path) -> None:
         backend.unlink()
     assert "Keine Rechenwerke in ai/ (ggml-cpu-*.dll)" in release_check.check_ai(tmp_path / "payload")
     assert release_check.check_ai(tmp_path / "leer") == ["KI-Laufzeit fehlt im Paket: ai/llama-server.exe"]
+
+
+# --- 4.0 Beta 6: mehrere PDFs, Übersetzen ---------------------------------------------------------------------------
+def test_sources_in_answers_about_several_pdfs() -> None:
+    from assistant import text as doctext
+
+    answer = "Die Frist beträgt drei Monate (Datei 2, S. 4). Laut Datei 1 »A.pdf«, Seiten 1 und 2 gilt **das**. Datei 9, S. 1 gibt es nicht."
+    assert doctext.cited_sources(answer, [3, 5]) == [(1, 4), (0, 1), (0, 2)]
+    rich = doctext.rich(answer, 0, ["A.pdf", "B & C.pdf"], [3, 5])
+    assert '(B &amp; C.pdf, S. <a href="src:1:4">4</a>)' in rich and 'A.pdf, S. <a href="src:0:1">1</a>, <a href="src:0:2">2</a>' in rich
+    assert "Datei 9, S. 1" in rich and "page:" not in rich  # ohne Datei keine Seitenverweise
+
+
+def test_translation_parts_keep_paragraphs() -> None:
+    from assistant import prompts
+
+    text = "\n\n".join(f"Absatz {i}. " + "Wort " * 60 for i in range(10))
+    parts = prompts.translation_parts(text, size=700)
+    assert len(parts) > 1 and all(len(part) <= 700 for part in parts)
+    assert "\n\n".join(parts).split("\n\n") == [p.strip() for p in text.split("\n\n")]
+    assert prompts.translation_tokens("x" * 3200) >= 1600
+
+
+def test_library_reads_folders_and_names_unreadable_files(tmp_path) -> None:
+    from reportlab.pdfgen import canvas
+
+    from assistant import library
+
+    (tmp_path / "unter").mkdir()
+    for name, text in (("a.pdf", "Erste Datei mit genug Text für eine Seite."), ("unter/b.pdf", "Zweite Datei, auch mit genug Text.")):
+        c = canvas.Canvas(str(tmp_path / name))
+        c.drawString(72, 700, text)
+        c.showPage()
+        c.save()
+    (tmp_path / "kaputt.pdf").write_bytes(b"%PDF-1.7 nichts")
+    (tmp_path / "notiz.txt").write_text("kein PDF")
+    found = library.collect([str(tmp_path)])
+    assert [path.name for path in found] == ["a.pdf", "kaputt.pdf", "b.pdf"]
+    result = library.read(found)
+    assert [path.name for path in result.files] == ["a.pdf", "b.pdf"] and result.unreadable == ["kaputt.pdf"]
+    assert {item.source for item in result.items} == {0, 1} and result.page_counts == [1, 1]
+    assert result.label == "2 PDFs"

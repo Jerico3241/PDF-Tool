@@ -79,7 +79,7 @@ Flickable {
     pixelAligned: true
     activeFocusOnTab: true
     Accessible.role: Accessible.Pane
-    Accessible.name: doc ? "Dokument " + doc.name : "Dokument"
+    Accessible.name: I18n.tr(doc ? "Dokument " + doc.name : "Dokument", I18n.revision)
     T.ScrollBar.vertical: PScrollBar { id: vbar }
     T.ScrollBar.horizontal: PScrollBar { id: hbar }
 
