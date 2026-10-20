@@ -483,7 +483,7 @@ def main() -> int:
     engine = editor_ocr.find_engine()
     check(engine is not None, "Texterkennung: keine Engine gefunden (ocr\\tesseract.exe)")
     check(engine.executable.parent == (app_dir.parent / "ocr").resolve(), f"Texterkennung: nicht die gebündelte Engine ({engine.executable})")
-    check({"deu", "eng"} <= set(engine.languages) and engine.orientation, f"Texterkennung: Sprachdaten {engine.languages}")
+    check({"deu", "eng", "fra", "ita", "spa", "nld", "por", "pol", "tur", "rus"} <= set(engine.languages) and engine.orientation, f"Texterkennung: Sprachdaten {engine.languages}")
     scan = write_scan_pdf(work / "editor-scan.pdf")
     dokument = EditorDocument.open(str(scan))
     try:

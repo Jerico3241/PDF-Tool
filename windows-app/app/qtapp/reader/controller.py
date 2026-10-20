@@ -1644,7 +1644,7 @@ class ReaderController(Observable):
         def found(engine) -> None:
             _OCR_PROBE["done"], _OCR_PROBE["engine"] = True, engine
             self._ocr_engine = engine
-            self.ocrLanguages = [{"code": code, "label": ocr.language_label(code)} for code in engine.languages] if engine is not None else []
+            self.ocrLanguages = [{"code": code, "label": ocr.language_label(code)} for code in ocr.display_order(engine.languages)] if engine is not None else []
             self.ocrState = "bereit" if engine is not None else "fehlt"
             if engine is None:
                 _log("ocr").info("Texterkennung: keine Engine gefunden")

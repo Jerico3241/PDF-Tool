@@ -183,6 +183,12 @@ def language_label(code: str) -> str:
     return LANGUAGE_NAMES.get(code, code)
 
 
+def display_order(codes) -> list[str]:
+    """Reihenfolge der Auswahl: Deutsch und Englisch vorn, danach nach Anzeigename."""
+    first = [code for code in ("deu", "eng") if code in codes]
+    return first + sorted((code for code in codes if code not in first), key=lambda code: language_label(code).casefold())
+
+
 def _executable_name() -> str:
     return "tesseract.exe" if os.name == "nt" else "tesseract"
 

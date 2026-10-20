@@ -40,7 +40,7 @@ SETUP_PREFIX = "PDF-Tool-Setup-"
 _CHECKSUM = re.compile(r"^(?P<hash>[0-9a-f]{64})  (?P<name>[^\r\n]+)\r?\n$")
 # Texterkennung im Paket (build.py, ``prepare_ocr``)
 OCR_DIR = "ocr"
-OCR_LANGUAGES = ("deu", "eng", "osd")
+OCR_LANGUAGES = ("deu", "eng", "osd", "fra", "ita", "spa", "nld", "por", "pol", "tur", "rus")
 OCR_FILES = ("LICENSE.txt", "tessdata/pdf.ttf")
 OCR_MIN_LANGUAGE_SIZE = 500_000  # kleinere Sprachdaten sind abgeschnitten (tessdata_fast: deu 1,5 MB)
 # DLLs, die Windows selbst mitbringt (System32) – alle anderen, die tesseract.exe lädt, müssen in ocr\ liegen

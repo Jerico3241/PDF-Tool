@@ -78,7 +78,7 @@ Versionsfunktion oder Versionstext); »–«: in der Datei nicht vermerkt.
 | Komponente (Datei in `ocr\`) | Version | Lizenz | Verwendet für | Quelle |
 | --- | --- | --- | --- | --- |
 | Tesseract OCR (`tesseract.exe`, `libtesseract-5.dll`, `tessdata\pdf.ttf`) | 5.5.3 (Build 5.5.3.20260724) | Apache-2.0 | Texterkennung, Text-only-PDF | https://github.com/tesseract-ocr/tesseract |
-| Sprachdaten `deu`, `eng`, `osd` (`tessdata\*.traineddata`, tessdata_fast) | Commit 87416418657359cb625c412a48b6e1d6d41c29bd | Apache-2.0 | Deutsch, Englisch, Lageerkennung | https://github.com/tesseract-ocr/tessdata_fast |
+| Sprachdaten `deu`, `eng`, `fra`, `ita`, `spa`, `nld`, `por`, `pol`, `tur`, `rus`, `osd` (`tessdata\*.traineddata`, tessdata_fast) | Commit 87416418657359cb625c412a48b6e1d6d41c29bd | Apache-2.0 | Deutsch, Englisch, Französisch, Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch, Russisch, Lageerkennung | https://github.com/tesseract-ocr/tessdata_fast |
 | Leptonica (`libleptonica-6.dll`) | 1.87.0 | BSD-2-Clause | Bildverarbeitung für Tesseract | http://www.leptonica.org |
 | GCC-Laufzeit (`libgcc_s_seh-1.dll`, `libstdc++-6.dll`) | GCC 14 (mingw-w64, POSIX-Threads) | GPL-3.0-or-later WITH GCC-exception-3.1 | C/C++-Laufzeit | https://gcc.gnu.org |
 | winpthreads (`libwinpthread-1.dll`) | – (mingw-w64) | MIT, Teile BSD-3-Clause | POSIX-Threads | https://www.mingw-w64.org |

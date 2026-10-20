@@ -163,6 +163,11 @@ def test_without_engine_find_engine_returns_none(tmp_path: Path, monkeypatch: py
     assert ocr.find_engine() is None
 
 
+def test_languages_are_offered_german_and_english_first() -> None:
+    assert ocr.display_order(("ces", "deu", "eng", "fra", "ita", "tur")) == ["deu", "eng", "fra", "ita", "ces", "tur"]
+    assert ocr.display_order(("rus", "pol")) == ["pol", "rus"]
+
+
 def test_installed_languages_come_from_the_tessdata_folder(tmp_path: Path) -> None:
     for name in ("deu.traineddata", "eng.traineddata", "osd.traineddata", "pdf.ttf", "x y.traineddata"):
         (tmp_path / name).write_bytes(b"-")
@@ -307,7 +312,7 @@ def test_release_check_finds_an_incomplete_ocr_bundle(tmp_path: Path) -> None:
     fake_pe(folder / "tesseract.exe", ["libtesseract-5.dll", "KERNEL32.dll"])
     fake_pe(folder / "libtesseract-5.dll", ["zlib1.dll", "msvcrt.dll"])
     fake_pe(folder / "zlib1.dll", ["KERNEL32.dll"])
-    for language in ("deu", "eng", "osd"):
+    for language in release_check.OCR_LANGUAGES:
         (folder / "tessdata" / f"{language}.traineddata").write_bytes(b"\0" * 600_000)
     (folder / "tessdata" / "pdf.ttf").write_bytes(b"\0" * 572)
     (folder / "LICENSE.txt").write_text("Apache License 2.0", encoding="utf-8")
