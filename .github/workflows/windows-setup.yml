@@ -92,7 +92,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.21.1 xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 fonttools==4.67.0 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
@@ -156,7 +156,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.19.0 xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.21.1 xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 fonttools==4.67.0 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
