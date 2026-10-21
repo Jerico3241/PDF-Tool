@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, Qt, Slot
 from PySide6.QtGui import QKeySequence
 
+import i18n
+
 from .base import Observable, prop
 
 CONFIG_KEY = "tastenkuerzel"
@@ -97,14 +99,22 @@ _EDITING = {
 }
 
 
+# … und auf einer englischen Oberfläche (seit 4.0 Beta 8: vorher stand dort »Strg+F1«)
+_ENGLISH_NAMES = {
+    "Meta": "Win", "Return": "Enter", "Enter": "Enter (numpad)", "PgUp": "Page Up", "PgDown": "Page Down", "Left": "←",
+    "Right": "→", "Up": "↑", "Down": "↓", "-": "−",
+}
+
+
 def display(sequence: str) -> str:
-    """»Ctrl+Shift+S« → »Strg+Umschalt+S«, »Ctrl++« → »Strg++«."""
+    """»Ctrl+Shift+S« → »Strg+Umschalt+S« (englische Oberfläche: »Ctrl+Shift+S«), »Ctrl++« → »Strg++«."""
     if not sequence:
         return ""
     if sequence == "+":
         return "+"
+    names = _ENGLISH_NAMES if i18n.language() == "en" else _NAMES
     parts = sequence[:-2].split("+") + ["+"] if sequence.endswith("++") else sequence.split("+")
-    return "+".join(_NAMES.get(part, part) for part in parts)
+    return "+".join(names.get(part, part) for part in parts)
 
 
 def normalize(sequence: str) -> str:
@@ -246,6 +256,10 @@ class ShortcutsController(Observable):
             self._custom.pop(key, None)
         else:
             self._custom[key] = list(sequences)
+
+    def refresh(self) -> None:
+        """Sprache umgeschaltet: Tastennamen neu (»Strg« ↔ »Ctrl«)."""
+        self._publish()
 
     def _publish(self) -> None:
         keys = {command.key: self.sequences(command.key) for command in COMMANDS}

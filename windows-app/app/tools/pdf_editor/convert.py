@@ -389,19 +389,25 @@ def number(text: str) -> tuple[float | None, str]:
     percent = value.endswith("%")
     currency = value.endswith("€") or value.startswith("€")
     value = value.strip("%€  ").replace("−", "-")
+    # Postleitzahl, Kundennummer (»01067«, »007«) und Telefonnummer (»+49 221 …«) bleiben Text
+    if value.startswith("+") or re.match(r"^-?0\d", value):
+        return None, ""
     if _NUMBER.match(value):
         decimals = len(value.split(",")[1]) if "," in value else 0
+        integer = value.split(",")[0]
         parsed = float(re.sub(r"[.   ]", "", value).replace(",", "."))
     elif _ENGLISH.match(value) and value.count(".") == 1:
         decimals = len(value.split(".")[1])
+        integer = value.split(".")[0]
         parsed = float(value.replace(",", ""))
     else:
         return None, ""
     places = "0" if not decimals else "0." + "0" * decimals
     if percent:
         return parsed / 100, places + "%"
-    grouped = "#,##" + places
-    return parsed, (grouped + ' "€"') if currency else (grouped if decimals or abs(parsed) >= 1000 else "General")
+    # Tausenderpunkte nur, wenn die Zahl sie schon hatte – eine Jahreszahl »2026« bleibt »2026«, nicht »2.026«
+    grouped = "#,##" + places if currency or not integer.lstrip("-+").isdigit() else places
+    return parsed, (grouped + ' "€"') if currency else (grouped if decimals or grouped != places else "General")
 
 
 _DATE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
@@ -476,6 +482,7 @@ def to_xlsx(layouts: list[PageLayout], numbers: list[int]) -> bytes:
                     cell.number_format = fmt
                 else:
                     cell.value = _CONTROL.sub("", text)
+                    cell.data_type = "s"  # Text wie »=== Summe ===« ist keine Formel
                 if line.bold:
                     cell.font = Font(bold=True)
                 if len(row) >= 2:  # lange Textzeilen dürfen über die Spalte hinauslaufen

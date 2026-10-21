@@ -89,3 +89,17 @@ def test_switch_to_english_in_settings_without_restart(ui_app, monkeypatch) -> N
     finally:
         language.setChoice("de")
     assert wait_until(lambda: card.property("title") == "Sprache", 5)
+
+
+def test_user_texts_stay_and_whole_messages_translate(english) -> None:
+    """Eigene Texte (Fragen, Datei- und Firmennamen) blieben bis 4.0 Beta 7 nicht unverändert (»Contract kündigen: …«),
+    zusammengesetzte Meldungen erschienen halb deutsch."""
+    for own in ("Vertrag kündigen: welche Frist?", "Vertrag Müller.pdf wurde gespeichert.", "Vertrag GmbH"):
+        assert i18n.tr(own) == own
+    assert i18n.tr("Vertrag 3") == "Contract 3" and i18n.tr("Seiten 1–3") == "Pages 1–3"
+    assert i18n.tr("Seiten 1–3 ins Französische übersetzen") == "Translate pages 1–3 into French"
+    assert i18n.tr("3 Seiten gespeichert als X.docx. Seite 2, 5 ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden.") == (
+        "3 pages saved as X.docx. Page 2, 5 without text was added as an image – for scans, run “Recognize text (OCR)” first.")
+    assert i18n.tr("Übersetzung ins Englische gespeichert: **a.pdf** (3 Seiten). 2 Seiten ohne Text blieben leer.") == (
+        "Translation into English saved: **a.pdf** (3 pages). 2 pages without text stayed empty.")
+    assert i18n.tr("Brief.docx wurde in PDF umgewandelt.") == "Brief.docx was converted to PDF."

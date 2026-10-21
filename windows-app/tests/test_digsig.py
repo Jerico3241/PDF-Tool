@@ -44,6 +44,24 @@ def test_sign_verify_and_detect_changes(tmp_path: Path, signer) -> None:
     assert digsig.verify_pdf(bytes(broken))[0].status == digsig.INVALID
 
 
+def test_signature_ending_in_a_zero_byte_stays_valid(tmp_path: Path, signer) -> None:
+    """/Contents ist mit Nullbytes aufgefüllt. Endete die Signatur selbst auf 0x00 (etwa jede 256.), schnitt die Prüfung
+    dieses Byte mit ab und meldete »Ungültig – beschädigt« (bis 4.0 Beta 7)."""
+    from asn1crypto import cms
+
+    source = samples.standard_text(tmp_path / "a.pdf", pages=1).read_bytes()
+    for number in range(3000):
+        signed = digsig.sign_pdf(source, signer, digsig.SignOptions(reason=f"Prüfung {number}"))
+        with pikepdf.open(io.BytesIO(signed)) as pdf:
+            contents = bytes(pdf.Root.AcroForm.Fields[0].V.Contents)
+        if cms.ContentInfo.load(contents, strict=False).dump().endswith(b"\0"):
+            break
+    else:
+        pytest.fail("keine Signatur mit 0x00 am Ende erzeugt")
+    [report] = digsig.verify_pdf(signed, trust=lambda cert, extra, when: ("trusted", "ok"))
+    assert report.status == digsig.VALID, report.detail
+
+
 def test_wrong_password_and_unsigned(tmp_path: Path) -> None:
     _path, data = make_pfx(tmp_path)
     with pytest.raises(digsig.SignError, match="Kennwort"):

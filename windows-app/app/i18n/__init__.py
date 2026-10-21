@@ -95,9 +95,14 @@ def catalog() -> tuple[dict[str, str], dict[str, list[tuple[re.Pattern, str, str
         if not target or len(re.findall(r"[A-Za-zÄÖÜäöüß]", _PLACEHOLDER.sub("", source))) < 2:
             continue  # nur Platzhalter: passte auf jeden Text
         parts = _PLACEHOLDER.split(source)
+        # Ein einzelnes Wort mit Platzhalter (»Vertrag {0}«, »Seiten {0}–{1}«) steht für eine Nummer: Der Platzhalter
+        # nimmt dann keine Buchstaben an – sonst würde aus »Vertrag kündigen: welche Frist?« »Contract kündigen: …«
+        literal = _PLACEHOLDER.sub(" ", source)
+        numbered = len([word for word in literal.split() if re.search(r"[A-Za-zÄÖÜäöüß]", word)]) <= 1 and ":" not in literal and re.search(r"\s\{\w+\}", source) is not None
+        value = r"[^A-Za-zÄÖÜäöüß]+?" if numbered else ".+?"
         regex = ""
         for index, part in enumerate(parts):
-            regex += re.escape(part) if index % 2 == 0 else f"(?P<p{part}>.+?)"
+            regex += re.escape(part) if index % 2 == 0 else f"(?P<p{part}>{value})"
         try:
             compiled = re.compile(f"^{regex}$", re.DOTALL)
         except re.error:
@@ -139,6 +144,8 @@ def _lookup(text: str, depth: int) -> str:
         match = regex.match(text)
         if match is None:
             continue
+        if any("\n" in value or _SENTENCES.search(value) for value in match.groupdict().values()):
+            continue  # ein Platzhalter verschluckte einen weiteren Satz – die Sätze werden unten einzeln übersetzt
         values = {name[1:]: _lookup(value, depth + 1) for name, value in match.groupdict().items()}
         return _PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), target)
     # Mehrere Zeilen oder Sätze: einzeln übersetzen

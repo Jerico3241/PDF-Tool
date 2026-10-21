@@ -1365,6 +1365,10 @@ class ReaderController(Observable):
         settings = self.app.settings
         return settings is not None and bool(getattr(settings, "readerRestoreSession", False))
 
+    def still_opening(self) -> bool:
+        """PDFs werden noch geöffnet oder warten auf den Start (»Öffnen mit«) – ein Update wartet darauf."""
+        return bool(self.opening or self._external)
+
     def unsaved(self) -> list[str]:
         """Namen der Dokumente mit ungespeicherten Änderungen (ein automatisches Update wartet darauf)."""
         return [controller.name for controller in self._docs.values() if controller.dirty]

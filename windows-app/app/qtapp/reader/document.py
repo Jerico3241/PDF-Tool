@@ -2106,11 +2106,15 @@ class DocumentController(Observable):
 
         def done(result) -> None:
             path = str(result.path)
-            message = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'} gespeichert als {os.path.basename(path)}."
+            # Jeder Satz ein ganzer Text des Katalogs – nur so erscheint er auf Englisch vollständig übersetzt
+            count = "1 Seite" if result.pages == 1 else f"{result.pages} Seiten"
+            message = f"{count} gespeichert als {os.path.basename(path)}."
             if result.empty:
                 where = ", ".join(str(i + 1) for i in result.empty[:6]) + (" …" if len(result.empty) > 6 else "")
-                scanned = " als Bild übernommen" if fmt == "docx" else " ohne Inhalt"
-                message += f" Seite {where} ohne Text{scanned} – für Scans vorher »Text erkennen (OCR)« verwenden."
+                if fmt == "docx":
+                    message += f" Seite {where} ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden."
+                else:
+                    message += f" Seite {where} ohne Text übersprungen – für Scans vorher »Text erkennen (OCR)« verwenden."
             self.app.notify("reader", "warning" if result.empty else "success", message, title=f"In {label} umgewandelt", auto_hide=12000,
                             actions=[("Öffnen", lambda: self.reader.openExternal(path)), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
 

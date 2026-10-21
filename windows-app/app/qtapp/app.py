@@ -135,6 +135,7 @@ class AppController(Observable):
         self.presenter: Callable[[], None] | None = None  # zeigt das Fenster (verdeckt bis zum ersten Bild)
         self._at_shutdown: list[Callable[[], None]] = []
         self._last_page: dict[str, str] = {}
+        self._before_settings = ""  # Seite vor den Einstellungen: Strg+W bzw. ein Klick aufs Zahnrad kehrt dorthin zurück
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
         self.documents_open: Callable[[], bool] = lambda: False  # geöffnete PDFs im Reader (setzt der Reader)
         self.navigations = 0  # Seitenwechsel (Tests, Diagnose)
@@ -226,6 +227,8 @@ class AppController(Observable):
         if not self.available(page) or page == self.currentPage:
             return
         previous = self.currentPage
+        if page == SETTINGS:
+            self._before_settings = previous
         if previous:
             _tool, hooks = self._page_tool(previous)
             if hooks is not None:
@@ -250,6 +253,18 @@ class AppController(Observable):
             return ""
         info = tool_for_page(page)
         return info.key if info is not None and info.key in TAB_KEYS else ""
+
+    @Slot()
+    def leaveSettings(self) -> None:  # noqa: N802
+        """Einstellungen schließen (Strg+W, Klick auf das markierte Zahnrad): zurück zur Seite davor, sonst zum Start."""
+        if self.currentPage != SETTINGS:
+            return
+        back = self._before_settings
+        tab = self.tab_for(back) if back else ""
+        if back and back != SETTINGS and (not tab or tab in self.openTabs):  # ein geschlossener Werkzeug-Tab bleibt zu
+            self.navigate(back)
+        if self.currentPage == SETTINGS:  # Seite davor gibt es nicht mehr (Werkzeug geschlossen, kein Dokument)
+            self.navigate(HOME)
 
     @Slot(str)
     def closeTab(self, key: str) -> None:  # noqa: N802

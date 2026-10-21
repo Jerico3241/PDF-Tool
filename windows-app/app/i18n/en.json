@@ -372,6 +372,8 @@
   "Beta": "Beta",
   "Beta 4.0 – fünfter Teil: Scannen direkt in eine PDF (Startseite → »Scannen«), Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y), Texterkennung in zehn Sprachen, Text über Seitengrenzen markieren und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).": "Beta 4.0 – part five: scan directly to a PDF (Home → “Scan”), read aloud with Windows voices (Ctrl+Shift+Y), text recognition in ten languages, select text across page boundaries, and custom keyboard shortcuts (Settings → Keyboard shortcuts, Ctrl+F1).",
   "Beta 4.0 – sechster Teil: Englische Oberfläche (Einstellungen → Sprache), digitale Signatur mit Zertifikat, PDF in Word, Excel oder Text umwandeln (und Office-Dateien in PDF), der KI-Assistent übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner. Texterkennung startet wieder richtig.": "Beta 4.0 – part six: English interface (Settings → Language), digital signatures with a certificate, convert PDFs to Word, Excel or text (and Office files to PDF), and the AI assistant translates documents and answers questions about several PDFs or a whole folder. Text recognition starts properly again.",
+  "Beta 4.0 – achter Teil: Fehler behoben. Das Hilfe-Menü springt nicht mehr und schließt sich beim zweiten Klick auf »?«, Strg+W und das Zahnrad schließen die Einstellungen, Signaturen und PDF in Excel arbeiten genauer, die englische Oberfläche übersetzt vollständiger, automatische Updates warten, bis alle PDFs offen sind.": "Beta 4.0 – part eight: bug fixes. The help menu no longer jumps and closes on a second click on “?”, Ctrl+W and the gear close the settings, signatures and PDF to Excel are more accurate, the English interface is translated more completely, automatic updates wait until all PDFs are open.",
+  "Aus Beta 7: Updates suchen und installieren sich beim Start von selbst (PDFs öffnen sich danach wieder), in den Einstellungen wird der Knopf zu »Jetzt installieren« und zeigt die Neuerungen. Oben ist aufgeräumt: kein ≡ Menü mehr, »?« ist das Hilfe-Menü, die Einstellungen öffnen sich ohne eigenen Tab.": "From Beta 7: updates check and install themselves at startup (your PDFs reopen afterwards), and in Settings the button turns into “Install now” and shows what's new. The top bar is tidied up: no ≡ menu any more, “?” is the help menu, and Settings open without their own tab.",
   "Beta 4.0 – siebter Teil: Updates suchen und installieren sich beim Start von selbst (PDFs öffnen sich danach wieder), in den Einstellungen wird der Knopf zu »Jetzt installieren« und zeigt die Neuerungen. Oben ist aufgeräumt: kein ≡ Menü mehr, »?« ist das Hilfe-Menü, die Einstellungen öffnen sich ohne eigenen Tab.": "Beta 4.0 – part seven: updates check and install themselves at startup (your PDFs reopen afterwards), and in Settings the button turns into “Install now” and shows what's new. The top bar is tidied up: no ≡ menu any more, “?” is the help menu, and Settings open without their own tab.",
   "Beta verwenden": "Use beta",
   "Beta-Versionen enthalten Funktionen und Änderungen, die noch getestet werden. Sie können instabiler sein als Stable-Versionen.": "Beta versions contain features and changes that are still being tested. They may be less stable than Stable versions.",
@@ -3426,7 +3428,20 @@
   "“ in die Darstellung laden": "”: load into Appearance",
   "“ löschen": "”: delete",
   "„Ich beleidige seine Mutter, weil wenn ich seine Mutter beleidige, beleidige ich nur ihn oder maximal noch seine Mutter.“": "“I insult his mother, because if I insult his mother, I only insult him or at most his mother as well.”",
-  "„repariert“ an Dateinamen anhängen": "Append “repaired” to file name"
+  "„repariert“ an Dateinamen anhängen": "Append “repaired” to file name",
+  "Englische": "English",
+  "Deutsche": "German",
+  "Französische": "French",
+  "Spanische": "Spanish",
+  "Italienische": "Italian",
+  "Niederländische": "Dutch",
+  "Polnische": "Polish",
+  "Portugiesische": "Portuguese",
+  "Türkische": "Turkish",
+  " 1 Seite ohne Text blieb leer.": " 1 page without text stayed empty.",
+  "1 Seite ohne Text blieb leer.": "1 page without text stayed empty.",
+  "Page Down": "Page Down",
+  "Page Up": "Page Up"
  },
  "patterns": {
   "  Gespeichert als {0}": "  Saved as {0}",
@@ -4178,7 +4193,6 @@
   "Übergabe fehlgeschlagen: {0}": "Handover failed: {0}",
   "Übergabe von {0} Datei(en) an die laufende App: {1}": "Handing over {0} file(s) to the running app: {1}",
   "Übergabe von {0} Datei(en): keine Antwort der laufenden App": "Handing over {0} file(s): no response from the running app",
-  "Übersetzung ins {0} gespeichert: **{1}** ({2} {3}).": "Translation into {0} saved: **{1}** ({2} {3}).",
   "„{0}“ aus dem Stapel entfernt.": "“{0}” removed from the batch.",
   "„{0}“ aus dem Stapel übernommen. Der Stapel-Eintrag bleibt unverändert.": "“{0}” taken from the batch. The batch entry remains unchanged.",
   "„{0}“ entspricht bereits den Angaben dieser Übersicht.": "“{0}” already matches the details of this overview.",
@@ -4196,6 +4210,17 @@
   "„{0}“ wurde in „{1}“ übernommen. E-Mail-Adressen und Aktivität sind vereint.": "“{0}” was merged into “{1}”. Email addresses and activity are combined.",
   "„{0}“: {1} – wird beim Einlesen übersprungen.": "“{0}”: {1} – will be skipped on import.",
   "„{0}“{1}. Die Vorschau zeigt diesen Eintrag genau so, wie der Stapel ihn erstellt.": "“{0}”{1}. The preview shows this entry exactly as the batch creates it.",
-  "… und {0} weitere geänderte Verträge": "… and {0} more changed contracts"
+  "… und {0} weitere geänderte Verträge": "… and {0} more changed contracts",
+  " Seite {0} ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden.": " Page {0} without text was added as an image – for scans, run “Recognize text (OCR)” first.",
+  " Seite {0} ohne Text übersprungen – für Scans vorher »Text erkennen (OCR)« verwenden.": " Page {0} without text was skipped – for scans, run “Recognize text (OCR)” first.",
+  " {0} Seiten ohne Text blieben leer.": " {0} pages without text stayed empty.",
+  "Seite {0} ins {1} übersetzen": "Translate page {0} into {1}",
+  "Seiten {0}–{1} ins {2} übersetzen": "Translate pages {0}–{1} into {2}",
+  "Übersetzung ins {0} gespeichert: **{1}** ({2}).": "Translation into {0} saved: **{1}** ({2}).",
+  "{0} gespeichert als {1}.": "{0} saved as {1}.",
+  "{0} wurde in PDF umgewandelt.": "{0} was converted to PDF.",
+  "Seite {0} ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden.": "Page {0} without text was added as an image – for scans, run “Recognize text (OCR)” first.",
+  "Seite {0} ohne Text übersprungen – für Scans vorher »Text erkennen (OCR)« verwenden.": "Page {0} without text was skipped – for scans, run “Recognize text (OCR)” first.",
+  "{0} Seiten ohne Text blieben leer.": "{0} pages without text stayed empty."
  }
 }

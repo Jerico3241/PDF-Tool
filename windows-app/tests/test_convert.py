@@ -89,10 +89,35 @@ def test_excel(tmp_path: Path) -> None:
     assert sheet.cell(header + 1, 1).font.bold
 
 
-@pytest.mark.parametrize(("text", "value"), [("1.234,56", 1234.56), ("-12", -12), ("12,5 %", 0.125), ("1,234.50", 1234.5), ("3.5", 3.5), ("2026-10", None), ("Seite 3", None), ("1.2.3", None)])
+@pytest.mark.parametrize(("text", "value"), [("1.234,56", 1234.56), ("-12", -12), ("12,5 %", 0.125), ("1,234.50", 1234.5), ("3.5", 3.5), ("2026-10", None), ("Seite 3", None), ("1.2.3", None),
+                                            ("0,5", 0.5), ("01067", None), ("007", None), ("+49 221 123", None)])
 def test_numbers(text: str, value) -> None:
     parsed, _fmt = convert.number(text)
     assert parsed == pytest.approx(value) if value is not None else parsed is None
+
+
+@pytest.mark.parametrize(("text", "fmt"), [("2026", "General"), ("1.234", "#,##0"), ("1234,56", "0.00"), ("1.234,56", "#,##0.00"), ("12 €", '#,##0 "€"')])
+def test_thousands_separator_only_when_the_number_had_one(text: str, fmt: str) -> None:
+    """Eine Jahreszahl »2026« erschien in Excel als »2.026« (bis 4.0 Beta 7)."""
+    assert convert.number(text)[1] == fmt
+
+
+def test_excel_text_starting_with_equals_is_no_formula(tmp_path: Path) -> None:
+    from openpyxl import load_workbook
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    path = tmp_path / "formel.pdf"
+    c = canvas.Canvas(str(path), pagesize=A4)
+    c.setFont("Helvetica", 11)
+    c.drawString(72, 780, "=== Summe ===")
+    c.drawString(72, 760, "=A1+1")
+    c.save()
+    result = convert.convert(EditorDocument.open(path), tmp_path / "formel.xlsx", "xlsx")
+    sheet = load_workbook(result.path).worksheets[0]
+    cells = [cell for row in sheet.iter_rows() for cell in row if cell.value]
+    assert [cell.value for cell in cells] == ["=== Summe ===", "=A1+1"]
+    assert all(cell.data_type == "s" for cell in cells)
 
 
 def test_copy_protected_is_refused(tmp_path: Path) -> None:

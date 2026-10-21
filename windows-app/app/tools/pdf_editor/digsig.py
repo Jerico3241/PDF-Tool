@@ -631,7 +631,9 @@ def _check_cms(contents: bytes, signed: bytes):
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
-    info = cms.ContentInfo.load(contents.rstrip(b"\0") if contents.endswith(b"\0\0") else contents, strict=False)
+    # /Contents ist mit Nullbytes aufgefüllt: ``strict=False`` liest nur die DER-Struktur und übergeht den Rest. Nie die
+    # Nullbytes abschneiden – endet der Signaturwert selbst auf 0x00 (etwa jede 256. Signatur), wäre er dann kaputt.
+    info = cms.ContentInfo.load(contents, strict=False)
     signed_data = info["content"]
     certificates = [cert.chosen.dump() for cert in signed_data["certificates"] if cert.name == "certificate"]
     signer_info = signed_data["signer_infos"][0]
