@@ -5,7 +5,7 @@
 * ``assets/datei-<art>.ico`` – ein eigenes Symbol je Dateiart (PDF, Text, Tabelle, Präsentation, CSV): Explorer und
   »Öffnen mit«, damit man vor dem Öffnen sieht, was man öffnet. Bis 32 px ohne Aufschrift (``<art>-klein.svg``).
 * ``app/qml/images/<art>-<px>.png`` – dieselben Symbole für die Oberfläche (Startseite, Tabs, zuletzt verwendet), je
-  einfach und doppelt groß für hohe Bildschirmauflösungen.
+  einfach und doppelt groß für hohe Bildschirmauflösungen; ``app-96.png`` für den Kopf der Startseite.
 
 Gerendert wird mit Chromium (Playwright, ``render_svg.mjs``), damit Verläufe, Schatten und die Schrift der Aufschrift
 genau wie im Entwurf aussehen; die Ergebnisse liegen im Repository – der Build braucht weder Node noch Chromium.
@@ -33,6 +33,7 @@ ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 SMALL_UP_TO = 32  # bis zu dieser Größe: Dateisymbole ohne Aufschrift
 FILE_KINDS = ("pdf", "text", "tabelle", "praesentation", "csv")
 UI_SIZES = (16, 24, 32, 48)  # Oberfläche (je einfach und doppelt)
+HERO_SIZE = 96  # App-Symbol oben auf der Startseite (nur »app«)
 
 
 def source(kind: str, size: int) -> Path:
@@ -59,7 +60,7 @@ def write_ico(path: Path, images: list[Image.Image]) -> None:
 def main() -> None:
     kinds = ("app", *FILE_KINDS)
     ui = sorted({size for base in UI_SIZES for size in (base, 2 * base)})
-    jobs = sorted({(kind, size) for kind in kinds for size in (*ICON_SIZES, *ui)})
+    jobs = sorted({(kind, size) for kind in kinds for size in (*ICON_SIZES, *ui)} | {("app", HERO_SIZE), ("app", 2 * HERO_SIZE)})
     IMAGES.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as temp:
         rendered = render_all(jobs, Path(temp))
@@ -70,6 +71,8 @@ def main() -> None:
             for base in UI_SIZES:
                 rendered[kind, base].save(IMAGES / f"{kind}-{base}.png", optimize=True)
                 rendered[kind, 2 * base].save(IMAGES / f"{kind}-{base}@2x.png", optimize=True)
+        rendered["app", HERO_SIZE].save(IMAGES / f"app-{HERO_SIZE}.png", optimize=True)
+        rendered["app", 2 * HERO_SIZE].save(IMAGES / f"app-{HERO_SIZE}@2x.png", optimize=True)
     print("Symbole geschrieben:", ASSETS / "icon.ico", ", ".join(f"datei-{kind}.ico" for kind in FILE_KINDS), IMAGES)
 
 

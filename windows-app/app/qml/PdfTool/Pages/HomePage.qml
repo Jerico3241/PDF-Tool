@@ -5,19 +5,72 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Startseite (⌂ in der Tab-Leiste) nach dem Vorbild von Adobe Acrobat: oben die Werkzeuge in einer Karte und
-// daneben die Ablagefläche zum Öffnen, darunter »Zuletzt verwendet« (Name, Ordner, wann geöffnet, Größe).
+// Startseite (⌂ in der Tab-Leiste) von Novadesk: oben der Willkommenskopf mit dem App-Symbol, darunter je Dateiart
+// eine Karte in ihrer Farbe (Tabelle, Text, Präsentation, PDF öffnen), dann die Werkzeuge in einer Karte und daneben
+// die Ablagefläche zum Öffnen, darunter »Zuletzt verwendet« (Name, Ordner, wann geöffnet, Größe; nach Dateiart filterbar).
 // Die Gruppe steht mittig und ist höchstens ``Metrics.homeMaxWidth`` breit; bei schmalem Fenster stehen
 // Werkzeuge und Ablagefläche untereinander, die Werkzeuge in einer Spalte. In der Karte der Werkzeuge stehen
 // darunter die Schnellwerkzeuge (PDF wählen, das Werkzeug startet im Reader) – vier, zwei oder eine Spalte.
 PPage {
     id: page
     objectName: "homePage"
-    title: I18n.tr("Willkommen bei " + App.appName, I18n.revision)
-    subtitle: I18n.tr("Werkzeuge für PDF-Dateien – alle Dateien werden lokal auf diesem PC verarbeitet.", I18n.revision)
     centered: true
     maxContentWidth: Metrics.homeMaxWidth
     readonly property bool wide: contentWidth >= Metrics.homeSideBySideFrom
+
+    // Willkommenskopf: Name und Satz links, rechts das App-Symbol (die bunten Seiten als Erkennungszeichen)
+    Rectangle {
+        objectName: "homeHero"
+        Layout.fillWidth: true
+        Layout.bottomMargin: Metrics.toolCardGap
+        implicitHeight: Math.max(heroText.implicitHeight, 96) + 2 * Metrics.s24
+        radius: Metrics.radiusCard + 4
+        border.width: 1
+        border.color: Theme.border
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.16 : 0.07) }
+            GradientStop { position: 1; color: Theme.surface }
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Metrics.s24 + Metrics.s4
+            anchors.rightMargin: Metrics.s24 + Metrics.s4
+            spacing: Metrics.s16
+            ColumnLayout {
+                id: heroText
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: Metrics.s4
+                PText {
+                    objectName: "homeTitle"
+                    Layout.fillWidth: true
+                    text: I18n.tr("Willkommen bei " + App.appName, I18n.revision)
+                    textStyle: "title"
+                    wrap: true
+                    Accessible.role: Accessible.Heading
+                }
+                PText {
+                    Layout.fillWidth: true
+                    text: I18n.tr("Tabellen, Texte, Präsentationen und PDFs – alles lokal auf diesem PC.", I18n.revision)
+                    tone: "secondary"
+                    wrap: true
+                }
+            }
+            Image {
+                objectName: "homeHeroImage"
+                Layout.preferredWidth: 96
+                Layout.preferredHeight: 96
+                Layout.alignment: Qt.AlignVCenter
+                visible: page.contentWidth >= 520
+                source: Qt.resolvedUrl("../../images/app-96.png")
+                sourceSize: Qt.size(96, 96)
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                Accessible.ignored: true
+            }
+        }
+    }
 
     // Hinweise nach dem Start (z. B. Ergebnis einer Wiederherstellung) und zum Öffnen von PDFs
     PInfoBar {
@@ -168,6 +221,96 @@ PPage {
         PToolTip { text: I18n.tr(quick.description, I18n.revision); visible: quick.hovered && quick.description !== "" }
     }
 
+    // Eine Dateiart: oben eine Linie in ihrer Farbe, Symbol, Name und Endungen. Ein Klick wählt eine Datei dieser Art;
+    // sie öffnet sich in einem eigenen Tab (Texte, Tabellen und Präsentationen vorerst als Ansicht).
+    component KindCard: T.AbstractButton {
+        id: kindCard
+        property string kind: ""
+        property string title: ""
+        property string description: ""
+        implicitHeight: Math.max(48, Math.ceil(kindColumn.implicitHeight)) + 2 * Metrics.s16 + 3
+        hoverEnabled: true
+        focusPolicy: Qt.StrongFocus
+        Accessible.role: Accessible.Button
+        Accessible.name: I18n.tr(title, I18n.revision)
+        Accessible.description: I18n.tr(description, I18n.revision)
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        contentItem: Item {}
+        // Farbige Oberkante wie »border-top« an einer runden Karte: die Karte liegt 3 px tiefer auf einer Fläche in
+        // der Farbe der Dateiart
+        background: Rectangle {
+            objectName: "kindLine"
+            radius: Metrics.radiusCard
+            color: FileKinds.color(kindCard.kind)
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: 3
+                radius: Metrics.radiusCard
+                color: kindCard.pressed ? Theme.controlPressed : (kindCard.hovered ? Theme.controlHover : Theme.surface)
+                border.width: 1
+                border.color: Theme.border
+            }
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Metrics.s16
+            anchors.rightMargin: Metrics.s16
+            anchors.topMargin: Metrics.s16 + 3
+            anchors.bottomMargin: Metrics.s16
+            spacing: Metrics.s12
+            Image {
+                objectName: "kindIcon"
+                Layout.preferredWidth: 48
+                Layout.preferredHeight: 48
+                Layout.alignment: Qt.AlignTop
+                source: FileKinds.image(kindCard.kind, 48)
+                sourceSize: Qt.size(48, 48)
+                scale: kindCard.hovered && Motion.moves ? 1.06 : 1
+                Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+                Accessible.ignored: true
+            }
+            ColumnLayout {
+                id: kindColumn
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignTop
+                spacing: Metrics.s4
+                PText { Layout.fillWidth: true; text: I18n.tr(kindCard.title, I18n.revision); textStyle: "bodyStrong"; wrap: true }
+                PText { Layout.fillWidth: true; text: I18n.tr(kindCard.description, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true }
+            }
+        }
+        PFocusRing { visible: kindCard.visualFocus; radius_: Metrics.radiusCard }
+    }
+
+    GridLayout {
+        id: kinds
+        objectName: "homeKinds"
+        Layout.fillWidth: true
+        Layout.bottomMargin: Metrics.toolCardGap
+        columns: page.contentWidth >= 820 ? 4 : 2
+        columnSpacing: Metrics.toolCardGap
+        rowSpacing: Metrics.toolCardGap
+        uniformCellWidths: true
+        Repeater {
+            model: [
+                { kind: "tabelle", title: "Tabelle öffnen", description: "Excel, OpenDocument und CSV (.xlsx, .ods, .csv)" },
+                { kind: "text", title: "Text öffnen", description: "Word, OpenDocument und RTF (.docx, .odt, .rtf)" },
+                { kind: "praesentation", title: "Präsentation öffnen", description: "PowerPoint und OpenDocument (.pptx, .odp)" },
+                { kind: "pdf", title: "PDF öffnen", description: "Lesen, bearbeiten, vergleichen" }
+            ]
+            KindCard {
+                required property var modelData
+                objectName: "kindCard_" + modelData.kind
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                kind: modelData.kind
+                title: modelData.title
+                description: modelData.description
+                onClicked: Reader.openKind(modelData.kind)
+            }
+        }
+    }
+
     GridLayout {
         id: top
         objectName: "homeTop"
@@ -300,8 +443,8 @@ PPage {
             Layout.preferredWidth: page.wide ? Metrics.homeDropWidth : -1
             highlighted: App.dragActive && App.dragAccepted
             iconName: "document_pdf"
-            title: I18n.tr(Reader.opening > 0 ? "Wird geöffnet …" : "PDF hierher ziehen", I18n.revision)
-            text: I18n.tr("oder eine Datei auswählen. Mehrere PDFs öffnen sich in eigenen Tabs, Bilder werden zu einer PDF.", I18n.revision)
+            title: I18n.tr(Reader.opening > 0 ? "Wird geöffnet …" : "Datei hierher ziehen", I18n.revision)
+            text: I18n.tr("oder eine Datei auswählen. Jede Datei öffnet sich in einem eigenen Tab, Bilder werden zu einer PDF.", I18n.revision)
             actions: [
                 PButton {
                     objectName: "homeOpenButton"
@@ -316,7 +459,8 @@ PPage {
         }
     }
 
-    // Zuletzt verwendet: nur Pfade, Zeitpunkt und Größe (keine Inhalte); leeren lässt sich die Liste jederzeit
+    // Zuletzt verwendet: nur Pfade, Zeitpunkt und Größe (keine Inhalte); leeren lässt sich die Liste jederzeit. Über der
+    // Liste lässt sie sich nach Dateiart filtern (Tabellen schließen CSV ein).
     PCard {
         id: recentCard
         objectName: "homeRecent"
@@ -325,10 +469,16 @@ PPage {
         title: I18n.tr("Zuletzt verwendet", I18n.revision)
         iconName: "history"
         readonly property bool showFolder: width >= Metrics.homeRecentFolderFrom
+        property string kindFilter: ""
+        readonly property var entries: {
+            var filter = kindFilter
+            if (filter === "") return Reader.recent
+            return Reader.recent.filter(function(entry) { return entry.kind === filter || (filter === "tabelle" && entry.kind === "csv") })
+        }
         // Spalten (Kopf und Zeilen gleich): Symbol, Name, Ordner, Geöffnet, Größe, zwei Schaltflächen
         readonly property int buttonsWidth: 2 * Metrics.controlHeight + Metrics.s12  // zwei Schaltflächen mit Abstand
         readonly property int gaps: (showFolder ? 5 : 4) * Metrics.s12
-        readonly property real textColumns: Math.max(0, body.width - 12 - 4 - Metrics.iconSizeMedium - buttonsWidth - Metrics.homeRecentWhenWidth - Metrics.homeRecentSizeWidth - gaps)
+        readonly property real textColumns: Math.max(0, body.width - 12 - 4 - Metrics.iconSizeLarge - buttonsWidth - Metrics.homeRecentWhenWidth - Metrics.homeRecentSizeWidth - gaps)
         readonly property real nameWidth: showFolder ? Math.floor(textColumns * 0.45) : textColumns
         readonly property real folderWidth: showFolder ? textColumns - nameWidth : 0
         headerRight: PButton {
@@ -343,7 +493,39 @@ PPage {
             objectName: "homeRecentEmpty"
             Layout.fillWidth: true
             visible: Reader.recent.length === 0
-            text: I18n.tr("Noch keine PDFs geöffnet. Geöffnete PDFs erscheinen hier – ein Klick öffnet sie wieder.", I18n.revision)
+            text: I18n.tr("Noch keine Dateien geöffnet. Geöffnete Dateien erscheinen hier – ein Klick öffnet sie wieder.", I18n.revision)
+            tone: "secondary"
+            wrap: true
+        }
+        Flow {
+            objectName: "homeRecentKinds"
+            Layout.fillWidth: true
+            spacing: Metrics.s4
+            visible: Reader.recent.length > 0
+            Repeater {
+                model: [
+                    { key: "", label: "Alle" },
+                    { key: "text", label: "Texte" },
+                    { key: "tabelle", label: "Tabellen" },
+                    { key: "praesentation", label: "Präsentationen" },
+                    { key: "pdf", label: "PDFs" }
+                ]
+                PButton {
+                    required property var modelData
+                    objectName: "homeRecentKind_" + (modelData.key || "alle")
+                    kind: "subtle"
+                    toggle: true
+                    checked: recentCard.kindFilter === modelData.key
+                    text: I18n.tr(modelData.label, I18n.revision)
+                    onClicked: recentCard.kindFilter = modelData.key
+                }
+            }
+        }
+        PText {
+            objectName: "homeRecentNone"
+            Layout.fillWidth: true
+            visible: Reader.recent.length > 0 && recentCard.entries.length === 0
+            text: I18n.tr("Keine Dateien dieser Art in der Liste.", I18n.revision)
             tone: "secondary"
             wrap: true
         }
@@ -352,14 +534,14 @@ PPage {
             objectName: "homeRecentHeader"
             Layout.fillWidth: true
             implicitHeight: headerRow.implicitHeight
-            visible: Reader.recent.length > 0
+            visible: recentCard.entries.length > 0
             RowLayout {
                 id: headerRow
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 4
                 spacing: Metrics.s12
-                Item { Layout.preferredWidth: Metrics.iconSizeMedium }
+                Item { Layout.preferredWidth: Metrics.iconSizeLarge }
                 PText { Layout.preferredWidth: recentCard.nameWidth; text: I18n.tr("Name", I18n.revision); textStyle: "caption"; tone: "secondary" }
                 PText { Layout.preferredWidth: recentCard.folderWidth; text: I18n.tr("Ordner", I18n.revision); textStyle: "caption"; tone: "secondary"; visible: recentCard.showFolder }
                 PText { Layout.preferredWidth: Metrics.homeRecentWhenWidth; text: I18n.tr("Geöffnet", I18n.revision); textStyle: "caption"; tone: "secondary" }
@@ -368,7 +550,7 @@ PPage {
             }
         }
         Repeater {
-            model: Reader.recent
+            model: recentCard.entries
             Item {
                 id: entry
                 required property var modelData
@@ -387,11 +569,15 @@ PPage {
                     anchors.leftMargin: 12
                     anchors.rightMargin: 4
                     spacing: Metrics.s12
-                    PIcon {
-                        Layout.preferredWidth: Metrics.iconSizeMedium
-                        name: entry.modelData.missing ? "document_dismiss" : "document_pdf"
-                        color: entry.modelData.missing ? Theme.textTertiary : Theme.accent
-                        size: Metrics.iconSizeMedium
+                    // Symbol der Dateiart (wie im Explorer); fehlt die Datei, ist es blass
+                    Image {
+                        objectName: "homeRecentIcon"
+                        Layout.preferredWidth: Metrics.iconSizeLarge
+                        Layout.preferredHeight: Metrics.iconSizeLarge
+                        source: FileKinds.image(entry.modelData.kind || "pdf", 24)
+                        sourceSize: Qt.size(Metrics.iconSizeLarge, Metrics.iconSizeLarge)
+                        opacity: entry.modelData.missing ? 0.4 : 1
+                        Accessible.ignored: true
                     }
                     PText { Layout.preferredWidth: recentCard.nameWidth; text: I18n.tr(entry.modelData.name, I18n.revision); tone: entry.modelData.missing ? "tertiary" : ""; elide: Text.ElideMiddle }
                     PText {

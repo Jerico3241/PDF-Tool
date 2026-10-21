@@ -121,11 +121,11 @@ WERKZEUGE = ("toolCard_reader", "toolCard_actions", "toolCard_contracts", "toolC
 
 
 def _pruefe_startseite(h) -> tuple[bool, int]:
-    """Aufbau der Startseite (Adobe-Prinzip); liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
+    """Aufbau der Startseite; liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
 
     Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
-    breit, Ränder mindestens 36 px; Titel, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis an derselben
-    linken Kante. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
+    breit, Ränder mindestens 36 px; Willkommenskopf, Dateiarten, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis
+    an derselben linken Kante und gleich breit. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
     untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte, kein Wort mitten im Wort
     umbrochen; nebeneinander gleich hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
     oben, karte, ablage, zuletzt, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homeRecent", "homePrivacy"))
@@ -137,10 +137,10 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
     assert gbreite <= 1080 and min(links, rechts) >= 36
-    for teil in (zuletzt, hinweis):
+    for teil in (zuletzt, hinweis, h.item("homeHero"), h.item("homeKinds")):
         assert _szene(teil)[0] == gx and _szene(teil)[2] == gbreite, teil.objectName()
-    titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
-    assert _szene(titel)[0] == gx
+    arten = [_szene(h.item("kindCard_" + art)) for art in ("tabelle", "text", "praesentation", "pdf")]
+    assert len({lage[2] for lage in arten}) == 1 and arten[0][0] == gx  # Dateiarten gleich breit, an der linken Kante
     k, a = _szene(karte), _szene(ablage)
     nebeneinander = a[1] == k[1]
     if nebeneinander:
