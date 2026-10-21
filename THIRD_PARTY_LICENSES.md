@@ -14,8 +14,8 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
   gelieferten Bibliotheken wie OpenSSL, libffi, bzip2, xz, zlib, SQLite, expat, mpdecimal; Tcl/Tk
   gehört seit 2.7.0 nicht mehr zur Laufzeit)
 - Pakete: `%LOCALAPPDATA%\PDF-Tool\runtime\Lib\site-packages\<Paket>-<Version>.dist-info\`
-  (bei pikepdf zusätzlich `…\pikepdf-10.15.0.dist-info\licenses\third-party-licenses\`, bei
-  pypdfium2 `…\pypdfium2-5.13.0.dist-info\licenses\`)
+  (bei pikepdf zusätzlich `…\pikepdf-10.17.0.dist-info\licenses\third-party-licenses\`, bei
+  pypdfium2 `…\pypdfium2-5.14.0.dist-info\licenses\`)
 - Texterkennung: `%LOCALAPPDATA%\PDF-Tool\ocr\LICENSE.txt` (Apache-2.0 – Tesseract und Sprachdaten);
   die Lizenzen der übrigen Bibliotheken nennt der Abschnitt zur Texterkennung
 - KI-Assistent: `%LOCALAPPDATA%\PDF-Tool\ai\LICENSES.txt` (alle in llama.cpp eingebauten Bestandteile)
@@ -29,31 +29,31 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | ↳ shiboken6 | 6.11.2 | LGPL-3.0-only (alternativ GPL-2.0/GPL-3.0 oder kommerziell) | Python-Bindung von PySide6 | https://pypi.org/project/shiboken6/6.11.2/ |
 | ↳ Qt (in PySide6 enthalten: QtCore, QtGui, QtWidgets, QtNetwork, QtOpenGL, QtQml, QtQuick, Qt Quick Controls (nur Stil »Basic«), Qt Quick Templates, Layouts, Shapes, QtSvg, QtPrintSupport; Plugins qwindows, qoffscreen, qico, qjpeg, qsvg, qwebp, qsvgicon, qschannelbackend) | 6.11.2 | LGPL-3.0-only | Oberfläche; Qt Network mit TLS über Windows-Schannel für die Update-Prüfung (seit 2.7.2, keine zusätzliche Bibliothek); Qt Print Support für den Druckdialog von Windows im PDF Reader (seit 3.0.0) | https://download.qt.io/official_releases/qt/6.11/ |
 | ↳ Bibliotheken von Qt (u. a. libjpeg-turbo, libwebp, PCRE2, HarfBuzz, FreeType, double-conversion, zlib) | – | BSD-artig / MIT / IJG / FTL / Zlib | Bildformate, Textdarstellung | https://doc.qt.io/qt-6/licenses-used-in-qt.html |
-| pikepdf | 10.15.0 | MPL-2.0 | PDF reparieren (Analyse, Neuaufbau); PDF Reader & Editor (Struktur, Bearbeiten, Speichern) | https://github.com/pikepdf/pikepdf |
+| pikepdf | 10.17.0 | MPL-2.0 | PDF reparieren (Analyse, Neuaufbau); PDF Reader & Editor (Struktur, Bearbeiten, Speichern) | https://github.com/pikepdf/pikepdf |
 | ↳ qpdf (in pikepdf enthalten) | 12.4.1 | Apache-2.0 | PDF-Engine 1 | https://github.com/qpdf/qpdf |
-| ↳ libjpeg-turbo, zlib, OpenSSL, Teile von pdfminer.six, sRGB-Farbprofil (in pikepdf enthalten) | – | IJG / BSD-3-Clause / Zlib / Apache-2.0 / MIT | Bilddaten, Verschlüsselung, Farbprofile | `pikepdf-10.15.0.dist-info\licenses\third-party-licenses\` |
+| ↳ libjpeg-turbo, zlib, OpenSSL, Teile von pdfminer.six, sRGB-Farbprofil (in pikepdf enthalten) | – | IJG / BSD-3-Clause / Zlib / Apache-2.0 / MIT | Bilddaten, Verschlüsselung, Farbprofile | `pikepdf-10.17.0.dist-info\licenses\third-party-licenses\` |
 | ↳ Microsoft Visual C++ Runtime (msvcp140, in pikepdf, numpy, pandas enthalten) | – | Microsoft Redistributable | C++-Laufzeit | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
-| pypdfium2 | 5.13.0 | Apache-2.0 oder BSD-3-Clause | PDF reparieren (zweite Engine, Rettungsmodus); PDF Reader & Editor (Darstellung, Text, Suche, Prüfung von Änderungen) | https://github.com/pypdfium2-team/pypdfium2 |
+| pypdfium2 | 5.14.0 | Apache-2.0 oder BSD-3-Clause | PDF reparieren (zweite Engine, Rettungsmodus); PDF Reader & Editor (Darstellung, Text, Suche, Prüfung von Änderungen) | https://github.com/pypdfium2-team/pypdfium2 |
 | ↳ PDFium (in pypdfium2 enthalten) | 153.0.7999.0 | BSD-3-Clause | PDF-Engine 2 | https://pdfium.googlesource.com/pdfium |
 | ↳ Bibliotheken von PDFium | – | Apache-2.0 (abseil, llvm-libc mit LLVM-Exception), FTL (FreeType), Unicode-3.0 (ICU), MIT (lcms, simdutf), BSD (agg, OpenJPEG, libjpeg-turbo), libpng, libtiff, Zlib, MIT/Apache-2.0 (fast_float) | Schriften, Bilder, Farbprofile | https://github.com/bblanchon/pdfium-binaries |
-| fontTools | 4.66.1 | MIT | PDF Reader & Editor: Teilmengen lokaler Schriften einbetten (nur wenn die Schrift es erlaubt) | https://github.com/fonttools/fonttools |
+| fontTools | 4.67.0 | MIT | PDF Reader & Editor: Teilmengen lokaler Schriften einbetten (nur wenn die Schrift es erlaubt) | https://github.com/fonttools/fonttools |
 | comtypes | 1.4.17 | MIT | Scannen über die Scanner-Schnittstelle von Windows (WIA) | https://github.com/enthought/comtypes |
 | cryptography | 50.0.2 | Apache-2.0 oder BSD-3-Clause | Digitale Signatur: Zertifikate, .pfx-Dateien, Prüfen von Signaturen | https://github.com/pyca/cryptography |
 | cffi | 2.1.1 | MIT | Grundlage von cryptography | https://github.com/python-cffi/cffi |
 | asn1crypto | 1.5.1 | MIT | Digitale Signatur: CMS-Paket (PAdES) | https://github.com/wbond/asn1crypto |
-| pypdf | 6.19.0 | BSD-3-Clause | PDF reparieren (dritte, tolerante Engine der erweiterten Wiederherstellung) | https://github.com/py-pdf/pypdf |
+| pypdf | 6.21.1 | BSD-3-Clause | PDF reparieren (dritte, tolerante Engine der erweiterten Wiederherstellung) | https://github.com/py-pdf/pypdf |
 | packaging | 26.3 | Apache-2.0 oder BSD-2-Clause | von pikepdf benötigt | https://github.com/pypa/packaging |
 | pandas | 2.3.3 | BSD-3-Clause | Vertragsübersichten (Excel lesen) | https://pandas.pydata.org |
-| NumPy | 2.5.3 | BSD-3-Clause (enthält OpenBLAS: BSD-3-Clause, LAPACK: BSD, GCC-Laufzeit: GPL-3.0 mit GCC Runtime Library Exception 3.1) | von pandas benötigt | https://numpy.org |
+| NumPy | 2.5.4 | BSD-3-Clause (enthält OpenBLAS: BSD-3-Clause, LAPACK: BSD, GCC-Laufzeit: GPL-3.0 mit GCC Runtime Library Exception 3.1) | von pandas benötigt | https://numpy.org |
 | python-dateutil | 2.9.0.post0 | Apache-2.0 / BSD-3-Clause | von pandas benötigt | https://github.com/dateutil/dateutil |
-| pytz | 2026.3.post1 | MIT | von pandas benötigt | https://pythonhosted.org/pytz |
-| tzdata | 2026.4 | Apache-2.0 | von pandas benötigt | https://github.com/python/tzdata |
+| pytz | 2026.5 | MIT | von pandas benötigt | https://pythonhosted.org/pytz |
+| tzdata | 2026.5 | Apache-2.0 | von pandas benötigt | https://github.com/python/tzdata |
 | six | 1.17.0 | MIT | von python-dateutil benötigt | https://github.com/benjaminp/six |
 | openpyxl | 3.1.5 | MIT | Excel (.xlsx) mit Formatierung lesen | https://foss.heptapod.net/openpyxl/openpyxl |
 | et-xmlfile | 2.0.0 | MIT | von openpyxl benötigt | https://foss.heptapod.net/openpyxl/et_xmlfile |
 | xlrd | 2.0.2 | BSD-3-Clause | Excel (.xls) lesen | https://github.com/python-excel/xlrd |
 | ReportLab | 4.5.1 | BSD-3-Clause (enthält Schriften: Bitstream Vera, DarkGarden unter GPL mit Font-Ausnahme) | PDF erzeugen, Rettungsmodus | https://www.reportlab.com |
-| charset-normalizer | 3.5.1 | MIT | von ReportLab benötigt | https://github.com/jawah/charset_normalizer |
+| charset-normalizer | 3.5.2 | MIT | von ReportLab benötigt | https://github.com/jawah/charset_normalizer |
 | Pillow | 12.3.0 | MIT-CMU (enthält brotli, FreeType, HarfBuzz, lcms2, libavif, libjpeg-turbo, libpng, libwebp, OpenJPEG, libtiff, xz, zlib-ng mit ihren Lizenzen) | Bilder, Symbole, Rettungsmodus | https://python-pillow.github.io |
 
 Nicht mitgeliefert: lxml (von pikepdf nur für XMP-Metadaten benötigt – PDF Tool schreibt

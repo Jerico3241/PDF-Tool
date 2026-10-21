@@ -46,7 +46,7 @@ freigegeben.
 ## Entwicklung
 
 ```powershell
-py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
+py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 fonttools==4.67.0
 $env:QT_QPA_PLATFORM = "offscreen"
 py -3.13 -m pytest windows-app\tests    # Tests
 py -3.13 windows-app\build.py           # Setup bauen (Inno Setup 6.6 oder neuer)

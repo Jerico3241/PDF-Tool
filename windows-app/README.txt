@@ -1142,7 +1142,7 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.15.0 pypdfium2==5.13.0 PySide6-Essentials==6.11.2 fonttools==4.66.1
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 fonttools==4.67.0
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Pull Request und auf main auf
