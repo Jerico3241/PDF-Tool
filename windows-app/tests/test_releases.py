@@ -307,7 +307,7 @@ def test_beta_is_a_prerelease_and_stable_is_not() -> None:
     assert release_check.outputs("2.8.0-beta.1") == {
         "version": "2.8.0-beta.1",
         "tag": "v2.8.0-beta.1",
-        "title": "PDF Tool 2.8.0-beta.1",
+        "title": "Novadesk 2.8.0-beta.1",
         "prerelease": "true",
         "setup": "PDF-Tool-Setup-2.8.0-beta.1.exe",
         "checksum": "PDF-Tool-Setup-2.8.0-beta.1.exe.sha256",
@@ -595,3 +595,52 @@ def test_icon_count_in_third_party_licenses_matches_the_icons() -> None:
     note = (ROOT.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
     match = re.search(r"(\d+) SVG-Symbole aus \*\*Fluent UI System Icons\*\*", note)
     assert match is not None and int(match.group(1)) == len(list((ROOT / "app" / "qml" / "icons").glob("*.svg")))
+
+
+def _build_module():
+    spec = importlib.util.spec_from_file_location("build_novadesk", ROOT / "build.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_libreoffice_keeps_only_german_and_english(tmp_path) -> None:
+    """Novadesk 5.0: aus dem MSI kommen nur Deutsch und Englisch ins Setup (sonst über 512 MiB, die Grenze des Updaters
+    von PDF Tool 4.0) – Dateien gemeinsamer Teile und anderer Programme bleiben unberührt."""
+    build = _build_module()
+    office = tmp_path / "office"
+    keep = [
+        "program/soffice.exe", "program/resource/de/LC_MESSAGES/sw.mo", "program/resource/en-GB/LC_MESSAGES/sw.mo",
+        "share/registry/res/registry_de.xcd", "share/registry/res/registry_en-US.xcd", "share/registry/res/fcfg_langpack_de.xcd",
+        "share/registry/main.xcd", "share/autocorr/acor_de-DE.dat", "share/autocorr/acor_en-GB.dat", "share/autotext/de/standard.bau",
+        "share/template/common/l10n/a.ott", "share/template/de/x.ott", "share/extensions/dict-de/de_DE.dic",
+        "share/extensions/dict-en/en_US.dic", "share/extensions/script-provider-for-python/x.py", "share/gallery/arrows.sdg",
+        "readmes/readme_de.txt", "readmes/readme_en-US.txt", "LICENSE.html",
+    ]
+    drop = [
+        "program/resource/fr/LC_MESSAGES/sw.mo", "program/resource/pt-BR/LC_MESSAGES/sw.mo", "share/registry/res/registry_fr.xcd",
+        "share/registry/res/fcfg_langpack_zh-CN.xcd", "share/autocorr/acor_fr-FR.dat", "share/autotext/fr/standard.bau",
+        "share/template/es/x.ott", "share/extensions/dict-fr/fr.dic", "share/extensions/wiki-publisher/x.jar",
+        "share/extensions/nlpsolver/x.jar", "readmes/readme_ja.txt",
+    ]
+    for rel in keep + drop:
+        (office / rel).parent.mkdir(parents=True, exist_ok=True)
+        (office / rel).write_bytes(b"x" * 10)
+    assert build.prune_office(office) == 10 * len(drop)
+    assert [rel for rel in keep if not (office / rel).is_file()] == []
+    assert [rel for rel in drop if (office / rel).exists()] == []
+
+
+def test_libreoffice_in_the_payload_is_checked(tmp_path) -> None:
+    payload = tmp_path / "payload"
+    assert any("soffice.exe" in problem for problem in release_check.check_office(payload))
+    program = payload / "office" / "program"
+    program.mkdir(parents=True)
+    for name in ("soffice.com", "soffice.bin", "mergedlo.dll"):
+        (program / name).write_bytes(b"MZ")
+    (program / "soffice.exe").write_bytes(b"MZ")
+    problems = release_check.check_office(payload)
+    assert any("64 Bit" in problem for problem in problems) and any("Lizenztext" in problem for problem in problems)
+    (payload / "office" / "LICENSE.html").write_text("MPL", encoding="utf-8")
+    (payload / "office" / "LibreOffice.msi").write_bytes(b"x")
+    assert any("MSI" in problem for problem in release_check.check_office(payload))

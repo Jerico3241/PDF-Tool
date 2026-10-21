@@ -6,7 +6,7 @@
   Datei – entweder der alte oder der neue Stand.
 * ``read_json`` liefert für fehlende, unlesbare oder beschädigte Dateien kein Ergebnis und einen
   Grund – nie eine Ausnahme. Eine beschädigte Datei macht so nie die ganze App unbrauchbar.
-* ``check_schema`` erkennt Daten einer neueren PDF-Tool-Version (``NewerSchema``): Solche Daten
+* ``check_schema`` erkennt Daten einer neueren Novadesk-Version (``NewerSchema``): Solche Daten
   werden nie überschrieben oder blind gelesen.
 * ``data_root`` ist der Ordner der Benutzerdaten (neben ``gui-config.json``, unter Windows
   ``%APPDATA%\\PDF-Tool``).
@@ -28,7 +28,7 @@ class SchemaError(ValueError):
 
 
 class NewerSchema(SchemaError):
-    """Datei stammt aus einer neueren PDF-Tool-Version (höhere Schema-Version)."""
+    """Datei stammt aus einer neueren Novadesk-Version (höhere Schema-Version)."""
 
 
 def data_root() -> Path:
@@ -104,7 +104,7 @@ def check_schema(data: object, current: int, kind: str) -> int:
     """Schema-Version eines gelesenen Stands prüfen und zurückgeben.
 
     ``SchemaError``: kein Objekt oder keine/ungültige Version; ``NewerSchema``: neuer als
-    ``current`` – diese PDF-Tool-Version kennt das Format noch nicht.
+    ``current`` – diese Novadesk-Version kennt das Format noch nicht.
     """
     if not isinstance(data, dict):
         raise SchemaError(f"{kind}: kein gültiger Datensatz")
@@ -112,7 +112,7 @@ def check_schema(data: object, current: int, kind: str) -> int:
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise SchemaError(f"{kind}: Schema-Version fehlt oder ist ungültig")
     if version > current:
-        raise NewerSchema(f"{kind}: mit einer neueren Version von PDF Tool erstellt (Schema {version})")
+        raise NewerSchema(f"{kind}: mit einer neueren Version von Novadesk erstellt (Schema {version})")
     return version
 
 

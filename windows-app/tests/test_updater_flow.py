@@ -558,7 +558,7 @@ def test_103_helper_waits_for_the_app_then_starts_the_verified_setup(tmp_path):
     assert helper.wait(10) == launch.OK
     assert wait_until(lambda: (tmp_path / "gestartet.txt").exists(), 5)
     text = log.read_text(encoding="utf-8")
-    assert "PDF Tool ist beendet." in text and "SHA-256 geprüft" in text and "Setup gestartet: PDF-Tool-Setup-2.7.3.exe" in text
+    assert "Novadesk ist beendet." in text and "SHA-256 geprüft" in text and "Setup gestartet: PDF-Tool-Setup-2.7.3.exe" in text
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Shell-Skript als Setup-Attrappe")
@@ -616,7 +616,7 @@ def test_silent_update_installs_without_questions_and_restarts(tmp_path):
     assert parameters[:4] == ["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"] and parameters[4].startswith("/LOG=")
     assert wait_until(lambda: (tmp_path / "neustart.txt").exists(), 5)
     text = log.read_text(encoding="utf-8")
-    assert "Update installiert: PDF-Tool-Setup-2.7.3.exe" in text and "PDF Tool neu gestartet." in text
+    assert "Update installiert: PDF-Tool-Setup-2.7.3.exe" in text and "Novadesk neu gestartet." in text
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Shell-Skript als Setup-Attrappe")

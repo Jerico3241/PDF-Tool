@@ -6,7 +6,7 @@ der Fließtext). Word bekommt Absätze, Überschriften, Fettdruck und Seitenumbr
 Texterkennung) kommen als Bild hinein. Excel bekommt je Seite ein Blatt: Zeilen werden Tabellenzeilen, große Lücken
 trennen Zellen, Zellen mit ähnlicher Lage teilen sich eine Spalte, Zahlen (auch »1.234,56« und »12 %«) werden Zahlen.
 
-Das .docx schreibt PDF Tool selbst (WordprocessingML, nur die Standardbibliothek), das .xlsx mit openpyxl. Die
+Das .docx schreibt Novadesk selbst (WordprocessingML, nur die Standardbibliothek), das .xlsx mit openpyxl. Die
 Berechtigung »Kopieren« der Datei gilt auch hier.
 """
 
@@ -363,7 +363,7 @@ def to_docx(layouts: list[PageLayout], images: list[tuple[bytes, float, float] |
                      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
                      '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>')
     core = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
-            'xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>' + _xml_text(title) + '</dc:title><dc:creator>PDF Tool</dc:creator></cp:coreProperties>')
+            'xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>' + _xml_text(title) + '</dc:title><dc:creator>Novadesk</dc:creator></cp:coreProperties>')
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as package:
         package.writestr("[Content_Types].xml", content_types)

@@ -1,153 +1,76 @@
-"""Erzeugt das App-Symbol von PDF Tool (Windows-Symbol, Favicons, Logo der Downloadseite).
+"""Erzeugt die Symbole von Novadesk (seit 5.0) aus den SVG-Vorlagen in ``windows-app/assets/symbole``.
 
-Motiv (seit 4.0): ein Blatt mit Smiley und Textzeilen, darauf ein blau-violettes Abzeichen »PDF«.
-Vorlage ist ``windows-app/assets/icon-source.png`` (512 × 512, »Pdf« von Magnific auf Flaticon, Stil
-»lineal color«, Namensnennung nötig – siehe THIRD_PARTY_LICENSES.md). Jede Größe wird mit LANCZOS aus
-der Vorlage verkleinert. 16, 20 und 24 px (Taskleiste, Explorer, Titelleiste) sind dagegen pixelgenau gezeichnet: vereinfacht
-(zwei Blätter, Textzeilen, Abzeichen mit »PDF« in Pixelschrift), weil das verkleinerte Motiv dort weich und »PDF« unlesbar wird.
+* ``assets/icon.ico`` – App-Symbol (ein freistehendes »N« vor drei Seiten in Grün, Orange und Rot): App, Taskleiste,
+  Setup, Deinstallation.
+* ``assets/datei-<art>.ico`` – ein eigenes Symbol je Dateiart (PDF, Text, Tabelle, Präsentation, CSV): Explorer und
+  »Öffnen mit«, damit man vor dem Öffnen sieht, was man öffnet. Bis 32 px ohne Aufschrift (``<art>-klein.svg``).
+* ``app/qml/images/<art>-<px>.png`` – dieselben Symbole für die Oberfläche (Startseite, Tabs, zuletzt verwendet), je
+  einfach und doppelt groß für hohe Bildschirmauflösungen.
 
-Aufruf (aus dem Repository-Hauptordner):
+Gerendert wird mit Chromium (Playwright, ``render_svg.mjs``), damit Verläufe, Schatten und die Schrift der Aufschrift
+genau wie im Entwurf aussehen; die Ergebnisse liegen im Repository – der Build braucht weder Node noch Chromium.
+Die Website (``public/``) behält bis zur stabilen Version 5.0 das Symbol von PDF Tool.
+
+Aufruf (aus dem Repository-Hauptordner, Node mit Playwright und Pillow nötig):
     python windows-app/scripts/make_icons.py
 """
 
 from __future__ import annotations
 
+import json
+import subprocess
+import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "windows-app" / "assets" / "icon-source.png"
+APP_ROOT = ROOT / "windows-app"
+SOURCES = APP_ROOT / "assets" / "symbole"
+ASSETS = APP_ROOT / "assets"
+IMAGES = APP_ROOT / "app" / "qml" / "images"
 ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
-FAVICON_SIZES = (16, 32, 48)
-
-BADGE = (90, 108, 217)  # Blau-Violett des Abzeichens
-WORDMARK = (32, 32, 32)
-
-# Kleine Größen, pixelgenau gezeichnet
-INK = (16, 16, 24, 255)
-FRONT = (246, 244, 255, 255)
-BACK = (195, 195, 244, 255)
-BADGE_FILL = (98, 110, 230, 255)
-WHITE = (255, 255, 255, 255)
-
-FONT3 = {  # 3 × 5
-    "P": ["###", "#.#", "###", "#..", "#.."],
-    "D": ["##.", "#.#", "#.#", "#.#", "##."],
-    "F": ["###", "#..", "##.", "#..", "#.."],
-}
-FONT4 = {  # 4 × 7
-    "P": ["###.", "#..#", "#..#", "###.", "#...", "#...", "#..."],
-    "D": ["###.", "#..#", "#..#", "#..#", "#..#", "#..#", "###."],
-    "F": ["####", "#...", "#...", "###.", "#...", "#...", "#..."],
-}
-
-# je Größe: Rückblatt, Vorderblatt, Zeilen (y, x0, x1), Abzeichen, Schrift
-LAYOUT = {
-    16: dict(back=(1, 2, 11, 15), front=(4, 0, 14, 13), lines=[(3, 6, 12), (5, 6, 12)], badge=(0, 8, 12, 14), font=FONT3),
-    20: dict(back=(1, 3, 14, 19), front=(5, 0, 18, 16), lines=[(4, 8, 16), (6, 8, 16), (8, 8, 13)], badge=(0, 10, 15, 18), font=FONT3),
-    24: dict(back=(1, 3, 17, 23), front=(6, 0, 22, 20), lines=[(4, 9, 19), (7, 9, 19), (10, 9, 15)], badge=(0, 12, 18, 22), font=FONT4),
-}
+SMALL_UP_TO = 32  # bis zu dieser Größe: Dateisymbole ohne Aufschrift
+FILE_KINDS = ("pdf", "text", "tabelle", "praesentation", "csv")
+UI_SIZES = (16, 24, 32, 48)  # Oberfläche (je einfach und doppelt)
 
 
-def _box(img: Image.Image, box, fill) -> None:
-    x0, y0, x1, y1 = box
-    d = ImageDraw.Draw(img)
-    d.rectangle(box, fill=fill, outline=INK)
-    # runde Ecken: Eckpixel weglassen, innen Kontur nachziehen
-    for x, y, ix, iy in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
-        img.putpixel((x, y), (0, 0, 0, 0))
-        img.putpixel((x + ix, y + iy), INK)
+def source(kind: str, size: int) -> Path:
+    if kind == "app":
+        return SOURCES / "app.svg"
+    return SOURCES / (f"{kind}-klein.svg" if size <= SMALL_UP_TO else f"{kind}.svg")
 
 
-def small(size: int) -> Image.Image:
-    spec = LAYOUT[size]
-    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    for key, fill in (("back", BACK), ("front", FRONT)):
-        layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        _box(layer, spec[key], fill)
-        out.alpha_composite(layer)
-    d = ImageDraw.Draw(out)
-    for y, x0, x1 in spec["lines"]:
-        d.line((x0, y, x1, y), fill=INK)
-    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    _box(layer, spec["badge"], BADGE_FILL)
-    out.alpha_composite(layer)
-    font = spec["font"]
-    w, h = len(font["P"][0]), len(font["P"])
-    bx0, by0, bx1, by1 = spec["badge"]
-    total = 3 * w + 2
-    x = bx0 + (bx1 - bx0 + 1 - total) // 2
-    y = by0 + (by1 - by0 + 1 - h) // 2
-    for ch in "PDF":
-        for r, row in enumerate(font[ch]):
-            for c, v in enumerate(row):
-                if v == "#":
-                    out.putpixel((x + c, y + r), WHITE)
-        x += w + 1
-    return out
+def render_all(jobs: list[tuple[str, int]], folder: Path) -> dict[tuple[str, int], Image.Image]:
+    task = [{"svg": str(source(kind, size)), "size": size, "out": str(folder / f"{kind}-{size}.png")} for kind, size in jobs]
+    (folder / "auftrag.json").write_text(json.dumps(task), encoding="utf-8")
+    subprocess.check_call(["node", str(Path(__file__).with_name("render_svg.mjs")), str(folder / "auftrag.json")])
+    return {(kind, size): Image.open(folder / f"{kind}-{size}.png").convert("RGBA") for kind, size in jobs}
 
 
-def _source() -> Image.Image:
-    """Vorlage als quadratisches RGBA-Bild (transparent aufgefüllt, falls nicht quadratisch)."""
-    image = Image.open(SOURCE).convert("RGBA")
-    side = max(image.size)
-    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    square.alpha_composite(image, ((side - image.width) // 2, (side - image.height) // 2))
-    return square
-
-
-def render(size: int) -> Image.Image:
-    if size in LAYOUT:
-        return small(size)
-    image = _source()
-    if size == image.width:
-        return image
-    small_image = image.resize((size, size), Image.LANCZOS)
-    if size <= 48:
-        # Kleine Größen wirken nach dem Verkleinern weich – Farbe leicht nachschärfen, Transparenz unverändert
-        alpha = small_image.getchannel("A")
-        small_image = small_image.filter(ImageFilter.UnsharpMask(radius=0.6, percent=60, threshold=1))
-        small_image.putalpha(alpha)
-    return small_image
-
-
-def write_ico(path: Path, sizes) -> None:
-    images = [render(size) for size in sizes]
+def write_ico(path: Path, images: list[Image.Image]) -> None:
+    images = sorted(images, key=lambda image: image.width)
     largest = images[-1]
-    largest.save(path, format="ICO", sizes=[(size, size) for size in sizes], append_images=images[:-1])
-    # Pillow wählt für jede Größe das Bild passender Größe aus append_images
+    largest.save(path, format="ICO", sizes=[image.size for image in images], append_images=images[:-1])
     check = Image.open(path)
-    assert sorted(check.ico.sizes()) == sorted((size, size) for size in sizes), check.ico.sizes()
-
-
-def write_logo(path: Path) -> None:
-    """Symbol mit Schriftzug »PDF Tool« (Downloadseite)."""
-    height = 96
-    icon = render(96)
-    font_path = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-    font = ImageFont.truetype(str(font_path), 50) if font_path.is_file() else ImageFont.load_default()
-    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    box = probe.textbbox((0, 0), "PDF Tool", font=font)
-    width = height + 14 + (box[2] - box[0]) + 8
-    logo = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    logo.alpha_composite(icon, (0, 0))
-    draw = ImageDraw.Draw(logo)
-    draw.text((height + 14 - box[0], (height - (box[3] - box[1])) // 2 - box[1]), "PDF", font=font, fill=BADGE + (255,))
-    pdf_width = probe.textlength("PDF ", font=font)
-    draw.text((height + 14 - box[0] + pdf_width, (height - (box[3] - box[1])) // 2 - box[1]), "Tool", font=font, fill=WORDMARK + (255,))
-    logo.save(path, optimize=True)
+    assert sorted(check.ico.sizes()) == sorted(image.size for image in images), check.ico.sizes()
 
 
 def main() -> None:
-    assets = ROOT / "windows-app" / "assets"
-    public = ROOT / "public"
-    write_ico(assets / "icon.ico", ICON_SIZES)
-    write_ico(public / "favicon.ico", FAVICON_SIZES)
-    render(32).save(public / "favicon.png", optimize=True)
-    render(512).save(public / "app-icon.png", optimize=True)
-    write_logo(public / "app-logo.png")
-    print("Symbole geschrieben:", assets / "icon.ico", public)
+    kinds = ("app", *FILE_KINDS)
+    ui = sorted({size for base in UI_SIZES for size in (base, 2 * base)})
+    jobs = sorted({(kind, size) for kind in kinds for size in (*ICON_SIZES, *ui)})
+    IMAGES.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as temp:
+        rendered = render_all(jobs, Path(temp))
+        write_ico(ASSETS / "icon.ico", [rendered["app", size] for size in ICON_SIZES])
+        for kind in FILE_KINDS:
+            write_ico(ASSETS / f"datei-{kind}.ico", [rendered[kind, size] for size in ICON_SIZES])
+        for kind in kinds:
+            for base in UI_SIZES:
+                rendered[kind, base].save(IMAGES / f"{kind}-{base}.png", optimize=True)
+                rendered[kind, 2 * base].save(IMAGES / f"{kind}-{base}@2x.png", optimize=True)
+    print("Symbole geschrieben:", ASSETS / "icon.ico", ", ".join(f"datei-{kind}.ico" for kind in FILE_KINDS), IMAGES)
 
 
 if __name__ == "__main__":

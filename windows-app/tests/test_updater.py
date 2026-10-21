@@ -38,7 +38,7 @@ def eintrag(tag: str, *, prerelease: bool | None = None, draft: bool = False, as
         assets = [asset(f"PDF-Tool-Setup-{version}.exe", tag, size=57_311_371, digest=DIGEST), asset(f"PDF-Tool-Setup-{version}.exe.sha256", tag, size=92)]
     return {
         "tag_name": tag,
-        "name": f"PDF Tool {version}",
+        "name": f"Novadesk {version}",
         "body": body,
         "draft": draft,
         "prerelease": prerelease,
@@ -518,7 +518,7 @@ def tags(markup: str) -> set[str]:
 
 def test_99_release_notes_with_headings_lists_and_links():
     blocks = notes.render(
-        "# PDF Tool 2.7.3\n\nEinleitung mit **fett** und `Code`.\n\n## Neu\n\n- Erster Punkt\n  mit Fortsetzung\n- Zweiter mit [Link](https://github.com/Jerico3241/PDF-Tool)\n  - Unterpunkt\n1. Nummer eins\n\n---\n"
+        "# Novadesk 2.7.3\n\nEinleitung mit **fett** und `Code`.\n\n## Neu\n\n- Erster Punkt\n  mit Fortsetzung\n- Zweiter mit [Link](https://github.com/Jerico3241/PDF-Tool)\n  - Unterpunkt\n1. Nummer eins\n\n---\n"
     )
     arten = [(block["kind"], block["level"], block["marker"]) for block in blocks]
     assert arten == [("heading", 1, ""), ("paragraph", 0, ""), ("heading", 2, ""), ("bullet", 0, "•"), ("bullet", 0, "•"), ("bullet", 1, "•"), ("bullet", 0, "1."), ("rule", 0, "")]
@@ -546,7 +546,7 @@ def test_99_no_code_execution_and_no_remote_content():
 def test_release_notes_of_2_7_1_render_cleanly():
     text = (Path(__file__).resolve().parents[1] / "release-notes" / "2.7.1.md").read_text(encoding="utf-8")
     blocks = notes.render(text)
-    assert blocks[0] == {"kind": "heading", "level": 2, "marker": "", "html": "PDF Tool 2.7.1 – PDF Repair Batch"}
+    assert blocks[0] == {"kind": "heading", "level": 2, "marker": "", "html": "Novadesk 2.7.1 – PDF Repair Batch"}
     assert sum(block["kind"] == "bullet" for block in blocks) >= 10
     assert tags("".join(block["html"] for block in blocks)) <= ERLAUBT
     assert notes.plain(text, 40).endswith("…")

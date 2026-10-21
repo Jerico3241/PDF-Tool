@@ -30,7 +30,7 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 from tools.pdf_editor import compare as comparing
 from tools.pdf_editor import imagepdf, office, recovery, scan
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
-from tools.registry import READER
+from tools.registry import CONTRACTS, READER
 
 from .. import files, mail
 from ..base import Observable, prop
@@ -44,6 +44,7 @@ RECENT_LIMIT = 12
 TAB_LIMIT = 24
 CLOSED_LIMIT = 10  # »Geschlossenen Tab wieder öffnen«: so viele zuletzt geschlossene Dokumente
 NIGHT_KEY = "reader_nachtmodus"  # Nachtmodus (gui-config.json)
+CONTRACT_LISTS = (".xlsx", ".xlsm", ".xls")  # Startseite: Excel-Listen gehören den »Vertragsübersichten« (wie dort)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
 UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
@@ -79,7 +80,7 @@ HELP_STEPS = (
     "Bearbeiten: Werkzeug links neben dem Dokument wählen – Text ändern oder hinzufügen, Kommentare, Zeichnen, Unterschreiben; jedes weitere Werkzeug mit Namen unter »Alle Werkzeuge«. Rückgängig mit Strg+Z.",
     "Speichern: Strg+S (die Datei wird erst nach erfolgreicher Prüfung ersetzt), Speichern unter: Strg+Umschalt+S. Drucken: Strg+P.",
     "Vergleichen und Präsentieren: »Alle Werkzeuge« → »Mit anderer Fassung vergleichen …« zeigt Unterschiede farbig; »Geteilte Ansicht« zeigt zwei PDFs nebeneinander; F5 startet die Präsentation.",
-    "Archivieren und Umwandeln: »Alle Werkzeuge« → »Als PDF/A speichern …«; Bilder (Fotos, Scans) in das Fenster ziehen oder im Explorer über »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
+    "Archivieren und Umwandeln: »Alle Werkzeuge« → »Als PDF/A speichern …«; Bilder (Fotos, Scans) in das Fenster ziehen oder im Explorer über »Senden an« → »Novadesk (Bilder zu PDF)« zu einer PDF zusammenfügen.",
 )
 HELP_NOTES = (
     "Textänderungen nennen ihren Weg: »Direkt im PDF geändert«, »Neu gesetzt« oder »Kompatibilitätsmodus« (Überlagerung – keine Schwärzung, der Originaltext bleibt in der Datei).",
@@ -124,7 +125,7 @@ class ReaderController(Observable):
         self.app = app
         self.engine = Engine(self, on_exception=app.report_exception)
         self.cache = RenderCache()
-        self._tabs = KeyedListModel(("key", "name", "dirty", "path", "tip"), key="key", parent=self)
+        self._tabs = KeyedListModel(("key", "name", "dirty", "path", "tip", "kind"), key="key", parent=self)
         self._docs: dict[str, DocumentController] = {}
         self._current: DocumentController | None = None
         self._ids = 0
@@ -270,7 +271,13 @@ class ReaderController(Observable):
     # Öffnen -----------------------------------------------------------------------------------------------
     @Slot()
     def openDialog(self) -> None:  # noqa: N802
-        paths = files.open_files("PDF öffnen", self.app.initial_dir("reader", self.source_dir), files.PDF_FILTER)
+        self.openKind("")
+
+    @Slot(str)
+    def openKind(self, kind: str) -> None:  # noqa: N802
+        """Dateiauswahl: alle Dateiarten (leer) oder nur eine (»text«, »tabelle«, »praesentation«, »pdf« – Startseite)."""
+        titles = {"text": "Text öffnen", "tabelle": "Tabelle öffnen", "praesentation": "Präsentation öffnen", "pdf": "PDF öffnen"}
+        paths = files.open_files(titles.get(kind, "Datei öffnen"), self.app.initial_dir("reader", self.source_dir), files.OPEN_FILTERS.get(kind, files.OPEN_FILTER))
         if paths:
             self.source_dir = str(Path(paths[0]).parent)
             self.app.schedule_save()
@@ -325,24 +332,27 @@ class ReaderController(Observable):
         images = [p for p in paths if imagepdf.is_image(p)]
         documents = [p for p in paths if p not in images and office.kind_of(p) is not None]
         pdfs = [p for p in paths if p not in images and p not in documents and (p.lower().endswith(".pdf") or _looks_like_pdf(p))]
-        if documents:
-            # Word, Excel, PowerPoint (Ziehen, »Senden an«): über Office in PDF umwandeln und öffnen
-            self.office_to_pdf(documents[0])
-            if not pdfs and not images:
-                return
         if images:
             # Bilder (Ziehen, »Senden an« im Explorer): zu einer PDF zusammenfügen
             self.images_to_pdf(images)
-            if not pdfs:
+            if not pdfs and not documents:
                 return
+        if documents and not office.installed(office.kind_of(documents[0]) or "word"):
+            self.app.notify("reader", "warning", office.missing_text(office.kind_of(documents[0]) or "word"), title="Office-Datei ansehen")
+            documents = []
+        # Word, Excel, PowerPoint (seit 5.0): eine Ansicht als PDF in einem eigenen Tab – in der Reihenfolge der Auswahl
+        pdfs = [p for p in paths if p in pdfs or p in documents]
         if not pdfs:
-            self.app.notify("reader", "warning", "Bitte eine PDF-Datei wählen.", title="Keine PDF")
+            if not documents and not images:
+                self.app.notify("reader", "warning", "Bitte eine PDF- oder Office-Datei wählen.", title="Nicht geöffnet")
+            if then is not None:
+                then(None)
             return
         # Mit geöffneten Dokumenten sofort zum Reader – sonst erst, wenn das Dokument da ist (kein leerer Reader)
         if self.app.currentPage != "reader" and self._docs:
             self.app.navigate(READER.key)
         for path in pdfs:
-            existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+            existing = next((doc for doc in self._docs.values() if _shows(doc, path)), None)
             if existing is not None:
                 self.activate(existing.ident)
                 if then is not None:
@@ -366,13 +376,16 @@ class ReaderController(Observable):
         self.opening = self.opening + 1
         self._opening_paths.append(path)
         name = recovered.name if recovered is not None else Path(path).name
-        self.app.set_status(f"Wird geöffnet: {name} …", "busy")
+        viewing = recovered is None and office.kind_of(path) is not None
+        self.app.set_status(f"Wird zum Ansehen vorbereitet: {name} …" if viewing else f"Wird geöffnet: {name} …", "busy")
 
         def work():
             from .session import Session  # PDF-Engine (pikepdf, PDFium) erst beim ersten Öffnen – im Arbeitsthread
 
             if recovered is not None:
                 session = Session.from_recovery(ident, recovered, password)
+            elif office.kind_of(path) is not None:
+                session = Session.from_office(ident, path)  # Ansicht einer Office-Datei (über LibreOffice)
             else:
                 session = Session.open(ident, path, password)
             controller.session = session
@@ -490,7 +503,11 @@ class ReaderController(Observable):
 
     # Tabs ---------------------------------------------------------------------------------------------------
     def _tab_item(self, controller: DocumentController) -> dict:
-        return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path, "tip": controller.path or controller.name}
+        if controller.sourcePath:
+            # Ansicht einer Office-Datei: Name, Symbol und Farbe der Office-Datei
+            source = Path(controller.sourcePath)
+            return {"key": controller.ident, "name": source.name, "dirty": controller.dirty, "path": "", "tip": f"{controller.sourcePath} (Ansicht als PDF)", "kind": office.symbol(source)}
+        return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path, "tip": controller.path or controller.name, "kind": "pdf"}
 
     def tab_changed(self, controller: DocumentController) -> None:
         if controller.ident in self._docs:
@@ -550,7 +567,7 @@ class ReaderController(Observable):
             self.open_beside(paths[0])
 
     def open_beside(self, path: str) -> None:
-        existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+        existing = next((doc for doc in self._docs.values() if _shows(doc, path)), None)
         if existing is not None:
             if existing is not self._current:
                 self.splitKey = existing.ident
@@ -575,7 +592,7 @@ class ReaderController(Observable):
         if newer.path and _same(newer.path, path):
             self.app.notify("reader", "info", "Bitte eine andere Datei wählen – ein PDF mit sich selbst zu vergleichen zeigt keine Unterschiede.", title="Gleiche Datei")
             return
-        existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+        existing = next((doc for doc in self._docs.values() if _shows(doc, path)), None)
         if existing is not None:
             self.activate(existing.ident)
             self.splitKey = newer.ident
@@ -874,7 +891,7 @@ class ReaderController(Observable):
             exists, size = self._recent_stat[path]
             p = Path(path)
             items.append({
-                "path": path, "name": p.name, "folder": str(p.parent), "missing": not exists,
+                "path": path, "name": p.name, "folder": str(p.parent), "missing": not exists, "kind": office.symbol(p),
                 "size": size_text(size) if exists else "", "opened": opened_text(self._recent_opened.get(path, "")),
             })
         self._recent_stat = {path: info for path, info in self._recent_stat.items() if path in self._recent_paths}
@@ -1159,12 +1176,13 @@ class ReaderController(Observable):
             self.office_to_pdf(path)
 
     def office_to_pdf(self, path: str) -> None:
-        """Word-, Excel- oder PowerPoint-Datei über das installierte Office in eine neue PDF umwandeln und öffnen."""
+        """Word-, Excel- oder PowerPoint-Datei in eine neue PDF umwandeln (LibreOffice, sonst Microsoft Office) und öffnen."""
         kind = office.kind_of(path)
         if kind is None:
             return
-        if not office.installed(kind):
-            self.app.notify("reader", "warning", f"Zum Umwandeln braucht PDF Tool Microsoft {office.NAMES[kind]}. Es ist auf diesem PC nicht installiert.", title="Office in PDF")
+        engine = office.engine(kind)
+        if engine is None:
+            self.app.notify("reader", "warning", office.missing_text(kind), title="Office in PDF")
             return
         target = files.save_file("PDF speichern", str(Path(path).with_suffix(".pdf")), files.PDF_FILTER)
         if not target:
@@ -1178,7 +1196,7 @@ class ReaderController(Observable):
         else:
             final = target
         self.source_dir = str(Path(path).parent)
-        self.app.set_status(f"{Path(path).name} wird mit {office.NAMES[kind]} in PDF umgewandelt …", "busy")
+        self.app.set_status(f"{Path(path).name} wird mit {engine} in PDF umgewandelt …", "busy")
 
         def work() -> str:
             office.to_pdf(path, target)
@@ -1193,10 +1211,22 @@ class ReaderController(Observable):
         def failed(exc: BaseException, _details: str) -> None:
             if final != target:
                 Path(target).unlink(missing_ok=True)
-            message = str(exc) if isinstance(exc, EditorError) else f"{office.NAMES[kind]} konnte die Datei nicht umwandeln."
+            message = str(exc) if isinstance(exc, EditorError) else f"{engine} konnte die Datei nicht umwandeln."
             self.app.notify("reader", "error", message, title="Office in PDF")
 
         self.engine.submit(work, done, failed, label="office")
+
+    @Slot(str)
+    def officeAction(self, action: str) -> None:  # noqa: N802
+        """Hinweis über der Ansicht einer Office-Datei: »overview« – aus der Tabelle eine Vertragsübersicht erstellen,
+        »external« – die Office-Datei im Standardprogramm öffnen (z. B. zum Bearbeiten in Word)."""
+        current = self._current
+        if current is None or not current.sourcePath:
+            return
+        if action == "overview":
+            self.app.open_with_tool(CONTRACTS.key, [current.sourcePath])
+        elif action == "external":
+            self.openExternal(current.sourcePath)
 
     @Slot(str)
     def openExternal(self, path: str) -> None:  # noqa: N802
@@ -1230,7 +1260,7 @@ class ReaderController(Observable):
             self._scanning = False
             self.app.notify(
                 "reader", "warning",
-                "PDF Tool findet Scanner über die Scanner-Schnittstelle von Windows. Bitte den Scanner einschalten und verbinden; "
+                "Novadesk findet Scanner über die Scanner-Schnittstelle von Windows. Bitte den Scanner einschalten und verbinden; "
                 "bei manchen Geräten ist dafür der Treiber des Herstellers nötig.",
                 title="Kein Scanner gefunden",
             )
@@ -1342,7 +1372,7 @@ class ReaderController(Observable):
     @Slot()
     def sendByMail(self) -> None:  # noqa: N802
         """Aktuelles Dokument per E-Mail senden: Das E-Mail-Programm zeigt eine neue Nachricht mit der PDF als Anhang –
-        gesendet wird dort, nie von PDF Tool. Ungespeicherte Änderungen: vorher speichern oder ohne sie senden; ein nie
+        gesendet wird dort, nie von Novadesk. Ungespeicherte Änderungen: vorher speichern oder ohne sie senden; ein nie
         gespeichertes Dokument wird zuerst gespeichert."""
         controller = self._current
         if controller is None:
@@ -1394,12 +1424,13 @@ class ReaderController(Observable):
         documents = []
         for key in self.tabs.keys():
             controller = self._docs.get(key)
-            if controller is not None and controller.path:
-                documents.append({"pfad": controller.path, "seite": int(controller.currentPage)})
+            if controller is not None and (controller.path or controller.sourcePath):
+                # Ansicht einer Office-Datei: beim nächsten Start wieder die Office-Datei (neu umgewandelt)
+                documents.append({"pfad": controller.path or controller.sourcePath, "seite": int(controller.currentPage)})
         if not documents:
             return None
         current = self._docs.get(self._quit_active) or self._current
-        active = current.path if current is not None and current.path else ""
+        active = (current.path or current.sourcePath) if current is not None else ""
         return {"dokumente": documents, "aktiv": active}
 
     def _restore_session(self, recovered: list[str] | None = None) -> None:
@@ -1423,7 +1454,7 @@ class ReaderController(Observable):
         def found(existing: list[dict]) -> None:
             if self.app.closing:
                 return
-            busy = {_key(doc.path) for doc in self._docs.values() if doc.path} | {_key(path) for path in self._opening_paths}
+            busy = {_key(doc.path or doc.sourcePath) for doc in self._docs.values() if doc.path or doc.sourcePath} | {_key(path) for path in self._opening_paths}
             entries = [entry for entry in existing if _key(entry["pfad"]) not in busy][: max(0, TAB_LIMIT - len(self._docs) - self.opening)]
             state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": sum(1 for entry in wanted if entry not in existing and not _temporary(entry["pfad"])), "failed": 0}
             if not entries:
@@ -1485,7 +1516,7 @@ class ReaderController(Observable):
         return files.pick_folder(title, self.app.initial_dir("reader", self.source_dir))
 
     def pick_save_pdf(self, name: str, title: str) -> str:
-        current = self._current.path if self._current is not None and self._current.path else ""
+        current = (self._current.path or self._current.sourcePath) if self._current is not None else ""
         folder = str(Path(current).parent) if current else self.app.initial_dir("reader", self.source_dir)
         target = files.save_file(title, str(Path(folder) / name), files.PDF_FILTER)
         if target and not target.lower().endswith(".pdf"):
@@ -1527,7 +1558,7 @@ class ReaderController(Observable):
         self.engine.submit(find, done, failed, label="wiederherstellung", priority=3)
 
     # Beenden -----------------------------------------------------------------------------------------------------
-    def confirm_close(self, reason: str = "PDF Tool wird beendet.") -> bool:
+    def confirm_close(self, reason: str = "Novadesk wird beendet.") -> bool:
         # Aktiver Tab vor den Rückfragen (sie zeigen das jeweilige Dokument) – für die letzte Sitzung
         self._quit_active = self.currentKey
         for controller in list(self._docs.values()):
@@ -1563,7 +1594,7 @@ class ReaderController(Observable):
         return "PDF speichern" if any(controller.busy or controller.saving for controller in self._docs.values()) else ""
 
     def release_documents(self) -> bool:
-        """Fenster schließt, PDF Tool bleibt im Hintergrund: wie beim Beenden nach ungespeicherten Änderungen fragen und
+        """Fenster schließt, Novadesk bleibt im Hintergrund: wie beim Beenden nach ungespeicherten Änderungen fragen und
         alle Dokumente schließen (die Engine bleibt geladen). Mit »letzte Sitzung« öffnet das nächste Zeigen sie wieder.
         Wird gerade gespeichert, bleiben die Dokumente offen (nichts wird abgebrochen)."""
         if self.running_work():
@@ -1806,9 +1837,9 @@ class ReaderTool:
         return HINT
 
     def accepts(self, paths: list[str], page: str) -> bool:
-        # Office-Dateien wandelt der Reader in PDF um – Excel-Listen aber nur im Reader selbst (auf der Startseite
-        # gehören sie zu den »Vertragsübersichten«)
-        return any(p.lower().endswith(".pdf") or imagepdf.is_image(p) or office.kind_of(p) in ("word", "powerpoint") or (page == READER.key and office.kind_of(p) == "excel") for p in paths)
+        # Office-Dateien zeigt der Reader als PDF – Excel-Listen aber nur im Reader selbst (auf der Startseite gehören sie
+        # zu den »Vertragsübersichten«; die Ansicht einer Tabelle bietet dafür »Vertragsübersicht erstellen« an)
+        return any(p.lower().endswith(".pdf") or imagepdf.is_image(p) or office.kind_of(p) in ("word", "powerpoint") or (office.kind_of(p) == "excel" and (page == READER.key or not p.lower().endswith(CONTRACT_LISTS))) for p in paths)
 
     def drag_enter(self, accepted: bool, page: str) -> None:
         self.controller.dropHighlight = accepted
@@ -1851,6 +1882,11 @@ class ReaderTool:
 
     def shown(self) -> None:
         self.controller.window_shown()
+
+
+def _shows(doc: DocumentController, path: str) -> bool:
+    """Zeigt dieser Tab die Datei – als PDF oder als Ansicht einer Office-Datei?"""
+    return bool(doc.path and _same(doc.path, path)) or bool(doc.sourcePath and _same(doc.sourcePath, path))
 
 
 def _same(a: str, b: str) -> bool:

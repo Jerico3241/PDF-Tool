@@ -2,7 +2,7 @@
 
 Jede Markierung ist ein eigener, kleiner Inhaltsstrom der Seite – über dem Inhalt oder (beim
 Wasserzeichen wählbar) darunter –, gekennzeichnet mit ``/PDFToolMark`` (``/Header`` bzw.
-``/Watermark``). So lassen sich Markierungen von PDF Tool später gezielt wieder entfernen, ohne den
+``/Watermark``). So lassen sich Markierungen von Novadesk später gezielt wieder entfernen, ohne den
 übrigen Inhalt anzufassen. Im Strom selbst ist der Text als Artefakt markiert (``/Artifact … BDC``):
 Vorlese- und Barrierefreiheitsprogramme überspringen ihn.
 
@@ -80,7 +80,7 @@ class MarkResult:
 
 
 def present(document: EditorDocument) -> dict:
-    """Welche Markierungen von PDF Tool das Dokument hat (Seiten je Art)."""
+    """Welche Markierungen von Novadesk das Dokument hat (Seiten je Art)."""
     counts = {kind: 0 for kind in KINDS}
     for page in document.pdf.pages:
         kinds = {str(stream.get("/PDFToolMark", ""))[1:] for stream in _streams(page.obj)}
@@ -166,7 +166,7 @@ def add_watermark(document: EditorDocument, history: History, spec: Watermark) -
 
 
 def remove_marks(document: EditorDocument, history: History, kinds: tuple[str, ...] = KINDS) -> int:
-    """Markierungen von PDF Tool (gewählte Arten) entfernen; liefert die Zahl der Seiten."""
+    """Markierungen von Novadesk (gewählte Arten) entfernen; liefert die Zahl der Seiten."""
     wanted = {"/" + kind for kind in kinds}
     title = "Wasserzeichen entfernen" if kinds == (WATERMARK,) else "Kopf- und Fußzeile entfernen" if kinds == (HEADER,) else "Markierungen entfernen"
     return _remove(document, history, lambda s: str(s.get("/PDFToolMark", "")) in wanted, title)

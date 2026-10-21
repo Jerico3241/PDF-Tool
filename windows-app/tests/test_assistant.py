@@ -140,7 +140,7 @@ def test_cited_pages_are_found_and_linked_only_if_the_page_exists() -> None:
 
 def test_answers_are_shown_escaped_with_only_bold_bullets_and_page_links() -> None:
     """Inhalte einer Antwort stammen zum Teil aus dem PDF: Auszeichnungen, Bilder und fremde Verweise werden nie
-    übernommen – nur fett, Überschriften, Stichpunkte und Seitenverweise, die PDF Tool selbst erzeugt."""
+    übernommen – nur fett, Überschriften, Stichpunkte und Seitenverweise, die Novadesk selbst erzeugt."""
     answer = (
         "## Überblick\n"
         "Der Vertrag läuft **24 Monate** (S. 2).\n\n"

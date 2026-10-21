@@ -37,7 +37,7 @@ RELEASES_URL = f"https://api.github.com/repositories/{REPOSITORY_ID}/releases?pe
 SITE = "https://github.com"  # Release-Seiten und Downloads (Tests: lokaler Testserver)
 API_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
 SETUP_PREFIX = "PDF-Tool-Setup-"
-MAX_INSTALLER_SIZE = 512 * 1024 * 1024
+MAX_INSTALLER_SIZE = 1536 * 1024 * 1024  # seit 5.0 mit LibreOffice (bis 4.0: 512 MiB – das Setup bleibt darunter)
 MAX_CHECKSUM_SIZE = 4096
 MAX_FEED_SIZE = 8 * 1024 * 1024
 MAX_NOTES = 60_000
@@ -131,7 +131,7 @@ def parse_release(raw: object, site: str = SITE) -> Release | None:
         problems.append(f"{installer_name(version)} fehlt")
     if checksum is None:
         problems.append(f"{checksum_name(version)} fehlt")
-    title = raw.get("name") if isinstance(raw.get("name"), str) and raw.get("name").strip() else f"PDF Tool {version}"
+    title = raw.get("name") if isinstance(raw.get("name"), str) and raw.get("name").strip() else f"Novadesk {version}"
     notes = raw.get("body") if isinstance(raw.get("body"), str) else ""
     return Release(
         version=version,

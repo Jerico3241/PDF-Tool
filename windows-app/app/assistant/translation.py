@@ -45,7 +45,7 @@ def write_pdf(pages: list[str], target: str | os.PathLike, *, source_name: str, 
     temp = target.parent / f".{target.stem[:40]}.pdftool-{secrets.token_hex(4)}.tmp"
     try:
         document = SimpleDocTemplate(str(temp), pagesize=A4, leftMargin=22 * mm, rightMargin=22 * mm, topMargin=20 * mm, bottomMargin=20 * mm,
-                                     title=f"{Path(source_name).stem} ({language})", author="PDF Tool", creator="PDF Tool")
+                                     title=f"{Path(source_name).stem} ({language})", author="Novadesk", creator="Novadesk")
         document.build(story)
         os.replace(temp, target)
     finally:

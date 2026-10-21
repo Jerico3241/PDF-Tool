@@ -308,7 +308,7 @@ def register_app_identity() -> None:
 
 
 @_safe(False)
-def set_window_identity(hwnd: int, exe: str | Path | None, name: str = "PDF Tool") -> bool:
+def set_window_identity(hwnd: int, exe: str | Path | None, name: str = "Novadesk") -> bool:
     """Taskleiste: Name, Symbol und Neustart-Befehl des Fensters festlegen. Ohne diese Angaben nimmt Windows sie vom
     Prozess – ``pythonw.exe`` – und zeigt beim Rechtsklick auf das Symbol »Python« mit dem Python-Logo (findet es
     keine Startmenü-Verknüpfung mit derselben App-Kennung, etwa nach einem Start über »Öffnen mit«).

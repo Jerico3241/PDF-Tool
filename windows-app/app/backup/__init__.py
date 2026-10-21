@@ -1,4 +1,4 @@
-"""Sicherung und Wiederherstellung der Benutzerdaten von PDF Tool – vollständig lokal.
+"""Sicherung und Wiederherstellung der Benutzerdaten von Novadesk – vollständig lokal.
 
 Eine Sicherung ist eine ZIP-Datei mit der Endung ``.pdtbackup``:
 
@@ -7,7 +7,7 @@ Eine Sicherung ist eine ZIP-Datei mit der Endung ``.pdtbackup``:
   Größe und SHA-256.
 * ``data/…`` – die Dateien der Bereiche, genau wie im Datenordner.
 
-Gesichert werden nur Daten von PDF Tool (``archive.AREAS``): Einstellungen samt Darstellung,
+Gesichert werden nur Daten von Novadesk (``archive.AREAS``): Einstellungen samt Darstellung,
 Textbausteinen und Zyklus-Regeln, der Stapel, Kundenakten mit Vertragsständen, Vorlagen und
 Regelwerke. Nie: Excel- oder PDF-Dateien, Logos, Protokolle oder andere Sicherungen.
 

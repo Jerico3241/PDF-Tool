@@ -30,9 +30,9 @@ from tools.contract_overview.history.repository import FOLDER, HistoryStore, fil
 from ..base import Observable, prop
 from ..models import KeyedListModel
 
-NO_CUSTOMER = "Mit einer Kundenakte speichert PDF Tool nach jedem Erstellen den Vertragsstand und zeigt beim nächsten Mal, was sich geändert hat."
+NO_CUSTOMER = "Mit einer Kundenakte speichert Novadesk nach jedem Erstellen den Vertragsstand und zeigt beim nächsten Mal, was sich geändert hat."
 FIRST_SAVED = "Erster Vertragsstand gespeichert. Beim nächsten Excel-Import ist ein Vergleich möglich."
-AFTER_EXPORT = "Nach dem Erstellen der PDF wird der aktuelle Stand gespeichert – ab dann zeigt PDF Tool hier neue, entfernte und geänderte Verträge."
+AFTER_EXPORT = "Nach dem Erstellen der PDF wird der aktuelle Stand gespeichert – ab dann zeigt Novadesk hier neue, entfernte und geänderte Verträge."
 TONES = {ChangeKind.ADDED: "success", ChangeKind.REMOVED: "critical", ChangeKind.CHANGED: "caution", ChangeKind.UNCHANGED: "neutral"}
 KIND_KEYS = {ChangeKind.ADDED: "added", ChangeKind.REMOVED: "removed", ChangeKind.CHANGED: "changed", ChangeKind.UNCHANGED: "unchanged"}
 

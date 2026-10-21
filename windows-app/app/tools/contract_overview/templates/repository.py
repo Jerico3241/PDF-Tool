@@ -10,7 +10,7 @@
 * Jede Datei wird atomar geschrieben (``storage.write_json``).
 * Eine beschädigte Datei betrifft nur diese eine Vorlage: Sie wird übersprungen und als Problem
   gemeldet (Diagnose), nie gelöscht oder überschrieben. Dasselbe gilt für Vorlagen einer neueren
-  PDF-Tool-Version.
+  Novadesk-Version.
 * Ohne Ordner (``folder=None``) arbeitet der Speicher nur im Arbeitsspeicher (Tests).
 """
 

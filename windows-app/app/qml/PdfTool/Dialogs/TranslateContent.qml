@@ -80,6 +80,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: I18n.tr("Scans ohne Text erkennt PDF Tool vorher mit der Texterkennung, wenn sie eingerichtet ist. Übersetzungen können Fehler enthalten – wichtige Stellen bitte im Original prüfen.", I18n.revision)
+        text: I18n.tr("Scans ohne Text erkennt Novadesk vorher mit der Texterkennung, wenn sie eingerichtet ist. Übersetzungen können Fehler enthalten – wichtige Stellen bitte im Original prüfen.", I18n.revision)
     }
 }

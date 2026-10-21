@@ -1,5 +1,5 @@
 ﻿; ---------------------------------------------------------------------------
-; PDF Tool – Inno-Setup-Skript (Inno Setup 6.6 oder neuer)
+; Novadesk – Inno-Setup-Skript (Inno Setup 6.6 oder neuer)
 ;
 ; Bauen:   python windows-app/build.py
 ;          (bereitet build\payload vor und ruft ISCC.exe mit diesem Skript auf)
@@ -18,10 +18,14 @@
 ; Benutzerdaten übernimmt die App beim ersten Start mit Sicherung (appstate.py).
 ; ---------------------------------------------------------------------------
 
-#define AppName        "PDF Tool"
+; Seit 5.0 heißt die App »Novadesk« (bis 4.0 »PDF Tool«). Ordner, AppId, ProgID, AppUserModelID, Mutex und der
+; Name der EXE bleiben bewusst, wie sie waren: So ersetzt ein Update die Installation von PDF Tool, statt eine
+; zweite anzulegen, und Daten, Einstellungen und »Öffnen mit« bleiben erhalten.
+#define AppName        "Novadesk"
+#define PdfToolName    "PDF Tool"
 #define AppFolder      "PDF-Tool"
 #define AppPublisher   "Jerico"
-#define AppExeComment  "Werkzeuge für PDF-Dateien: PDFs lesen und bearbeiten, Vertragsübersichten erstellen, PDFs reparieren"
+#define AppExeComment  "Office für Windows: Tabellen, Texte, Präsentationen und PDFs ansehen, PDFs bearbeiten, Vertragsübersichten erstellen"
 ; Feste AppId – darf sich in künftigen Versionen NIE ändern, sonst entsteht eine zweite Installation.
 #define AppGuid        "59C40061-D5E5-446D-ACB4-E077D3C71E1A"
 #define AppId          "{{" + AppGuid + "}"
@@ -37,8 +41,20 @@
 ; (IExecuteCommand), nicht als Kindprozess des Aufrufers. Muss zu CLSID_PDFTOOL_OPEN in installer/launcher/launcher.c passen.
 ; Symbol der PDF-Dateien und in »Öffnen mit«: eigene Symbol-Ressource von PDF-Tool.exe. Windows merkt sich Symbole
 ; nach Datei und Nummer – mit derselben Nummer bliebe nach einem neuen Symbol das alte sichtbar (Sprungliste,
-; Explorer). Bei einem neuen App-Symbol die Nummer erhöhen (installer/launcher/launcher.rc).
-#define DocIcon        "-2"
+; Explorer). Bei einem neuen Symbol die Nummer erhöhen (installer/launcher/launcher.rc). Seit 5.0 (Novadesk):
+; App-Symbol -3, je Dateiart ein eigenes Symbol (-10 PDF, -11 Text, -12 Tabelle, -13 Präsentation, -14 CSV).
+#define AppIcon        "-3"
+#define DocIcon        "-10"
+#define TextIcon       "-11"
+#define SheetIcon      "-12"
+#define SlidesIcon     "-13"
+#define CsvIcon        "-14"
+; »Öffnen mit« für Office-Dateien (seit 5.0): je Dateiart eine ProgID mit eigenem Symbol, nur für diesen Benutzer.
+; Novadesk wird dabei nicht zur Standard-App – das wählt nur der Benutzer.
+#define TextProgId     "Novadesk.Text"
+#define SheetProgId    "Novadesk.Tabelle"
+#define SlidesProgId   "Novadesk.Praesentation"
+#define CsvProgId      "Novadesk.Csv"
 #define OpenClsid      "{{61E62B6E-0FE6-46A2-8AF1-BD670901BF3B}"
 ; Anmeldung als Programm für PDF-Dateien (Einstellungen → Apps → Standard-Apps), nur für diesen Benutzer
 #define CapabilitiesKey "Software\PDF-Tool\Capabilities"
@@ -147,11 +163,12 @@ ShowLanguageDialog=no
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [CustomMessages]
-de.LaunchApp=PDF Tool starten
+de.LaunchApp=Novadesk starten
 de.DesktopIcon=Verknüpfung auf dem &Desktop erstellen
 de.ShortcutGroup=Verknüpfungen:
-de.UpdateWelcome=PDF Tool %1 wird auf Version {#AppVersion} aktualisiert.%n%nEinstellungen, Kundenakten, Vertragsstände, Vorlagen, Textbausteine, Zyklus-Regeln und der gespeicherte Stapel bleiben erhalten.%n%nBitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
-de.RenameWelcome=Der {#OldAppName} %1 wird auf Version {#AppVersion} aktualisiert und heißt ab jetzt »PDF Tool«.%n%nNeu ist das Werkzeug »PDF reparieren«. Einstellungen, Vorlagen, Textbausteine, Zyklus-Regeln und der Kundenverlauf werden übernommen; vorher wird eine Sicherung angelegt.%n%nDie Verknüpfungen heißen danach »PDF Tool«. Bitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
+de.UpdateWelcome=Novadesk %1 wird auf Version {#AppVersion} aktualisiert.%n%nEinstellungen, Kundenakten, Vertragsstände, Vorlagen, Textbausteine, Zyklus-Regeln und der gespeicherte Stapel bleiben erhalten.%n%nBitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
+de.RenameWelcome=Der {#OldAppName} %1 wird auf Version {#AppVersion} aktualisiert und heißt ab jetzt »Novadesk«.%n%nNeu ist das Werkzeug »PDF reparieren«. Einstellungen, Vorlagen, Textbausteine, Zyklus-Regeln und der Kundenverlauf werden übernommen; vorher wird eine Sicherung angelegt.%n%nDie Verknüpfungen heißen danach »Novadesk«. Bitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
+de.NovadeskWelcome=PDF Tool %1 wird auf Version {#AppVersion} aktualisiert und heißt ab jetzt »Novadesk«.%n%nNeu: Word-, Excel- und PowerPoint-Dateien öffnen sich direkt zum Ansehen, dazu eine neue Startseite und neue Symbole für jede Dateiart. Alle PDF-Werkzeuge, Einstellungen, Kundenakten, Vertragsstände und Vorlagen bleiben erhalten.%n%nDie Verknüpfungen heißen danach »Novadesk«. Bitte schließen Sie die App, falls sie geöffnet ist. Klicken Sie dann auf »Weiter«.
 de.RemoveUserData=Sollen auch Ihre gespeicherten Einstellungen, Vorlagen, Regelwerke, Kundenakten, Vertragsstände, der gespeicherte Stapel, die automatischen Sicherungen im Datenordner und die Protokolle gelöscht werden?%n%nWählen Sie »Nein«, um sie für eine spätere Neuinstallation zu behalten. Erstellte und reparierte PDF-Dateien, Ihre Excel-Listen und Sicherungen außerhalb des Datenordners werden in keinem Fall gelöscht.
 
 [Tasks]
@@ -167,6 +184,8 @@ Type: filesandordirs; Name: "{app}\assets"
 Type: filesandordirs; Name: "{app}\ocr"
 ; KI-Laufzeit (llama.cpp): ebenso – Sprachmodelle liegen nicht hier, sondern in {localappdata}\PDF-Tool-KI
 Type: filesandordirs; Name: "{app}\ai"
+; LibreOffice (seit 5.0): ebenso – nie Dateien einer älteren LibreOffice-Version mischen
+Type: filesandordirs; Name: "{app}\office"
 ; Reste des selbst geschriebenen Installers bis 2.0.5 (bei Installation im selben Ordner)
 Type: files; Name: "{app}\Uebersichten-Ersteller.exe"
 Type: files; Name: "{app}\Uebersichten-Ersteller.exe.alt"
@@ -176,6 +195,10 @@ Type: files; Name: "{app}\version.txt"
 Type: files; Name: "{app}\start.log"
 Type: filesandordirs; Name: "{app}\.alt-*"
 Type: filesandordirs; Name: "{app}\.neu-*"
+; Verknüpfungen von PDF Tool (bis 4.0) – sie heißen jetzt »Novadesk«
+Type: files; Name: "{userprograms}\{#PdfToolName}.lnk"
+Type: files; Name: "{userdesktop}\{#PdfToolName}.lnk"
+Type: files; Name: "{usersendto}\{#PdfToolName} (Bilder zu PDF).lnk"
 ; Verknüpfungen des Übersichten-Erstellers (bis 2.2) und früherer App-Namen
 Type: files; Name: "{userprograms}\Übersichten-Ersteller.lnk"
 Type: files; Name: "{userdesktop}\Übersichten-Ersteller.lnk"
@@ -222,20 +245,106 @@ Root: HKCU; Subkey: "Software\Classes\CLSID\{#OpenClsid}"; ValueType: string; Va
 Root: HKCU; Subkey: "Software\Classes\CLSID\{#OpenClsid}\LocalServer32"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"""
 ; Das Programm selbst: Name und Symbol in »Öffnen mit« (Windows liest sie sonst aus der EXE)
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#DocIcon}"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#AppIcon}"
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
 ; Standard-Apps: PDF Tool als Programm für .pdf anmelden (Capabilities + RegisteredApplications)
 Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{#AppExeComment}"
-Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExe}"",{#DocIcon}"
+Root: HKCU; Subkey: "{#CapabilitiesKey}"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExe}"",{#AppIcon}"
 Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#PdfProgId}"
 Root: HKCU; Subkey: "Software\PDF-Tool"; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppName}"; ValueData: "{#CapabilitiesKey}"; Flags: uninsdeletevalue
 ; .pdf und .pdf\OpenWithProgids nur entfernen, wenn sie danach leer sind (Einträge anderer Programme bleiben)
 Root: HKCU; Subkey: "Software\Classes\.pdf"; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#PdfProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+
+; Office-Dateien (seit 5.0): dieselben Einträge wie für PDF – je Dateiart eine ProgID mit eigenem Symbol
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}"; ValueType: string; ValueName: ""; ValueData: "Text-Dokument"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Text-Dokument"
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppUserModelID}"
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#TextIcon}"
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\{#TextProgId}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".docx"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".docx"; ValueData: "{#TextProgId}"
+Root: HKCU; Subkey: "Software\Classes\.docx"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.docx\OpenWithProgids"; ValueType: string; ValueName: "{#TextProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".doc"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".doc"; ValueData: "{#TextProgId}"
+Root: HKCU; Subkey: "Software\Classes\.doc"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.doc\OpenWithProgids"; ValueType: string; ValueName: "{#TextProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".docm"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".docm"; ValueData: "{#TextProgId}"
+Root: HKCU; Subkey: "Software\Classes\.docm"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.docm\OpenWithProgids"; ValueType: string; ValueName: "{#TextProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".odt"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".odt"; ValueData: "{#TextProgId}"
+Root: HKCU; Subkey: "Software\Classes\.odt"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.odt\OpenWithProgids"; ValueType: string; ValueName: "{#TextProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".rtf"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".rtf"; ValueData: "{#TextProgId}"
+Root: HKCU; Subkey: "Software\Classes\.rtf"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.rtf\OpenWithProgids"; ValueType: string; ValueName: "{#TextProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}"; ValueType: string; ValueName: ""; ValueData: "Tabelle"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Tabelle"
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppUserModelID}"
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#SheetIcon}"
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\{#SheetProgId}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".xlsx"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".xlsx"; ValueData: "{#SheetProgId}"
+Root: HKCU; Subkey: "Software\Classes\.xlsx"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.xlsx\OpenWithProgids"; ValueType: string; ValueName: "{#SheetProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".xls"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".xls"; ValueData: "{#SheetProgId}"
+Root: HKCU; Subkey: "Software\Classes\.xls"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.xls\OpenWithProgids"; ValueType: string; ValueName: "{#SheetProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".xlsm"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".xlsm"; ValueData: "{#SheetProgId}"
+Root: HKCU; Subkey: "Software\Classes\.xlsm"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.xlsm\OpenWithProgids"; ValueType: string; ValueName: "{#SheetProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".ods"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".ods"; ValueData: "{#SheetProgId}"
+Root: HKCU; Subkey: "Software\Classes\.ods"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.ods\OpenWithProgids"; ValueType: string; ValueName: "{#SheetProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}"; ValueType: string; ValueName: ""; ValueData: "Präsentation"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Präsentation"
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppUserModelID}"
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#SlidesIcon}"
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\{#SlidesProgId}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pptx"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".pptx"; ValueData: "{#SlidesProgId}"
+Root: HKCU; Subkey: "Software\Classes\.pptx"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.pptx\OpenWithProgids"; ValueType: string; ValueName: "{#SlidesProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".ppt"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".ppt"; ValueData: "{#SlidesProgId}"
+Root: HKCU; Subkey: "Software\Classes\.ppt"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.ppt\OpenWithProgids"; ValueType: string; ValueName: "{#SlidesProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pptm"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".pptm"; ValueData: "{#SlidesProgId}"
+Root: HKCU; Subkey: "Software\Classes\.pptm"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.pptm\OpenWithProgids"; ValueType: string; ValueName: "{#SlidesProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".odp"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".odp"; ValueData: "{#SlidesProgId}"
+Root: HKCU; Subkey: "Software\Classes\.odp"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.odp\OpenWithProgids"; ValueType: string; ValueName: "{#SlidesProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}"; ValueType: string; ValueName: ""; ValueData: "CSV-Datei"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "CSV-Datei"
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppUserModelID}"
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",{#CsvIcon}"
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\{#CsvProgId}\shell\open\command"; ValueType: string; ValueName: "DelegateExecute"; ValueData: "{#OpenClsid}"
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".csv"; ValueData: ""
+Root: HKCU; Subkey: "{#CapabilitiesKey}\FileAssociations"; ValueType: string; ValueName: ".csv"; ValueData: "{#CsvProgId}"
+Root: HKCU; Subkey: "Software\Classes\.csv"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\.csv\OpenWithProgids"; ValueType: string; ValueName: "{#CsvProgId}"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Run]
 Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
@@ -247,6 +356,9 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\assets"
 Type: filesandordirs; Name: "{app}\ocr"
 Type: filesandordirs; Name: "{app}\ai"
+Type: filesandordirs; Name: "{app}\office"
+; Profil von LibreOffice und umgewandelte Ansichten von Office-Dateien (seit 5.0) – nur Zwischenablage, keine Benutzerdaten
+Type: filesandordirs; Name: "{localappdata}\PDF-Tool-Office"
 Type: files; Name: "{app}\fehler.log"
 Type: files; Name: "{app}\start.log"
 Type: dirifempty; Name: "{app}"
@@ -303,14 +415,21 @@ begin
   Result := True;
 end;
 
+function PdfToolUpdate(): Boolean;
+begin
+  Result := (PreviousVersion <> '') and (PreviousName = '{#PdfToolName}');
+end;
+
 function RenamedUpdate(): Boolean;
 begin
-  Result := (PreviousVersion <> '') and (PreviousName <> '{#AppName}');
+  Result := (PreviousVersion <> '') and (PreviousName <> '{#AppName}') and not PdfToolUpdate();
 end;
 
 procedure InitializeWizard();
 begin
-  if RenamedUpdate() then
+  if PdfToolUpdate() then
+    WizardForm.WelcomeLabel2.Caption := FmtMessage(CustomMessage('NovadeskWelcome'), [PreviousVersion])
+  else if RenamedUpdate() then
     WizardForm.WelcomeLabel2.Caption := FmtMessage(CustomMessage('RenameWelcome'), [PreviousVersion])
   else if PreviousVersion <> '' then
     WizardForm.WelcomeLabel2.Caption := FmtMessage(CustomMessage('UpdateWelcome'), [PreviousVersion]);
@@ -441,6 +560,10 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
+    { Einträge unter dem alten Namen »PDF Tool« (bis 4.0): Standard-Apps und »Start mit Windows« (den setzt die
+      App beim nächsten Start unter »Novadesk« neu, wenn die Einstellung an ist) }
+    RegDeleteValue(HKCU, 'Software\RegisteredApplications', '{#PdfToolName}');
+    RegDeleteValue(HKCU, '{#RunKey}', '{#PdfToolName}');
     { Gleicher Ordner (z. B. selbst gewählt oder Update bis 2.0.5 im selben Ordner): alte Einstellungsdatei übernehmen }
     if SamePath(PreviousDir, ExpandConstant('{app}')) then
       MigrateLegacyConfig(ExpandConstant('{app}'))
@@ -461,7 +584,11 @@ var
 begin
   if CurUninstallStep = usUninstall then
     { »Im Hintergrund bereithalten«: den Eintrag unter »Start mit Windows« setzt die App selbst }
+  begin
     RegDeleteValue(HKCU, '{#RunKey}', '{#AppName}');
+    RegDeleteValue(HKCU, '{#RunKey}', '{#PdfToolName}');
+    RegDeleteValue(HKCU, 'Software\RegisteredApplications', '{#PdfToolName}');
+  end;
   if CurUninstallStep = usPostUninstall then
   begin
     DataDir := ExpandConstant('{userappdata}\' + DataFolder);

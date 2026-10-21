@@ -1,6 +1,6 @@
 """Eigene temporäre Dateien früherer Sitzungen entfernen – nie fremde.
 
-Entfernt wird nur, was PDF Tool selbst anlegt und was älter als ein Tag ist (eine laufende
+Entfernt wird nur, was Novadesk selbst anlegt und was älter als ein Tag ist (eine laufende
 zweite Instanz verliert so nie eine Datei, an der sie gerade arbeitet):
 
 * im temporären Ordner von Windows: ``pdf-tool-vorschau-*``, ``pdf-tool-reparatur-*``,

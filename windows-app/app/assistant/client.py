@@ -172,7 +172,7 @@ def _http_error(response: http.client.HTTPResponse) -> str:
     except (ValueError, OSError, http.client.HTTPException):
         data = {}
     if response.status in (401, 403):
-        return "Der KI-Assistent hat die Anfrage abgelehnt. Bitte PDF Tool neu starten."
+        return "Der KI-Assistent hat die Anfrage abgelehnt. Bitte Novadesk neu starten."
     return _error_text(data.get("error"), response.status)
 
 

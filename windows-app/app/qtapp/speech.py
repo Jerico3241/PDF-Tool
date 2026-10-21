@@ -16,7 +16,7 @@ from .base import Observable, prop
 
 VOICE_KEY = "vorlesen_stimme"  # gui-config.json: gewählte Stimme (SAPI-Kennung)
 RATE_KEY = "vorlesen_tempo"
-POLL_MS = 120  # so oft fragt PDF Tool die Sprachausgabe nach Wort und Ende
+POLL_MS = 120  # so oft fragt Novadesk die Sprachausgabe nach Wort und Ende
 
 
 class SpeechController(Observable):

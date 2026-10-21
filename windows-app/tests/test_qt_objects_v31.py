@@ -308,7 +308,7 @@ def test_paste_image_and_text_from_other_programs(reader_app, tmp_path: Path) ->
 
 
 def test_closing_keeps_copied_text_for_other_programs(reader_app, tmp_path: Path) -> None:
-    """Beim Beenden ersetzt PDF Tool seine Daten in der Zwischenablage durch Qt-eigene: der Text bleibt für
+    """Beim Beenden ersetzt Novadesk seine Daten in der Zwischenablage durch Qt-eigene: der Text bleibt für
     andere Programme, die interne Kennung entfällt (sonst stürzte der Abbau der Anwendung ab)."""
     from qtapp.reader.controller import CLIP_FORMAT
 

@@ -235,7 +235,7 @@ class RulesController(Observable):
             one = len(problems) == 1
             text = f"{len(problems)} {'Regelwerk konnte' if one else 'Regelwerke konnten'} nicht gelesen werden und {'wird' if one else 'werden'} nicht angezeigt (Einstellungen → Diagnose)."
             if all(problem.newer for problem in problems):
-                text += " Sie stammen aus einer neueren Version von PDF Tool."
+                text += " Sie stammen aus einer neueren Version von Novadesk."
             self.problemsText = text
         else:
             self.problemsText = ""

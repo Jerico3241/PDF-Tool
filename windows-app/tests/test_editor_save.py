@@ -251,7 +251,7 @@ def test_folder_without_write_permission_is_reported_before_any_work(tmp_path: P
         with pytest.raises(SaveFailed) as error:
             save.save(doc, path)
         assert error.value.kind == errors.DIRECTORY_NOT_WRITABLE and error.value.phase == "temp_create" and error.value.save_as
-        assert str(error.value).startswith("PDF Tool hat keine Schreibberechtigung für diesen Speicherort.")
+        assert str(error.value).startswith("Novadesk hat keine Schreibberechtigung für diesen Speicherort.")
         assert serialized == []  # sofort gemeldet – ohne erst zu serialisieren
         assert_untouched(doc, history, path, original)
     finally:

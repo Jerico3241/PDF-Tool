@@ -1097,7 +1097,7 @@ def test_f_folder_without_write_permission(reader_app, tmp_path: Path, monkeypat
     key(h, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
     settle(h)
     error = save_error(h)
-    assert error is not None and error.message.startswith("PDF Tool hat keine Schreibberechtigung für diesen Speicherort.")
+    assert error is not None and error.message.startswith("Novadesk hat keine Schreibberechtigung für diesen Speicherort.")
     assert error.actions == ["Speichern unter …"] and doc.dirty and digest(path) == before
 
 

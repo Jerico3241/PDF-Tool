@@ -31,7 +31,7 @@ from .sanitize import Sanitizer, anonymize_config, sensitive_terms
 
 PREFIX = "PDF-Tool-Support"
 MAX_LOG = 2 * 1024 * 1024
-README = """Support-Paket von PDF Tool
+README = """Support-Paket von Novadesk
 ==========================
 
 Dieses Paket hilft bei der Fehlersuche. Es wurde auf diesem PC erstellt und wird nicht
@@ -70,7 +70,7 @@ def _tail(path: Path, limit: int = MAX_LOG) -> str:
 
 def report_text(app_version: str, facts: list[Fact], checks: list[Check], qml: list[str], created: str) -> str:
     status, verdict = summary(checks)
-    lines = [f"PDF Tool – Diagnosebericht ({created})", "", "Systeminformationen", "-------------------"]
+    lines = [f"Novadesk – Diagnosebericht ({created})", "", "Systeminformationen", "-------------------"]
     lines += [f"{fact.label}: {fact.value}" for fact in facts]
     lines += ["", f"Datenprüfung: {verdict}", "------------"]
     marks = {"ok": "OK     ", "info": "Info   ", "warning": "Hinweis", "error": "FEHLER "}

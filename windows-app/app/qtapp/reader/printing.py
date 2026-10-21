@@ -4,7 +4,7 @@ Seitenanpassung und Vorschau. Gerendert wird jede Seite im Arbeitsthread in Druc
 
 * Bereich: alle Seiten, aktuelle Seite, ausgewählte Seiten (Auswahl in »Seiten organisieren«) oder
   Seitenbereiche wie »1-3, 5«.
-* Kopien: übernimmt der Druckertreiber; kann er keine Kopien, druckt PDF Tool sie selbst (sortiert
+* Kopien: übernimmt der Druckertreiber; kann er keine Kopien, druckt Novadesk sie selbst (sortiert
   bzw. unsortiert wie gewählt).
 * Ausrichtung: wie im Dialog gewählt; ohne Änderung im Dialog je Seite wie das Dokument
   (Querformat-Seiten quer).

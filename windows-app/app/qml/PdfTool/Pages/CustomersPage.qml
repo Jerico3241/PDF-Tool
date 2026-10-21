@@ -206,7 +206,7 @@ Item {
                 Layout.topMargin: 16
                 iconName: "arrow_sync"
                 title: I18n.tr("Bekannte Kunden automatisch übernehmen", I18n.revision)
-                description: I18n.tr("Erkennt PDF Tool nach der Excel-Prüfung genau einen bekannten Kunden und sind noch keine Kundendaten eingetragen, werden sie ohne Nachfrage übernommen (rückgängig machbar). Standard: aus.", I18n.revision)
+                description: I18n.tr("Erkennt Novadesk nach der Excel-Prüfung genau einen bekannten Kunden und sind noch keine Kundendaten eingetragen, werden sie ohne Nachfrage übernommen (rückgängig machbar). Standard: aus.", I18n.revision)
                 PToggle {
                     label: I18n.tr("Bekannte Kunden automatisch übernehmen", I18n.revision)
                     checked: Customers.autoApply
@@ -289,7 +289,7 @@ Item {
                 Layout.alignment: Qt.AlignTop
                 title: I18n.tr("Rechnungsempfänger", I18n.revision)
                 iconName: "mail"
-                subtitle: I18n.tr("Adressen, an denen PDF Tool diesen Kunden in einer Excel-Liste wiedererkennt.", I18n.revision)
+                subtitle: I18n.tr("Adressen, an denen Novadesk diesen Kunden in einer Excel-Liste wiedererkennt.", I18n.revision)
                 PText {
                     Layout.fillWidth: true
                     visible: Customers.emailModel.count === 0

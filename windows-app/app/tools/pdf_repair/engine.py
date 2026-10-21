@@ -1288,7 +1288,7 @@ def _stage_raster(path: Path, work: Path, password: str | None, source: _Source,
     try:
         total = len(src)
         sheet = canvas.Canvas(str(out), pageCompression=1)
-        sheet.setCreator("PDF Tool – Rettungsmodus")
+        sheet.setCreator("Novadesk – Rettungsmodus")
         for index in range(total):
             progress("raster", index / max(1, total))
             page = bitmap = None

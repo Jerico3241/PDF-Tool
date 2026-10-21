@@ -550,7 +550,7 @@ def test_raw_recoverable_file_offers_the_structure_rebuild(repair_app, tmp_path:
     item = eintrag(h, pdf)
     row = zeile(h, item)
     assert row["diagSeverity"] == "warning" and row["diagTitle"] == "Erweiterte Wiederherstellung möglich"
-    assert "PDF Tool versucht, die noch vorhandenen Inhalte wiederherzustellen." in row["diagText"]
+    assert "Novadesk versucht, die noch vorhandenen Inhalte wiederherzustellen." in row["diagText"]
     assert "Datenströme" in row["diagText"]
     assert row["stateText"] == "Erweiterte Wiederherstellung möglich"
     assert h.repair.primaryText == "PDF-Struktur rekonstruieren" and h.repair.canStart

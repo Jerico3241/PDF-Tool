@@ -22,7 +22,7 @@ from diagnostics import applog, checks, cleanup, info, support
 from diagnostics.sanitize import Sanitizer, anonymize_config
 
 PROFILE = r"C:\Users\Max Mustermann"
-INSTALL = r"C:\Program Files\PDF Tool"
+INSTALL = r"C:\Program Files\Novadesk"
 DATA = r"C:\Users\Max Mustermann\AppData\Roaming\PDF-Tool"
 
 
@@ -109,7 +109,7 @@ def test_redact_removes_personal_paths_names_and_mails() -> None:
     log = (
         "2026-10-01 PDF erstellt: C:\\Users\\Max Mustermann\\Documents\\Kunden\\Muster GmbH\\Vertragsuebersicht_Kd10042.pdf\n"
         "Excel: \\\\server\\freigabe\\Muster GmbH\\liste.xlsx\n"
-        'Traceback: File "C:\\Program Files\\PDF Tool\\app\\engine.py", line 12, in erstelle_pdf\n'
+        'Traceback: File "C:\\Program Files\\Novadesk\\app\\engine.py", line 12, in erstelle_pdf\n'
         "Daten: C:\\Users\\Max Mustermann\\AppData\\Roaming\\PDF-Tool\\vorlagen\\abc.json\n"
         "Empfänger rechnung@muster-gmbh.de, Benutzer mmustermann auf BUERO-PC-07\n"
         "Linux: /home/max/Kunden/Muster GmbH/liste.xlsx\n"
@@ -242,7 +242,7 @@ def test_update_installer_and_start_log_into_their_categories(tmp_path: Path, mo
         applog.close()
     assert gestartet and gestartet[0][1] == "-I"  # Hilfsprozess im isolierten Modus
     text = (tmp_path / "pdf-tool.log").read_text(encoding="utf-8")
-    assert "INFO    pdftool.ui: PDF Tool " in text and " gestartet (Python " in text
+    assert "INFO    pdftool.ui: Novadesk " in text and " gestartet (Python " in text
     assert "INFO    pdftool.update: Kanal: stable → beta" in text
     assert "INFO    pdftool.installer: Hilfsprozess gestartet: PDF-Tool-Setup-2.7.3.exe startet nach dem Ende von Prozess 4242" in text
     assert str(tmp_path) not in text

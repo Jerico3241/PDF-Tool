@@ -98,7 +98,7 @@ def test_settings_show_version_channel_automatic_and_last_check(start):
     h = start()
     h.navigate("settings", 0.3)
     assert u(h).currentVersion == "2.7.2" and not u(h).currentBeta
-    assert h.item("updateCurrentVersion").property("text") == "PDF Tool 2.7.2"
+    assert h.item("updateCurrentVersion").property("text") == "Novadesk 2.7.2"
     assert h.item("updateLastCheck").property("text") == "Letzte Prüfung: Noch nie"
     # Standard: Schalter »Beta-Versionen erhalten« aus = Kanal Stable; keine Auswahlliste mehr
     assert u(h).channel == "stable" and u(h).beta is False
@@ -145,7 +145,7 @@ def test_start_check_finds_update_and_the_button_becomes_install(start, server, 
     server.publish("2.7.3", notes=NOTES)
     h = start(auto=True, update_auto_installieren=False)
     assert settle(h, "available") == "available"
-    assert u(h).statusTitle == "PDF Tool 2.7.3 ist verfügbar." and u(h).action == "install"
+    assert u(h).statusTitle == "Novadesk 2.7.3 ist verfügbar." and u(h).action == "install"
     assert requests(server) == 1
     assert config(config_file)["update_letzte_pruefung"].endswith("Z") and config(config_file)["update_auto_installieren"] is False
     assert h.item("updateBanner") is None
@@ -153,13 +153,13 @@ def test_start_check_finds_update_and_the_button_becomes_install(start, server, 
     h.runtime.settings.setSection("updates")
     pump(0.3)
     assert h.item("updateActionButton").property("text") == "Jetzt installieren"
-    assert h.item("updateOffer").property("visible") and h.item("updateOfferTitle").property("text") == "Was ist neu in PDF Tool 2.7.3"
+    assert h.item("updateOffer").property("visible") and h.item("updateOfferTitle").property("text") == "Was ist neu in Novadesk 2.7.3"
     assert len([item for item in h.item("updateCardNotes").childItems() if item.property("kind")]) == 4
     assert not updates.LAUNCHES  # ohne automatische Installation: erst nach dem Klick
 
 
 def test_start_check_downloads_installs_and_reopens_the_pdfs(start, server, config_file):
-    """Standard seit 4.0 Beta 7: beim Start gefunden, im Hintergrund geladen, installiert – PDF Tool beendet sich
+    """Standard seit 4.0 Beta 7: beim Start gefunden, im Hintergrund geladen, installiert – Novadesk beendet sich
     (das Setup startet es neu) und merkt sich, die PDFs danach einmal wieder zu öffnen."""
     server.publish("2.7.3", notes=NOTES)
     h = start(auto=True, fetch=True)
@@ -318,13 +318,13 @@ def test_81_channel_switch_works_without_restart(start, server):
     server.publish("2.8.0-beta.1")
     h = start()
     u(h).checkNow()
-    assert settle(h, "available") == "available" and u(h).offerTitle == "PDF Tool 2.7.3"
+    assert settle(h, "available") == "available" and u(h).offerTitle == "Novadesk 2.7.3"
     u(h).setChannel("beta")
-    assert settle(h, "available") == "available" and u(h).offerTitle == "PDF Tool 2.8.0-beta.1"
+    assert settle(h, "available") == "available" and u(h).offerTitle == "Novadesk 2.8.0-beta.1"
     assert u(h).offerBeta and u(h).offerLabel == "2.8.0 Beta 1"
-    assert u(h).statusTitle == "PDF Tool 2.8.0 Beta 1 ist verfügbar."
+    assert u(h).statusTitle == "Novadesk 2.8.0 Beta 1 ist verfügbar."
     u(h).setChannel("stable")
-    assert u(h).offerTitle == "PDF Tool 2.7.3" and not u(h).offerBeta
+    assert u(h).offerTitle == "Novadesk 2.7.3" and not u(h).offerBeta
 
 
 def test_19_newer_beta_installed_and_switched_to_stable(start, server, monkeypatch):
@@ -348,7 +348,7 @@ def test_53_54_beta_user_stays_on_beta_after_stable_update(start, server, monkey
     server.publish("2.8.1-beta.1")
     h = start(update_kanal="beta", update_beta_bestaetigt=True)
     u(h).checkNow()
-    assert settle(h, "available") == "available" and u(h).offerTitle == "PDF Tool 2.8.1-beta.1"
+    assert settle(h, "available") == "available" and u(h).offerTitle == "Novadesk 2.8.1-beta.1"
     assert config(config_file)["update_kanal"] == "beta"
 
 

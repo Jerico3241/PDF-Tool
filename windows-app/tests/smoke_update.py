@@ -101,9 +101,9 @@ def prepare(app_dir: Path | None, channel: str) -> None:
     finally:
         runtime.app.shutdown()
     saved = read_config(config)
-    check(saved.get("vorlagen_2") == appstate.VERSION, f"PDF Tool {appstate.VERSION} hat die Vorlagen nicht übernommen: {saved.get('vorlagen_2')}")
+    check(saved.get("vorlagen_2") == appstate.VERSION, f"Novadesk {appstate.VERSION} hat die Vorlagen nicht übernommen: {saved.get('vorlagen_2')}")
     check(saved.get("update_kanal") == channel, f"Update-Kanal nach dem ersten Start: {saved.get('update_kanal')}")
-    print(f"Erster Start von PDF Tool {appstate.VERSION} ohne Fenster: Vorlagen 2.0 {names}")
+    print(f"Erster Start von Novadesk {appstate.VERSION} ohne Fenster: Vorlagen 2.0 {names}")
     del runtime
     del qt
 
@@ -136,7 +136,7 @@ def search(app_dir: Path, installed_text: str, expected: str, channel_name: str,
     check(installed < target, f"{expected} ist nicht neuer als die installierte Version {installed}")
     beta_target = bool(target.prerelease)
     label = CHANNELS[channel_name]
-    print(f"Installiert: PDF Tool {appstate.VERSION} · Kanal {label} · Python {sys.version.split()[0]} · {sys.executable}")
+    print(f"Installiert: Novadesk {appstate.VERSION} · Kanal {label} · Python {sys.version.split()[0]} · {sys.executable}")
     worker = Worker()
     app = SimpleNamespace(worker=worker)
     done = (UpdateState.UP_TO_DATE, UpdateState.AVAILABLE, UpdateState.ERROR)
@@ -194,7 +194,7 @@ def after(app_dir: Path, expected: str, channel: str) -> None:
     legacy = [entry["name"] for entry in before.get("vorlagen") or [] if isinstance(entry, dict) and entry.get("name")]
     # Hat die Vorversion die Vorlagen schon übernommen (ab 2.8.0-beta.1), bleibt es dabei – nie doppelt
     taken_over = before.get("vorlagen_2") or expected
-    print(f"Installiert: PDF Tool {appstate.VERSION} · Vorlagen im alten Format: {legacy} · übernommen von: {before.get('vorlagen_2') or '–'}")
+    print(f"Installiert: Novadesk {appstate.VERSION} · Vorlagen im alten Format: {legacy} · übernommen von: {before.get('vorlagen_2') or '–'}")
 
     qt, runtime = start(appstate)
     try:

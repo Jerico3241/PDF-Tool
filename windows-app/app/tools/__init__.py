@@ -1,4 +1,4 @@
-"""Werkzeuge von PDF Tool.
+"""Werkzeuge von Novadesk.
 
 Jedes Werkzeug ist ein eigenes Paket mit eigener Logik (ohne Oberflächencode); seine Seiten
 stehen in QML (``qml/PdfTool/Pages``), seine Controller in ``qtapp``. Startseite und Tab-Leiste

@@ -162,7 +162,7 @@ jobs:
         run: |
           $root = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
           $old = "$([char]0x00DC)bersichten-Ersteller"
-          $entries = @(Get-ChildItem $root | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { $_.DisplayName -eq "PDF Tool" -or $_.DisplayName -eq $old -or $_.PSChildName -eq "Uebersichten-Ersteller" })
+          $entries = @(Get-ChildItem $root | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { $_.DisplayName -eq "Novadesk" -or $_.DisplayName -eq "PDF Tool" -or $_.DisplayName -eq $old -or $_.PSChildName -eq "Uebersichten-Ersteller" })
           if ($entries.Count -ne 1) { throw "Erwartet genau einen App-Eintrag, gefunden: $($entries.Count)" }
           if ($entries[0].DisplayVersion -ne $env:ZIEL) { throw "App-Eintrag nennt Version $($entries[0].DisplayVersion) statt $env:ZIEL" }
           Write-Host "App-Eintrag: $($entries[0].DisplayName) $($entries[0].DisplayVersion)"

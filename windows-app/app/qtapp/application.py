@@ -147,7 +147,7 @@ class Runtime(QObject):
 
         self.system_watcher = system.watch(self.app, self.theme)
         self.app.at_shutdown(lambda: system.unwatch(self.system_watcher))
-        # Nach dem Start zeigt PDF Tool die Startseite mit allen Werkzeugen (fertig im ersten Bild).
+        # Nach dem Start zeigt Novadesk die Startseite mit allen Werkzeugen (fertig im ersten Bild).
         self.app.navigate("home")
 
     def _build_tools(self) -> None:
@@ -163,7 +163,7 @@ def create_application(argv: list[str] | None = None) -> QApplication:
         QQuickStyle.setStyle("Basic")
         app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName(APP_NAME)
-    # Anzeigename = Fenstertitel (bei einer Beta »PDF Tool 2.8.0 Beta«): Qt hängt den Anzeigenamen
+    # Anzeigename = Fenstertitel (bei einer Beta »Novadesk 2.8.0 Beta«): Qt hängt den Anzeigenamen
     # an jeden Fenstertitel an, der nicht auf ihn endet – im Hauptfenster stünde er sonst doppelt.
     app.setApplicationDisplayName(window_title(VERSION))
     app.setApplicationVersion(VERSION)
@@ -280,7 +280,7 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine, visible: bool =
     hwnd = int(window.winId())  # natives Fenster anlegen (noch unsichtbar)
     from .background import launcher_path
 
-    winsys.set_window_identity(hwnd, launcher_path())  # Taskleiste: »PDF Tool« statt »Python«
+    winsys.set_window_identity(hwnd, launcher_path())  # Taskleiste: »Novadesk« statt »Python«
     app.apply_chrome()
     runtime.theme.darkChanged.connect(app.apply_chrome)
     runtime.theme.revisionChanged.connect(app.apply_chrome)
@@ -365,7 +365,7 @@ def start_log() -> None:
         qt = f"PySide6 {pyside}, Qt {qVersion()}"
     except Exception:  # noqa: BLE001
         qt = "Qt unbekannt"
-    applog.get(applog.UI).info("PDF Tool %s gestartet (Python %s, %s, %s)", VERSION, platform.python_version(), qt, info.os_brief())
+    applog.get(applog.UI).info("Novadesk %s gestartet (Python %s, %s, %s)", VERSION, platform.python_version(), qt, info.os_brief())
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -379,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
         get_log("sicherung").log(20 if outcome.ok else 40, "Wiederherstellung beim Start: %s", outcome.message)
     cfg = load_config()
     qt_app = create_application(argv)
-    # »Öffnen mit«: PDFs aus der Befehlszeile – läuft PDF Tool schon, öffnet die laufende App sie
+    # »Öffnen mit«: PDFs aus der Befehlszeile – läuft Novadesk schon, öffnet die laufende App sie
     from . import instance
 
     from . import background
@@ -388,14 +388,14 @@ def main(argv: list[str] | None = None) -> int:
     paths = instance.pdf_arguments(arguments)
     hidden = background.ARGUMENT in arguments and not paths
     if hidden:
-        # Start mit Windows: nur mit eingeschalteter Einstellung und nur, wenn PDF Tool noch nicht läuft
+        # Start mit Windows: nur mit eingeschalteter Einstellung und nur, wenn Novadesk noch nicht läuft
         if not background.enabled_in(cfg):
             background.sync_autostart(False)
             return 0
         if instance.forward([], show=False):
             return 0
     else:
-        # Läuft PDF Tool schon (sichtbar oder im Hintergrund), zeigt die laufende App ihr Fenster bzw. öffnet die PDFs
+        # Läuft Novadesk schon (sichtbar oder im Hintergrund), zeigt die laufende App ihr Fenster bzw. öffnet die PDFs
         winsys.allow_foreground()
         if instance.forward(paths, show=True):
             return 0
@@ -438,18 +438,18 @@ def main(argv: list[str] | None = None) -> int:
     from diagnostics.applog import UI
     from diagnostics.applog import get as get_log
 
-    get_log(UI).info("PDF Tool beendet")
+    get_log(UI).info("Novadesk beendet")
     if getattr(runtime.app, "restart_requested", False):
         restart_app()
     return code
 
 
 def restart_app() -> None:
-    """PDF Tool neu starten (z. B. nach dem Vorbereiten einer Wiederherstellung). Erst wenn diese
+    """Novadesk neu starten (z. B. nach dem Vorbereiten einer Wiederherstellung). Erst wenn diese
     Instanz alles gespeichert hat – die neue liest beim Start den neuen Stand."""
     import subprocess
 
-    # Nur Interpreter-Optionen und Startskript übernehmen: ohne »--hintergrund« (sonst käme PDF Tool unsichtbar
+    # Nur Interpreter-Optionen und Startskript übernehmen: ohne »--hintergrund« (sonst käme Novadesk unsichtbar
     # oder gar nicht zurück) und ohne die PDFs vom ursprünglichen Start
     original = list(getattr(sys, "orig_argv", None) or [])
     if original and len(original) >= len(sys.argv):
@@ -460,7 +460,7 @@ def restart_app() -> None:
 
     launcher = launcher_path()
     if launcher is not None:
-        args = [str(launcher)]  # über PDF-Tool.exe: Symbol und Name von PDF Tool statt Python
+        args = [str(launcher)]  # über PDF-Tool.exe: Symbol und Name von Novadesk statt Python
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

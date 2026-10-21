@@ -20,6 +20,7 @@ FocusScope {
     readonly property bool active: App.currentPage === "reader" && !Dialogs.open
     readonly property bool editing: doc !== null && doc !== undefined
     property var dismissedNotices: ({})
+    property var dismissedOffice: ({})  // Hinweis »Ansicht« je Dokument geschlossen
     property var dismissedScans: ({})  // Hinweis »Gescannte Seiten« je Tab geschlossen
     // Hinweise zum Dokument (repariert, signiert, gescannt, Text nicht lesbar …) gehen nach 5 s von selbst zu
     // (seit 4.0); ein Objekt-Hinweis erst wieder, wenn er sich ändert
@@ -228,6 +229,23 @@ FocusScope {
                                     var next = Object.assign({}, page.dismissedScans)
                                     next[page.doc.docId] = true
                                     page.dismissedScans = next
+                                }
+                            }
+                            // Ansicht einer Office-Datei (seit 5.0): was sie ist, und – bei Tabellen – »Vertragsübersicht erstellen«
+                            PInfoBar {
+                                objectName: "readerOfficeNotice"
+                                readonly property bool sheet: page.doc !== null && FileKinds.of(page.doc.sourcePath) === "tabelle"
+                                Layout.fillWidth: true
+                                shown: page.doc !== null && page.doc.sourcePath !== "" && page.doc.officeNote !== "" && !page.dismissedOffice[page.doc.docId]
+                                severity: "info"
+                                title: I18n.tr("Ansicht", I18n.revision)
+                                message: I18n.tr(page.doc ? page.doc.officeNote : "", I18n.revision)
+                                actions: sheet ? ["Vertragsübersicht erstellen", "Im Standardprogramm öffnen"] : ["Im Standardprogramm öffnen"]
+                                onActionTriggered: (index) => Reader.officeAction(sheet && index === 0 ? "overview" : "external")
+                                onClosed: {
+                                    var next = Object.assign({}, page.dismissedOffice)
+                                    next[page.doc.docId] = true
+                                    page.dismissedOffice = next
                                 }
                             }
                             PInfoBar {

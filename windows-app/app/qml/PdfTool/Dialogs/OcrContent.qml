@@ -5,7 +5,7 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // »Text erkennen (OCR)«: welche Seiten (alle, aktuelle, ausgewählte) und welche Sprachen. Seiten, die schon
-// Text haben, werden übersprungen (sie sind bereits durchsuchbar); eine frühere Erkennung von PDF Tool lässt
+// Text haben, werden übersprungen (sie sind bereits durchsuchbar); eine frühere Erkennung von Novadesk lässt
 // sich wiederholen. Die Sprachen kommen von der installierten Texterkennung – solange sie noch gesucht wird,
 // ist »Erkennen« gesperrt.
 ColumnLayout {
@@ -84,7 +84,7 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: Reader.ocrState === "fehlt" ? "warning" : "secondary"
-        text: I18n.tr(Reader.ocrState === "fehlt" ? "Die Texterkennung wurde nicht gefunden. Bitte PDF Tool neu installieren." : "Die Texterkennung wird vorbereitet …", I18n.revision)
+        text: I18n.tr(Reader.ocrState === "fehlt" ? "Die Texterkennung wurde nicht gefunden. Bitte Novadesk neu installieren." : "Die Texterkennung wird vorbereitet …", I18n.revision)
     }
     Flow {
         Layout.fillWidth: true

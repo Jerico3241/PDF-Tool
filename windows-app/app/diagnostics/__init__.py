@@ -1,4 +1,4 @@
-"""Diagnose von PDF Tool – lokal, ohne Netzwerk, ohne Inhalte von Dokumenten.
+"""Diagnose von Novadesk – lokal, ohne Netzwerk, ohne Inhalte von Dokumenten.
 
 * ``info``: Systeminformationen (Version, Kanal, Python, Qt, Windows, Pfade, Module, Engines).
 * ``checks``: Datenprüfung (Einstellungen, Kundenakten, Vorlagen, Regelwerke, Vertragsstände,

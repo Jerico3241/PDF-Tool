@@ -68,7 +68,7 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: I18n.tr(root.data_["protected"] ? "Dieses Dokument ist geschützt. Neue Kennwörter ersetzen die bisherigen; die Datei ändert sich erst beim Speichern." : "Der Schutz gilt ab dem nächsten Speichern. Ein vergessenes Kennwort lässt sich nicht wiederherstellen – auch nicht mit PDF Tool.", I18n.revision)
+        text: I18n.tr(root.data_["protected"] ? "Dieses Dokument ist geschützt. Neue Kennwörter ersetzen die bisherigen; die Datei ändert sich erst beim Speichern." : "Der Schutz gilt ab dem nächsten Speichern. Ein vergessenes Kennwort lässt sich nicht wiederherstellen – auch nicht mit Novadesk.", I18n.revision)
     }
     ColumnLayout {
         visible: root.data_["protected"] === true

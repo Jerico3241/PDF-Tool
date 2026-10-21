@@ -3,15 +3,15 @@
 Der erste Start nach dem Hochfahren ist langsam (Windows lädt Python, Qt und die Oberfläche erst
 von der Festplatte). Mit der Einstellung »Im Hintergrund bereithalten« (Standard: an)
 
-- startet PDF Tool bei der Anmeldung unsichtbar (``PDF-Tool.exe --hintergrund``, Eintrag unter
+- startet Novadesk bei der Anmeldung unsichtbar (``PDF-Tool.exe --hintergrund``, Eintrag unter
   ``HKCU\\…\\Run``) und baut seine Oberfläche dabei schon auf,
 - schließt das Schließen-Kreuz nur das Fenster: Dokumente werden wie beim Beenden geschlossen
-  (mit Rückfrage bei ungespeicherten Änderungen), PDF Tool bleibt mit einem Symbol im
+  (mit Rückfrage bei ungespeicherten Änderungen), Novadesk bleibt mit einem Symbol im
   Infobereich der Taskleiste,
 - öffnet ein weiterer Start (Startmenü, Doppelklick auf eine PDF) sofort das vorhandene Fenster.
 
 Beenden: Symbol im Infobereich → »Beenden«. Updates, Wiederherstellungen und das Abmelden von
-Windows beenden PDF Tool wie bisher ganz. Ist die Einstellung aus, verhält sich PDF Tool wie
+Windows beenden Novadesk wie bisher ganz. Ist die Einstellung aus, verhält sich Novadesk wie
 früher (kein Symbol, kein Autostart, das Schließen-Kreuz beendet).
 
 Den Autostart-Eintrag setzt nur eine installierte App (``PDF-Tool.exe`` neben dem Ordner ``app``);
@@ -33,16 +33,17 @@ SETTING = "hintergrund"  # gui-config.json; fehlt der Schlüssel: an
 HINT_SHOWN = "hintergrund_hinweis"  # Hinweis »läuft im Hintergrund weiter« schon einmal gezeigt
 ARGUMENT = BACKGROUND_ARGUMENT  # Start bei der Anmeldung: ohne Fenster
 RUN_NAME = APP_NAME  # Name des Eintrags unter »Start mit Windows« (so zeigt ihn auch der Task-Manager)
+LEGACY_RUN_NAMES = ("PDF Tool",)  # Eintrag bis 4.0 (vor »Novadesk«) – wird entfernt, sonst startet die App zweimal
 LAUNCHER = "PDF-Tool.exe"
 TITLE = "Im Hintergrund bereithalten"
 TEXT = (
-    "PDF Tool startet mit Windows unsichtbar und bleibt nach dem Schließen des Fensters im Infobereich der "
+    "Novadesk startet mit Windows unsichtbar und bleibt nach dem Schließen des Fensters im Infobereich der "
     "Taskleiste. So öffnet es sich danach sofort – auch beim ersten Mal nach dem Hochfahren."
 )
-NOTE = "Beenden über das PDF-Tool-Symbol im Infobereich (rechts unten) → »Beenden«. Ausgeschaltet beendet das Schließen-Kreuz PDF Tool wie bisher."
+NOTE = "Beenden über das Novadesk-Symbol im Infobereich (rechts unten) → »Beenden«. Ausgeschaltet beendet das Schließen-Kreuz Novadesk wie bisher."
 TRAY_RETRIES = 24  # Infobereich noch nicht da (Anmeldung): 2 Minuten lang alle 5 s nachsehen
 TRAY_RETRY_MS = 5000
-HIDDEN_TITLE = "PDF Tool läuft im Hintergrund weiter"
+HIDDEN_TITLE = "Novadesk läuft im Hintergrund weiter"
 HIDDEN_TEXT = "So öffnet es sich beim nächsten Mal sofort. Beenden über dieses Symbol – ausschalten unter Einstellungen."
 
 
@@ -67,9 +68,10 @@ def sync_autostart(enabled: bool, exe: Path | None = None, read: Callable[[str],
     if exe is None:
         return False
     wanted = autostart_command(exe) if enabled else None
+    legacy_ok = all(read(name) is None or write(name, None) for name in LEGACY_RUN_NAMES)
     if read(RUN_NAME) == wanted:
-        return True
-    return bool(write(RUN_NAME, wanted))
+        return legacy_ok
+    return bool(write(RUN_NAME, wanted)) and legacy_ok
 
 
 class Background(QObject):
@@ -158,7 +160,7 @@ class Background(QObject):
             self.app.present_window()
 
     def hidden(self) -> None:
-        """Fenster wurde versteckt: beim ersten Mal kurz erklären, wo PDF Tool jetzt ist."""
+        """Fenster wurde versteckt: beim ersten Mal kurz erklären, wo Novadesk jetzt ist."""
         if self.hint_shown or self.tray is None:
             return
         self.hint_shown = True
@@ -167,7 +169,7 @@ class Background(QObject):
         self.tray.showMessage(HIDDEN_TITLE, HIDDEN_TEXT, QSystemTrayIcon.MessageIcon.Information, 8000)
 
     def finished(self) -> None:
-        """PDF Tool wurde beendet (Werkzeuge haben aufgeräumt): Symbol entfernen, Hauptschleife verlassen.
+        """Novadesk wurde beendet (Werkzeuge haben aufgeräumt): Symbol entfernen, Hauptschleife verlassen.
         Ohne Symbol endet die App wie bisher mit dem letzten Fenster."""
         if self.tray is not None:
             self.tray.hide()

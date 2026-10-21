@@ -23,7 +23,7 @@ def healthy(path: Path, pages: int = 5, image: bool = False) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     sheet = canvas.Canvas(str(path), pagesize=A4)
     sheet.setTitle("Testdokument")
-    sheet.setAuthor("PDF Tool Tests")
+    sheet.setAuthor("Novadesk Tests")
     for index in range(pages):
         sheet.setFont("Helvetica", 14)
         sheet.drawString(72, 760, f"Seite {index + 1} – Testdokument mit Umlauten äöüß")

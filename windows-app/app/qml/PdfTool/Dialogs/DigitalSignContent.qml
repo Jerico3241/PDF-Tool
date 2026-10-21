@@ -5,7 +5,7 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // »Digital signieren« (seit 4.0 Beta 6): Zertifikat wählen (aus Windows oder eine .pfx-Datei mit Kennwort), Grund
-// und Ort, auf Wunsch ein sichtbares Feld unten rechts auf einer Seite. Danach fragt PDF Tool nach dem Dateinamen der
+// und Ort, auf Wunsch ein sichtbares Feld unten rechts auf einer Seite. Danach fragt Novadesk nach dem Dateinamen der
 // signierten Kopie.
 ColumnLayout {
     id: root

@@ -1,6 +1,6 @@
 """Vorlagen 2.0: eine vollständige, wiederverwendbare Darstellung einer Vertragsübersicht.
 
-Eine Vorlage speichert genau die Einstellungen, die PDF Tool für die PDF tatsächlich kennt:
+Eine Vorlage speichert genau die Einstellungen, die Novadesk für die PDF tatsächlich kennt:
 
 * ``TemplateMetadata``: stabile ID (UUID), Name, Beschreibung, Zeitstempel. Der Name ist nur
   die Anzeige – umbenennen, duplizieren und verweisen (Kundenakte, Stapel, Standardvorlage)

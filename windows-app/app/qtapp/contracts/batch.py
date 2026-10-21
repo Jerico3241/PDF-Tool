@@ -1627,7 +1627,7 @@ class BatchController(Observable):
             self.app.notify(
                 "batch_mail_info",
                 "info",
-                f"{', '.join(offer)} → „{res.customer.label}“. PDF Tool erkennt den Kunden dann in der nächsten Excel-Liste wieder.",
+                f"{', '.join(offer)} → „{res.customer.label}“. Novadesk erkennt den Kunden dann in der nächsten Excel-Liste wieder.",
                 title="Diese E-Mail künftig diesem Kunden zuordnen?" if single else "Diese E-Mail-Adressen künftig diesem Kunden zuordnen?",
                 actions=(("Zuordnung merken", lambda: self.remember_emails(item_id)), ("Nicht zuordnen", lambda: self.decline_emails(item_id))),
                 status=False,
@@ -1781,7 +1781,7 @@ class BatchController(Observable):
     @Slot()
     def mailPdf(self) -> None:  # noqa: N802
         """Erstellte PDF dieses Eintrags per E-Mail senden: neue Nachricht im E-Mail-Programm, an den
-        Rechnungsempfänger des Eintrags (falls bekannt) – gesendet wird dort, nie von PDF Tool."""
+        Rechnungsempfänger des Eintrags (falls bekannt) – gesendet wird dort, nie von Novadesk."""
         item = self.current()
         if item is None or not item.output:
             return

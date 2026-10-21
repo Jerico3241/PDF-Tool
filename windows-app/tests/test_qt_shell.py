@@ -26,7 +26,7 @@ from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR
 
 def test_start_and_version(app) -> None:
     assert app.app.version == appstate.VERSION
-    assert app.window.title() == window_title(appstate.VERSION) == app.app.windowTitle  # »PDF Tool« (Beta: mit Version)
+    assert app.window.title() == window_title(appstate.VERSION) == app.app.windowTitle  # »Novadesk« (Beta: mit Version)
     assert app.app.currentPage == "home"
     assert app.item("homePage") is not None
     assert app.item("toolCard_contracts") is not None and app.item("toolCard_repair") is not None
@@ -276,17 +276,17 @@ def test_start_page_tools_open_their_tool(app) -> None:
 
 
 def test_window_title_marks_beta_versions() -> None:
-    """Fenstertitel aus der Versionsnummer: Stable »PDF Tool«, Beta »PDF Tool X.Y.Z Beta«."""
-    assert window_title("2.8.0") == "PDF Tool"
-    assert window_title("2.8.0-beta.1") == "PDF Tool 2.8.0 Beta"
-    assert window_title("10.20.30-beta.12") == "PDF Tool 10.20.30 Beta"
-    assert window_title("kaputt") == "PDF Tool"
+    """Fenstertitel aus der Versionsnummer: Stable »Novadesk«, Beta »Novadesk X.Y.Z Beta«."""
+    assert window_title("2.8.0") == "Novadesk"
+    assert window_title("2.8.0-beta.1") == "Novadesk 2.8.0 Beta"
+    assert window_title("10.20.30-beta.12") == "Novadesk 10.20.30 Beta"
+    assert window_title("kaputt") == "Novadesk"
 
 
-@pytest.mark.parametrize("version,titel", [("4.2.0-beta.3", "PDF Tool 4.2.0 Beta"), ("4.2.0", "PDF Tool")])
+@pytest.mark.parametrize("version,titel", [("4.2.0-beta.3", "Novadesk 4.2.0 Beta"), ("4.2.0", "Novadesk")])
 def test_beta_is_marked_in_window_title_and_settings(qt_application, config_file: Path, monkeypatch, version: str, titel: str) -> None:
     """Beta: Fenstertitel mit Version und das Etikett »Beta« in der Info-Karte der Einstellungen –
-    dasselbe wie in der Karte »Updates«; Stable: »PDF Tool«, kein Etikett."""
+    dasselbe wie in der Karte »Updates«; Stable: »Novadesk«, kein Etikett."""
     from qtutil import Harness
 
     from qtapp import app as appmodule
@@ -364,7 +364,7 @@ def test_status_hint_follows_the_tool(app) -> None:
 def test_help_follows_the_open_view(app) -> None:
     from qtapp import dialogs
 
-    for page, title in (("home", "Kurzanleitung – PDF Tool"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
+    for page, title in (("home", "Kurzanleitung – Novadesk"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
         app.navigate(page, 0.15)
         app.app.showHelp()
         assert app.app.dialogs.history[-1]["title"] == title
@@ -511,7 +511,7 @@ def test_help_menu_replaces_the_app_menu(app) -> None:
     pump(0.4)
     assert app.item("helpMenu").property("opened") is True
     names = ("menuHelp", "menuShortcuts", "menuNews", "menuAbout")
-    assert [app.item(name).property("text") for name in names] == ["Kurzanleitung", "Tastenkürzel", "Neu in dieser Version", "Über PDF Tool"]
+    assert [app.item(name).property("text") for name in names] == ["Kurzanleitung", "Tastenkürzel", "Neu in dieser Version", "Über Novadesk"]
     assert app.item("menuHelp").property("hint") == "F1" and app.item("menuShortcuts").property("hint") == "Strg+F1"
     entry = app.item("menuAbout")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, entry.mapToScene(QPointF(entry.width() / 2, entry.height() / 2)).toPoint())

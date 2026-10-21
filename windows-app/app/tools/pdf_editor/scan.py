@@ -1,7 +1,7 @@
 """Scannen (seit 4.0 Beta 5): Seiten vom Scanner über die Scanner-Schnittstelle von Windows (WIA) holen.
 
 Jeder Scanner mit Windows-Treiber (WIA) erscheint in der Liste – dieselben, die »Windows-Fax und -Scan« kennt.
-Gescannt wird ohne Fenster des Treibers mit den Angaben aus PDF Tool:
+Gescannt wird ohne Fenster des Treibers mit den Angaben aus Novadesk:
 
 * **Quelle:** Vorlagenglas (eine Seite je Durchgang) oder Einzug (alle eingelegten Blätter auf einmal; endet,
   sobald der Einzug leer ist).

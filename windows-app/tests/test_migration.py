@@ -1,4 +1,4 @@
-"""Übernahme der Benutzerdaten vom Übersichten-Ersteller (bis 2.2) nach PDF Tool (ab 2.3).
+"""Übernahme der Benutzerdaten vom Übersichten-Ersteller (bis 2.2) nach Novadesk (ab 2.3).
 
 %APPDATA%\\Uebersichten-Ersteller → %APPDATA%\\PDF-Tool: einmalig, mit Sicherung, verlustfrei
 geprüft; der alte Ordner bleibt erhalten, bei einem Fehler arbeitet die App mit ihm weiter.

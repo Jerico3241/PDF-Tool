@@ -66,7 +66,7 @@ BACKUPS_PER_FILE = 3
 REPLACE_ATTEMPTS = 10  # etwa 1 s: Virenscanner und Suche halten eine neue Datei manchmal kurz offen
 UNCHANGED = "Die Originaldatei ist unverändert."
 READ_ONLY_TEXT = "Die Datei ist schreibgeschützt. Verwenden Sie »Speichern unter«, um eine bearbeitete Kopie zu erstellen."
-NO_PERMISSION_TEXT = "PDF Tool hat keine Schreibberechtigung für diesen Speicherort. Verwenden Sie »Speichern unter«, um einen anderen Ort zu wählen."
+NO_PERMISSION_TEXT = "Novadesk hat keine Schreibberechtigung für diesen Speicherort. Verwenden Sie »Speichern unter«, um einen anderen Ort zu wählen."
 LOCKED_TEXT = "Die Datei wird möglicherweise von einem anderen Programm verwendet. Schließen Sie sie dort und speichern Sie erneut – oder verwenden Sie »Speichern unter«."
 FILESYSTEM = "Dateisystem"
 

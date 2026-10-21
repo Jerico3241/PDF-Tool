@@ -14,6 +14,18 @@ import winsys
 EXCEL_FILTER = "Excel (*.xlsx *.xlsm *.xls);;Alle Dateien (*.*)"
 IMAGE_FILTER = "Bilder (*.png *.jpg *.jpeg *.webp);;Alle Dateien (*.*)"
 PDF_FILTER = "PDF (*.pdf);;Alle Dateien (*.*)"
+# Öffnen in Novadesk (seit 5.0): PDFs und Office-Dateien zum Ansehen – je Dateiart auch einzeln wählbar
+OPEN_FILTER = (
+    "Alle unterstützten Dateien (*.pdf *.docx *.doc *.docm *.odt *.rtf *.xlsx *.xls *.xlsm *.ods *.csv *.pptx *.ppt *.pptm *.odp);;"
+    "PDF (*.pdf);;Texte (*.docx *.doc *.docm *.odt *.rtf);;Tabellen (*.xlsx *.xls *.xlsm *.ods *.csv);;"
+    "Präsentationen (*.pptx *.ppt *.pptm *.odp);;Alle Dateien (*.*)"
+)
+OPEN_FILTERS = {  # Startseite: »Tabelle öffnen« usw. – nur diese Dateiart
+    "text": "Texte (*.docx *.doc *.docm *.odt *.rtf);;Alle Dateien (*.*)",
+    "tabelle": "Tabellen (*.xlsx *.xls *.xlsm *.ods *.csv);;Alle Dateien (*.*)",
+    "praesentation": "Präsentationen (*.pptx *.ppt *.pptm *.odp);;Alle Dateien (*.*)",
+    "pdf": PDF_FILTER,
+}
 
 
 

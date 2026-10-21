@@ -6,9 +6,9 @@ import PdfTool.Shell
 import PdfTool.Pages
 import PdfTool.Reader
 
-// Hauptfenster von PDF Tool. Das Fenster bleibt verborgen, bis Python Lage und Titelleiste
+// Hauptfenster von Novadesk. Das Fenster bleibt verborgen, bis Python Lage und Titelleiste
 // gesetzt hat; es erscheint mit dem ersten vollständig gezeichneten Bild.
-// Titel: »PDF Tool«, bei einer Beta mit Versionsnummer (»PDF Tool 2.8.0 Beta«).
+// Titel: »Novadesk«, bei einer Beta mit Versionsnummer (»Novadesk 2.8.0 Beta«).
 ApplicationWindow {
     id: window
     objectName: "mainWindow"

@@ -5,7 +5,7 @@
 * Nur ``127.0.0.1``, ein freier Port, ein zufälliger Schlüssel (über die Umgebung, nicht in der Befehlszeile) – andere
   Programme auf dem PC können ihn nicht nutzen.
 * Ohne Weboberfläche und ohne Protokoll; unter Windows ohne Konsolenfenster, mit niedriger Priorität (die Oberfläche
-  bleibt flüssig) und in einem Job-Objekt: Endet PDF Tool – auch unerwartet –, endet der Prozess mit.
+  bleibt flüssig) und in einem Job-Objekt: Endet Novadesk – auch unerwartet –, endet der Prozess mit.
 * ``start`` wartet, bis das Modell geladen ist; ``stop`` beendet den Prozess (die App ruft es nach einer Weile ohne
   Anfrage und beim Beenden auf – der Arbeitsspeicher wird wieder frei).
 """
@@ -163,14 +163,14 @@ class Server:
 
 def _exit_text(code: int) -> str:
     if code in DLL_NOT_FOUND:
-        return "Dem KI-Assistenten fehlt eine Programmdatei. Bitte PDF Tool neu installieren."
+        return "Dem KI-Assistenten fehlt eine Programmdatei. Bitte Novadesk neu installieren."
     if code in ILLEGAL_INSTRUCTION:
         return "Der Prozessor dieses PCs unterstützt den KI-Assistenten nicht."
     return f"Der KI-Assistent wurde unerwartet beendet (Code {code}). Vielleicht reicht der Arbeitsspeicher nicht – das kleinere Modell braucht weniger."
 
 
 def _bind_to_app(process: subprocess.Popen):
-    """Windows: Prozess in ein Job-Objekt mit »beim Schließen beenden« – endet PDF Tool, endet er mit. Das Handle des
+    """Windows: Prozess in ein Job-Objekt mit »beim Schließen beenden« – endet Novadesk, endet er mit. Das Handle des
     Jobs hält ``Server`` bis ``stop``; die App selbst bleibt außerhalb des Jobs."""
     if os.name != "nt":
         return None

@@ -85,6 +85,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: I18n.tr("Quelle: Hugging Face (Modelle Qwen3.5, Apache-Lizenz 2.0). PDF Tool lädt die Datei über HTTPS und prüft ihre Prüfsumme, bevor sie verwendet wird. Dokumente, Fragen und Antworten verlassen diesen PC nicht. Das Modell lässt sich in den Einstellungen jederzeit wieder entfernen.", I18n.revision)
+        text: I18n.tr("Quelle: Hugging Face (Modelle Qwen3.5, Apache-Lizenz 2.0). Novadesk lädt die Datei über HTTPS und prüft ihre Prüfsumme, bevor sie verwendet wird. Dokumente, Fragen und Antworten verlassen diesen PC nicht. Das Modell lässt sich in den Einstellungen jederzeit wieder entfernen.", I18n.revision)
     }
 }

@@ -14,10 +14,12 @@ import threading
 import time
 import traceback
 from collections import Counter
+from pathlib import Path
 from typing import Any, Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from tools.pdf_editor import office
 from tools.pdf_editor.errors import EditorError, ExternalChange, Overflow, PasswordRequired, ReadOnlyDocument, SaveFailed, UnsupportedEdit
 
 from ..base import Observable, prop
@@ -55,6 +57,7 @@ class DocumentController(Observable):
     # Datei
     nameChanged, name = prop(str, "name", "")
     pathChanged, path = prop(str, "path", "")
+    sourcePathChanged, sourcePath = prop(str, "sourcePath", "")  # Ansicht einer Office-Datei (seit 5.0): ihr Pfad
     dirtyChanged, dirty = prop(bool, "dirty", False)
     revisionChanged, revision = prop(int, "revision", 0)
     pageCountChanged, pageCount = prop(int, "pageCount", 0)
@@ -64,6 +67,7 @@ class DocumentController(Observable):
     signedChanged, signed = prop(int, "signed", 0)
     noticeChanged, notice = prop(str, "notice", "")  # Hinweis beim Öffnen (signiert, repariert, XFA …)
     noticeKindChanged, noticeKind = prop(str, "noticeKind", "info")
+    officeNoteChanged, officeNote = prop(str, "officeNote", "")  # Ansicht einer Office-Datei (seit 5.0)
     scanHintChanged, scanHint = prop(bool, "scanHint", False)  # gescannte Seiten ohne Text (Texterkennung anbieten)
     # Texterkennung (OCR) im Hintergrund: läuft, erledigte und zu erkennende Seiten, Zustandstext
     ocrRunningChanged, ocrRunning = prop(bool, "ocrRunning", False)
@@ -229,6 +233,7 @@ class DocumentController(Observable):
         self.state = state
         self.name = state["name"]
         self.path = state["path"]
+        self.sourcePath = state.get("source", "")
         sizes = state["sizes"]
         if sizes != self.pageSizes:
             self.pageSizes = sizes
@@ -276,8 +281,11 @@ class DocumentController(Observable):
         state = self.state
         notes = []
         kind = "info"
+        # Ansicht einer Office-Datei: eigener Hinweis mit »Vertragsübersicht erstellen« (Tabellen) und »Im
+        # Standardprogramm öffnen«
+        self.officeNote = "Ansicht als PDF – die Datei selbst bleibt unverändert, »Speichern« legt eine neue PDF an. Bearbeiten in Novadesk kommt mit den nächsten Betas." if state.get("source") else ""
         if state.get("signed"):
-            notes.append("Dieses PDF ist digital signiert. Jede Änderung macht die Signatur ungültig – PDF Tool fragt vor der ersten Bearbeitung nach. Prüfen: »Alle Werkzeuge« › »Signaturen prüfen«.")
+            notes.append("Dieses PDF ist digital signiert. Jede Änderung macht die Signatur ungültig – Novadesk fragt vor der ersten Bearbeitung nach. Prüfen: »Alle Werkzeuge« › »Signaturen prüfen«.")
             kind = "warning"
         if state.get("readOnly"):
             notes.append(state["readOnly"])
@@ -285,7 +293,7 @@ class DocumentController(Observable):
         if state.get("repaired"):
             notes.append("Beim Öffnen wurden kleine Strukturfehler ausgeglichen. Beim Speichern entsteht eine bereinigte Datei; bei Problemen hilft »PDF reparieren«.")
         if state.get("xfa"):
-            notes.append("Das PDF enthält ein XFA-Formular. PDF Tool zeigt und bearbeitet nur den AcroForm-Teil.")
+            notes.append("Das PDF enthält ein XFA-Formular. Novadesk zeigt und bearbeitet nur den AcroForm-Teil.")
         if state.get("javascript"):
             notes.append("Das PDF enthält JavaScript. Es wird nicht ausgeführt.")
         self.notice = " ".join(notes)
@@ -1314,7 +1322,7 @@ class DocumentController(Observable):
             return
         reader = self.reader
         if reader.ocrState == "fehlt":
-            self.app.notify("reader", "error", "Die Texterkennung (Tesseract) wurde nicht gefunden. Bitte PDF Tool neu installieren.", title="Texterkennung nicht verfügbar")
+            self.app.notify("reader", "error", "Die Texterkennung (Tesseract) wurde nicht gefunden. Bitte Novadesk neu installieren.", title="Texterkennung nicht verfügbar")
             return
         reader.probe_ocr()
         chosen = sorted({int(page) for page in (selected or []) if 0 <= int(page) < self.pageCount})
@@ -1451,7 +1459,7 @@ class DocumentController(Observable):
 
     @Slot("QVariantList")
     def removeRecognizedText(self, selected) -> None:  # noqa: N802
-        """Von PDF Tool erkannten Text (Textebenen) wieder entfernen – alle bzw. die ausgewählten Seiten."""
+        """Von Novadesk erkannten Text (Textebenen) wieder entfernen – alle bzw. die ausgewählten Seiten."""
         if not self.edit_allowed():
             return
         pages = sorted({int(page) for page in (selected or []) if 0 <= int(page) < self.pageCount}) or list(range(self.pageCount))
@@ -1461,7 +1469,7 @@ class DocumentController(Observable):
                 self.edited("Erkannten Text entfernt")
                 self.app.notify("reader", "success", f"Erkannter Text von {count} {'Seite' if count == 1 else 'Seiten'} entfernt.", title="Erkannten Text entfernen", auto_hide=8000)
             else:
-                self.app.notify("reader", "info", "Auf diesen Seiten gibt es keinen von PDF Tool erkannten Text.", title="Erkannten Text entfernen", auto_hide=8000)
+                self.app.notify("reader", "info", "Auf diesen Seiten gibt es keinen von Novadesk erkannten Text.", title="Erkannten Text entfernen", auto_hide=8000)
 
         self.run(lambda session: session.ocr_remove(pages), done, busy="Erkannter Text wird entfernt …")
 
@@ -1642,7 +1650,7 @@ class DocumentController(Observable):
 
     @Slot(str, str, "QVariant")
     def styleAnnotation(self, key: str, name: str, value) -> None:  # noqa: N802
-        """Linienstärke, Füllung, Deckkraft oder Schriftgröße eines Kommentars aus PDF Tool ändern."""
+        """Linienstärke, Füllung, Deckkraft oder Schriftgröße eines Kommentars aus Novadesk ändern."""
         if hasattr(value, "name") and callable(value.name):  # QColor aus QML
             value = value.name()
         self._annot_op(lambda session: session.restyle_annotation(key, name, value), "Kommentar formatiert")
@@ -2464,17 +2472,17 @@ class DocumentController(Observable):
 
     @Slot()
     def removePageMarks(self) -> None:  # noqa: N802
-        """Kopf-/Fußzeilen und Wasserzeichen entfernen, die PDF Tool hinzugefügt hat (andere bleiben)."""
+        """Kopf-/Fußzeilen und Wasserzeichen entfernen, die Novadesk hinzugefügt hat (andere bleiben)."""
         if not self.edit_allowed("edit"):
             return
 
         def show(present: dict) -> None:
             items = [
-                {"key": "Header", "label": "Kopf- und Fußzeilen, Seitenzahlen", "detail": "von PDF Tool hinzugefügt", "count": int(present.get("Header", 0)), "checked": True, "unit": "Seiten"},
-                {"key": "Watermark", "label": "Wasserzeichen", "detail": "von PDF Tool hinzugefügt", "count": int(present.get("Watermark", 0)), "checked": True, "unit": "Seiten"},
+                {"key": "Header", "label": "Kopf- und Fußzeilen, Seitenzahlen", "detail": "von Novadesk hinzugefügt", "count": int(present.get("Header", 0)), "checked": True, "unit": "Seiten"},
+                {"key": "Watermark", "label": "Wasserzeichen", "detail": "von Novadesk hinzugefügt", "count": int(present.get("Watermark", 0)), "checked": True, "unit": "Seiten"},
             ]
             if not any(item["count"] for item in items):
-                self.app.notify("reader", "info", "Dieses Dokument hat keine Kopf-/Fußzeilen oder Wasserzeichen von PDF Tool.", title="Nichts zu entfernen", auto_hide=8000)
+                self.app.notify("reader", "info", "Dieses Dokument hat keine Kopf-/Fußzeilen oder Wasserzeichen von Novadesk.", title="Nichts zu entfernen", auto_hide=8000)
                 return
             answer, data = self.app.dialogs.ask("checklist", "Kopf-/Fußzeile und Wasserzeichen entfernen", "", primary="Entfernen", close="Abbrechen", data={"items": items}, width=540)
             if answer != "primary":
@@ -2799,7 +2807,7 @@ class DocumentController(Observable):
             return
         uri = link["uri"]
         if not uri:
-            self.app.notify("reader", "info", "Dieser Link führt aus dem Dokument hinaus oder startet eine Aktion – PDF Tool führt so etwas nicht aus.", title="Link nicht geöffnet", auto_hide=8000)
+            self.app.notify("reader", "info", "Dieser Link führt aus dem Dokument hinaus oder startet eine Aktion – Novadesk führt so etwas nicht aus.", title="Link nicht geöffnet", auto_hide=8000)
             return
         mail = uri.lower().startswith("mailto:")
         if not self.app.dialogs.confirm("E-Mail schreiben?" if mail else "Webadresse öffnen?", (f"Der Link öffnet eine neue E-Mail an {uri[7:]}." if mail else f"Der Link führt zu {uri}") + " Öffnen Sie nur Adressen aus Quellen, denen Sie vertrauen.", "Öffnen", danger=False):
@@ -3180,7 +3188,7 @@ def field_changes(item: dict, data: dict) -> dict:
 
 
 SESSION_SIGNATURE = "sitzung"  # Kennung der nicht gespeicherten Unterschrift
-_SESSION_SIGNATURE: list = [None]  # nur im Arbeitsspeicher, bis PDF Tool beendet wird (für alle Tabs)
+_SESSION_SIGNATURE: list = [None]  # nur im Arbeitsspeicher, bis Novadesk beendet wird (für alle Tabs)
 
 
 def signature_preview(signature, height: int = 96) -> str:

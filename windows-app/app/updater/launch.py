@@ -1,4 +1,4 @@
-"""Hilfsprozess: startet das Setup erst, wenn PDF Tool beendet ist.
+"""Hilfsprozess: startet das Setup erst, wenn Novadesk beendet ist.
 
 Aufruf durch die App (``installer.Launcher``) – ohne Konsolenfenster, im isolierten Modus::
 
@@ -13,7 +13,7 @@ Aufruf durch die App (``installer.Launcher``) – ohne Konsolenfenster, im isoli
    nichts wird gestartet.
 3. Setup starten. Mit ``--silent`` (seit 4.0, »Jetzt installieren«): ohne Fragen des Assistenten – nur
    ein Fortschrittsfenster (``/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL``); der Hilfsprozess wartet
-   auf das Ende und startet danach PDF Tool neu (``--restart``). Gelingt das stille Setup nicht (Fehlercode,
+   auf das Ende und startet danach Novadesk neu (``--restart``). Gelingt das stille Setup nicht (Fehlercode,
    Start verweigert), startet es wie per Doppelklick – sichtbar, die Installation lässt sich dort fertig
    machen. Ohne ``--silent``: wie per Doppelklick (Windows: ShellExecute), sichtbar, ohne Parameter.
 
@@ -39,7 +39,7 @@ SILENT_ARGS = ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL")
 RESTART_NAME = "PDF-Tool.exe"
 SETUP_NAME = re.compile(r"^PDF-Tool-Setup-[0-9A-Za-z.+-]+\.exe$")
 HEX = re.compile(r"^[0-9a-fA-F]{64}$")
-TITLE = "PDF Tool – Update"
+TITLE = "Novadesk – Update"
 NOT_VERIFIED = "Das heruntergeladene Update konnte nicht verifiziert werden und wurde daher nicht installiert."
 NOT_STARTED = "Das Setup konnte nicht gestartet werden."
 NOT_INSTALLED = "Das Update ließ sich nicht im Hintergrund installieren. Das Setup wird jetzt angezeigt – bitte dort die Installation abschließen."
@@ -149,7 +149,7 @@ def install_silently(setup: Path, log_file: Path | None, timeout: float = INSTAL
 
 
 def restart(app: Path) -> bool:
-    """PDF Tool nach dem Update wieder starten (nur das eigene Startprogramm)."""
+    """Novadesk nach dem Update wieder starten (nur das eigene Startprogramm)."""
     if app.name != RESTART_NAME or not app.is_file():
         return False
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
@@ -174,7 +174,7 @@ def message(text: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Setup nach dem Beenden von PDF Tool starten")
+    parser = argparse.ArgumentParser(description="Setup nach dem Beenden von Novadesk starten")
     parser.add_argument("--setup", required=True, type=Path)
     parser.add_argument("--sha256", required=True)
     parser.add_argument("--wait", type=int, default=0, help="Prozess-ID der App")
@@ -188,11 +188,11 @@ def main(argv: list[str] | None = None) -> int:
         return USAGE_CODE
     log = Log(args.log)
     setup = args.setup.resolve()
-    log(f"Warten auf das Ende von PDF Tool (Prozess {args.wait}) …")
+    log(f"Warten auf das Ende von Novadesk (Prozess {args.wait}) …")
     if wait_for_exit(args.wait, args.timeout):
-        log("PDF Tool ist beendet.")
+        log("Novadesk ist beendet.")
     else:
-        log("PDF Tool läuft noch – das Setup wird trotzdem gestartet und fordert zum Schließen auf.")
+        log("Novadesk läuft noch – das Setup wird trotzdem gestartet und fordert zum Schließen auf.")
     if not verified(setup, args.sha256):
         log(f"Prüfung fehlgeschlagen: {setup.name} – nicht gestartet, Datei entfernt.")
         try:
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
                 except OSError as exc:
                     started = False
                     log(f"Neustart fehlgeschlagen: {exc}")
-                log("PDF Tool neu gestartet." if started else "PDF Tool nicht neu gestartet.")
+                log("Novadesk neu gestartet." if started else "Novadesk nicht neu gestartet.")
             return OK
         if code == -1:
             log("Das Setup läuft noch nach dem Zeitlimit – kein Neustart.")

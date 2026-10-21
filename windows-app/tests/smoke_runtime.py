@@ -592,14 +592,14 @@ def ai_check(app_dir: Path, work: Path) -> None:
     try:
         check(health(endpoint) == "ok", "KI-Assistent: Prozess nicht bereit")
         check(endpoint.key not in " ".join(process._process.args), "KI-Assistent: Schlüssel in der Befehlszeile")
-        check(process._job is not None, "KI-Assistent: Prozess nicht an PDF Tool gebunden (Job-Objekt)")
+        check(process._job is not None, "KI-Assistent: Prozess nicht an Novadesk gebunden (Job-Objekt)")
         pieces: list[str] = []
         answer = Chat(endpoint, [{"role": "user", "content": "Hallo"}], max_tokens=8).run(pieces.append)
         check(len(pieces) >= 1 and answer.text == "".join(pieces), f"KI-Assistent: keine gestreamte Antwort ({answer.finish!r})")
     finally:
         process.stop()
     check(not process.running, "KI-Assistent: Prozess läuft nach dem Beenden weiter")
-    # Abrupt endender Prozess (wie ein Absturz von PDF Tool): der KI-Prozess endet mit ihm
+    # Abrupt endender Prozess (wie ein Absturz von Novadesk): der KI-Prozess endet mit ihm
     code = (
         "import os, sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from assistant import runtime; "
         "server = runtime.Server(runtime.server_path(), Path(sys.argv[2])); server.start(); "
@@ -608,8 +608,8 @@ def ai_check(app_dir: Path, work: Path) -> None:
     started = subprocess.run([sys.executable, "-s", "-c", code, str(app_dir), str(model)], capture_output=True, text=True, timeout=180)
     check(started.returncode == 0 and started.stdout.strip(), f"KI-Assistent: Probe-Prozess fehlgeschlagen ({started.returncode}): {started.stderr[-500:]}")
     pid = int(started.stdout.strip().splitlines()[-1])
-    check(process_ended(pid, 15), f"KI-Assistent: Prozess {pid} läuft nach dem Ende von PDF Tool weiter")
-    print(f"KI-Assistent: llama-server (gebündelt) mit Testmodell in {loaded:.1f} s bereit, {len(pieces)} Stücke gestreamt, beendet; endet mit PDF Tool")
+    check(process_ended(pid, 15), f"KI-Assistent: Prozess {pid} läuft nach dem Ende von Novadesk weiter")
+    print(f"KI-Assistent: llama-server (gebündelt) mit Testmodell in {loaded:.1f} s bereit, {len(pieces)} Stücke gestreamt, beendet; endet mit Novadesk")
 
 
 def process_ended(pid: int, timeout: float) -> bool:
@@ -743,7 +743,7 @@ def ui_probe(qt_application, full: bool) -> None:
     def first() -> None:
         import winsys
 
-        # Taskleiste: Name und Symbol von PDF Tool statt Python (Eigenschaften des Fensters, echtes Windows-Fenster)
+        # Taskleiste: Name und Symbol von Novadesk statt Python (Eigenschaften des Fensters, echtes Windows-Fenster)
         shown["identity"] = winsys.set_window_identity(int(window.winId()), Path(sys.executable))
         shown["visible"] = window.isVisible()
         shown["page"] = app.currentPage
@@ -850,10 +850,10 @@ def ui_probe(qt_application, full: bool) -> None:
     from appstate import VERSION
     from qtapp.app import window_title
 
-    qt_app_title = window_title(VERSION)  # »PDF Tool«, bei einer Beta mit Versionsnummer
+    qt_app_title = window_title(VERSION)  # »Novadesk«, bei einer Beta mit Versionsnummer
     check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
     check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")
-    check(shown.get("identity") is True, "Taskleiste: Name und Symbol von PDF Tool ließen sich nicht setzen")
+    check(shown.get("identity") is True, "Taskleiste: Name und Symbol von Novadesk ließen sich nicht setzen")
     check(shown.get("page") == "home", "Startseite fehlt")
     check(shown.get("title") == qt_app_title, f"Fenstertitel: {shown.get('title')} statt {qt_app_title}")
     check(not shown.get("messages"), "Meldungen der QML-Engine:\n" + "\n".join(shown.get("messages") or []))

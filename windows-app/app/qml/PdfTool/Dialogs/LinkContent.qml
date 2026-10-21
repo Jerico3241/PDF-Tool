@@ -5,7 +5,7 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // Link setzen oder ändern: Ziel ist eine Seite dieses Dokuments oder eine Webadresse (https://, mailto:).
-// Andere Ziele (Programme, Dateien, Skripte) bietet PDF Tool bewusst nicht an.
+// Andere Ziele (Programme, Dateien, Skripte) bietet Novadesk bewusst nicht an.
 ColumnLayout {
     id: root
     objectName: "linkContent"
@@ -65,6 +65,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: I18n.tr("Erlaubt sind Webadressen (http, https) und E-Mail-Adressen. Beim Anklicken fragt PDF Tool nach, bevor eine Webadresse geöffnet wird.", I18n.revision)
+        text: I18n.tr("Erlaubt sind Webadressen (http, https) und E-Mail-Adressen. Beim Anklicken fragt Novadesk nach, bevor eine Webadresse geöffnet wird.", I18n.revision)
     }
 }

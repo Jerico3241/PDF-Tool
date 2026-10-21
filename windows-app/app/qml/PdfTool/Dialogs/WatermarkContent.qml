@@ -155,7 +155,7 @@ ColumnLayout {
         Layout.topMargin: 8
         Layout.fillWidth: true
         visible: (root.data_.existing || 0) > 0
-        text: I18n.tr("Bisheriges Wasserzeichen von PDF Tool ersetzen (" + (root.data_.existing || 0) + " Seiten)", I18n.revision)
+        text: I18n.tr("Bisheriges Wasserzeichen von Novadesk ersetzen (" + (root.data_.existing || 0) + " Seiten)", I18n.revision)
         checked: root.replace
         onToggled: root.replace = checked
     }

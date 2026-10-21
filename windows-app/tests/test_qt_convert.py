@@ -37,7 +37,7 @@ def test_convert_to_word_excel_and_text(ui_app, tmp_path: Path, monkeypatch) -> 
     open_pdf(h, report_pdf(tmp_path / "bericht.pdf"))
     for command, suffix, title in (("toWord", ".docx", "In Word umgewandelt"), ("toExcel", ".xlsx", "In Excel umgewandelt"), ("toText", ".txt", "In Text umgewandelt")):
         target = tmp_path / f"ausgabe{suffix}"
-        monkeypatch.setattr(files, "RESPONSES", [str(target.with_suffix(""))])  # Endung ergänzt PDF Tool
+        monkeypatch.setattr(files, "RESPONSES", [str(target.with_suffix(""))])  # Endung ergänzt Novadesk
         perform(h, command)
         assert wait_until(lambda: target.is_file(), 20), command
         settle(h)

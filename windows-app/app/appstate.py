@@ -18,7 +18,7 @@ INSTALL_DIR = APP_DIR.parent
 ASSETS_DIR = INSTALL_DIR / "assets"
 DEFAULT_LOGO = ASSETS_DIR / "hott_logo_final.png"
 ICON_FILE = ASSETS_DIR / "icon.ico"
-APP_NAME = "PDF Tool"
+APP_NAME = "Novadesk"
 DEVELOPER = "Jerico"
 DATA_FOLDER = "PDF-Tool"
 # Datenordner bis Version 2.2 (»Übersichten-Ersteller«) – wird beim ersten Start übernommen
@@ -146,14 +146,14 @@ NEUERUNGEN = (
     "Aus Beta 7: Updates suchen und installieren sich beim Start von selbst (PDFs öffnen sich danach wieder), in den Einstellungen wird der Knopf zu »Jetzt installieren« und zeigt die Neuerungen. Oben ist aufgeräumt: kein ≡ Menü mehr, »?« ist das Hilfe-Menü, die Einstellungen öffnen sich ohne eigenen Tab.",
     "Aus Beta 6: Englische Oberfläche (Einstellungen → Sprache), digitale Signatur mit Zertifikat, PDF in Word, Excel oder Text umwandeln (und Office-Dateien in PDF), der KI-Assistent übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner. Texterkennung startet wieder richtig.",
     "Aus Beta 5: Scannen direkt in eine PDF (Startseite → »Scannen«), Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y), Texterkennung in zehn Sprachen, Text über Seitengrenzen markieren und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).",
-    "Aus Beta 4: PDF-Anhänge aus Outlook öffnen sich wieder (auch mit strengen Defender-Regeln), in der Taskleiste steht »PDF Tool« statt »Python«, das Symbol ist auch klein scharf.",
+    "Aus Beta 4: PDF-Anhänge aus Outlook öffnen sich wieder (auch mit strengen Defender-Regeln), in der Taskleiste steht »Novadesk« statt »Python«, das Symbol ist auch klein scharf.",
     "Aus Beta 3: aufgeräumt. PDF-Anhänge aus Outlook öffnen sich wieder, Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
     "Aus Beta 2: Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
     "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",
     "Aus Beta 1: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
     "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Alle Werkzeuge« → »Schützen« und als Schnellwerkzeug.",
-    "PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF …) in die App ziehen oder im Explorer über Rechtsklick → »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
-    "Updates mit einem Klick: PDF Tool lädt neue Versionen selbst herunter. »Jetzt installieren« aktualisiert ohne Setup-Assistent und startet die App danach neu.",
+    "PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF …) in die App ziehen oder im Explorer über Rechtsklick → »Senden an« → »Novadesk (Bilder zu PDF)« zu einer PDF zusammenfügen.",
+    "Updates mit einem Klick: Novadesk lädt neue Versionen selbst herunter. »Jetzt installieren« aktualisiert ohne Setup-Assistent und startet die App danach neu.",
     "Aufgeräumte Einstellungen: oben eine Leiste mit den Bereichen Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose und Info.",
     "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )

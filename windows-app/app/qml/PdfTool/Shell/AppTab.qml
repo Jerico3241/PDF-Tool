@@ -13,6 +13,8 @@ import PdfTool.Backend
 T.AbstractButton {
     id: tab
     property string iconName: ""
+    property url imageSource: ""        // farbiges Symbol der Dateiart (seit 5.0) statt eines Fluent-Symbols
+    property color kindColor: "transparent"  // Farbe der Dateiart: Linie oben am aktiven Tab
     property string title: ""
     property string tooltip: title
     property bool active: false
@@ -27,7 +29,7 @@ T.AbstractButton {
     // Volle Breite mit ganzem Namen, Punkt und × – unabhängig davon, was gerade zu sehen ist (die Breite kommt von
     // außen; so entsteht keine Schleife über die Breite)
     readonly property real fullWidth: iconOnly ? Metrics.appTabIconOnly
-        : Math.min(Metrics.appTabMaxWidth, leftPadding + rightPadding + (iconName !== "" ? Metrics.iconSize + row.spacing : 0)
+        : Math.min(Metrics.appTabMaxWidth, leftPadding + rightPadding + (iconName !== "" || imageSource != "" ? Metrics.iconSize + row.spacing : 0)
                    + Math.ceil(label.implicitWidth) + (showDirty ? 6 + row.spacing : 0) + (closable ? 24 + row.spacing : 0))
     readonly property bool narrow: !iconOnly && width < fullWidth - 0.5
     signal closeRequested()
@@ -66,6 +68,16 @@ T.AbstractButton {
                 border.width: 1
                 border.color: Theme.layerStroke
             }
+            // Dateiart: farbige Linie oben (wie das Symbol – Grün für Tabellen, Blau für Texte …)
+            Rectangle {
+                objectName: "tabKindLine"
+                x: Metrics.radiusCard
+                width: parent.width - 2 * Metrics.radiusCard
+                height: 2
+                radius: 1
+                color: tab.kindColor
+                visible: tab.kindColor.a > 0
+            }
         }
         Rectangle {
             anchors.fill: parent
@@ -91,8 +103,19 @@ T.AbstractButton {
                 Layout.leftMargin: tab.iconOnly ? (tab.width - width) / 2 : 0
                 name: tab.iconName
                 color: tab.active ? Theme.accent : Theme.textSecondary
-                visible: tab.iconName !== ""
+                visible: tab.iconName !== "" && tab.imageSource == ""
                 Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+            }
+            Image {
+                objectName: "tabKindIcon"
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: Metrics.iconSize
+                Layout.preferredHeight: Metrics.iconSize
+                source: tab.imageSource
+                visible: tab.imageSource != ""
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                Accessible.ignored: true
             }
             PText {
                 id: label

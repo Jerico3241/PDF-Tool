@@ -88,8 +88,8 @@ def create(paths: list[str | Path], target: str | Path, *, page_size: str = "aut
         if len(pdf.pages) == 0:
             raise ImageError("Keines der gewählten Bilder ließ sich lesen.")
         pdf.docinfo[Name.Title] = pikepdf.String(target.stem)  # ohne XMP: die Laufzeit hat kein lxml
-        pdf.docinfo[Name.Creator] = pikepdf.String("PDF Tool")
-        pdf.docinfo[Name.Producer] = pikepdf.String("PDF Tool")
+        pdf.docinfo[Name.Creator] = pikepdf.String("Novadesk")
+        pdf.docinfo[Name.Producer] = pikepdf.String("Novadesk")
         buffer = io.BytesIO()
         pdf.save(buffer, compress_streams=True, object_stream_mode=pikepdf.ObjectStreamMode.generate, fix_metadata_version=False)
     finally:

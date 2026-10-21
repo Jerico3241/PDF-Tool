@@ -6,7 +6,7 @@ Was entfernt werden kann (je ein Schalter):
   die einzelner Seiten.
 * **JavaScript und automatische Aktionen** – Skripte des Dokuments, Aktionen beim Öffnen und bei
   Ereignissen (``/AA``), Skript-, Start-, Sende- und Importaktionen von Links, Lesezeichen und
-  Formularfeldern. PDF Tool führt JavaScript ohnehin nie aus; bereinigt bleibt es auch in anderen
+  Formularfeldern. Novadesk führt JavaScript ohnehin nie aus; bereinigt bleibt es auch in anderen
   Programmen wirkungslos.
 * **Anhänge** – eingebettete Dateien und Dateianhang-Kommentare.
 * **Kommentare** – alle Anmerkungen außer Links und Formularfeldern (samt ihrer Notizfenster).

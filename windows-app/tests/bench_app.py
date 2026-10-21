@@ -186,7 +186,7 @@ def main() -> int:
             print(f"{scenario} {run + 1}/{args.runs}: " + ", ".join(f"{k} {v:.0f}" for k, v in values.items()), file=sys.stderr, flush=True)
     import platform
 
-    print(f"PDF Tool {version} · Python {platform.python_version()} · {platform.system()} {platform.release()} · {os.cpu_count()} Kerne · Qt-Plattform {os.environ.get('QT_QPA_PLATFORM', 'offscreen')}")
+    print(f"Novadesk {version} · Python {platform.python_version()} · {platform.system()} {platform.release()} · {os.cpu_count()} Kerne · Qt-Plattform {os.environ.get('QT_QPA_PLATFORM', 'offscreen')}")
     print()
     print(table(results, args.label or version))
     if args.json:

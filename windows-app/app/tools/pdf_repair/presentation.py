@@ -32,7 +32,7 @@ HELP_STEPS = (
 HELP_NOTES = (
     "Die Originaldateien werden nie verändert, umbenannt oder überschrieben. Standardname: »<Name>_repariert.pdf«; gibt es den Namen schon, wird nummeriert: »<Name>_repariert (1).pdf« …",
     "Nicht jede Datei lässt sich vollständig wiederherstellen; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
-    "Öffnet keine PDF-Engine die Datei, sucht PDF Tool die noch vorhandenen PDF-Objekte direkt in der Datei und baut Querverweise, Trailer und Seitenbaum neu auf (»PDF-Struktur rekonstruieren«).",
+    "Öffnet keine PDF-Engine die Datei, sucht Novadesk die noch vorhandenen PDF-Objekte direkt in der Datei und baut Querverweise, Trailer und Seitenbaum neu auf (»PDF-Struktur rekonstruieren«).",
     "Fremde Daten vor oder nach der PDF (z. B. ein E-Mail-Kopf) werden entfernt und im Ergebnis genannt. Von beschädigten Datenströmen wird der lesbare Teil übernommen; das Ergebnis heißt dann »teilweise wiederhergestellt«.",
     "Der Rettungsmodus überträgt lesbare Seiten als Bilder – nur für die einzelne Datei und nur nach Bestätigung, weil Text- und Vektorinformationen verloren gehen.",
     "Passwörter gelten nur für ihre Datei und werden nicht gespeichert. Technische Details stehen im Protokoll pdf-repair.log im Datenordner.",
@@ -40,12 +40,12 @@ HELP_NOTES = (
 
 CONDITION_TEXT = {
     Condition.HEALTHY: ("success", "Keine Fehler gefunden", "Die PDF scheint strukturell in Ordnung zu sein. Eine Reparatur ist nicht nötig."),
-    Condition.REPAIRABLE: ("warning", "Reparierbare Probleme erkannt", "PDF Tool hat beschädigte Strukturen gefunden, die möglicherweise repariert werden können."),
-    Condition.DAMAGED: ("warning", "Schwer beschädigt", "Teile der PDF können nicht gelesen werden. PDF Tool versucht, so viele Seiten und Inhalte wie möglich wiederherzustellen."),
+    Condition.REPAIRABLE: ("warning", "Reparierbare Probleme erkannt", "Novadesk hat beschädigte Strukturen gefunden, die möglicherweise repariert werden können."),
+    Condition.DAMAGED: ("warning", "Schwer beschädigt", "Teile der PDF können nicht gelesen werden. Novadesk versucht, so viele Seiten und Inhalte wie möglich wiederherzustellen."),
     Condition.RAW_RECOVERABLE: (
         "warning",
         "Erweiterte Wiederherstellung möglich",
-        "Die Standard-PDF-Engines können die Datei nicht öffnen. Es wurden jedoch noch PDF-Objekte gefunden. PDF Tool versucht, die noch vorhandenen Inhalte wiederherzustellen.",
+        "Die Standard-PDF-Engines können die Datei nicht öffnen. Es wurden jedoch noch PDF-Objekte gefunden. Novadesk versucht, die noch vorhandenen Inhalte wiederherzustellen.",
     ),
     Condition.UNREADABLE: ("error", "Keine Reparatur möglich", "Die Datei lässt sich mit keiner der eingebauten Engines lesen."),
     Condition.ENCRYPTED: ("info", "Die PDF ist verschlüsselt", "Zum Öffnen wird ein Passwort benötigt."),

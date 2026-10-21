@@ -258,7 +258,7 @@ def test_versions_are_consistent() -> None:
 
 
 def test_readme_stays_a_short_introduction() -> None:
-    """README-Regel: Die README.md stellt PDF Tool kurz vor – keine Versionsnummer, die bei jedem
+    """README-Regel: Die README.md stellt Novadesk kurz vor – keine Versionsnummer, die bei jedem
     Release geändert werden müsste, keine Release-Historie, keine Test- oder CI-Berichte."""
     import re
 
@@ -285,14 +285,14 @@ def test_branding_is_consistent() -> None:
     root = Path(__file__).resolve().parents[1]
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     assert not (root / "installer" / "Uebersichten-Ersteller.iss").exists()
-    assert '#define AppName        "PDF Tool"' in iss
+    assert '#define AppName        "Novadesk"' in iss
     # Die AppId bleibt – ein Update vom Übersichten-Ersteller erzeugt keinen zweiten App-Eintrag.
     assert '#define AppGuid        "59C40061-D5E5-446D-ACB4-E077D3C71E1A"' in iss
     assert "OutputBaseFilename=PDF-Tool-Setup-{#AppVersion}" in iss
     assert f'#define AppUserModelID "{windows.APP_USER_MODEL_ID}"' in iss
     assert f'#define AppMutexName   "{windows.APP_MUTEX}"' in iss
     assert "AppMutex={#AppMutexName},{#OldMutexName}" in iss  # läuft noch die alte App?
-    assert appstate.APP_NAME == "PDF Tool" and appstate.DATA_FOLDER == "PDF-Tool"
+    assert appstate.APP_NAME == "Novadesk" and appstate.DATA_FOLDER == "PDF-Tool"
     assert appstate.LEGACY_DATA_FOLDER == "Uebersichten-Ersteller"
     # Alte Produktnamen stehen nur noch dort, wo die Vorversion übernommen wird.
     for datei in list((root / "app").rglob("*.py")) + list((root / "app" / "qml").rglob("*.qml")):

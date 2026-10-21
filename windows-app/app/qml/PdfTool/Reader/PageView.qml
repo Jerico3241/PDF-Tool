@@ -415,7 +415,7 @@ Item {
             border.color: Theme.accent
             opacity: chosen ? 1 : (pointer.hoverKey === modelData.key ? 0.8 : 0)
             Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
-            // Anfasser an den Ecken: Größe ändern (Kommentare aus PDF Tool; Umschalt: Seitenverhältnis halten)
+            // Anfasser an den Ecken: Größe ändern (Kommentare aus Novadesk; Umschalt: Seitenverhältnis halten)
             Repeater {
                 model: annotationBox.chosen && annotationBox.modelData.resizable ? 4 : 0
                 Rectangle {

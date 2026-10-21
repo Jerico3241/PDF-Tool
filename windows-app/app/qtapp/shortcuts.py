@@ -1,7 +1,7 @@
 """Tastenkürzel (QML: ``Shortcuts``, seit 4.0 Beta 5): alle Befehle mit Tastenkürzel an einer Stelle, eigene
 Kürzel und die Übersicht (Einstellungen › Tastenkürzel, Strg+F1).
 
-Jeder Befehl hat eine feste Kennung (``reader.save``) und Standardkürzel. Eigene Kürzel speichert PDF Tool nur als
+Jeder Befehl hat eine feste Kennung (``reader.save``) und Standardkürzel. Eigene Kürzel speichert Novadesk nur als
 Abweichung (``tastenkuerzel`` in gui-config.json); »Zurücksetzen« entfernt sie. Ein Kürzel gehört immer genau einem
 Befehl: wer es neu vergibt, nimmt es dem bisherigen Befehl weg (die Übersicht sagt, welchem).
 

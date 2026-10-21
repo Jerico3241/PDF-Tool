@@ -1,9 +1,9 @@
 """Weiterer Start bei laufender App: Übergabe an die laufende App – ohne Qt, gleich zu Beginn von ``start.py``.
 
-Läuft PDF Tool schon (sichtbar oder im Hintergrund), muss ein weiterer Start (Startmenü, Doppelklick auf eine PDF)
+Läuft Novadesk schon (sichtbar oder im Hintergrund), muss ein weiterer Start (Startmenü, Doppelklick auf eine PDF)
 nur Bescheid geben und enden. Dafür lohnt es nicht, Qt und die Oberfläche zu laden: ``early_forward`` schreibt die
 Nachricht direkt in die Named Pipe der laufenden App (``QLocalServer``, nur für diesen Benutzer) und wartet auf deren
-»ok«. Klappt das nicht (keine App, ältere Version, Zeitüberschreitung), startet PDF Tool normal; ``qtapp.instance``
+»ok«. Klappt das nicht (keine App, ältere Version, Zeitüberschreitung), startet Novadesk normal; ``qtapp.instance``
 versucht die Übergabe dann noch einmal über Qt.
 
 Übertragen werden nur Dateipfade und ob das Fenster gezeigt werden soll – keine Inhalte.
@@ -203,7 +203,7 @@ def message(paths: list[str], show: bool) -> bytes:
 def _connect(pipe: str, wait: float = BUSY_WAIT):
     """Named Pipe öffnen. Ist sie gerade belegt (z. B. mehrere Anhänge aus Outlook kurz nacheinander geöffnet: die
     laufende App bedient noch den vorigen Start), kurz warten und erneut versuchen – sonst startete ein zweites
-    PDF Tool. ``None``: keine laufende App bzw. weiter belegt."""
+    Novadesk. ``None``: keine laufende App bzw. weiter belegt."""
     deadline = time.monotonic() + wait
     while True:
         try:
@@ -219,7 +219,7 @@ def _connect(pipe: str, wait: float = BUSY_WAIT):
 def early_forward(argv: list[str], name: str | None = None, timeout: float = EARLY_TIMEOUT) -> bool:
     """Nur Windows: Start an die laufende App übergeben. ``True``: angenommen – dieser Prozess kann sofort enden.
 
-    Start mit Windows (``--hintergrund``) fragt nur, ob PDF Tool schon läuft (nichts wird gezeigt)."""
+    Start mit Windows (``--hintergrund``) fragt nur, ob Novadesk schon läuft (nichts wird gezeigt)."""
     if sys.platform != "win32":
         return False
     paths = pdf_arguments(argv)

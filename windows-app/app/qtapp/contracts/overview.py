@@ -1319,7 +1319,7 @@ class ContractOverviewController(Observable):
     @Slot()
     def sendPdfByMail(self) -> None:  # noqa: N802
         """Zuletzt erstellte PDF per E-Mail senden: Das E-Mail-Programm zeigt eine neue Nachricht mit der PDF als
-        Anhang, der Rechnungsempfänger ist eingetragen (falls bekannt) – gesendet wird dort, nie von PDF Tool."""
+        Anhang, der Rechnungsempfänger ist eingetragen (falls bekannt) – gesendet wird dort, nie von Novadesk."""
         path = self.lastPdf
         if not path:
             return
