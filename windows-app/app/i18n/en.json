@@ -3426,7 +3426,18 @@
   "“ in die Darstellung laden": "”: load into Appearance",
   "“ löschen": "”: delete",
   "„Ich beleidige seine Mutter, weil wenn ich seine Mutter beleidige, beleidige ich nur ihn oder maximal noch seine Mutter.“": "“I insult his mother, because if I insult his mother, I only insult him or at most his mother as well.”",
-  "„repariert“ an Dateinamen anhängen": "Append “repaired” to file name"
+  "„repariert“ an Dateinamen anhängen": "Append “repaired” to file name",
+  "Englische": "English",
+  "Deutsche": "German",
+  "Französische": "French",
+  "Spanische": "Spanish",
+  "Italienische": "Italian",
+  "Niederländische": "Dutch",
+  "Polnische": "Polish",
+  "Portugiesische": "Portuguese",
+  "Türkische": "Turkish",
+  " 1 Seite ohne Text blieb leer.": " 1 page without text stayed empty.",
+  "1 Seite ohne Text blieb leer.": "1 page without text stayed empty."
  },
  "patterns": {
   "  Gespeichert als {0}": "  Saved as {0}",
@@ -4178,7 +4189,6 @@
   "Übergabe fehlgeschlagen: {0}": "Handover failed: {0}",
   "Übergabe von {0} Datei(en) an die laufende App: {1}": "Handing over {0} file(s) to the running app: {1}",
   "Übergabe von {0} Datei(en): keine Antwort der laufenden App": "Handing over {0} file(s): no response from the running app",
-  "Übersetzung ins {0} gespeichert: **{1}** ({2} {3}).": "Translation into {0} saved: **{1}** ({2} {3}).",
   "„{0}“ aus dem Stapel entfernt.": "“{0}” removed from the batch.",
   "„{0}“ aus dem Stapel übernommen. Der Stapel-Eintrag bleibt unverändert.": "“{0}” taken from the batch. The batch entry remains unchanged.",
   "„{0}“ entspricht bereits den Angaben dieser Übersicht.": "“{0}” already matches the details of this overview.",
@@ -4196,6 +4206,17 @@
   "„{0}“ wurde in „{1}“ übernommen. E-Mail-Adressen und Aktivität sind vereint.": "“{0}” was merged into “{1}”. Email addresses and activity are combined.",
   "„{0}“: {1} – wird beim Einlesen übersprungen.": "“{0}”: {1} – will be skipped on import.",
   "„{0}“{1}. Die Vorschau zeigt diesen Eintrag genau so, wie der Stapel ihn erstellt.": "“{0}”{1}. The preview shows this entry exactly as the batch creates it.",
-  "… und {0} weitere geänderte Verträge": "… and {0} more changed contracts"
+  "… und {0} weitere geänderte Verträge": "… and {0} more changed contracts",
+  " Seite {0} ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden.": " Page {0} without text was added as an image – for scans, run “Recognize text (OCR)” first.",
+  " Seite {0} ohne Text übersprungen – für Scans vorher »Text erkennen (OCR)« verwenden.": " Page {0} without text was skipped – for scans, run “Recognize text (OCR)” first.",
+  " {0} Seiten ohne Text blieben leer.": " {0} pages without text stayed empty.",
+  "Seite {0} ins {1} übersetzen": "Translate page {0} into {1}",
+  "Seiten {0}–{1} ins {2} übersetzen": "Translate pages {0}–{1} into {2}",
+  "Übersetzung ins {0} gespeichert: **{1}** ({2}).": "Translation into {0} saved: **{1}** ({2}).",
+  "{0} gespeichert als {1}.": "{0} saved as {1}.",
+  "{0} wurde in PDF umgewandelt.": "{0} was converted to PDF.",
+  "Seite {0} ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden.": "Page {0} without text was added as an image – for scans, run “Recognize text (OCR)” first.",
+  "Seite {0} ohne Text übersprungen – für Scans vorher »Text erkennen (OCR)« verwenden.": "Page {0} without text was skipped – for scans, run “Recognize text (OCR)” first.",
+  "{0} Seiten ohne Text blieben leer.": "{0} pages without text stayed empty."
  }
 }

@@ -225,10 +225,11 @@ ColumnLayout {
                     required property string note
                     required property var pages
                     required property var sources
+                    required property bool own  // vom Benutzer getippte Frage (nie übersetzen)
                     Layout.fillWidth: true
                     implicitHeight: kind === "question" ? bubble.height : details.implicitHeight
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: I18n.tr((kind === "question" ? "Frage: " : "") + text, I18n.revision)
+                    Accessible.name: own ? I18n.tr("Frage: ", I18n.revision) + text : I18n.tr((kind === "question" ? "Frage: " : "") + text, I18n.revision)
 
                     // Frage: rechts, in einer Blase
                     Rectangle {
@@ -245,7 +246,8 @@ ColumnLayout {
                             x: 12
                             y: 8
                             width: bubble.width - 24
-                            text: I18n.tr(entry.kind === "question" ? entry.text : "", I18n.revision)
+                            // Eigene Fragen bleiben, wie sie getippt wurden – nur Fragen der App (»Dokument zusammenfassen«) werden übersetzt
+                            text: entry.kind !== "question" ? "" : (entry.own ? entry.text : I18n.tr(entry.text, I18n.revision))
                             wrap: true
                         }
                     }
