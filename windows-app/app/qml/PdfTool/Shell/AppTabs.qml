@@ -388,7 +388,8 @@ Item {
             tip: I18n.tr("Hilfe", I18n.revision)
             toggle: true
             checked: helpMenu.opened
-            onClicked: helpMenu.open()
+            // Ein zweiter Klick schließt das Menü (der Druck auf »?« zählt nicht als Klick daneben, siehe closePolicy)
+            onClicked: helpMenu.opened ? helpMenu.close() : helpMenu.open()
         }
         PIconButton {
             id: settingsButton
@@ -399,7 +400,7 @@ Item {
             tip: I18n.tr("Einstellungen" + Shortcuts.hints["app.settings"], I18n.revision)
             toggle: true
             checked: App.currentPage === "settings"  // die Einstellungen haben keinen eigenen Tab
-            onClicked: App.navigate("settings")
+            onClicked: App.currentPage === "settings" ? App.leaveSettings() : App.navigate("settings")
         }
     }
 
@@ -465,6 +466,7 @@ Item {
         x: helpButton.width - width
         y: helpButton.height + 4
         transformOrigin: Item.TopRight
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
         PMenuItem { objectName: "menuHelp"; text: I18n.tr("Kurzanleitung", I18n.revision); hint: I18n.tr(bar.keyText("app.help"), I18n.revision); iconName: "question_circle"; onTriggered: helpMenu.afterClose = function() { App.showHelp() } }
         PMenuItem { objectName: "menuShortcuts"; text: I18n.tr("Tastenkürzel", I18n.revision); hint: I18n.tr(bar.keyText("app.shortcuts"), I18n.revision); iconName: "keyboard"; onTriggered: helpMenu.afterClose = function() { Shortcuts.showOverview() } }
         T.MenuSeparator {

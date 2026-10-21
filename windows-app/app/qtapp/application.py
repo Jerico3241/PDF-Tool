@@ -134,6 +134,7 @@ class Runtime(QObject):
 
         self.shortcuts = ShortcutsController(self.app, cfg, self)
         self.singletons["Shortcuts"] = self.shortcuts
+        self.language.observe("language", lambda _code: self.shortcuts.refresh())
         # Vorlesen (Sprachausgabe von Windows) – richtet sich erst beim ersten Vorlesen ein
         from .speech import SpeechController
 

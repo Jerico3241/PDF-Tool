@@ -3437,7 +3437,9 @@
   "Portugiesische": "Portuguese",
   "Türkische": "Turkish",
   " 1 Seite ohne Text blieb leer.": " 1 page without text stayed empty.",
-  "1 Seite ohne Text blieb leer.": "1 page without text stayed empty."
+  "1 Seite ohne Text blieb leer.": "1 page without text stayed empty.",
+  "Page Down": "Page Down",
+  "Page Up": "Page Up"
  },
  "patterns": {
   "  Gespeichert als {0}": "  Saved as {0}",
