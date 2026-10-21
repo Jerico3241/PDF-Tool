@@ -2,6 +2,22 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.8
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.8.md).
+
+- Hilfe-Menü: Position an die Breite gebunden, `transformOrigin: TopRight` (kein Sprung beim Einblenden),
+  `CloseOnPressOutsideParent`, damit »?« es wieder schließt.
+- Einstellungen: `App.leaveSettings()` kehrt zur vorherigen Seite zurück (Strg+W, Zahnrad).
+- Tastenkürzel: englische Tastennamen bei englischer Oberfläche (`Shortcuts.refresh` beim Sprachwechsel).
+- Signatur: `_check_cms` lädt die CMS-Daten ohne `rstrip` (Signaturen mit Null-Byte am Ende galten als beschädigt).
+- Excel-Export: `number()` lässt »+…« und führende Nullen als Text, Tausendertrennung nur bei Währung oder
+  vorhandenen Trennzeichen; Text mit »=« am Anfang ist Typ `s`.
+- i18n: kurze Muster fangen keine ganzen Sätze mehr, eigene Eingaben (`own`) im Assistenten werden nicht übersetzt,
+  Meldungen als ganze Sätze im Katalog.
+- Updates: automatische Installation erst nach `app.ready` und `still_opening()`, `restore_after_update` nur bei
+  automatischer Installation, `installNow` stoppt den wartenden Versuch, `_auto_tries` wird zurückgesetzt.
+
 # PDF Tool 4.0.0-beta.7
 
 Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.7.md).
