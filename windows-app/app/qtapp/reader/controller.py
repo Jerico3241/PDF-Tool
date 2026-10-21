@@ -17,7 +17,9 @@ protokolliert.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
+import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -25,7 +27,8 @@ from typing import Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from tools.pdf_editor import recovery
+from tools.pdf_editor import compare as comparing
+from tools.pdf_editor import imagepdf, office, recovery, scan
 from tools.pdf_editor.errors import DamagedDocument, EditorError, NotAPdf, PasswordRequired
 from tools.registry import READER
 
@@ -42,10 +45,15 @@ TAB_LIMIT = 24
 CLOSED_LIMIT = 10  # »Geschlossenen Tab wieder öffnen«: so viele zuletzt geschlossene Dokumente
 NIGHT_KEY = "reader_nachtmodus"  # Nachtmodus (gui-config.json)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
+UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
 # Beschreibung (Tooltip), Symbol
 QUICK_TOOLS = (
     ("optimize", "PDF verkleinern", "Verkleinerte Kopie speichern – das Original bleibt unverändert", "arrow_minimize"),
+    ("pdfa", "Als PDF/A speichern", "Archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften speichern", "library"),
+    ("images", "PDF aus Bildern", "Fotos und Scans (JPG, PNG, TIFF …) zu einer PDF zusammenfügen", "image_add"),
+    ("scan", "Scannen", "Vom Scanner direkt in eine PDF – auf Wunsch durchsuchbar", "scan_text"),
+    ("office", "Office in PDF", "Word-, Excel- oder PowerPoint-Datei in PDF umwandeln (mit Microsoft Office)", "document_pdf"),
     ("redact", "Schwärzen", "Text und Bereiche dauerhaft unkenntlich machen", "eye_off"),
     ("protect", "Kennwortschutz", "Kennwort zum Öffnen oder Einschränkungen festlegen", "lock_closed"),
     ("watermark", "Wasserzeichen", "Wasserzeichen auf die Seiten legen", "layer"),
@@ -55,7 +63,7 @@ QUICK_TOOLS = (
     ("merge", "Zusammenführen", "Weitere PDFs an ein Dokument anhängen", "merge"),
 )
 LEFT_PANELS = ("thumbs", "outline", "search", "attachments", "")
-RIGHT_PANELS = ("comments", "properties", "assistant", "")
+RIGHT_PANELS = ("comments", "properties", "assistant", "compare", "")
 CLIP_FORMAT = "application/x-pdftool-objects"  # Kennung kopierter Objekte in der Zwischenablage des Systems
 _OCR_PROBE: dict = {"done": False, "engine": None}  # Texterkennung: einmal je Programmlauf gesucht
 MAX_WIDTH = 12000  # Pixel – breitere Seitenbilder gibt es nicht (der Ausschnitt bleibt scharf)
@@ -68,8 +76,10 @@ FONT_FAMILIES = (("Helvetica", "Serifenlos (Helvetica/Arial)"), ("Times", "Serif
 HELP_STEPS = (
     "PDF öffnen: »Öffnen« (Strg+O), eine Datei in das Fenster ziehen oder eine Datei aus »Zuletzt geöffnet« wählen.",
     "Lesen: Seiten blättern (Bild ↑/↓), zoomen (Strg+Mausrad, Strg++ / Strg+−), Miniaturen und Lesezeichen links, Suchen mit Strg+F.",
-    "Bearbeiten: Werkzeug oben wählen – Text ändern oder hinzufügen, Bilder, Kommentare, Formulare. Rückgängig mit Strg+Z.",
+    "Bearbeiten: Werkzeug links neben dem Dokument wählen – Text ändern oder hinzufügen, Kommentare, Zeichnen, Unterschreiben; jedes weitere Werkzeug mit Namen unter »Alle Werkzeuge«. Rückgängig mit Strg+Z.",
     "Speichern: Strg+S (die Datei wird erst nach erfolgreicher Prüfung ersetzt), Speichern unter: Strg+Umschalt+S. Drucken: Strg+P.",
+    "Vergleichen und Präsentieren: »Alle Werkzeuge« → »Mit anderer Fassung vergleichen …« zeigt Unterschiede farbig; »Geteilte Ansicht« zeigt zwei PDFs nebeneinander; F5 startet die Präsentation.",
+    "Archivieren und Umwandeln: »Alle Werkzeuge« → »Als PDF/A speichern …«; Bilder (Fotos, Scans) in das Fenster ziehen oder im Explorer über »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
 )
 HELP_NOTES = (
     "Textänderungen nennen ihren Weg: »Direkt im PDF geändert«, »Neu gesetzt« oder »Kompatibilitätsmodus« (Überlagerung – keine Schwärzung, der Originaltext bleibt in der Datei).",
@@ -90,6 +100,15 @@ class ReaderController(Observable):
     organizeChanged, organize = prop(bool, "organize", False)  # Ansicht »Seiten organisieren«
     openingChanged, opening = prop(int, "opening", 0)  # Dateien, die gerade geöffnet werden
     fullScreenChanged, fullScreen = prop(bool, "fullScreen", False)  # Vollbild (nur das Dokument)
+    presentingChanged, presenting = prop(bool, "presenting", False)  # Präsentation: Vollbild, Seite für Seite, schwarz
+    splitKeyChanged, splitKey = prop(str, "splitKey", "")  # geteilte Ansicht: Dokument rechts neben dem aktuellen ("" = aus)
+    # Vergleichen: läuft, Ergebnis (Text), Änderungen [{key, kind, before, after, oldPage, newPage}], gewählte Änderung
+    compareActiveChanged, compareActive = prop(bool, "compareActive", False)
+    compareRunningChanged, compareRunning = prop(bool, "compareRunning", False)
+    compareSummaryChanged, compareSummary = prop(str, "compareSummary", "")
+    compareItemsChanged, compareItems = prop(list, "compareItems", [])
+    compareIndexChanged, compareIndex = prop(int, "compareIndex", -1)
+    compareNamesChanged, compareNames = prop(list, "compareNames", [])  # [alte Fassung, neue Fassung]
     canPasteChanged, canPaste = prop(bool, "canPaste", False)  # Zwischenablage: Objekte, Bild oder Text
     pageClipChanged, pageClip = prop(int, "pageClip", 0)  # kopierte Seiten (Anzahl; über Tabs hinweg)
     # Texterkennung: "" (noch nicht gesucht), "pruefen", "bereit" oder "fehlt"; installierte Sprachen
@@ -120,6 +139,11 @@ class ReaderController(Observable):
         if view.get("links") in LEFT_PANELS:
             self.set_quietly("leftPanel", view.get("links"))
         self._window_before_full = None  # Fensterzustand vor dem Vollbild
+        self._split_pending = False  # geteilte Ansicht: das nächste geöffnete PDF kommt neben das bisherige
+        self._compare_pending: str = ""  # Vergleichen: Kennung der neuen Fassung, bis die alte geöffnet ist
+        self._compare: tuple | None = None  # (alte Fassung, neue Fassung, Ergebnis)
+        self._compare_serial = 0
+        self._before_presentation: tuple | None = None  # (Dokument, Ansicht, Einpassen, Zoom, Werkzeug) vor der Präsentation
         self._watching_window = False
         self._attachment_dir: str | None = None  # eigener Ordner für geöffnete Anhänge (beim Beenden gelöscht)
         self._clip = None  # kopierte Objekte (objectops.Clip) – gilt für alle Tabs
@@ -128,9 +152,24 @@ class ReaderController(Observable):
         self._ocr_chosen = [str(code) for code in chosen if isinstance(code, str)][:6] if isinstance(chosen, list) else []
         self._clip_cut = False
         self._page_data: bytes | None = None  # kopierte Seiten als kleine PDF
+        stored_sign = cfg.get("reader_signieren")
+        self.sign_defaults: dict = dict(stored_sign) if isinstance(stored_sign, dict) else {}  # Grund, Ort, sichtbar, Zertifikat
         self._paste_counts: dict[tuple[str, int], int] = {}  # wie oft je Dokument und Seite eingefügt
         self._clipboard_watched = False
         self.source_dir = str(cfg.get("ordner_reader") or "")
+        images = cfg.get("reader_bilder") if isinstance(cfg.get("reader_bilder"), dict) else {}
+        self._image_options = {
+            "pageSize": images.get("seite") if images.get("seite") in ("auto", *imagepdf.PAGE_SIZES) else "auto",
+            "margin": images.get("rand") if images.get("rand") in imagepdf.MARGINS else "none",
+            "folder": str(images.get("ordner") or ""),
+        }
+        stored = cfg.get("reader_scan") if isinstance(cfg.get("reader_scan"), dict) else {}
+        settings = scan.Settings.of({"source": stored.get("quelle"), "color": stored.get("farbe"), "dpi": stored.get("dpi")})
+        self._scan_options = {
+            "source": settings.source, "color": settings.color, "dpi": settings.dpi, "ocr": stored.get("ocr") is not False,
+            "scanner": str(stored.get("scanner") or ""), "folder": str(stored.get("ordner") or ""),
+        }
+        self._scanning = False
         self._external: list[str] = []
         self._preloaded = False  # PDF-Engine vorab geladen (bzw. angestoßen)
         self._opening_paths: list[str] = []  # Dateien, die gerade geöffnet werden
@@ -139,6 +178,9 @@ class ReaderController(Observable):
         # Letzte Sitzung (nur mit der Einstellung): gilt bis zum Beenden, das sie neu festhält; der Start öffnet sie einmal
         self._session = _session_from(cfg.get(SESSION_KEY))
         self._session_pending = self._session
+        # Automatisches Update (seit 4.0 Beta 7): die PDFs vor dem Neustart einmal wieder öffnen, auch ohne Einstellung
+        self.restore_after_update = False
+        self._update_once = cfg.get(UPDATE_SESSION_KEY) is True
         self._restoring = False  # Wiederherstellung läuft (Beenden währenddessen: die gemerkte Liste bleibt)
         self._quit_active = ""  # beim Beenden: der aktive Tab vor den Rückfragen zu ungespeicherten Dokumenten
         self._refresh_recent()
@@ -154,6 +196,11 @@ class ReaderController(Observable):
         return self._current
 
     current = Property(QObject, _get_current, notify=currentChanged)
+
+    def _get_split(self):
+        return self._docs.get(self.splitKey)
+
+    splitDoc = Property(QObject, _get_split, notify=splitKeyChanged)
 
     def provider(self) -> PageImageProvider:
         return PageImageProvider(self._render, self.cache)
@@ -275,7 +322,19 @@ class ReaderController(Observable):
     def open_paths(self, paths: list[str], then: Callable[[DocumentController | None], None] | None = None) -> None:
         """PDFs öffnen (je Datei ein Tab; schon geöffnete werden aktiv). ``then(Dokument)``: sobald das jeweilige
         Dokument geöffnet und aktiv ist – ``then(None)``, wenn es sich nicht öffnen ließ."""
-        pdfs = [p for p in paths if p.lower().endswith(".pdf") or _looks_like_pdf(p)]
+        images = [p for p in paths if imagepdf.is_image(p)]
+        documents = [p for p in paths if p not in images and office.kind_of(p) is not None]
+        pdfs = [p for p in paths if p not in images and p not in documents and (p.lower().endswith(".pdf") or _looks_like_pdf(p))]
+        if documents:
+            # Word, Excel, PowerPoint (Ziehen, »Senden an«): über Office in PDF umwandeln und öffnen
+            self.office_to_pdf(documents[0])
+            if not pdfs and not images:
+                return
+        if images:
+            # Bilder (Ziehen, »Senden an« im Explorer): zu einer PDF zusammenfügen
+            self.images_to_pdf(images)
+            if not pdfs:
+                return
         if not pdfs:
             self.app.notify("reader", "warning", "Bitte eine PDF-Datei wählen.", title="Keine PDF")
             return
@@ -289,6 +348,8 @@ class ReaderController(Observable):
                 if then is not None:
                     then(existing)
                 continue
+            if then is None and any(_same(opening, path) for opening in self._opening_paths):
+                continue  # wird schon geöffnet (z. B. Doppelklick zweimal kurz hintereinander)
             if len(self._docs) >= TAB_LIMIT:
                 self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
                 return
@@ -441,6 +502,7 @@ class ReaderController(Observable):
         if controller is None or controller is self._current:
             return
         self._remember_panels()
+        previous = self._current
         self._current = controller
         # Seitenleisten und »Seiten organisieren« des Tabs (Tabs beeinflussen sich nicht gegenseitig)
         panels = controller.panels or {}
@@ -450,6 +512,194 @@ class ReaderController(Observable):
         self.currentKey = key
         self.hasDocument = True
         self.currentChanged.emit()
+        # Geteilte Ansicht: das Dokument rechts wird angeklickt → die beiden tauschen; ein eben für die geteilte
+        # Ansicht geöffnetes PDF kommt neben das bisherige
+        if previous is not None and previous.ident in self._docs:
+            if key == self.splitKey or self._split_pending:
+                self.splitKey = previous.ident
+        self._split_pending = False
+        if self._compare_pending and self._compare_pending in self._docs and self._compare_pending != key:
+            newer = self._docs[self._compare_pending]
+            self._compare_pending = ""
+            self.splitKey = newer.ident
+            self.start_compare(controller, newer)
+
+    # Geteilte Ansicht ---------------------------------------------------------------------------------------
+    @Slot()
+    def toggleSplit(self) -> None:  # noqa: N802
+        """Zwei PDFs nebeneinander: rechts ein anderes geöffnetes PDF (das zuletzt benutzte), sonst eines zum
+        Öffnen wählen. Noch einmal: wieder nur das aktuelle."""
+        if self.splitKey:
+            self.splitKey = ""
+            if self.compareActive:
+                self.endCompare()
+            return
+        if not self.hasDocument:
+            return
+        others = [key for key in self.tabs.keys() if key != self.currentKey]
+        if others:
+            self.splitKey = others[-1]
+            return
+        self.openSplitDialog()
+
+    @Slot()
+    def openSplitDialog(self) -> None:  # noqa: N802
+        """Ein PDF wählen, das rechts neben dem aktuellen erscheint."""
+        paths = files.open_files("PDF für die geteilte Ansicht öffnen", self.app.initial_dir("reader", self.source_dir), files.PDF_FILTER)
+        if paths:
+            self.open_beside(paths[0])
+
+    def open_beside(self, path: str) -> None:
+        existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+        if existing is not None:
+            if existing is not self._current:
+                self.splitKey = existing.ident
+            return
+        self._split_pending = self._current is not None
+        self.open_paths([str(path)])
+
+    # Vergleichen ----------------------------------------------------------------------------------------------
+    def compare_with(self, newer: DocumentController) -> None:
+        """»Mit anderer Fassung vergleichen«: die ältere Fassung wählen; sie erscheint links, ``newer`` rechts, die
+        Unterschiede sind in beiden markiert und rechts als Liste."""
+        paths = files.open_files("Ältere Fassung zum Vergleichen wählen", self.app.initial_dir("reader", self.source_dir), files.PDF_FILTER)
+        if paths:
+            self.compare_paths(newer, paths[0])
+
+    def compare_paths(self, newer: DocumentController, path: str) -> None:
+        if newer.path and _same(newer.path, path):
+            self.app.notify("reader", "info", "Bitte eine andere Datei wählen – ein PDF mit sich selbst zu vergleichen zeigt keine Unterschiede.", title="Gleiche Datei")
+            return
+        existing = next((doc for doc in self._docs.values() if doc.path and _same(doc.path, path)), None)
+        if existing is not None:
+            self.activate(existing.ident)
+            self.splitKey = newer.ident
+            self.start_compare(existing, newer)
+            return
+        self._compare_pending = newer.ident
+        self.open_paths([str(path)])
+
+    def start_compare(self, older: DocumentController, newer: DocumentController) -> None:
+        self.end_compare()
+        self._compare_serial += 1
+        serial = self._compare_serial
+        self._compare = (older, newer, None)
+        self.compareActive = True
+        self.compareRunning = True
+        self.compareSummary = "Vergleich läuft …"
+        self.compareNames = [older.name, newer.name]
+        self.showRightPanel("compare")
+        found: dict = {}
+
+        def cancelled() -> bool:
+            return serial != self._compare_serial
+
+        def got(which: str, payload) -> None:
+            if cancelled():
+                return
+            found[which] = payload
+            if len(found) == 2:
+                (old_words, old_empty), (new_words, new_empty) = found["old"], found["new"]
+                self.engine.submit(lambda: comparing.compare(old_words, new_words, old_empty, new_empty, cancelled), lambda result: self._compare_done(serial, result), lambda exc, details: self._compare_failed(serial, exc, details), priority=BACKGROUND, label="vergleichen")
+
+        def failed(exc: BaseException) -> None:
+            self._compare_failed(serial, exc, "")
+
+        older.run(lambda session: session.compare_words(cancelled), lambda payload: got("old", payload), refresh=False, failed=failed, priority=BACKGROUND)
+        newer.run(lambda session: session.compare_words(cancelled), lambda payload: got("new", payload), refresh=False, failed=failed, priority=BACKGROUND)
+
+    def _compare_failed(self, serial: int, exc: BaseException, details: str) -> None:
+        if serial != self._compare_serial:
+            return
+        _log().warning("Vergleich fehlgeschlagen: %s %s", type(exc).__name__, details)
+        self.compareRunning = False
+        self.compareSummary = "Der Vergleich ist fehlgeschlagen. Bitte beide PDFs prüfen (beschädigt oder kennwortgeschützt?)."
+
+    def _compare_done(self, serial: int, result) -> None:
+        if serial != self._compare_serial or self._compare is None:
+            return
+        older, newer, _ = self._compare
+        self._compare = (older, newer, result)
+        self.compareRunning = False
+        self.compareSummary = comparing.summary(result)
+        codes = {"changed": 0, "added": 1, "removed": 2}
+        marks: dict[str, dict[str, list]] = {"old": {}, "new": {}}
+        items = []
+        for number, change in enumerate(result.changes):
+            for side, places in (("old", change.old), ("new", change.new)):
+                for page, rects in places.items():
+                    marks[side].setdefault(str(page), []).extend([round(value, 2) for value in rect] + [codes[change.kind]] for rect in rects)
+            items.append({"key": str(number), "kind": change.kind, "before": change.before, "after": change.after, "oldPage": change.old_at[0], "newPage": change.new_at[0]})
+        older.compareRects = marks["old"]
+        newer.compareRects = marks["new"]
+        self.compareItems = items
+        if items:
+            self.showCompare(0)
+
+    @Slot(int)
+    def showCompare(self, index: int) -> None:  # noqa: N802
+        """Änderung ``index`` in beiden Fassungen zeigen und hervorheben."""
+        if self._compare is None or self._compare[2] is None or not self._compare[2].changes:
+            return
+        older, newer, result = self._compare
+        index %= len(result.changes)
+        change = result.changes[index]
+        self.compareIndex = index
+        for doc, places, at in ((older, change.old, change.old_at), (newer, change.new, change.new_at)):
+            if doc not in self._docs.values():
+                continue
+            page = at[0]
+            doc.currentCompare = {"page": page, "rects": [list(rect) for rect in places.get(page, [])]} if page >= 0 else {}
+            if page >= 0:
+                doc.currentPage = page
+                doc.reveal(page, at[1], at[2])
+
+    @Slot()
+    def nextCompare(self) -> None:  # noqa: N802
+        self.showCompare(self.compareIndex + 1)
+
+    @Slot()
+    def previousCompare(self) -> None:  # noqa: N802
+        self.showCompare(self.compareIndex - 1 if self.compareIndex > 0 else len(self.compareItems) - 1)
+
+    @Slot()
+    def recompare(self) -> None:
+        if self._compare is not None:
+            older, newer, _ = self._compare
+            if older in self._docs.values() and newer in self._docs.values():
+                self.start_compare(older, newer)
+
+    @Slot()
+    def endCompare(self) -> None:  # noqa: N802
+        self.end_compare()
+        if self.rightPanel == "compare":
+            self.rightPanel = ""
+            self._remember_panels()
+
+    def end_compare(self) -> None:
+        self._compare_serial += 1
+        if self._compare is not None:
+            for doc in self._compare[:2]:
+                if doc in self._docs.values():
+                    doc.compareRects = {}
+                    doc.currentCompare = {}
+        self._compare = None
+        self.compareActive = False
+        self.compareRunning = False
+        self.compareSummary = ""
+        self.compareItems = []
+        self.compareIndex = -1
+        self.compareNames = []
+
+    @Slot(str)
+    def setSplit(self, key: str) -> None:  # noqa: N802
+        if key in self._docs and key != self.currentKey:
+            self.splitKey = key
+
+    @Slot()
+    def swapSplit(self) -> None:  # noqa: N802
+        if self.splitKey in self._docs:
+            self.activate(self.splitKey)
 
     def _remember_panels(self) -> None:
         if self._current is not None:
@@ -567,6 +817,10 @@ class ReaderController(Observable):
         controller = self._docs.pop(key, None)
         if controller is None:
             return
+        if key == self.splitKey:
+            self.splitKey = ""
+        if self._compare is not None and controller in self._compare[:2]:
+            self.endCompare()
         if remember:
             self._remember_closed(controller)
         keys = self.tabs.keys()
@@ -701,7 +955,43 @@ class ReaderController(Observable):
         window.showFullScreen()
 
     @Slot()
+    def startPresentation(self) -> None:  # noqa: N802
+        """F5: Präsentation – Vollbild auf schwarzem Grund, eine ganze Seite nach der anderen (Pfeiltasten,
+        Leertaste, Bild auf/ab); Esc beendet sie und stellt Ansicht und Zoom wieder her."""
+        doc = self._current
+        if doc is None or self.presenting:
+            return
+        self._before_presentation = (doc, doc.viewMode, doc.fit, doc.zoom, doc.tool)
+        self.organize = False
+        doc.setTool("select")
+        doc.setViewMode("single")
+        doc.fitPage()
+        self.presenting = True
+        if not self.fullScreen:
+            self.toggleFullScreen()
+
+    def _end_presentation(self) -> None:
+        if not self.presenting:
+            return
+        self.presenting = False
+        before, self._before_presentation = self._before_presentation, None
+        if before is None:
+            return
+        doc, mode, fit, zoom, tool = before
+        if doc not in self._docs.values():
+            return  # inzwischen geschlossen
+        doc.setViewMode(mode)
+        if fit == "width":
+            doc.fitWidth()
+        elif fit == "page":
+            doc.fitPage()
+        else:
+            doc.setZoom(zoom)
+        doc.setTool(tool)
+
+    @Slot()
     def leaveFullScreen(self) -> None:  # noqa: N802
+        self._end_presentation()
         if not self.fullScreen:
             return
         self.fullScreen = False
@@ -723,6 +1013,7 @@ class ReaderController(Observable):
         if self.fullScreen and visibility not in (QWindow.Visibility.FullScreen, QWindow.Visibility.Hidden):
             self.fullScreen = False
             self._window_before_full = None
+            self._end_presentation()
 
     def _page_changed(self, page: str) -> None:
         if page != "reader":
@@ -735,7 +1026,13 @@ class ReaderController(Observable):
         session = self._session if self._restore_wanted() else None
         return {
             "reader_zuletzt": list(self._recent_paths), "reader_zuletzt_zeit": dict(self._recent_opened), "reader_ansicht": {**self._view, "links": self.leftPanel},
-            "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
+            "ordner_reader": self.source_dir, "reader_ocr_sprachen": list(self._ocr_chosen), "reader_signieren": dict(self.sign_defaults) or None, NIGHT_KEY: bool(self.nightMode), SESSION_KEY: session,
+            UPDATE_SESSION_KEY: True if self.restore_after_update else None,
+            "reader_bilder": {"seite": self._image_options["pageSize"], "rand": self._image_options["margin"], "ordner": self._image_options["folder"]},
+            "reader_scan": {
+                "quelle": self._scan_options["source"], "farbe": self._scan_options["color"], "dpi": self._scan_options["dpi"],
+                "ocr": self._scan_options["ocr"], "scanner": self._scan_options["scanner"], "ordner": self._scan_options["folder"],
+            },
         }
 
     # Nachtmodus --------------------------------------------------------------------------------------------------
@@ -757,6 +1054,15 @@ class ReaderController(Observable):
         (»Zusammenführen«: danach die PDFs wählen, die angehängt werden)."""
         tool = next((entry for entry in QUICK_TOOLS if entry[0] == action), None)
         if tool is None:
+            return
+        if action == "images":
+            self.imagesToPdf()
+            return
+        if action == "scan":
+            self.scanToPdf()
+            return
+        if action == "office":
+            self.officeToPdf()
             return
         path = self.pick_pdf(f"{tool[1]} – erste PDF wählen" if action == "merge" else f"{tool[1]} – PDF wählen")
         if not path:
@@ -780,6 +1086,246 @@ class ReaderController(Observable):
 
         # Im nächsten Durchlauf: Tab und Reader stehen, bevor ein Dialog oder Werkzeug erscheint
         self.app.timers.later(f"reader:quick:{controller.ident}", 0, start)
+
+    # PDF aus Bildern -------------------------------------------------------------------------------------------------
+    @Slot()
+    def imagesToPdf(self) -> None:  # noqa: N802
+        self.images_to_pdf([])
+
+    def images_to_pdf(self, paths: list[str]) -> None:
+        """Bilder wählen (oder die gezogenen bzw. aus dem Explorer gesendeten), Reihenfolge, Seitengröße und Rand
+        festlegen, als neue PDF speichern und im Reader öffnen."""
+        if not paths:
+            paths = files.open_files("PDF aus Bildern – Bilder wählen", self.app.initial_dir("bilder", self._image_options["folder"] or self.source_dir), imagepdf.FILTER)
+        images = [str(p) for p in paths if imagepdf.is_image(p)][: imagepdf.MAX_IMAGES]
+        if not images:
+            if paths:
+                self.app.notify("reader", "warning", "Bitte Bilder wählen (JPG, PNG, TIFF, BMP, GIF oder WebP).", title="Keine Bilder")
+            return
+        self._image_options["folder"] = str(Path(images[0]).parent)
+        answer, data = self.app.dialogs.ask(
+            "images", "PDF aus Bildern", "", primary="PDF erstellen", close="Abbrechen", width=620,
+            data={"files": [{"name": Path(p).name, "path": p} for p in images], "pageSize": self._image_options["pageSize"], "margin": self._image_options["margin"]},
+        )
+        if answer != "primary":
+            return
+        data = data or {}
+        order = [str(p) for p in data.get("order") or [] if str(p) in images]
+        if not order:
+            return
+        page_size = data.get("pageSize") if data.get("pageSize") in ("auto", *imagepdf.PAGE_SIZES) else "auto"
+        margin = data.get("margin") if data.get("margin") in imagepdf.MARGINS else "none"
+        self._image_options.update(pageSize=page_size, margin=margin)
+        self.app.schedule_save()
+        name = f"{Path(order[0]).stem}.pdf" if len(order) == 1 else f"{Path(order[0]).parent.name or 'Bilder'}.pdf"
+        target = files.save_file("PDF aus Bildern speichern", str(Path(order[0]).parent / name), files.PDF_FILTER)
+        if not target:
+            return
+        if not target.lower().endswith(".pdf"):
+            target += ".pdf"
+        if any(_same(target, p) for p in order):
+            self.app.notify("reader", "warning", "Die PDF braucht einen eigenen Namen.", title="Nicht gespeichert")
+            return
+        self.app.set_status(f"PDF aus {len(order)} {'Bild' if len(order) == 1 else 'Bildern'} wird erstellt …", "busy")
+
+        def done(result) -> None:
+            skipped = f" Nicht lesbar und ausgelassen: {', '.join(result.skipped[:5])}{' …' if len(result.skipped) > 5 else ''}." if result.skipped else ""
+            pages = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'}."
+            self.app.notify("reader", "warning" if skipped else "success", pages + skipped, title="PDF aus Bildern erstellt", auto_hide=12000)
+            self.open_paths([str(result.path)])
+
+        def failed(exc: BaseException, _details: str) -> None:
+            message = str(exc) if isinstance(exc, EditorError) else "Die PDF ließ sich nicht erstellen."
+            self.app.notify("reader", "error", message, title="PDF aus Bildern")
+
+        self.engine.submit(lambda: imagepdf.create(order, target, page_size=page_size, margin=margin), done, failed, label="bilder")
+
+    # Office in PDF -----------------------------------------------------------------------------------------------------
+    @Slot()
+    def officeToPdf(self) -> None:  # noqa: N802
+        path = files.open_file("Office in PDF – Datei wählen", self.app.initial_dir("reader", self.source_dir), office.FILTER)
+        if path:
+            self.office_to_pdf(path)
+
+    def office_to_pdf(self, path: str) -> None:
+        """Word-, Excel- oder PowerPoint-Datei über das installierte Office in eine neue PDF umwandeln und öffnen."""
+        kind = office.kind_of(path)
+        if kind is None:
+            return
+        if not office.installed(kind):
+            self.app.notify("reader", "warning", f"Zum Umwandeln braucht PDF Tool Microsoft {office.NAMES[kind]}. Es ist auf diesem PC nicht installiert.", title="Office in PDF")
+            return
+        target = files.save_file("PDF speichern", str(Path(path).with_suffix(".pdf")), files.PDF_FILTER)
+        if not target:
+            return
+        if not target.lower().endswith(".pdf"):
+            target += ".pdf"
+        if Path(target).exists():
+            # Die Dateiauswahl hat das Überschreiben bestätigt: erst nach erfolgreicher Umwandlung ersetzen
+            final, target = target, str(Path(target).with_name(f".{Path(target).stem[:40]}.pdftool-office.pdf"))
+            Path(target).unlink(missing_ok=True)
+        else:
+            final = target
+        self.source_dir = str(Path(path).parent)
+        self.app.set_status(f"{Path(path).name} wird mit {office.NAMES[kind]} in PDF umgewandelt …", "busy")
+
+        def work() -> str:
+            office.to_pdf(path, target)
+            if final != target:
+                os.replace(target, final)
+            return final
+
+        def done(result: str) -> None:
+            self.app.notify("reader", "success", f"{Path(path).name} wurde in PDF umgewandelt.", title="Office in PDF", auto_hide=8000)
+            self.open_paths([result])
+
+        def failed(exc: BaseException, _details: str) -> None:
+            if final != target:
+                Path(target).unlink(missing_ok=True)
+            message = str(exc) if isinstance(exc, EditorError) else f"{office.NAMES[kind]} konnte die Datei nicht umwandeln."
+            self.app.notify("reader", "error", message, title="Office in PDF")
+
+        self.engine.submit(work, done, failed, label="office")
+
+    @Slot(str)
+    def openExternal(self, path: str) -> None:  # noqa: N802
+        """Umgewandelte Datei (Word, Excel, Text) mit dem Standardprogramm öffnen."""
+        try:
+            files.open_path(path)
+        except OSError as exc:
+            self.app.notify("reader", "error", str(exc) or "Kein Programm zum Öffnen gefunden.", title="Nicht geöffnet")
+
+    # Scannen -----------------------------------------------------------------------------------------------------------
+    @Slot()
+    def scanToPdf(self) -> None:  # noqa: N802
+        """Vom Scanner (WIA) in eine neue PDF: Scanner, Quelle, Farbe und Auflösung wählen, Seite für Seite (Vorlagenglas)
+        oder alle auf einmal (Einzug) scannen, als PDF speichern, im Reader öffnen und auf Wunsch Text erkennen."""
+        if self._scanning:
+            return
+        self._scanning = True
+        self.probe_ocr()
+        self.app.set_status("Scanner werden gesucht …", "busy")
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self._scanning = False
+            self.app.set_status("", "neutral")
+            self.app.notify("reader", "error", str(exc) if isinstance(exc, scan.ScanError) else "Die Scanner ließen sich nicht abfragen.", title="Scannen")
+
+        self.app.worker.run(scan.scanners, self._scan_choose, failed)
+
+    def _scan_choose(self, found: list) -> None:
+        self.app.set_status("", "neutral")
+        if not found:
+            self._scanning = False
+            self.app.notify(
+                "reader", "warning",
+                "PDF Tool findet Scanner über die Scanner-Schnittstelle von Windows. Bitte den Scanner einschalten und verbinden; "
+                "bei manchen Geräten ist dafür der Treiber des Herstellers nötig.",
+                title="Kein Scanner gefunden",
+            )
+            return
+        options = self._scan_options
+        chosen = options["scanner"] if any(item.ident == options["scanner"] for item in found) else found[0].ident
+        data = {
+            "scanners": [{"id": item.ident, "name": item.name} for item in found], "scanner": chosen,
+            "source": options["source"], "color": options["color"], "dpi": options["dpi"], "resolutions": list(scan.RESOLUTIONS),
+            "ocr": options["ocr"] and self.ocrState != "fehlt", "ocrAvailable": self.ocrState != "fehlt",
+        }
+        answer, result = self.app.dialogs.ask("scan", "Scannen", "", primary="Scannen", data=data, width=520)
+        if answer != "primary":
+            self._scanning = False
+            return
+        result = result or {}
+        ident = str(result.get("scanner") or chosen)
+        if not any(item.ident == ident for item in found):
+            ident = chosen
+        settings = scan.Settings.of(result)
+        with_ocr = bool(result.get("ocr")) and self.ocrState != "fehlt"
+        options.update(scanner=ident, source=settings.source, color=settings.color, dpi=settings.dpi, ocr=with_ocr)
+        self.app.schedule_save()
+        folder = Path(tempfile.mkdtemp(prefix="pdf-tool-scan-"))
+        self._scan_more(ident, settings, folder, [], with_ocr)
+
+    def _scan_more(self, ident: str, settings, folder: Path, pages: list, with_ocr: bool) -> None:
+        self.app.set_status(f"Seite {len(pages) + 1} wird gescannt …" if settings.source == "flatbed" else "Einzug wird gescannt …", "busy")
+
+        def done(_new: list) -> None:
+            self.app.set_status("", "neutral")
+            if settings.source == "flatbed":
+                count = f"{len(pages)} {'Seite' if len(pages) == 1 else 'Seiten'} gescannt"
+                answer, _data = self.app.dialogs.ask(
+                    "confirm", count, "Für die nächste Seite das Blatt wenden oder ein neues auflegen.",
+                    primary="Nächste Seite scannen", secondary="Fertig", close="Abbrechen", default="secondary",
+                )
+                if answer == "primary":
+                    self._scan_more(ident, settings, folder, pages, with_ocr)
+                    return
+                if answer != "secondary":
+                    self._scan_cancelled(folder)
+                    return
+            self._scan_finish(pages, folder, with_ocr)
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self.app.set_status("", "neutral")
+            message = str(exc) if isinstance(exc, scan.ScanError) else "Der Scan ist fehlgeschlagen."
+            if not isinstance(exc, scan.ScanError):
+                _log("scan").warning("Scannen fehlgeschlagen: %s", type(exc).__name__)
+            if pages:
+                answer, _data = self.app.dialogs.ask(
+                    "confirm", "Scan fehlgeschlagen", f"{message}\n\n{len(pages)} {'Seite ist' if len(pages) == 1 else 'Seiten sind'} schon gescannt.",
+                    primary="Erneut versuchen", secondary="Mit diesen Seiten fertigstellen", close="Abbrechen",
+                )
+                if answer == "primary":
+                    self._scan_more(ident, settings, folder, pages, with_ocr)
+                elif answer == "secondary":
+                    self._scan_finish(pages, folder, with_ocr)
+                else:
+                    self._scan_cancelled(folder)
+                return
+            self._scan_cancelled(folder, quiet=True)
+            self.app.notify("reader", "error", message, title="Scannen")
+
+        start = len(pages)
+        self.app.worker.run(lambda: scan.scan(ident, settings, folder, start=start, into=pages), done, failed)
+
+    def _scan_cancelled(self, folder: Path, quiet: bool = False) -> None:
+        self._scanning = False
+        shutil.rmtree(folder, ignore_errors=True)
+        if not quiet:
+            self.app.set_status("Scannen abgebrochen.", "info")
+
+    def _scan_finish(self, pages: list, folder: Path, with_ocr: bool) -> None:
+        default_dir = self._scan_options["folder"] or str(Path.home() / "Documents")
+        name = time.strftime("Scan %Y-%m-%d %H-%M.pdf")
+        target = files.save_file("Scan speichern", str(Path(default_dir) / name), files.PDF_FILTER)
+        if not target:
+            self._scan_cancelled(folder)
+            return
+        if not target.lower().endswith(".pdf"):
+            target += ".pdf"
+        self._scan_options["folder"] = str(Path(target).parent)
+        self.app.schedule_save()
+        self.app.set_status(f"PDF aus {len(pages)} gescannten {'Seite' if len(pages) == 1 else 'Seiten'} wird erstellt …", "busy")
+        languages = self.ocr_languages()
+
+        def done(result) -> None:
+            self._scanning = False
+            shutil.rmtree(folder, ignore_errors=True)
+            pages_text = f"{result.pages} {'Seite' if result.pages == 1 else 'Seiten'}"
+            self.app.notify("reader", "success", f"{pages_text} gescannt und gespeichert." + (" Der Text wird jetzt erkannt." if with_ocr else ""), title="Scan gespeichert", auto_hide=10000)
+
+            def recognize(controller: DocumentController | None) -> None:
+                if controller is not None and with_ocr and languages and self.ocr_engine() is not None:
+                    controller.start_ocr_all(languages)
+
+            self.open_paths([str(result.path)], then=recognize)
+
+        def failed(exc: BaseException, _details: str) -> None:
+            self._scanning = False
+            self.app.notify("reader", "error", str(exc) if isinstance(exc, EditorError) else "Die PDF ließ sich nicht erstellen.", title="Scannen")
+            shutil.rmtree(folder, ignore_errors=True)
+
+        self.engine.submit(lambda: imagepdf.create([str(p) for p in pages], target, page_size="auto"), done, failed, label="scan")
 
     # Per E-Mail senden ---------------------------------------------------------------------------------------------
     @Slot()
@@ -814,8 +1360,18 @@ class ReaderController(Observable):
 
     # Letzte Sitzung (Einstellung »PDFs der letzten Sitzung beim Start wieder öffnen«) -------------------------------
     def _restore_wanted(self) -> bool:
+        if self.restore_after_update or self._update_once:
+            return True
         settings = self.app.settings
         return settings is not None and bool(getattr(settings, "readerRestoreSession", False))
+
+    def still_opening(self) -> bool:
+        """PDFs werden noch geöffnet oder warten auf den Start (»Öffnen mit«) – ein Update wartet darauf."""
+        return bool(self.opening or self._external)
+
+    def unsaved(self) -> list[str]:
+        """Namen der Dokumente mit ungespeicherten Änderungen (ein automatisches Update wartet darauf)."""
+        return [controller.name for controller in self._docs.values() if controller.dirty]
 
     def _restore_setting(self, enabled: bool) -> None:
         if not enabled:
@@ -839,7 +1395,9 @@ class ReaderController(Observable):
         """Nach dem Start: die PDFs der letzten Sitzung im Hintergrund wieder öffnen – nur vorhandene Dateien, ohne
         Rückfragen; der Start wartet nie darauf. ``recovered``: schon wiederhergestellte Dokumente (Absturz)."""
         session = self._session_pending
-        if session is None or not self._restore_wanted() or self.app.closing:
+        wanted_now = self._restore_wanted()
+        self._update_once = False  # nach dem Update nur dieses eine Mal
+        if session is None or not wanted_now or self.app.closing:
             self._session_pending = None
             return
         self._session_pending = None
@@ -856,7 +1414,7 @@ class ReaderController(Observable):
                 return
             busy = {_key(doc.path) for doc in self._docs.values() if doc.path} | {_key(path) for path in self._opening_paths}
             entries = [entry for entry in existing if _key(entry["pfad"]) not in busy][: max(0, TAB_LIMIT - len(self._docs) - self.opening)]
-            state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": len(wanted) - len(existing), "failed": 0}
+            state = {"left": len(entries), "idents": [], "active": session["aktiv"], "missing": sum(1 for entry in wanted if entry not in existing and not _temporary(entry["pfad"])), "failed": 0}
             if not entries:
                 self._restoring = False
                 if state["missing"]:
@@ -958,7 +1516,7 @@ class ReaderController(Observable):
         self.engine.submit(find, done, failed, label="wiederherstellung", priority=3)
 
     # Beenden -----------------------------------------------------------------------------------------------------
-    def confirm_close(self) -> bool:
+    def confirm_close(self, reason: str = "PDF Tool wird beendet.") -> bool:
         # Aktiver Tab vor den Rückfragen (sie zeigen das jeweilige Dokument) – für die letzte Sitzung
         self._quit_active = self.currentKey
         for controller in list(self._docs.values()):
@@ -966,7 +1524,7 @@ class ReaderController(Observable):
                 continue
             self.activate(controller.ident)
             answer, _data = self.app.dialogs.ask(
-                "confirm", f"Änderungen an »{controller.name}« speichern?", "PDF Tool wird beendet. Ohne Speichern gehen die Änderungen verloren.",
+                "confirm", f"Änderungen an »{controller.name}« speichern?", f"{reason} Ohne Speichern gehen die Änderungen verloren.",
                 primary="Speichern", secondary="Nicht speichern", close="Abbrechen",
             )
             if answer == "primary":
@@ -992,6 +1550,27 @@ class ReaderController(Observable):
 
     def running_work(self) -> str:
         return "PDF speichern" if any(controller.busy or controller.saving for controller in self._docs.values()) else ""
+
+    def release_documents(self) -> bool:
+        """Fenster schließt, PDF Tool bleibt im Hintergrund: wie beim Beenden nach ungespeicherten Änderungen fragen und
+        alle Dokumente schließen (die Engine bleibt geladen). Mit »letzte Sitzung« öffnet das nächste Zeigen sie wieder.
+        Wird gerade gespeichert, bleiben die Dokumente offen (nichts wird abgebrochen)."""
+        if self.running_work():
+            return True
+        if not self.confirm_close("Das Fenster wird geschlossen."):
+            return False
+        if self._docs and self._restore_wanted() and self._session_pending is None and not self._restoring:
+            self._session = self._session_snapshot()
+            self._session_pending = self._session
+        for key in list(self._docs):
+            self._finish_close(key, discard_recovery=True, remember=False)
+        self._quit_active = ""
+        return True
+
+    def window_shown(self) -> None:
+        """Fenster nach dem Verstecken wieder gezeigt: die beim Schließen gemerkten PDFs wieder öffnen (Einstellung)."""
+        if self.app.ready and self._session_pending is not None and not self._docs:
+            self._restore_session()
 
     def close_all(self) -> None:
         # Vor dem Schließen: die PDFs dieser Sitzung (nur Pfade und Seiten) – beendet, bevor die letzte Sitzung wieder
@@ -1149,7 +1728,7 @@ class ReaderController(Observable):
         def found(engine) -> None:
             _OCR_PROBE["done"], _OCR_PROBE["engine"] = True, engine
             self._ocr_engine = engine
-            self.ocrLanguages = [{"code": code, "label": ocr.language_label(code)} for code in engine.languages] if engine is not None else []
+            self.ocrLanguages = [{"code": code, "label": ocr.language_label(code)} for code in ocr.display_order(engine.languages)] if engine is not None else []
             self.ocrState = "bereit" if engine is not None else "fehlt"
             if engine is None:
                 _log("ocr").info("Texterkennung: keine Engine gefunden")
@@ -1175,6 +1754,11 @@ class ReaderController(Observable):
         if chosen:
             return chosen
         return ["deu"] if "deu" in installed else installed[:1]
+
+    def remember_sign_defaults(self, values: dict) -> None:
+        if values != self.sign_defaults:
+            self.sign_defaults = dict(values)
+            self.app.schedule_save()
 
     def remember_ocr_languages(self, codes: list[str]) -> None:
         if codes and codes != self._ocr_chosen:
@@ -1211,7 +1795,9 @@ class ReaderTool:
         return HINT
 
     def accepts(self, paths: list[str], page: str) -> bool:
-        return any(p.lower().endswith(".pdf") for p in paths)
+        # Office-Dateien wandelt der Reader in PDF um – Excel-Listen aber nur im Reader selbst (auf der Startseite
+        # gehören sie zu den »Vertragsübersichten«)
+        return any(p.lower().endswith(".pdf") or imagepdf.is_image(p) or office.kind_of(p) in ("word", "powerpoint") or (page == READER.key and office.kind_of(p) == "excel") for p in paths)
 
     def drag_enter(self, accepted: bool, page: str) -> None:
         self.controller.dropHighlight = accepted
@@ -1245,6 +1831,12 @@ class ReaderTool:
 
     def close(self) -> None:
         self.controller.close_all()
+
+    def release(self) -> bool:
+        return self.controller.release_documents()
+
+    def shown(self) -> None:
+        self.controller.window_shown()
 
 
 def _same(a: str, b: str) -> bool:
@@ -1335,3 +1927,9 @@ def opened_text(stamp: str, now: datetime | None = None) -> str:
     if when.date() == today - timedelta(days=1):
         return f"Gestern, {when:%H:%M}"
     return f"{when:%d.%m.%Y}"
+
+
+def _temporary(path: str) -> bool:
+    """Kopie eines Outlook-Anhangs (``INetCache\\Content.Outlook``). Outlook löscht seine Kopien später wieder; dass sie
+    in der letzten Sitzung fehlen, ist kein Fehler."""
+    return "\\content.outlook\\" in str(path).replace("/", "\\").lower()

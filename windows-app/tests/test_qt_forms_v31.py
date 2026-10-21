@@ -64,8 +64,8 @@ def changed(h, doc, check, timeout: float = 20) -> None:
 
 
 def design_mode(h, doc) -> None:
-    """Werkzeug »Formular gestalten« über die Werkzeugleiste (Pfeil neben »Formular«)."""
-    press(h, "readerFormMenu")
+    """Werkzeug »Formular gestalten« über »Alle Werkzeuge«."""
+    press(h, "readerAllTools")
     pump(0.3)
     press(h, "readerToolFormDesign")
     pump(0.3)

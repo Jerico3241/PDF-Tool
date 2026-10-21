@@ -17,15 +17,15 @@ Item {
         anchors.fill: parent
         visible: root.doc !== null && !root.doc.hasOutline
         iconName: "bookmark"
-        title: "Keine Lesezeichen"
-        text: "Dieses PDF enthält kein Inhaltsverzeichnis. Seiten finden Sie über die Miniaturen oder die Suche."
+        title: I18n.tr("Keine Lesezeichen", I18n.revision)
+        text: I18n.tr("Dieses PDF enthält kein Inhaltsverzeichnis. Seiten finden Sie über die Miniaturen oder die Suche.", I18n.revision)
         PButton {
             objectName: "readerOutlineAddFirst"
             // unter dem Hinweis (der leere Zustand steht im oberen Drittel)
             x: (parent.width - width) / 2
             y: Math.max(Metrics.s24, parent.height * parent.topShare) + 176
             iconName: "bookmark_add"
-            text: "Lesezeichen für diese Seite"
+            text: I18n.tr("Lesezeichen für diese Seite", I18n.revision)
             onClicked: root.doc.addBookmark("", false)
         }
     }
@@ -43,7 +43,7 @@ Item {
         activeFocusOnTab: true
         T.ScrollBar.vertical: PScrollBar {}
         Accessible.role: Accessible.Tree
-        Accessible.name: "Lesezeichen"
+        Accessible.name: I18n.tr("Lesezeichen", I18n.revision)
 
         delegate: Item {
             id: row
@@ -57,7 +57,7 @@ Item {
             width: list.width
             height: Math.max(32, label.implicitHeight + 12)
             Accessible.role: Accessible.TreeItem
-            Accessible.name: title
+            Accessible.name: I18n.tr(title, I18n.revision)
 
             PListItem {
                 anchors.fill: parent
@@ -75,7 +75,7 @@ Item {
                 implicitHeight: 24
                 visible: row.hasChildren
                 iconName: row.expanded ? "chevron_down" : "chevron_right"
-                tip: row.expanded ? "Zuklappen" : "Aufklappen"
+                tip: I18n.tr(row.expanded ? "Zuklappen" : "Aufklappen", I18n.revision)
                 onClicked: root.doc.toggleOutline(row.key)
             }
             PText {
@@ -83,7 +83,7 @@ Item {
                 x: chevron.x + 28
                 width: parent.width - x - 44
                 anchors.verticalCenter: parent.verticalCenter
-                text: row.title
+                text: I18n.tr(row.title, I18n.revision)
                 wrap: true
                 maximumLineCount: 2
                 elide: Text.ElideRight
@@ -92,7 +92,7 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
-                text: row.page >= 0 ? String(row.page + 1) : ""
+                text: I18n.tr(row.page >= 0 ? String(row.page + 1) : "", I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
             }
@@ -143,8 +143,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             kind: "subtle"
             iconName: "bookmark_add"
-            text: "Lesezeichen für Seite " + (root.doc ? root.doc.currentPage + 1 : 1)
-            tip: "Neues Lesezeichen zur angezeigten Seite – hinter dem gewählten Eintrag (sonst am Ende)"
+            text: I18n.tr("Lesezeichen für Seite " + (root.doc ? root.doc.currentPage + 1 : 1), I18n.revision)
+            tip: I18n.tr("Neues Lesezeichen zur angezeigten Seite – hinter dem gewählten Eintrag (sonst am Ende)", I18n.revision)
             onClicked: root.doc.addBookmark(list.currentItem ? list.currentItem.key : "", false)
         }
     }
@@ -153,15 +153,15 @@ Item {
         id: entryMenu
         objectName: "readerOutlineMenu"
         property var entry: ({})
-        PMenuItem { text: "Gehe zu"; iconName: "arrow_right"; onTriggered: root.doc.openOutline(entryMenu.entry.key) }
-        PMenuItem { text: "Neues Lesezeichen dahinter …"; iconName: "bookmark_add"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.addBookmark(key, false) } } }
-        PMenuItem { text: "Neues Lesezeichen darunter …"; iconName: "add"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.addBookmark(key, true) } } }
-        PMenuItem { text: "Umbenennen … (F2)"; iconName: "edit"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.renameBookmark(key) } } }
-        PMenuItem { text: "Auf die angezeigte Seite setzen (" + (root.doc ? root.doc.currentPage + 1 : 1) + ")"; iconName: "bookmark"; onTriggered: root.doc.bookmarkCurrentPage(entryMenu.entry.key) }
-        PMenuItem { text: "Nach oben"; iconName: "chevron_up"; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "up") }
-        PMenuItem { text: "Nach unten"; iconName: "chevron_down"; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "down") }
-        PMenuItem { text: "Einrücken (Unterpunkt des vorigen)"; iconName: "chevron_right"; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "in") }
-        PMenuItem { text: "Ausrücken"; iconName: "chevron_left"; enabled: (entryMenu.entry.level || 0) > 0; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "out") }
-        PMenuItem { text: "Löschen (Entf)"; iconName: "delete"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.deleteBookmark(key) } } }
+        PMenuItem { text: I18n.tr("Gehe zu", I18n.revision); iconName: "arrow_right"; onTriggered: root.doc.openOutline(entryMenu.entry.key) }
+        PMenuItem { text: I18n.tr("Neues Lesezeichen dahinter …", I18n.revision); iconName: "bookmark_add"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.addBookmark(key, false) } } }
+        PMenuItem { text: I18n.tr("Neues Lesezeichen darunter …", I18n.revision); iconName: "add"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.addBookmark(key, true) } } }
+        PMenuItem { text: I18n.tr("Umbenennen … (F2)", I18n.revision); iconName: "edit"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.renameBookmark(key) } } }
+        PMenuItem { text: I18n.tr("Auf die angezeigte Seite setzen (" + (root.doc ? root.doc.currentPage + 1 : 1) + ")", I18n.revision); iconName: "bookmark"; onTriggered: root.doc.bookmarkCurrentPage(entryMenu.entry.key) }
+        PMenuItem { text: I18n.tr("Nach oben", I18n.revision); iconName: "chevron_up"; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "up") }
+        PMenuItem { text: I18n.tr("Nach unten", I18n.revision); iconName: "chevron_down"; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "down") }
+        PMenuItem { text: I18n.tr("Einrücken (Unterpunkt des vorigen)", I18n.revision); iconName: "chevron_right"; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "in") }
+        PMenuItem { text: I18n.tr("Ausrücken", I18n.revision); iconName: "chevron_left"; enabled: (entryMenu.entry.level || 0) > 0; onTriggered: root.doc.moveBookmark(entryMenu.entry.key, "out") }
+        PMenuItem { text: I18n.tr("Löschen (Entf)", I18n.revision); iconName: "delete"; onTriggered: { var d = root.doc, key = entryMenu.entry.key; entryMenu.afterClose = function() { d.deleteBookmark(key) } } }
     }
 }

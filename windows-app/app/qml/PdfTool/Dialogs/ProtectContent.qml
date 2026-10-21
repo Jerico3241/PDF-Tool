@@ -68,14 +68,14 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: root.data_["protected"] ? "Dieses Dokument ist geschützt. Neue Kennwörter ersetzen die bisherigen; die Datei ändert sich erst beim Speichern." : "Der Schutz gilt ab dem nächsten Speichern. Ein vergessenes Kennwort lässt sich nicht wiederherstellen – auch nicht mit PDF Tool."
+        text: I18n.tr(root.data_["protected"] ? "Dieses Dokument ist geschützt. Neue Kennwörter ersetzen die bisherigen; die Datei ändert sich erst beim Speichern." : "Der Schutz gilt ab dem nächsten Speichern. Ein vergessenes Kennwort lässt sich nicht wiederherstellen – auch nicht mit PDF Tool.", I18n.revision)
     }
     ColumnLayout {
         visible: root.data_["protected"] === true
         spacing: 0
         Layout.topMargin: 8
-        PRadioButton { objectName: "protectModeSet"; text: "Schutz ändern"; checked: root.mode === "set"; onClicked: root.mode = "set" }
-        PRadioButton { objectName: "protectModeRemove"; text: "Kennwortschutz entfernen"; checked: root.mode === "remove"; onClicked: root.mode = "remove" }
+        PRadioButton { objectName: "protectModeSet"; text: I18n.tr("Schutz ändern", I18n.revision); checked: root.mode === "set"; onClicked: root.mode = "set" }
+        PRadioButton { objectName: "protectModeRemove"; text: I18n.tr("Kennwortschutz entfernen", I18n.revision); checked: root.mode === "remove"; onClicked: root.mode = "remove" }
     }
 
     ColumnLayout {
@@ -89,7 +89,7 @@ ColumnLayout {
             objectName: "protectOpen"
             Layout.topMargin: 12
             Layout.fillWidth: true
-            text: "Zum Öffnen ein Kennwort verlangen"
+            text: I18n.tr("Zum Öffnen ein Kennwort verlangen", I18n.revision)
             checked: root.openLock
             onToggled: root.openLock = checked
         }
@@ -99,15 +99,15 @@ ColumnLayout {
             visible: root.openLock
             columns: 2
             columnSpacing: 8
-            Secret { id: userField; objectName: "protectUserPassword"; label: "Kennwort zum Öffnen"; placeholderText: "Kennwort" }
-            Secret { id: userRepeat; objectName: "protectUserRepeat"; label: "Kennwort wiederholen"; placeholderText: "Wiederholen" }
+            Secret { id: userField; objectName: "protectUserPassword"; label: I18n.tr("Kennwort zum Öffnen", I18n.revision); placeholderText: I18n.tr("Kennwort", I18n.revision) }
+            Secret { id: userRepeat; objectName: "protectUserRepeat"; label: I18n.tr("Kennwort wiederholen", I18n.revision); placeholderText: I18n.tr("Erneut eingeben", I18n.revision) }
         }
 
         PCheckBox {
             objectName: "protectRestrict"
             Layout.topMargin: 12
             Layout.fillWidth: true
-            text: "Drucken, Kopieren und Ändern einschränken"
+            text: I18n.tr("Drucken, Kopieren und Ändern einschränken", I18n.revision)
             checked: root.restrict
             onToggled: root.restrict = checked
         }
@@ -116,7 +116,7 @@ ColumnLayout {
             Layout.leftMargin: 28
             visible: root.restrict
             spacing: 0
-            PText { text: "Erlaubt bleiben:"; textStyle: "caption"; tone: "secondary"; Layout.topMargin: 4 }
+            PText { text: I18n.tr("Erlaubt bleiben:", I18n.revision); textStyle: "caption"; tone: "secondary"; Layout.topMargin: 4 }
             GridLayout {
                 columns: 2
                 columnSpacing: 16
@@ -133,7 +133,7 @@ ColumnLayout {
                     PCheckBox {
                         required property var modelData
                         objectName: "protectRight_" + modelData.key
-                        text: modelData.label
+                        text: I18n.tr(modelData.label, I18n.revision)
                         checked: root.rights[modelData.key] === true
                         onToggled: root.setRight(modelData.key, checked)
                     }
@@ -144,8 +144,8 @@ ColumnLayout {
                 Layout.topMargin: 8
                 columns: 2
                 columnSpacing: 8
-                Secret { id: ownerField; objectName: "protectOwnerPassword"; label: "Berechtigungskennwort"; placeholderText: "Berechtigungskennwort" }
-                Secret { id: ownerRepeat; objectName: "protectOwnerRepeat"; label: "Berechtigungskennwort wiederholen"; placeholderText: "Wiederholen" }
+                Secret { id: ownerField; objectName: "protectOwnerPassword"; label: I18n.tr("Berechtigungskennwort", I18n.revision); placeholderText: I18n.tr("Berechtigungskennwort", I18n.revision) }
+                Secret { id: ownerRepeat; objectName: "protectOwnerRepeat"; label: I18n.tr("Berechtigungskennwort wiederholen", I18n.revision); placeholderText: I18n.tr("Erneut eingeben", I18n.revision) }
             }
             PText {
                 Layout.fillWidth: true
@@ -153,7 +153,7 @@ ColumnLayout {
                 wrap: true
                 textStyle: "caption"
                 tone: "secondary"
-                text: "Wer das Berechtigungskennwort kennt, kann die Einschränkungen aufheben. Viele Programme halten sich an sie – ein echter Schutz ist nur das Kennwort zum Öffnen."
+                text: I18n.tr("Wer das Berechtigungskennwort kennt, kann die Einschränkungen aufheben. Viele Programme halten sich an sie – ein echter Schutz ist nur das Kennwort zum Öffnen.", I18n.revision)
             }
         }
     }
@@ -164,7 +164,7 @@ ColumnLayout {
         visible: root.problem !== "" && (userField.text !== "" || ownerField.text !== "" || (!root.openLock && !root.restrict))
         wrap: true
         tone: "warning"
-        text: root.problem
+        text: I18n.tr(root.problem, I18n.revision)
     }
     PText {
         Layout.fillWidth: true
@@ -172,6 +172,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Verschlüsselung: AES-256. Kennwörter werden weder gespeichert noch protokolliert."
+        text: I18n.tr("Verschlüsselung: AES-256. Kennwörter werden weder gespeichert noch protokolliert.", I18n.revision)
     }
 }

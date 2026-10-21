@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,6 +32,14 @@ DEFAULT_MEDIABOX: Rect = (0.0, 0.0, 612.0, 792.0)  # US Letter – Standard laut
 RESTRICTED_REASON = "Der Ersteller dieses PDFs hat das Bearbeiten nicht erlaubt."
 HEADER_WINDOW = 1024  # »%PDF-« muss in den ersten 1024 Bytes stehen (wie bei Acrobat/PDFium)
 TEXTPAGE_CACHE = 24  # geladene Textseiten je Dokument
+# Gerade entstehende Dateien (Word »Nach dem Veröffentlichen öffnen«, Anhänge aus Outlook): Das andere Programm kann die
+# Datei beim Öffnen noch sperren oder schreiben. Ist sie jünger als FRESH_SECONDS, wird bis SETTLE_SECONDS lang erneut
+# gelesen, bis sie lesbar und vollständig ist (``%%EOF`` am Ende) oder sich nicht mehr ändert – ältere Dateien werden wie
+# bisher sofort gelesen.
+FRESH_SECONDS = 20.0
+SETTLE_SECONDS = 8.0
+SETTLE_STEP = 0.25
+STABLE_SECONDS = 1.0  # unvollständig, aber so lange unverändert: wirklich beschädigt, nicht mehr warten
 
 
 @dataclass(frozen=True)
@@ -47,6 +56,39 @@ class FileStamp:
         except OSError:
             return None
         return cls(info.st_size, info.st_mtime_ns)
+
+
+def _fresh(path: Path) -> bool:
+    try:
+        return time.time() - os.stat(path).st_mtime < FRESH_SECONDS
+    except OSError:
+        return False
+
+
+def _complete(data: bytes) -> bool:
+    return bool(data) and b"%%EOF" in data[-2048:]
+
+
+def read_settled(path: Path, settle: float = SETTLE_SECONDS) -> bytes:
+    """Datei vollständig lesen. Wird sie gerade von einem anderen Programm geschrieben (jung, gesperrt oder noch ohne
+    ``%%EOF``), erneut versuchen – bis sie vollständig ist, sich ``STABLE_SECONDS`` lang nicht mehr ändert oder
+    ``settle`` Sekunden vergangen sind; dann gilt das zuletzt Gelesene bzw. der letzte Fehler."""
+    deadline = time.monotonic() + settle
+    last, since = FileStamp.of(path), time.monotonic()
+    while True:
+        try:
+            data = path.read_bytes()
+        except PermissionError:  # unter Windows auch: Datei von einem anderen Programm gesperrt
+            if time.monotonic() >= deadline or not _fresh(path):
+                raise
+        else:
+            now = time.monotonic()
+            if _complete(data) or now >= deadline or not _fresh(path) or now - since >= STABLE_SECONDS:
+                return data
+        time.sleep(SETTLE_STEP)
+        current = FileStamp.of(path)
+        if current != last:
+            last, since = current, time.monotonic()
 
 
 @dataclass(frozen=True)
@@ -110,11 +152,12 @@ class EditorDocument:
     @classmethod
     def open(cls, path: str | os.PathLike, password: str | None = None) -> "EditorDocument":
         path = Path(path)
-        stamp = FileStamp.of(path)
         try:
-            data = path.read_bytes()
+            data = read_settled(path)
         except OSError as exc:
             raise EditorError(f"Die Datei kann nicht gelesen werden ({exc.strerror or 'Zugriff verweigert'}).") from exc
+        # Stand nach dem Lesen: Eine eben fertig geschriebene Datei gilt sonst gleich als »von außen geändert«
+        stamp = FileStamp.of(path)
         return cls.from_bytes(data, name=path.name, path=path, password=password, stamp=stamp)
 
     @classmethod

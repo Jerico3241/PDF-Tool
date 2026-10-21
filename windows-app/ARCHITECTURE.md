@@ -44,6 +44,9 @@ und `app/tools/` (ohne Oberflächencode):
   Konflikte und Nummerierung, Reservierung beim Start – keine eigene Engine, nur Reihenfolge und
   Namen), Texte und Angaben für die Anzeige (`presentation.py`), erweiterte Wiederherstellung
   (`recovery/`).
+- `tools/pdf_actions/` (seit 4.0) – Stapel-Aktionen ohne Oberfläche: Schritte, feste Reihenfolge und
+  gespeicherte Einstellungen (`actions.py`, ohne Kennwort), eine Datei bearbeiten (`runner.py`) – nur mit den
+  Funktionen des PDF Editors, keine eigene PDF-Verarbeitung. Oberfläche: `qtapp/actions.py` (`Actions`).
 - `tools/pdf_editor/` (seit 3.0.0) – PDF Reader & Editor ohne Oberfläche: Dokument (pikepdf als
   Quelle der Wahrheit, PDFium für Darstellung und Text), Text bearbeiten (`textedit.py`: direkt, neu
   gesetzt, Überlagerung – mit Prüfung), Bilder, Seiten, Anmerkungen, Formulare, Metadaten, Export,
@@ -87,7 +90,7 @@ Modul `PdfTool.Backend`:
   melden); Python-Code kann mit `observe()` darauf hören.
 - **Werkzeuge** melden sich mit `ToolHooks` beim `AppController` an (Strg+Enter, Strg+O, Strg+F,
   F1, Drag & Drop, Speichern, Beenden, laufende Verarbeitung vor einem Update) –
-  `qtapp/contracts/tool.py`, `qtapp/repair.py`.
+  `qtapp/contracts/tool.py`, `qtapp/repair.py`, `qtapp/actions.py`.
 - **Singletons je Engine:** `application.register_backend()` registriert jeden Namen einmal;
   jede QML-Engine erhält die Controller ihrer eigenen Laufzeit (Tests starten viele nacheinander).
   Die Controller gehören der Laufzeit (`Runtime`) und leben länger als die Engine.
@@ -251,8 +254,10 @@ Instanz alles gespeichert hat.
 ## Updater (`app/updater`, seit 2.7.2)
 
 Der Updater ist kein Werkzeug, sondern eine eigene Schicht: Logik in `app/updater/`, Anzeige im
-Controller `app/qtapp/updates.py` (QML: `Updates`), Oberfläche in `Shell/UpdateBanner.qml`,
-`Pages/SettingsPage.qml` (Abschnitt „Updates“) und `Dialogs/UpdateContent.qml`. QML ruft nie
+Controller `app/qtapp/updates.py` (QML: `Updates`), Oberfläche in `Pages/SettingsPage.qml`
+(Abschnitt „Updates“, mit den Release Notes über `Controls/PReleaseNotes.qml`) und `Dialogs/UpdateContent.qml`.
+Seit 4.0 Beta 7 sucht PDF Tool bei jedem Start und installiert ein gefundenes Update selbst (Einstellung
+`update_auto_installieren`); die Hinweisleiste über den Seiten gibt es nicht mehr. QML ruft nie
 GitHub auf, lädt nichts, berechnet keine Prüfsumme und vergleicht keine Versionen.
 
 | Modul | Aufgabe |

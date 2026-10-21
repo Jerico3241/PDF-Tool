@@ -3,13 +3,13 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Aufbau des Hauptfensters (Adobe-Prinzip): oben die Tab-Leiste mit ≡ Menü, ⌂ Start, den Tabs der geöffneten
+// Aufbau des Hauptfensters (Adobe-Prinzip): oben die Tab-Leiste mit ⌂ Start, den Tabs der geöffneten
 // Werkzeuge und PDFs; darunter die Inhaltsebene mit Seiten und Statuszeile über die ganze Breite. Dazu
 // Dialoge, Drag & Drop und Tastenkürzel.
 FocusScope {
     id: shell
     property alias pages: host
-    // Vollbild (F11 im Reader): nur das Dokument – Tab-Leiste, Hinweisleiste und Statuszeile ausgeblendet
+    // Vollbild (F11 im Reader): nur das Dokument – Tab-Leiste und Statuszeile ausgeblendet
     readonly property bool fullScreen: Reader.fullScreen
 
     // Themawechsel: das bisherige Bild blendet über dem neuen aus (kurz, »Aus«: sofort)
@@ -79,19 +79,10 @@ FocusScope {
             color: Theme.layer
             Rectangle { width: parent.width; height: 1; color: Theme.layerStroke; visible: !shell.fullScreen }
 
-            // Hinweisleiste für Updates über den Seiten (die Seiten rücken einmal um ihre Höhe)
-            UpdateBanner {
-                id: updateBanner
-                x: 0
-                y: shell.fullScreen ? 0 : 1
-                width: layer.width
-                height: implicitHeight
-                suppressed: shell.fullScreen
-            }
             PageHost {
                 id: host
                 x: 0
-                y: updateBanner.y + updateBanner.height
+                y: shell.fullScreen ? 0 : 1
                 width: layer.width
                 height: layer.height - y - status.height
             }
@@ -146,18 +137,21 @@ FocusScope {
     }
 
     // Tastenkürzel (nicht, solange ein Dialog offen ist)
-    Shortcut { sequences: ["Ctrl+Return", "Ctrl+Enter"]; enabled: !Dialogs.open; onActivated: App.primaryAction() }
-    Shortcut { sequence: "Ctrl+O"; enabled: !Dialogs.open; onActivated: App.openAction() }
-    Shortcut { sequence: "Ctrl+F"; enabled: !Dialogs.open; onActivated: App.findAction() }
-    Shortcut { sequence: "F1"; enabled: !Dialogs.open; onActivated: App.showHelp() }
-    Shortcut { sequence: "Ctrl+1"; enabled: !Dialogs.open; onActivated: App.openShortcut(1) }
-    Shortcut { sequence: "Ctrl+2"; enabled: !Dialogs.open; onActivated: App.openShortcut(2) }
-    Shortcut { sequence: "Ctrl+3"; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
-    Shortcut { sequence: "Ctrl+4"; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
-    Shortcut { sequence: "Ctrl+5"; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
-    // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument)
-    readonly property string currentTab: App.currentPage === "settings" ? "settings" : App.currentTool
-    Shortcut { sequence: "Ctrl+W"; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }
+    Shortcut { sequences: Shortcuts.keys["app.primary"] || []; enabled: !Dialogs.open; onActivated: App.primaryAction() }
+    Shortcut { sequences: Shortcuts.keys["app.open"] || []; enabled: !Dialogs.open; onActivated: App.openAction() }
+    Shortcut { sequences: Shortcuts.keys["app.find"] || []; enabled: !Dialogs.open; onActivated: App.findAction() }
+    Shortcut { sequences: Shortcuts.keys["app.help"] || []; enabled: !Dialogs.open; onActivated: App.showHelp() }
+    Shortcut { sequences: Shortcuts.keys["app.shortcuts"] || []; enabled: !Dialogs.open; onActivated: Shortcuts.showOverview() }
+    Shortcut { sequences: Shortcuts.keys["app.home"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(1) }
+    Shortcut { sequences: Shortcuts.keys["app.contracts"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(2) }
+    Shortcut { sequences: Shortcuts.keys["app.repair"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
+    Shortcut { sequences: Shortcuts.keys["app.settings"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
+    Shortcut { sequences: Shortcuts.keys["app.reader"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
+    Shortcut { sequences: Shortcuts.keys["app.actions"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(6) }
+    // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument); die Einstellungen (ohne eigenen Tab)
+    // schließt Strg+W zurück zur Seite davor
+    Shortcut { sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(App.currentTool) >= 0; onActivated: App.closeTab(App.currentTool) }
+    Shortcut { objectName: "closeSettingsShortcut"; sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage === "settings"; onActivated: App.leaveSettings() }
     // Zuletzt geschlossenes Dokument wieder öffnen – auf jeder Seite, wie im Browser
-    Shortcut { objectName: "reopenShortcut"; sequence: "Ctrl+Shift+T"; enabled: !Dialogs.open && Reader.canReopen; onActivated: Reader.reopenClosed() }
+    Shortcut { objectName: "reopenShortcut"; sequences: Shortcuts.keys["app.reopen"] || []; enabled: !Dialogs.open && Reader.canReopen; onActivated: Reader.reopenClosed() }
 }

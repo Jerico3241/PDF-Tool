@@ -3,6 +3,7 @@
 Aufruf durch die App (``installer.Launcher``) – ohne Konsolenfenster, im isolierten Modus::
 
     runtime\\pythonw.exe -I app\\updater\\launch.py --setup <Setup> --sha256 <Hash> --wait <PID> [--log <Datei>]
+        [--silent] [--restart <PDF-Tool.exe>]
 
 1. Warten, bis der Prozess ``--wait`` (die App) beendet ist – höchstens 120 Sekunden. Ist sie
    dann noch nicht beendet, startet das Setup trotzdem; es erkennt eine laufende App selbst
@@ -10,7 +11,11 @@ Aufruf durch die App (``installer.Launcher``) – ohne Konsolenfenster, im isoli
 2. Das Setup unmittelbar vor dem Start erneut prüfen: Name ``PDF-Tool-Setup-<Version>.exe``,
    Datei vorhanden, SHA-256 stimmt. Sonst wird die Datei gelöscht, ein Hinweis erscheint und
    nichts wird gestartet.
-3. Setup starten wie per Doppelklick (Windows: ShellExecute) – sichtbar, ohne stille Parameter.
+3. Setup starten. Mit ``--silent`` (seit 4.0, »Jetzt installieren«): ohne Fragen des Assistenten – nur
+   ein Fortschrittsfenster (``/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL``); der Hilfsprozess wartet
+   auf das Ende und startet danach PDF Tool neu (``--restart``). Gelingt das stille Setup nicht (Fehlercode,
+   Start verweigert), startet es wie per Doppelklick – sichtbar, die Installation lässt sich dort fertig
+   machen. Ohne ``--silent``: wie per Doppelklick (Windows: ShellExecute), sichtbar, ohne Parameter.
 
 Nur Standardbibliothek. Das Protokoll (``--log``) enthält nur Zeitpunkte, Dateinamen und
 Ergebnisse.
@@ -29,11 +34,15 @@ import time
 from pathlib import Path
 
 WAIT_SECONDS = 120.0
+INSTALL_SECONDS = 900.0  # stilles Setup: höchstens so lange warten
+SILENT_ARGS = ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL")
+RESTART_NAME = "PDF-Tool.exe"
 SETUP_NAME = re.compile(r"^PDF-Tool-Setup-[0-9A-Za-z.+-]+\.exe$")
 HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 TITLE = "PDF Tool – Update"
 NOT_VERIFIED = "Das heruntergeladene Update konnte nicht verifiziert werden und wurde daher nicht installiert."
 NOT_STARTED = "Das Setup konnte nicht gestartet werden."
+NOT_INSTALLED = "Das Update ließ sich nicht im Hintergrund installieren. Das Setup wird jetzt angezeigt – bitte dort die Installation abschließen."
 
 OK, NOT_VERIFIED_CODE, START_FAILED_CODE, USAGE_CODE = 0, 2, 3, 4
 
@@ -126,6 +135,32 @@ def start(setup: Path) -> None:
         subprocess.Popen([str(setup)], cwd=str(setup.parent), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
+def install_silently(setup: Path, log_file: Path | None, timeout: float = INSTALL_SECONDS) -> int:
+    """Stilles Setup starten und auf sein Ende warten – Rückgabe: Code des Setups (0 = installiert)."""
+    args = [str(setup), *SILENT_ARGS]
+    if log_file is not None:
+        args.append(f"/LOG={log_file}")
+    options: dict = {"cwd": str(setup.parent), "stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    process = subprocess.Popen(args, **options)  # noqa: S603 - geprüftes Setup, feste Parameter
+    try:
+        return process.wait(timeout)
+    except subprocess.TimeoutExpired:
+        return -1  # läuft weiter; die App startet nicht neu, das Fortschrittsfenster bleibt sichtbar
+
+
+def restart(app: Path) -> bool:
+    """PDF Tool nach dem Update wieder starten (nur das eigene Startprogramm)."""
+    if app.name != RESTART_NAME or not app.is_file():
+        return False
+    flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    options: dict = {"cwd": str(app.parent), "stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "close_fds": True}
+    if os.name == "nt":
+        subprocess.Popen([str(app)], creationflags=flags, **options)  # noqa: S603
+    else:
+        subprocess.Popen([str(app)], start_new_session=True, **options)  # noqa: S603
+    return True
+
+
 def message(text: str) -> None:
     if os.name == "nt":
         try:
@@ -145,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wait", type=int, default=0, help="Prozess-ID der App")
     parser.add_argument("--timeout", type=float, default=WAIT_SECONDS)
     parser.add_argument("--log", type=Path, default=None)
+    parser.add_argument("--silent", action="store_true", help="ohne Fragen installieren, danach neu starten")
+    parser.add_argument("--restart", type=Path, default=None, help="PDF-Tool.exe – nach dem stillen Update starten")
     try:
         args = parser.parse_args(argv)
     except SystemExit:
@@ -166,6 +203,29 @@ def main(argv: list[str] | None = None) -> int:
         message(NOT_VERIFIED)
         return NOT_VERIFIED_CODE
     log(f"SHA-256 geprüft: {setup.name}")
+    if args.silent:
+        setup_log = args.log.with_name("update-setup.log") if args.log is not None else None
+        try:
+            code = install_silently(setup, setup_log)
+        except OSError as exc:  # z. B. Start verweigert (Rechte): sichtbar weiter
+            code = None
+            log(f"Stilles Setup nicht gestartet: {exc}")
+        if code == 0:
+            log(f"Update installiert: {setup.name}")
+            if args.restart is not None:
+                try:
+                    started = restart(args.restart)
+                except OSError as exc:
+                    started = False
+                    log(f"Neustart fehlgeschlagen: {exc}")
+                log("PDF Tool neu gestartet." if started else "PDF Tool nicht neu gestartet.")
+            return OK
+        if code == -1:
+            log("Das Setup läuft noch nach dem Zeitlimit – kein Neustart.")
+            return OK
+        if code is not None:
+            log(f"Stilles Setup endete mit Code {code} – das Setup wird sichtbar gestartet.")
+        message(NOT_INSTALLED)
     try:
         start(setup)
     except OSError as exc:

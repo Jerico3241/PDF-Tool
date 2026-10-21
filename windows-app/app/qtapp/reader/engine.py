@@ -273,6 +273,8 @@ class PageResponse(QQuickImageResponse):
         self._image = QImage()
         self._error = ""
         self.task: Task | None = None
+        self._delivered = False
+        self._lock = threading.Lock()
 
     def textureFactory(self):  # noqa: N802 - Qt-Schnittstelle
         return QQuickTextureFactory.textureFactoryForImage(self._image)
@@ -281,10 +283,17 @@ class PageResponse(QQuickImageResponse):
         return self._error
 
     def cancel(self) -> None:
+        # Qt erwartet auch nach dem Abbrechen ein »finished« – sonst bleiben Antwort und Ladeauftrag liegen.
+        # Ein schon laufender Auftrag meldet sich danach noch einmal; das zählt dann nicht mehr.
         if self.task is not None:
             self.task.cancel()
+        self.deliver(None, "Abgebrochen")
 
     def deliver(self, image: QImage | None, error: str = "") -> None:
+        with self._lock:
+            if self._delivered:
+                return
+            self._delivered = True
         self._image = image if image is not None else QImage()
         self._error = error
         self.finished.emit()

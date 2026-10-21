@@ -35,9 +35,49 @@ unter `app/tools/` (Fachlogik ohne Oberfläche), einen Controller unter `app/qta
 unter `app/qml/PdfTool/Pages/` und einen Eintrag in `app/tools/registry.py` – siehe
 [`windows-app/ARCHITECTURE.md`](../windows-app/ARCHITECTURE.md).
 
+## PDF Reader: Werkzeugleiste, Vergleichen, geteilte Ansicht, Präsentation (seit 4.0.0-beta.2)
+
+- **Werkzeugleiste nach dem Vorbild von Acrobat:** oben nur Datei-Befehle (Öffnen, Speichern, Drucken, E-Mail,
+  Rückgängig/Wiederholen) und »Alle Werkzeuge«; links neben dem Dokument die Schnellwerkzeuge (Auswählen,
+  Verschieben, Kommentieren, Zeichnen, Text hinzufügen, Text bearbeiten, Objekt bearbeiten, Unterschreiben).
+  »Alle Werkzeuge« listet jedes Werkzeug mit Namen in Gruppen (`QuickTools.qml`, `AllTools.qml`).
+- **Mit anderer Fassung vergleichen:** ältere Fassung links, neuere rechts; Unterschiede im Text farbig
+  markiert (geändert gelb, neu grün, entfernt rot) und als Liste rechts (`tools/pdf_editor/compare.py`,
+  `ComparePanel.qml`).
+- **Geteilte Ansicht:** zwei geöffnete PDFs nebeneinander mit eigener Seite und eigenem Zoom (`SplitPane.qml`).
+- **Präsentation (F5):** Vollbild auf schwarzem Grund, Seite für Seite; Esc stellt die Ansicht wieder her.
+
+## Stapel-Aktionen, PDF/A und PDF aus Bildern (seit 4.0.0-beta.1)
+
+- **Stapel-Aktionen** (Startseite, Strg+6): viele PDFs wählen oder hineinziehen, Aktionen ankreuzen und
+  „Alle bearbeiten“. Feste Reihenfolge: Text erkennen → bereinigen → reduzieren → Wasserzeichen →
+  Seitenzahlen → verkleinern → PDF/A → Kennwortschutz. PDF/A und Kennwortschutz schließen sich aus.
+  Jede PDF wird als neue Datei gespeichert (neben dem Original oder in einem Ordner, mit Zusatz am Namen);
+  nichts wird überschrieben, ein vorhandener Name bekommt „(2)“. Kennwortgeschützte PDFs werden ausgelassen.
+  Die gewählten Aktionen bleiben gespeichert, das Kennwort nie.
+- **Als PDF/A speichern** (Reader → „Schützen“, Schnellwerkzeug): PDF/A-2b-Kopie. Nicht eingebettete
+  Schriften werden durch Teilmengen von Windows-Schriften ersetzt (Arial, Times New Roman, Courier New …),
+  sRGB-Farbprofil und XMP-Metadaten ergänzt, Skripte, Anhänge und Signaturwerte entfernt. Enthält ein PDF
+  Druckfarben (CMYK) ohne Profil oder gibt es für eine Schrift keinen Ersatz, nennt die Meldung den Grund.
+- **PDF aus Bildern**: Bilder in das Fenster ziehen, das Schnellwerkzeug nutzen oder im Explorer „Senden
+  an“ → „PDF Tool (Bilder zu PDF)“. Reihenfolge, Seitengröße (wie das Bild, A4, Letter) und Rand wählen.
+  JPEGs werden unverändert übernommen, die EXIF-Ausrichtung beachtet, Transparenz liegt auf Weiß.
+
+## Updates mit einem Klick (seit 4.0.0-beta.1)
+
+Nach der automatischen Prüfung lädt PDF Tool eine neue Version selbst herunter (SHA-256 geprüft).
+„Jetzt installieren“ beendet PDF Tool; der Hilfsprozess installiert still
+(`/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`) und startet danach `PDF-Tool.exe`. Scheitert die stille
+Installation, zeigt er das Setup wie bisher. Wirkt ab dem Update von 4.0.0-beta.1 auf eine spätere Version.
+
+## Einstellungen in Bereichen (seit 4.0.0-beta.1)
+
+Eine Leiste oben wählt Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose
+oder Info; nur der gewählte Bereich ist sichtbar.
+
 ## PDF Reader & Editor: Schützen und Weitergeben (seit 3.2)
 
-In der Werkzeugleiste des Readers stehen zwei neue Befehle: **Schützen** (Schild) und **Seiten gestalten**.
+In der Werkzeugleiste des Readers stehen zwei neue Befehle: **Schützen** (Schild) und **Seiten gestalten** (seit 4.0.0-beta.2 als Gruppen unter »Alle Werkzeuge«).
 Alles läuft lokal; jede Änderung lässt sich rückgängig machen, solange das Dokument offen ist, und wird beim
 Speichern geprüft. Technische Einzelheiten: [PDF-EDITOR.md](PDF-EDITOR.md#schützen-und-weitergeben-seit-32).
 
@@ -156,6 +196,14 @@ Mit eingeschalteter Kundenakte gilt:
 „3 erkannt“ mit Auswahl daneben), „Kunde · Nicht zugeordnet“, wenn das weiterhilft, Fettschrift und
 Hinweise. Ein erkannter Kunde erscheint einmal – als Hinweis mit Aktionen in der Dateikarte, nach dem
 Übernehmen als aktive Kundenakte in den Kundendaten.
+
+**Gekündigte und abgelaufene Verträge (seit 3.2.0-beta.3, getrennte Schalter seit 3.2.0-beta.5):** Die
+Schalter „Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit aufführen“ unter der Excel-Liste
+(Standard aus) nehmen Verträge mit dem Anwenderstatus „Gekündigt“ bzw. „Abgelaufen“ mit in die Übersicht auf –
+einzeln oder beide zusammen; in der PDF mit dem Status rot unter der Vertragsnummer, in der Prüfung z. B. als
+„· 1 gekündigt“, „· 1 abgelaufen“ oder „· 2 gekündigt/abgelaufen“. Andere Status bleiben ausgeblendet. Die
+Schalter gelten auch für Vorschau und Stapel. War der frühere gemeinsame Schalter an, sind nach dem Update beide
+an.
 
 - **Kundenakte 2.0:** stabile ID (UUID), Firmenname, Kundennummer, mehrere
   Rechnungsempfänger-E-Mails (die erste ist primär), optionale Notiz, bevorzugtes Logo, bevorzugter
@@ -357,6 +405,20 @@ Ein **Regelwerk** passt Werte der Übersicht nach festen Regeln an – „WENN d
   Excel-Datei. „Übersicht erstellen“ nennt, was es an der Excel ändert. Im Stapel hat jeder Eintrag
   „Automatisch“ (Regelwerk der Vorlage, sonst der Darstellung), „Kein Regelwerk“ oder ein bestimmtes.
   Ein fehlendes Regelwerk wird nie still ersetzt.
+
+## Im Hintergrund bereithalten (seit 3.2.0-beta.4)
+
+Einstellungen → Verhalten → „Im Hintergrund bereithalten“ (Standard: an). PDF Tool startet mit Windows ohne
+Fenster (`PDF-Tool.exe --hintergrund`, Eintrag „PDF Tool“ unter „Start mit Windows“ – nur für diesen
+Benutzer) und baut seine Oberfläche dabei auf. Ein weiterer Start (Startmenü, Desktop, Doppelklick auf eine
+PDF) übergibt nur an die laufende App und endet – das Fenster erscheint ohne erneutes Laden.
+
+Das Schließen-Kreuz schließt dann nur das Fenster: Dokumente werden wie beim Beenden geschlossen (Rückfrage
+bei ungespeicherten Änderungen; mit „PDFs der letzten Sitzung“ öffnet das nächste Zeigen sie wieder), laufende
+Stapel oder Reparaturen gehen weiter. PDF Tool bleibt mit Symbol im Infobereich: Klick öffnet das Fenster,
+Rechtsklick → „Beenden“ beendet ganz. Updates, Neustart nach einer Wiederherstellung und das Abmelden von
+Windows beenden PDF Tool immer ganz. Ausgeschaltet: kein Symbol, kein Autostart, das Kreuz beendet wie
+bisher. Die Deinstallation entfernt den Autostart-Eintrag.
 
 ## Sicherung und Wiederherstellung (seit 2.8)
 

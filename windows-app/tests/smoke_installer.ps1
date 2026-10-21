@@ -25,7 +25,10 @@
 #      Kundenakte aus, Kundenakten unveraendert und fuer die App lesbar
 #   4b. »Oeffnen mit« (seit 3.0.0): Eintrag fuer PDF-Dateien vorhanden, die Standard-App fuer .pdf
 #      unveraendert; Start mit einer PDF, ein zweiter Start reicht seine PDF an die laufende App weiter
-#   5. still deinstallieren (auch die Eintraege fuer »Oeffnen mit« sind danach entfernt)
+#   4c. »Im Hintergrund bereithalten« (seit 3.2.0-beta.4): Start mit Windows eingetragen, Start mit
+#      --hintergrund ohne Fenster und nur einmal, ein weiterer Start zeigt das Fenster der laufenden App
+#   4d. PDF-Anhang aus Outlook bei laufender App: gesichert und uebergeben, obwohl Outlook seine Kopie loescht
+#   5. still deinstallieren (auch die Eintraege fuer »Oeffnen mit« und »Start mit Windows« sind danach entfernt)
 #
 # Aufruf:
 #   pwsh -File windows-app\tests\smoke_installer.ps1 -Setup windows-app\dist\PDF-Tool-Setup-<Version>.exe
@@ -66,6 +69,9 @@ $uninstallRoot = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
 $appKey = Join-Path $uninstallRoot "{59C40061-D5E5-446D-ACB4-E077D3C71E1A}_is1"
 # »Oeffnen mit« (seit 3.0.0): eigene ProgID; die Standard-App fuer .pdf bleibt unveraendert
 $progIdKey = "HKCU:\Software\Classes\PDFTool.Dokument"
+$appExeKey = "HKCU:\Software\Classes\Applications\PDF-Tool.exe"
+$capabilitiesKey = "HKCU:\Software\PDF-Tool\Capabilities"
+$registeredKey = "HKCU:\Software\RegisteredApplications"
 $openWithKey = "HKCU:\Software\Classes\.pdf\OpenWithProgids"
 function RegValue([string]$path, [string]$name) {
     if (-not (Test-Path $path)) { return "<keiner>" }
@@ -183,9 +189,31 @@ if ($Previous) {
     }
 }
 
+# Nur Messung (scheitert nie): Wie lange dauert es vom Doppelklick auf das Setup bis zum Fenster des Assistenten?
+# Das ist die Wartezeit, die Anwender beim Start des Setups bemerken (Pruefung durch Windows, Entpacken des
+# Setup-Programms). Danach wird der Assistent sofort beendet, ohne etwas zu installieren.
+$startWatch = [Diagnostics.Stopwatch]::StartNew()
+$wizard = Start-Process -FilePath $Setup -PassThru
+$shown = $null
+while ($startWatch.Elapsed.TotalSeconds -lt 120 -and $null -eq $shown) {
+    Start-Sleep -Milliseconds 50
+    $shown = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like "*$appName*" -and $_.Path -and ($_.Path -like "*\Temp\*" -or $_.Path -eq $Setup) } | Select-Object -First 1
+}
+$startWatch.Stop()
+Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -eq $Setup -or ($_.Path -like "*\Temp\is-*")) } | Stop-Process -Force -ErrorAction SilentlyContinue
+if ($wizard -and -not $wizard.HasExited) { Stop-Process -Id $wizard.Id -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Milliseconds 500
+if ($null -ne $shown) {
+    $seconds = [Math]::Round($startWatch.Elapsed.TotalSeconds, 1)
+    Write-Host "0. Setup-Assistent sichtbar nach $seconds s ($([Math]::Round((Get-Item $Setup).Length / 1MB, 1)) MB)"
+    Write-Host "::notice::Setup-Start: Assistent nach $seconds s sichtbar"
+} else {
+    Write-Host "::warning::Setup-Start: kein Fenster des Assistenten nach 120 s gefunden (nur Messung)"
+}
+
 Write-Host "1. Stille Installation: $Setup"
 $log = Install $Setup "installation"
-foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "runtime\Lib\site-packages\PySide6\QtPrintSupport.pyd", "runtime\Lib\site-packages\PySide6\Qt6PrintSupport.dll", "runtime\Lib\site-packages\fontTools\__init__.py", "app\qtapp\instance.py", "app\qtapp\reader\controller.py", "app\qtapp\reader\document.py", "app\tools\pdf_editor\textedit.py", "app\tools\pdf_editor\save.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
+foreach ($file in "runtime\python.exe", "runtime\pythonw.exe", "app\start.py", "app\qml_rc.py", "app\engine.py", "app\excelstyle.py", "app\richtext.py", "app\pdffonts.py", "app\winsys.py", "app\handoff.py", "app\qtapp\background.py", "app\qtapp\application.py", "app\qtapp\app.py", "app\qtapp\repair.py", "app\qtapp\contracts\overview.py", "app\qtapp\contracts\batch.py", "app\qtapp\contracts\customers.py", "app\qtapp\contracts\comparison.py", "app\tools\registry.py", "app\tools\contract_overview\history\repository.py", "app\tools\pdf_repair\engine.py", "app\tools\pdf_repair\process.py", "app\tools\pdf_repair\presentation.py", "app\tools\pdf_repair\recovery\rebuild.py", "app\qtapp\updates.py", "app\updater\service.py", "app\updater\launch.py", "runtime\Lib\site-packages\PySide6\QtNetwork.pyd", "runtime\Lib\site-packages\PySide6\plugins\tls\qschannelbackend.dll", "runtime\Lib\site-packages\pikepdf\__init__.py", "runtime\Lib\site-packages\pypdfium2_raw\pdfium.dll", "runtime\Lib\site-packages\pypdf\__init__.py", "runtime\Lib\site-packages\PySide6\QtQuick.pyd", "runtime\Lib\site-packages\PySide6\Qt6Quick.dll", "runtime\Lib\site-packages\PySide6\plugins\platforms\qwindows.dll", "runtime\Lib\site-packages\PySide6\qml\QtQuick\Controls\Basic\qmldir", "runtime\Lib\site-packages\shiboken6\Shiboken.pyd", "runtime\Lib\site-packages\PySide6\QtPrintSupport.pyd", "runtime\Lib\site-packages\PySide6\Qt6PrintSupport.dll", "runtime\Lib\site-packages\fontTools\__init__.py", "app\qtapp\instance.py", "app\qtapp\reader\controller.py", "app\qtapp\reader\document.py", "app\tools\pdf_editor\textedit.py", "app\tools\pdf_editor\save.py", "assets\icon.ico", "assets\hott_logo_final.png", "VERSION", "unins000.exe") {
     if (-not (Test-Path (Join-Path $target $file))) { throw "Nach der Installation fehlt: $file" }
 }
 # Seit 2.7.0 ohne Tk-Oberflaeche: auch bei einem Update bleiben keine alten Programmteile zurueck
@@ -213,8 +241,20 @@ if ($entry.DisplayVersion -ne $version) { throw "Version unter 'Installierte App
 if ((($entry."Inno Setup: App Path") -replace '\\$', '') -ne $target) { throw "Installationsort laut Registrierung: $($entry.'Inno Setup: App Path')" }
 Write-Host "   installiert: $($entry.DisplayName) $version in $target"
 # »Oeffnen mit«: ProgID mit Befehl, Eintrag unter .pdf\OpenWithProgids, Standard-App unveraendert
+$launcher = Join-Path $target "PDF-Tool.exe"
+if (-not (Test-Path $launcher)) { throw "Startprogramm PDF-Tool.exe fehlt" }
+$info = (Get-Item $launcher).VersionInfo
+if ($info.FileDescription -ne $appName -or $info.ProductName -ne $appName) { throw "Versionsangaben von PDF-Tool.exe: $($info.FileDescription) / $($info.ProductName)" }
+if ($info.ProductVersion -ne $version) { throw "Version von PDF-Tool.exe: $($info.ProductVersion) statt $version" }
 $command = (Get-Item -LiteralPath (Join-Path $progIdKey "shell\open\command")).GetValue("")
-if ($command -notlike "*$(Join-Path $target 'app\start.py')*" -or $command -notlike '*"%1"*') { throw "Befehl fuer 'Oeffnen mit': $command" }
+if ($command -ne "`"$launcher`" `"%1`"") { throw "Befehl fuer 'Oeffnen mit': $command" }
+if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",-2") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
+if ((Get-Item -LiteralPath $appExeKey).GetValue("FriendlyAppName") -ne $appName) { throw "Name von PDF-Tool.exe in 'Oeffnen mit' fehlt" }
+if ((Get-Item -LiteralPath $capabilitiesKey).GetValue("ApplicationName") -ne $appName) { throw "Anmeldung fuer die Standard-Apps fehlt (Capabilities)" }
+if ((Get-Item -LiteralPath (Join-Path $capabilitiesKey "FileAssociations")).GetValue(".pdf") -ne "PDFTool.Dokument") { throw "Standard-Apps: .pdf ist nicht PDF Tool zugeordnet" }
+if ((Get-Item -LiteralPath $registeredKey).GetValue($appName) -ne "Software\PDF-Tool\Capabilities") { throw "PDF Tool fehlt unter RegisteredApplications" }
+$link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+if ($link.TargetPath -ne $launcher) { throw "Startmenue-Verknuepfung zeigt auf $($link.TargetPath) statt auf PDF-Tool.exe" }
 if ((Get-Item -LiteralPath (Join-Path $progIdKey "shell\open")).GetValue("FriendlyAppName") -ne $appName) { throw "Name in 'Oeffnen mit' fehlt" }
 if ($null -eq (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument")) { throw "PDF Tool fehlt unter .pdf\OpenWithProgids" }
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Das Setup hat die Standard-App fuer PDF-Dateien veraendert: $(PdfDefault) statt $pdfDefaultBefore" }
@@ -271,16 +311,33 @@ Write-Host "3. Installierte Laufzeit: Module, Vertragsuebersicht, PDF-Reparatur,
 & (Join-Path $target "runtime\python.exe") -s (Join-Path $PSScriptRoot "smoke_runtime.py") --app (Join-Path $target "app") --ui
 if ($LASTEXITCODE -ne 0) { throw "Pruefung der installierten Laufzeit fehlgeschlagen (Code $LASTEXITCODE)" }
 
-Write-Host "4. Start wie ueber die Verknuepfung"
+Write-Host "4. Start wie ueber die Verknuepfung (PDF-Tool.exe startet die App und endet)"
 $errorLog = Join-Path $data "fehler.log"
 Remove-Item $errorLog -ErrorAction SilentlyContinue
-$app = Start-Process -FilePath (Join-Path $target "runtime\pythonw.exe") -ArgumentList "-s", "-OO", "`"$(Join-Path $target 'app\start.py')`"" -WorkingDirectory (Join-Path $target "app") -PassThru
+$started = Start-Process -FilePath $launcher -WorkingDirectory $target -PassThru
+$null = $started.Handle
+if (-not $started.WaitForExit(30000)) { throw "PDF-Tool.exe endet nicht nach dem Start der App" }
+if ($started.ExitCode -ne 0) { throw "PDF-Tool.exe endete mit Code $($started.ExitCode)" }
+$runtimeExe = Join-Path $target "runtime\pythonw.exe"
+$app = $null
+for ($i = 0; $i -lt 30 -and -not $app; $i++) {
+    $app = Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" | Where-Object { $_.ExecutablePath -eq $runtimeExe -and $_.CommandLine -like "*app\start.py*" } | Select-Object -First 1
+    if (-not $app) { Start-Sleep -Seconds 1 }
+}
+if (-not $app) { throw "PDF-Tool.exe hat die App nicht gestartet" }
 Start-Sleep -Seconds 15
-if ($app.HasExited) { throw "Die App hat sich beim Start beendet (Code $($app.ExitCode))" }
+if (-not (Get-Process -Id $app.ProcessId -ErrorAction SilentlyContinue)) { throw "Die App hat sich beim Start beendet" }
 if (Test-Path $errorLog) { throw "Fehler beim Start: $(Get-Content $errorLog -Raw)" }
-Stop-Process -Id $app.Id -Force
+$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$autostart = (Get-Item -LiteralPath $runKey -ErrorAction SilentlyContinue).GetValue($appName)
+if ($autostart -ne "`"$launcher`" --hintergrund") {
+    $appLog = Join-Path $data "pdf-tool.log"
+    if (Test-Path $appLog) { Write-Host "--- pdf-tool.log ---"; Get-Content $appLog -Tail 60 | Write-Host }
+    throw "Start mit Windows: '$autostart' statt PDF-Tool.exe --hintergrund"
+}
+Stop-Process -Id $app.ProcessId -Force
 Start-Sleep -Seconds 2
-Write-Host "   App lief ohne Fehler"
+Write-Host "   App lief ohne Fehler; Start mit Windows eingetragen ($autostart)"
 Write-Host "4b. 'Oeffnen mit': Start mit einer PDF, zweiter Start reicht seine PDF weiter"
 $pdfDir = Join-Path $temp "pdf-tool-oeffnen-mit"
 New-Item -ItemType Directory -Force -Path $pdfDir | Out-Null
@@ -302,6 +359,98 @@ Stop-Process -Id $first.Id -Force
 Start-Sleep -Seconds 2
 Remove-Item $pdfDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "   App startete mit der PDF, der zweite Start endete nach dem Weiterreichen"
+
+Write-Host "4c. Start mit Windows (ohne Fenster), danach zeigt ein weiterer Start das Fenster der laufenden App"
+function AppProcesses { @(Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" | Where-Object { $_.ExecutablePath -eq $runtimeExe -and $_.CommandLine -like "*app\start.py*" }) }
+Remove-Item $errorLog -ErrorAction SilentlyContinue
+$hidden = Start-Process -FilePath $launcher -ArgumentList "--hintergrund" -WorkingDirectory $target -PassThru
+$null = $hidden.Handle
+if (-not $hidden.WaitForExit(30000) -or $hidden.ExitCode -ne 0) { throw "PDF-Tool.exe --hintergrund endete nicht bzw. mit Fehler" }
+$resident = $null
+for ($i = 0; $i -lt 30 -and -not $resident; $i++) { $resident = AppProcesses | Select-Object -First 1; if (-not $resident) { Start-Sleep -Seconds 1 } }
+if (-not $resident) { throw "Start mit Windows hat die App nicht gestartet" }
+Start-Sleep -Seconds 15
+$process = Get-Process -Id $resident.ProcessId -ErrorAction SilentlyContinue
+if (-not $process) { throw "Die App hat sich nach dem Start mit Windows beendet" }
+if ($process.MainWindowHandle -ne 0) { throw "Start mit Windows hat ein Fenster gezeigt" }
+# Ein zweiter Start mit Windows (z. B. erneute Anmeldung) startet keine zweite App
+$again = Start-Process -FilePath $launcher -ArgumentList "--hintergrund" -WorkingDirectory $target -PassThru
+$null = $again.Handle
+if (-not $again.WaitForExit(30000)) { throw "Zweiter Start mit Windows endet nicht" }
+Start-Sleep -Seconds 3
+if ((AppProcesses).Count -ne 1) { throw "Zweiter Start mit Windows hat eine weitere App gestartet" }
+# Weiterer Start wie ueber das Startmenue: das Fenster der laufenden App erscheint
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$open = Start-Process -FilePath $launcher -WorkingDirectory $target -PassThru
+$null = $open.Handle
+$shown = $false
+while (-not $shown -and $watch.Elapsed.TotalSeconds -lt 30) {
+    $process = Get-Process -Id $resident.ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) { throw "Die App hat sich beim Zeigen des Fensters beendet" }
+    if ($process.MainWindowHandle -ne 0) { $shown = $true } else { Start-Sleep -Milliseconds 25 }
+}
+$elapsed = $watch.ElapsedMilliseconds
+if (-not $shown) { throw "Das Fenster der App im Hintergrund erschien nicht" }
+Start-Sleep -Seconds 3
+if ((AppProcesses).Count -ne 1) { throw "Der weitere Start hat eine zweite App gestartet statt das Fenster zu zeigen" }
+if (Test-Path $errorLog) { throw "Fehler im Hintergrundbetrieb: $(Get-Content $errorLog -Raw)" }
+Write-Host "   Fenster aus dem Hintergrund nach $elapsed ms (ab Start von PDF-Tool.exe)"
+if ($env:GITHUB_ACTIONS) { Write-Host "::notice title=Fenster aus dem Hintergrund::PDF Tool $version - $elapsed ms vom Start von PDF-Tool.exe bis zum sichtbaren Fenster" }
+
+Write-Host "4d. PDF-Anhang aus Outlook bei laufender App: Outlook startet PDF-Tool.exe mit seiner Kopie und loescht sie, sobald PDF-Tool.exe endet"
+$appLog = Join-Path $data "pdf-tool.log"
+$handoffLog = Join-Path $data "uebergabe.log"
+$outlookDir = Join-Path $env:LOCALAPPDATA "Microsoft\Windows\INetCache\Content.Outlook\PDFTEST1"
+New-Item -ItemType Directory -Force -Path $outlookDir | Out-Null
+$attachment = Join-Path $outlookDir "Mitteilung_SEPA_Mandat Test GmbH (003).pdf"
+& (Join-Path $target "runtime\python.exe") -s -c "import sys, pikepdf; p = pikepdf.new(); p.add_blank_page(); p.save(sys.argv[1])" $attachment
+if ($LASTEXITCODE -ne 0) { throw "Test-Anhang konnte nicht erzeugt werden" }
+Set-ItemProperty -Path $attachment -Name IsReadOnly -Value $true  # Outlook legt Anhaenge schreibgeschuetzt ab
+$logBefore = if (Test-Path $appLog) { (Get-Content $appLog -Encoding UTF8).Count } else { 0 }
+# wie Outlook: ShellExecuteEx mit der Zuordnung (ProgID PDFTool.Dokument, Verb »open«) - Windows startet
+# PDF-Tool.exe ueber DelegateExecute als COM-Server, nicht als Kindprozess des Aufrufers
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class ShellOpen {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHELLEXECUTEINFO {
+        public int cbSize; public uint fMask; public IntPtr hwnd; public string lpVerb; public string lpFile;
+        public string lpParameters; public string lpDirectory; public int nShow; public IntPtr hInstApp; public IntPtr lpIDList;
+        public string lpClass; public IntPtr hkeyClass; public uint dwHotKey; public IntPtr hIcon; public IntPtr hProcess;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool ShellExecuteExW(ref SHELLEXECUTEINFO info);
+    public static int Open(string file, string progId) {
+        var info = new SHELLEXECUTEINFO();
+        info.cbSize = Marshal.SizeOf(info);
+        info.fMask = 0x00000001 | 0x00000400 | 0x00000100; // SEE_MASK_CLASSNAME | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC
+        info.lpVerb = "open"; info.lpFile = file; info.lpClass = progId; info.nShow = 1;
+        return ShellExecuteExW(ref info) ? 0 : Marshal.GetLastWin32Error();
+    }
+}
+"@
+$opened = [ShellOpen]::Open($attachment, "PDFTool.Dokument")
+if ($opened -ne 0) { throw "ShellExecuteEx ueber die Zuordnung fehlgeschlagen (Fehler $opened)" }
+for ($i = 0; $i -lt 60 -and (Get-Process -Name "PDF-Tool" -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }  # Outlook wartet ebenso
+Set-ItemProperty -Path $attachment -Name IsReadOnly -Value $false
+Remove-Item $outlookDir -Recurse -Force  # Outlook raeumt seine Kopie auf
+$received = $null
+for ($i = 0; $i -lt 40 -and -not $received; $i++) {
+    if (Test-Path $appLog) { $received = Get-Content $appLog -Encoding UTF8 | Select-Object -Skip $logBefore | Where-Object { $_ -like "*Weiterer Start*" } | Select-Object -Last 1 }
+    if (-not $received) { Start-Sleep -Milliseconds 250 }
+}
+if (Test-Path $handoffLog) { Write-Host "   Uebergabe-Protokoll:"; Get-Content $handoffLog -Encoding UTF8 | ForEach-Object { Write-Host "     $_" } }
+if (-not $received) { throw "Outlook-Anhang: die laufende App hat keinen weiteren Start erhalten" }
+Write-Host "   $received"
+if ($received -notlike "*1 Datei(en), 1 vorhanden*") { throw "Outlook-Anhang kam nicht an: $received" }
+if (-not (Test-Path $handoffLog) -or -not (Select-String -Path $handoffLog -Pattern "Start mit Datei .ber COM: Outlook" -Quiet)) { throw "Outlook-Anhang: PDF-Tool.exe wurde nicht ueber DelegateExecute (COM) gestartet" }
+$saved = @(Get-ChildItem (Join-Path $env:LOCALAPPDATA "PDF-Tool\Anhaenge") -Recurse -Filter "Mitteilung_SEPA_Mandat Test GmbH (003).pdf" -ErrorAction SilentlyContinue)
+if ($saved.Count -lt 1) { throw "Outlook-Anhang wurde nicht gesichert" }
+if (Test-Path $errorLog) { throw "Fehler beim Oeffnen des Outlook-Anhangs: $(Get-Content $errorLog -Raw)" }
+Write-Host "   Anhang gesichert und an die laufende App uebergeben"
+Stop-Process -Id $resident.ProcessId -Force
+Start-Sleep -Seconds 2
 # Die automatische Update-Pruefung laeuft wenige Sekunden nach dem Start im Hintergrund (nur lesend).
 # Offline oder bei einem Anfragelimit bleibt sie still - das ist nur ein Hinweis, kein Fehler.
 if (Test-Path (Join-Path $updates "releases.json")) {
@@ -414,6 +563,11 @@ if (Test-Path (Join-Path $target "runtime")) { throw "Laufzeit ist nach der Dein
 if (Test-Path $shortcut) { throw "Verknuepfung ist nach der Deinstallation noch vorhanden" }
 if ((AppEntries).Count -ne 0) { throw "Eintrag unter 'Installierte Apps' ist nach der Deinstallation noch vorhanden" }
 if (Test-Path $progIdKey) { throw "Eintrag fuer 'Oeffnen mit' ist nach der Deinstallation noch vorhanden" }
+if (Test-Path $appExeKey) { throw "Eintrag fuer PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
+if (Test-Path $capabilitiesKey) { throw "Anmeldung fuer die Standard-Apps ist nach der Deinstallation noch vorhanden" }
+if ((Test-Path $registeredKey) -and ($null -ne (Get-Item -LiteralPath $registeredKey).GetValue($appName))) { throw "RegisteredApplications enthaelt nach der Deinstallation noch PDF Tool" }
+if (Test-Path (Join-Path $target "PDF-Tool.exe")) { throw "PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
+if ($null -ne (Get-Item -LiteralPath $runKey -ErrorAction SilentlyContinue).GetValue($appName)) { throw "Start mit Windows ist nach der Deinstallation noch eingetragen" }
 if ((Test-Path $openWithKey) -and ($null -ne (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))) { throw ".pdf\OpenWithProgids enthaelt nach der Deinstallation noch PDF Tool" }
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Standard-App fuer PDF-Dateien nach der Deinstallation veraendert" }
 if (-not $pdfKeyBefore -and (Test-Path "HKCU:\Software\Classes\.pdf")) { throw "Der vom Setup angelegte Schluessel .pdf ist nach der Deinstallation noch vorhanden" }

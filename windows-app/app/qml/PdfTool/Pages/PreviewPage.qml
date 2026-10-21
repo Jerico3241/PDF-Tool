@@ -11,8 +11,8 @@ import PdfTool.Controls
 PPage {
     id: page
     objectName: "previewPage"
-    title: "Vertragsübersichten"
-    subtitle: "Vorschau: die PDF so, wie sie erstellt wird – aktualisiert sich bei jeder Änderung."
+    title: I18n.tr("Vertragsübersichten", I18n.revision)
+    subtitle: I18n.tr("Vorschau: die PDF so, wie sie erstellt wird – aktualisiert sich bei jeder Änderung.", I18n.revision)
 
     // Verfügbare Fläche für »An Breite« bzw. »Ganze Seite« an Python melden
     function reportViewport() {
@@ -43,32 +43,32 @@ PPage {
         spacing: 6
         Row {
             spacing: 4
-            PIconButton { iconName: "chevron_left"; tip: "Vorherige Seite (Bild ↑)"; enabled: Preview.canPrev; onClicked: Preview.step(-1) }
+            PIconButton { iconName: "chevron_left"; tip: I18n.tr("Vorherige Seite (Bild ↑)", I18n.revision); enabled: Preview.canPrev; onClicked: Preview.step(-1) }
             PText {
                 width: pageMetrics.advanceWidth + 16
                 height: 32
                 horizontalAlignment: Text.AlignHCenter
-                text: Preview.pages > 0 ? "Seite " + (Preview.page + 1) + " von " + Preview.pages : "Seite –"
-                TextMetrics { id: pageMetrics; font: Typography.body; text: "Seite 88 von 88" }
+                text: I18n.tr(Preview.pages > 0 ? "Seite " + (Preview.page + 1) + " von " + Preview.pages : "Seite –", I18n.revision)
+                TextMetrics { id: pageMetrics; font: Typography.body; text: I18n.tr("Seite 88 von 88", I18n.revision) }
             }
-            PIconButton { iconName: "chevron_right"; tip: "Nächste Seite (Bild ↓)"; enabled: Preview.canNext; onClicked: Preview.step(1) }
+            PIconButton { iconName: "chevron_right"; tip: I18n.tr("Nächste Seite (Bild ↓)", I18n.revision); enabled: Preview.canNext; onClicked: Preview.step(1) }
         }
         Row {
             spacing: 4
             leftPadding: 12
-            PIconButton { iconName: "zoom_out"; tip: "Verkleinern (−)"; enabled: Preview.pages > 0; onClicked: Preview.zoomOut() }
+            PIconButton { iconName: "zoom_out"; tip: I18n.tr("Verkleinern (−)", I18n.revision); enabled: Preview.pages > 0; onClicked: Preview.zoomOut() }
             PText {
                 width: zoomMetrics.advanceWidth + 16
                 height: 32
                 horizontalAlignment: Text.AlignHCenter
-                text: Preview.zoomText
-                TextMetrics { id: zoomMetrics; font: Typography.body; text: "Ganze Seite" }
+                text: I18n.tr(Preview.zoomText, I18n.revision)
+                TextMetrics { id: zoomMetrics; font: Typography.body; text: I18n.tr("Ganze Seite", I18n.revision) }
             }
-            PIconButton { iconName: "zoom_in"; tip: "Vergrößern (+)"; enabled: Preview.pages > 0; onClicked: Preview.zoomIn() }
+            PIconButton { iconName: "zoom_in"; tip: I18n.tr("Vergrößern (+)", I18n.revision); enabled: Preview.pages > 0; onClicked: Preview.zoomIn() }
         }
-        PButton { kind: "subtle"; iconName: "arrow_autofit_width"; text: "An Breite anpassen"; tip: "Seite an die Breite der Ansicht anpassen (0)"; enabled: Preview.fit !== "width"; onClicked: Preview.fitWidth() }
-        PButton { kind: "subtle"; iconName: "page_fit"; text: "Ganze Seite"; tip: "Ganze Seite in die Ansicht einpassen"; enabled: Preview.fit !== "page"; onClicked: Preview.fitPage() }
-        PButton { iconName: "arrow_clockwise"; text: "Aktualisieren"; tip: "Vorschau neu erzeugen (z. B. nach Änderungen an der Excel-Datei)"; onClicked: Preview.refreshNow() }
+        PButton { kind: "subtle"; iconName: "arrow_autofit_width"; text: I18n.tr("An Breite anpassen", I18n.revision); tip: I18n.tr("Seite an die Breite der Ansicht anpassen (0)", I18n.revision); enabled: Preview.fit !== "width"; onClicked: Preview.fitWidth() }
+        PButton { kind: "subtle"; iconName: "page_fit"; text: I18n.tr("Ganze Seite", I18n.revision); tip: I18n.tr("Ganze Seite in die Ansicht einpassen", I18n.revision); enabled: Preview.fit !== "page"; onClicked: Preview.fitPage() }
+        PButton { iconName: "arrow_clockwise"; text: I18n.tr("Aktualisieren", I18n.revision); tip: I18n.tr("Vorschau neu erzeugen (z. B. nach Änderungen an der Excel-Datei)", I18n.revision); onClicked: Preview.refreshNow() }
     }
 
     // Zustand in eigener Zeile: Sein Text wechselt in der Länge und bricht die Leiste nicht um
@@ -94,7 +94,7 @@ PPage {
             PCrossfadeText {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: Preview.stateText
+                text: I18n.tr(Preview.stateText, I18n.revision)
                 font: Typography.caption
                 color: Theme.textSecondary
             }
@@ -122,10 +122,10 @@ PPage {
                     width: parent.width - 48
                     spacing: 4
                     PIcon { name: "eye"; size: Metrics.iconSizeLarge; color: Theme.textSecondary }
-                    PText { text: Preview.texts.emptyTitle; textStyle: "bodyStrong"; Layout.topMargin: 6 }
-                    PText { text: Preview.problem; tone: "warning"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
-                    PText { text: Preview.texts.emptyHint; tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 2 }
-                    PButton { kind: "accent"; iconName: "document"; text: "Zu »Übersicht erstellen«"; Layout.topMargin: 10; onClicked: App.navigate("create") }
+                    PText { text: I18n.tr(Preview.texts.emptyTitle, I18n.revision); textStyle: "bodyStrong"; Layout.topMargin: 6 }
+                    PText { text: I18n.tr(Preview.problem, I18n.revision); tone: "warning"; wrap: true; visible: text !== ""; Layout.fillWidth: true }
+                    PText { text: I18n.tr(Preview.texts.emptyHint, I18n.revision); tone: "secondary"; wrap: true; Layout.fillWidth: true; Layout.topMargin: 2 }
+                    PButton { kind: "accent"; iconName: "document"; text: I18n.tr("Zu »Übersicht erstellen«", I18n.revision); Layout.topMargin: 10; onClicked: App.navigate("create") }
                 }
             }
         }
@@ -140,7 +140,7 @@ PPage {
                 onWidthChanged: viewportTimer.restart()
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Graphic
-                Accessible.name: Preview.pages > 0 ? "Vorschau, Seite " + (Preview.page + 1) + " von " + Preview.pages : "Vorschau"
+                Accessible.name: I18n.tr(Preview.pages > 0 ? "Vorschau, Seite " + (Preview.page + 1) + " von " + Preview.pages : "Vorschau", I18n.revision)
                 Keys.onPressed: (event) => {
                     switch (event.key) {
                     case Qt.Key_PageUp: Preview.step(-1); break

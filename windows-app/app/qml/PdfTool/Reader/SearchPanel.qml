@@ -47,8 +47,8 @@ ColumnLayout {
             objectName: "readerSearchField"
             Layout.fillWidth: true
             preferredWidth: 120
-            label: "Suchbegriff"
-            placeholderText: "Im Dokument suchen"
+            label: I18n.tr("Suchbegriff", I18n.revision)
+            placeholderText: I18n.tr("Im Dokument suchen", I18n.revision)
             onAccepted: {
                 if (root.doc && text.trim() === root.doc.searchText && root.doc.searchCount > 0) root.doc.nextHit()
                 else root.run()
@@ -60,7 +60,7 @@ ColumnLayout {
         }
         PIconButton {
             iconName: root.doc && root.doc.searchRunning ? "dismiss" : "search"
-            tip: root.doc && root.doc.searchRunning ? "Suche abbrechen" : "Suchen"
+            tip: I18n.tr(root.doc && root.doc.searchRunning ? "Suche abbrechen" : "Suchen", I18n.revision)
             onClicked: root.doc && root.doc.searchRunning ? root.doc.cancelSearch() : root.run()
         }
     }
@@ -69,8 +69,8 @@ ColumnLayout {
         Layout.leftMargin: 12
         Layout.rightMargin: 12
         spacing: 12
-        PCheckBox { id: caseBox; objectName: "readerSearchCase"; text: "Groß-/Kleinschreibung"; onToggled: if (field.text.trim() !== "") root.run() }
-        PCheckBox { id: wordBox; objectName: "readerSearchWords"; text: "Ganzes Wort"; onToggled: if (field.text.trim() !== "") root.run() }
+        PCheckBox { id: caseBox; objectName: "readerSearchCase"; text: I18n.tr("Groß-/Kleinschreibung", I18n.revision); onToggled: if (field.text.trim() !== "") root.run() }
+        PCheckBox { id: wordBox; objectName: "readerSearchWords"; text: I18n.tr("Ganzes Wort", I18n.revision); onToggled: if (field.text.trim() !== "") root.run() }
     }
     PProgressBar {
         Layout.fillWidth: true
@@ -87,13 +87,13 @@ ColumnLayout {
         PText {
             objectName: "readerSearchSummary"
             Layout.fillWidth: true
-            text: root.doc ? (root.doc.searchCount > 0 && root.doc.searchIndex >= 0 ? (root.doc.searchIndex + 1) + " von " + root.doc.searchSummary : root.doc.searchSummary) : ""
+            text: I18n.tr(root.doc ? (root.doc.searchCount > 0 && root.doc.searchIndex >= 0 ? (root.doc.searchIndex + 1) + " von " + root.doc.searchSummary : root.doc.searchSummary) : "", I18n.revision)
             textStyle: "caption"
             tone: "secondary"
             wrap: true
         }
-        PIconButton { iconName: "chevron_up"; tip: "Vorheriger Treffer (Umschalt+F3)"; enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.previousHit() }
-        PIconButton { iconName: "chevron_down"; tip: "Nächster Treffer (F3)"; enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.nextHit() }
+        PIconButton { iconName: "chevron_up"; tip: I18n.tr("Vorheriger Treffer (Umschalt+F3)", I18n.revision); enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.previousHit() }
+        PIconButton { iconName: "chevron_down"; tip: I18n.tr("Nächster Treffer" + Shortcuts.hints["reader.nextHit"], I18n.revision); enabled: root.doc !== null && root.doc.searchCount > 0; onClicked: root.doc.nextHit() }
     }
     ListView {
         id: hitList
@@ -106,7 +106,7 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         T.ScrollBar.vertical: PScrollBar {}
         Accessible.role: Accessible.List
-        Accessible.name: "Treffer"
+        Accessible.name: I18n.tr("Treffer", I18n.revision)
         delegate: Item {
             id: hitRow
             required property int page
@@ -116,7 +116,7 @@ ColumnLayout {
             width: hitList.width
             height: excerptText.implicitHeight + pageText.implicitHeight + 14
             Accessible.role: Accessible.ListItem
-            Accessible.name: "Seite " + (page + 1) + ": " + excerpt
+            Accessible.name: I18n.tr("Seite " + (page + 1) + ": " + excerpt, I18n.revision)
             PListItem {
                 anchors.fill: parent
                 anchors.leftMargin: 4
@@ -132,8 +132,8 @@ ColumnLayout {
                 anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2
-                PText { id: pageText; text: "Seite " + (hitRow.page + 1); textStyle: "caption"; tone: "secondary" }
-                PText { id: excerptText; width: parent.width; text: hitRow.excerpt; wrap: true; maximumLineCount: 2; elide: Text.ElideRight }
+                PText { id: pageText; text: I18n.tr("Seite " + (hitRow.page + 1), I18n.revision); textStyle: "caption"; tone: "secondary" }
+                PText { id: excerptText; width: parent.width; text: I18n.tr(hitRow.excerpt, I18n.revision); wrap: true; maximumLineCount: 2; elide: Text.ElideRight }
             }
             TapHandler { onTapped: root.doc.showHit(hitRow.hitIndex) }
         }

@@ -83,7 +83,7 @@ T.Popup {
         }
         Keys.onEnterPressed: popup.answer(popup.defaultButton())
         Accessible.role: Accessible.Dialog
-        Accessible.name: popup.request.title || ""
+        Accessible.name: I18n.tr(popup.request.title || "", I18n.revision)
 
         ColumnLayout {
             id: layout
@@ -105,7 +105,7 @@ T.Popup {
                     width: scroller.width
                     spacing: 12
                     PText {
-                        text: popup.request.title || ""
+                        text: I18n.tr(popup.request.title || "", I18n.revision)
                         textStyle: "subtitle"
                         wrap: true
                         Layout.fillWidth: true
@@ -115,7 +115,7 @@ T.Popup {
                         Accessible.role: Accessible.Heading
                     }
                     PText {
-                        text: popup.request.message || ""
+                        text: I18n.tr(popup.request.message || "", I18n.revision)
                         wrap: true
                         visible: text !== ""
                         Layout.fillWidth: true
@@ -154,10 +154,16 @@ T.Popup {
                             case "checklist": return checklistContent
                             case "protect": return protectContent
                             case "optimize": return optimizeContent
+                            case "images": return imagesContent
+                            case "scan": return scanContent
+                            case "shortcuts": return shortcutsContent
                             case "header_footer": return headerFooterContent
                             case "watermark": return watermarkContent
                             case "redact_search": return redactSearchContent
                             case "signature": return signatureContent
+                            case "digital_sign": return digitalSignContent
+                            case "signatures": return signaturesContent
+                            case "assistant_translate": return translateContent
                             case "link": return linkContent
                             case "crop": return cropContent
                             case "assistant_setup": return assistantSetupContent
@@ -187,7 +193,7 @@ T.Popup {
                         id: primaryButton
                         objectName: "dialogPrimaryButton"
                         visible: (popup.request.primary || "") !== ""
-                        text: popup.request.primary || ""
+                        text: I18n.tr(popup.request.primary || "", I18n.revision)
                         kind: popup.request.danger ? "danger" : "accent"
                         enabled: !popup.content || popup.content.acceptable !== false
                         Layout.fillWidth: popup.buttonsShown >= 2
@@ -196,14 +202,14 @@ T.Popup {
                     }
                     PButton {
                         visible: (popup.request.secondary || "") !== ""
-                        text: popup.request.secondary || ""
+                        text: I18n.tr(popup.request.secondary || "", I18n.revision)
                         Layout.fillWidth: popup.buttonsShown >= 2
                         Layout.preferredWidth: popup.buttonsShown >= 2 ? 1 : Math.max(120, implicitWidth)
                         onClicked: popup.answer("secondary")
                     }
                     PButton {
                         visible: (popup.request.close || "") !== ""
-                        text: popup.request.close || ""
+                        text: I18n.tr(popup.request.close || "", I18n.revision)
                         kind: (popup.request.primary || "") === "" ? "accent" : "standard"
                         Layout.fillWidth: popup.buttonsShown >= 2
                         Layout.preferredWidth: popup.buttonsShown >= 2 ? 1 : Math.max(120, implicitWidth)
@@ -233,6 +239,12 @@ T.Popup {
     Component { id: checklistContent; ChecklistContent {} }
     Component { id: protectContent; ProtectContent {} }
     Component { id: optimizeContent; OptimizeContent {} }
+    Component { id: imagesContent; ImagesContent {} }
+    Component { id: scanContent; ScanContent {} }
+    Component { id: digitalSignContent; DigitalSignContent {} }
+    Component { id: signaturesContent; SignaturesContent {} }
+    Component { id: translateContent; TranslateContent {} }
+    Component { id: shortcutsContent; ShortcutsContent {} }
     Component { id: headerFooterContent; HeaderFooterContent {} }
     Component { id: watermarkContent; WatermarkContent {} }
     Component { id: redactSearchContent; RedactSearchContent {} }

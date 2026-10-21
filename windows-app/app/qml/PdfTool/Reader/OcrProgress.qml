@@ -50,11 +50,11 @@ Item {
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     textStyle: "bodyStrong"
-                    text: root.doc ? (root.doc.ocrStatus || "Text wird erkannt …") : ""
+                    text: I18n.tr(root.doc ? (root.doc.ocrStatus || "Text wird erkannt …") : "", I18n.revision)
                 }
                 PButton {
                     objectName: "readerOcrCancel"
-                    text: "Abbrechen"
+                    text: I18n.tr("Abbrechen", I18n.revision)
                     onClicked: root.doc.cancelOcr()
                 }
             }

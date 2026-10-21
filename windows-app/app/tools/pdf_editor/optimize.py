@@ -68,6 +68,15 @@ def optimize_copy(document: EditorDocument, target: str | Path, level: str = "mi
     target = Path(target)
     if document.path is not None and save._same(document.path, target):  # noqa: SLF001
         raise EditorError("Die verkleinerte Kopie braucht einen eigenen Namen – das Original bleibt unverändert.")
+    result, before, changed, skipped = optimize_bytes(document, level)
+    save.write_copy(document, result, target)
+    return OptimizeResult(target, before, len(result), changed, skipped)
+
+
+def optimize_bytes(document: EditorDocument, level: str = "mittel") -> tuple[bytes, int, int, int]:
+    """Verkleinerter aktueller Stand als Bytes – (Daten, Größe vorher, verkleinerte Bilder, übersprungene)."""
+    if level not in LEVELS:
+        raise EditorError("Unbekannte Stufe.")
     dpi, quality = LEVELS[level]
     data = document.serialize(keep_encryption=True)
     password = document.save_password
@@ -86,11 +95,9 @@ def optimize_copy(document: EditorDocument, target: str | Path, level: str = "mi
     finally:
         pdf.close()
     if len(result) >= len(data):
-        result, changed = data, 0  # nichts gewonnen: die Kopie entspricht dem aktuellen Stand
-    else:
-        save.validate(result, password, expected)
-    save.write_copy(document, result, target)
-    return OptimizeResult(target, len(data), len(result), changed, skipped)
+        return data, len(data), 0, skipped  # nichts gewonnen: die Kopie entspricht dem aktuellen Stand
+    save.validate(result, password, expected)
+    return result, len(data), changed, skipped
 
 
 # --- Bilder ------------------------------------------------------------------------------------------------------

@@ -28,6 +28,17 @@ Flickable {
     readonly property bool paired: mode === "two" || mode === "continuousTwo"
     readonly property bool paged: mode === "single" || mode === "two"
     readonly property var sizes: doc ? doc.pageSizes : []
+    // Markierungen aller Seiten: einmal je Änderung aus Python holen – die Seiten (PageView) lesen nur ihren
+    // Eintrag. Sonst holte jede sichtbare Seite beim Blättern die ganze Tabelle (große PDFs: spürbar langsam).
+    readonly property string toolKey: doc ? doc.tool : "select"
+    readonly property var hitMap: doc ? doc.hitRects : ({})
+    readonly property var compareMap: doc ? doc.compareRects : ({})
+    readonly property var annotationMap: doc ? doc.annotationPages : ({})
+    readonly property var fieldMap: doc && toolKey === "form" ? doc.fieldPages : ({})
+    readonly property var designMap: doc && toolKey === "formDesign" ? doc.designPages : ({})
+    readonly property var linkMap: doc ? doc.linkPages : ({})
+    readonly property var markMap: doc ? doc.redactMarks : ({})
+    readonly property var objectMap: doc && toolKey === "objects" ? doc.objectPages : ({})
     readonly property int pageCount: sizes.length
     readonly property int current: doc ? doc.currentPage : 0
     readonly property real ratio: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
@@ -68,7 +79,7 @@ Flickable {
     pixelAligned: true
     activeFocusOnTab: true
     Accessible.role: Accessible.Pane
-    Accessible.name: doc ? "Dokument " + doc.name : "Dokument"
+    Accessible.name: I18n.tr(doc ? "Dokument " + doc.name : "Dokument", I18n.revision)
     T.ScrollBar.vertical: PScrollBar { id: vbar }
     T.ScrollBar.horizontal: PScrollBar { id: hbar }
 
@@ -77,7 +88,7 @@ Flickable {
         parent: view
         anchors.fill: parent
         z: -1
-        color: Theme.viewer
+        color: Reader.presenting ? "black" : Theme.viewer  // Präsentation: Seite auf schwarzem Grund
     }
 
     // --- Aufbau ------------------------------------------------------------------------------------------
@@ -219,8 +230,9 @@ Flickable {
         if (!doc) return
         var point = pointAt(x, y)
         restoring = true
+        var before = zoomScale
         doc.zoomBy(factor)
-        relayout()
+        if (zoomScale === before) relayout()  // sonst hat onZoomScaleChanged schon neu angeordnet
         restoring = false
         restorePoint(point)
         rememberAnchor()
@@ -338,18 +350,26 @@ Flickable {
             // die Stelle als Anker setzen (gilt auch für onSizesChanged/onZoomScaleChanged) und danach
             // noch einmal genau anfahren
             var anchor = { page: saved.page, u: saved.u, v: saved.v, x: width / 2, y: height / 2 }
-            var key = doc.docId
             viewAnchor = anchor
             restorePoint(anchor)
-            Qt.callLater(function() {
-                if (!view.doc || view.doc.docId !== key) return
-                view.relayout()
-                view.restorePoint({ page: anchor.page, u: anchor.u, v: anchor.v, x: view.width / 2, y: view.height / 2 })
-                view.rememberAnchor()
-                view.updateSlots()
-            })
+            restoreLater.anchor = anchor
+            restoreLater.key = doc.docId
+            restoreLater.restart()  // ein Timer der Ansicht statt Qt.callLater: entfällt mit ihr (geteilte Ansicht)
         } else {
             reveal(doc.currentPage, -1, -1)
+        }
+    }
+    Timer {
+        id: restoreLater
+        property var anchor: null
+        property string key: ""
+        interval: 0
+        onTriggered: {
+            if (!view.doc || view.doc.docId !== key || anchor === null) return
+            view.relayout()
+            view.restorePoint({ page: anchor.page, u: anchor.u, v: anchor.v, x: view.width / 2, y: view.height / 2 })
+            view.rememberAnchor()
+            view.updateSlots()
         }
     }
     Component.onCompleted: {
@@ -475,6 +495,10 @@ Flickable {
         cursorShape: view.doc && (view.doc.tool === "hand" || view.movable) ? Qt.OpenHandCursor : Qt.ArrowCursor
     }
 
+    // Druck in eine Seite (Werkzeug benutzen, Auswählen, Ziehen; meldet PageView) – schließt die Einstellungen
+    // des Werkzeugs
+    signal interacted()
+
     Keys.onPressed: (event) => {
         if (!view.doc) return
         if (view.doc.tool === "objects" && view.editing === null && view.objectKey(event)) {
@@ -484,6 +508,15 @@ Flickable {
         if (view.doc.tool === "formDesign" && view.editing === null && view.fieldKey(event)) {
             event.accepted = true
             return
+        }
+        // Präsentation: jede Taste zum Blättern wechselt die ganze Seite
+        if (Reader.presenting) {
+            switch (event.key) {
+            case Qt.Key_Right: case Qt.Key_Down: case Qt.Key_PageDown: case Qt.Key_Space: case Qt.Key_Return: case Qt.Key_Enter:
+                view.doc.step(1); event.accepted = true; return
+            case Qt.Key_Left: case Qt.Key_Up: case Qt.Key_PageUp: case Qt.Key_Backspace:
+                view.doc.step(-1); event.accepted = true; return
+            }
         }
         var page = view.height * 0.9
         switch (event.key) {
@@ -512,7 +545,8 @@ Flickable {
         case Qt.Key_End:
             view.doc.goTo(view.pageCount - 1); break
         case Qt.Key_Escape:
-            if (view.doc.selectionPage >= 0) view.doc.clearSelection()
+            if (Speech.active) Speech.stop()
+            else if (view.doc.selectionPage >= 0) view.doc.clearSelection()
             else if (view.doc.tool !== "select") view.doc.setTool("select")
             else if (Reader.fullScreen) Reader.leaveFullScreen()
             else { event.accepted = false; return }

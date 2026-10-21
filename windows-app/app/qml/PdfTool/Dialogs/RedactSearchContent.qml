@@ -36,9 +36,9 @@ ColumnLayout {
         Layout.fillWidth: true
         wrap: true
         tone: "secondary"
-        text: "Gefundene Stellen werden rot umrandet vorgemerkt – noch nichts wird entfernt. Prüfen Sie die Markierungen und wählen Sie dann »Schwärzen anwenden«."
+        text: I18n.tr("Gefundene Stellen werden rot umrandet vorgemerkt – noch nichts wird entfernt. Prüfen Sie die Markierungen und wählen Sie dann »Schwärzen anwenden«.", I18n.revision)
     }
-    PFieldLabel { text: "Muster" }
+    PFieldLabel { text: I18n.tr("Muster", I18n.revision) }
     GridLayout {
         columns: 2
         columnSpacing: 24
@@ -53,28 +53,28 @@ ColumnLayout {
             PCheckBox {
                 required property var modelData
                 objectName: "redactKind_" + modelData.key
-                text: modelData.label
+                text: I18n.tr(modelData.label, I18n.revision)
                 checked: root.kinds.indexOf(modelData.key) >= 0
                 onToggled: root.toggle(modelData.key, checked)
             }
         }
     }
-    PFieldLabel { text: "Eigene Begriffe (einer je Zeile)" }
+    PFieldLabel { text: I18n.tr("Eigene Begriffe (einer je Zeile)", I18n.revision) }
     PTextArea {
         id: terms
         objectName: "redactTerms"
         Layout.fillWidth: true
         minLines: 3
         maxLines: 6
-        placeholderText: "z. B. Namen, Kundennummern, Adressen"
-        label: "Eigene Begriffe"
+        placeholderText: I18n.tr("z. B. Namen, Kundennummern, Adressen", I18n.revision)
+        label: I18n.tr("Eigene Begriffe", I18n.revision)
     }
-    PCheckBox { id: matchCase; Layout.topMargin: 4; text: "Groß- und Kleinschreibung beachten" }
-    PFieldLabel { text: "Seiten" }
+    PCheckBox { id: matchCase; Layout.topMargin: 4; text: I18n.tr("Groß- und Kleinschreibung beachten", I18n.revision) }
+    PFieldLabel { text: I18n.tr("Seiten", I18n.revision) }
     RowLayout {
         spacing: 12
-        PRadioButton { text: "Alle Seiten (" + (root.data_.pageCount || 0) + ")"; checked: root.scope === "all"; onClicked: root.scope = "all" }
-        PRadioButton { text: "Aktuelle Seite (" + ((root.data_.current || 0) + 1) + ")"; checked: root.scope === "current"; onClicked: root.scope = "current" }
+        PRadioButton { text: I18n.tr("Alle Seiten (" + (root.data_.pageCount || 0) + ")", I18n.revision); checked: root.scope === "all"; onClicked: root.scope = "all" }
+        PRadioButton { text: I18n.tr("Aktuelle Seite (" + ((root.data_.current || 0) + 1) + ")", I18n.revision); checked: root.scope === "current"; onClicked: root.scope = "current" }
     }
     PText {
         Layout.fillWidth: true
@@ -82,6 +82,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Gesucht wird im Text der Seiten. Gescannte Seiten ohne Text vorher mit »Text erkennen« durchsuchbar machen."
+        text: I18n.tr("Gesucht wird im Text der Seiten. Gescannte Seiten ohne Text vorher mit »Text erkennen« durchsuchbar machen.", I18n.revision)
     }
 }

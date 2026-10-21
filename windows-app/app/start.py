@@ -61,6 +61,25 @@ def prepare_env() -> None:
 
 def main() -> None:
     prepare_env()
+    # Läuft PDF Tool schon (z. B. im Hintergrund): nur Bescheid geben und enden – ohne Qt zu laden
+    try:
+        from handoff import early_forward, secure_transient, signal_started
+
+        sys.argv[1:] = secure_transient(sys.argv[1:])  # Outlook-Anhänge sichern, bevor Outlook sie löscht
+        # PDF-Tool.exe erst nach der Übergabe enden lassen (es wartet auf das Ende dieses Prozesses): Endet es
+        # vorher, beendet Outlook womöglich auch diesen Prozess, bevor die Datei bei der laufenden App ist.
+        if early_forward(sys.argv[1:]):
+            raise SystemExit(0)
+        signal_started()
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - dann wie bisher über Qt
+        try:
+            from handoff import note
+
+            note(f"Übergabe fehlgeschlagen: {type(exc).__name__}")
+        except Exception:  # noqa: BLE001
+            pass
     try:
         from PySide6 import QtCore, QtQml, QtQuick  # noqa: F401
     except Exception:

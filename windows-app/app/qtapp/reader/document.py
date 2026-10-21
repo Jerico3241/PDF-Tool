@@ -31,10 +31,11 @@ PAGE_GAP = 12  # Abstand der Seiten (geräteunabhängige Pixel)
 VIEW_MARGIN = 16
 VIEW_MODES = ("continuous", "single", "two", "continuousTwo")
 TOOLS = ("select", "hand", "editText", "objects", "addText", "image", "highlight", "underline", "strikeout", "note", "ink", "rect", "ellipse", "line", "arrow", "textbox", "form", "formDesign", "redact", "stamp", "signature", "link")
-ACTIONS = ("optimize", "redact", "redactSearch", "protect", "watermark", "headerFooter", "clean", "flatten", "sign", "stamp", "crop")  # Schnellwerkzeuge der Startseite
+ACTIONS = ("optimize", "pdfa", "redact", "redactSearch", "protect", "watermark", "headerFooter", "clean", "flatten", "sign", "stamp", "crop")  # Schnellwerkzeuge der Startseite
 SIGNATURE_FILE = "unterschriften.json"  # gespeicherte Unterschriften (nur lokal, nur auf Wunsch)
 MM = 72 / 25.4
 RECOVERY_DELAY_MS = 4000
+MAX_SELECTION_PAGES = 200  # Auswahl über Seiten: höchstens so viele Seiten (Textschichten im Speicher)
 LINKS_DELAY_MS = 250  # nach einer Änderung: Links gesammelt neu lesen
 SAVED_SHOWN_MS = 2500  # »Gespeichert« so lange in der Werkzeugleiste
 NUDGE_DELAY_MS = 350  # Pfeiltasten: so lange sammeln, dann ein Schritt (eine Änderung, ein Rückgängig)
@@ -44,6 +45,8 @@ SEARCH_LIMIT = 5000
 LISTED_HITS = 500
 _ids = itertools.count(1)
 
+
+_CLOSED = object()  # Ergebnis eines Auftrags, der nach dem Schließen nicht mehr lief
 
 class DocumentController(Observable):
     """Zustand eines Tabs; Arbeit läuft im Arbeitsthread."""
@@ -82,7 +85,9 @@ class DocumentController(Observable):
     redoTextChanged, redoText = prop(str, "redoText", "")
     # Auswahl (Text)
     selectionPageChanged, selectionPage = prop(int, "selectionPage", -1)
-    selectionRectsChanged, selectionRects = prop(list, "selectionRects", [])
+    selectionRectsChanged, selectionRects = prop(list, "selectionRects", [])  # Rechtecke auf selectionPage
+    speechWordChanged, speechWord = prop(dict, "speechWord", {})  # Vorlesen: gerade gesprochenes Wort {page, rects}
+    selectionPagesChanged, selectionPages = prop(dict, "selectionPages", {})  # Seite (Text) → Rechtecke (seit 4.0 Beta 5 über Seiten)
     textPagesChanged, textPages = prop(list, "textPages", [])  # Seiten mit geladener Zeichentabelle
     # Suche
     searchTextChanged, searchText = prop(str, "searchText", "")
@@ -95,6 +100,9 @@ class DocumentController(Observable):
     searchSummaryChanged, searchSummary = prop(str, "searchSummary", "")
     hitRectsChanged, hitRects = prop(dict, "hitRects", {})  # Seite (Text) → Liste von Rechtecken
     currentHitChanged, currentHit = prop(dict, "currentHit", {})  # {page, rects}
+    # Vergleichen: Seite (Text) → [[x0, y0, x1, y1, Art]] (0 geändert, 1 neu, 2 entfernt); gewählte Änderung {page, rects}
+    compareRectsChanged, compareRects = prop(dict, "compareRects", {})
+    currentCompareChanged, currentCompare = prop(dict, "currentCompare", {})
     # Bearbeiten
     blocksChanged, blocks = prop(list, "blocks", [])
     blocksPageChanged, blocksPage = prop(int, "blocksPage", -1)
@@ -157,7 +165,8 @@ class DocumentController(Observable):
         self._texts: dict[int, Any] = {}  # Seite → PageText (Zeichentabelle)
         self._text_requests: set[int] = set()
         self._select_all_pending: set[int] = set()  # »Alles auswählen«, sobald die Textschicht da ist
-        self._selection: tuple[int, int, int] | None = None  # Seite, Anfang, Ende (einschließlich)
+        self._selection: tuple[int, int, int, int] | None = None  # erste Seite, Anfang, letzte Seite, Ende (einschließlich)
+        self._across_pending: tuple | None = None  # Auswahl über Seiten, deren Textschicht noch lädt
         self._search_task: Task | None = None
         self._search_hits: list[dict] = []
         self._search_serial = 0
@@ -263,7 +272,7 @@ class DocumentController(Observable):
         notes = []
         kind = "info"
         if state.get("signed"):
-            notes.append("Dieses PDF ist digital signiert. Jede Änderung macht die Signatur ungültig – PDF Tool fragt vor der ersten Bearbeitung nach.")
+            notes.append("Dieses PDF ist digital signiert. Jede Änderung macht die Signatur ungültig – PDF Tool fragt vor der ersten Bearbeitung nach. Prüfen: »Alle Werkzeuge« › »Signaturen prüfen«.")
             kind = "warning"
         if state.get("readOnly"):
             notes.append(state["readOnly"])
@@ -286,11 +295,15 @@ class DocumentController(Observable):
             self.busyText = busy
 
         def work():
+            if self.session is not None and self.session.closed:
+                return _CLOSED  # Tab schon geschlossen: das Dokument nicht für einen Nachzügler neu öffnen
             result = func(self.session)
             state = self.session.state() if refresh and self.session is not None and not self.session.closed else None
             return result, state
 
         def finish(payload) -> None:
+            if payload is _CLOSED or self._closing:
+                return  # das Tab-Objekt wird gerade gelöscht
             result, state = payload
             if busy:
                 self.busy = False
@@ -301,6 +314,8 @@ class DocumentController(Observable):
                 done(result)
 
         def error(exc: BaseException, details: str) -> None:
+            if self._closing:
+                return
             if busy:
                 self.busy = False
                 self.busyText = ""
@@ -499,6 +514,8 @@ class DocumentController(Observable):
                 if page in self._select_all_pending:
                     self._select_all_pending.discard(page)
                     self._select_whole(page)
+                if self._across_pending is not None:
+                    self.selectAcross(*self._across_pending)
 
         def failed(_exc) -> None:
             self._text_requests.discard(page)
@@ -571,11 +588,72 @@ class DocumentController(Observable):
         if table is not None and table.boxes:
             self._set_selection(page, 0, len(table.boxes) - 1)
 
-    def _set_selection(self, page: int, start: int, end: int) -> None:
-        table = self._texts[page]
-        self._selection = (page, start, end)
+    @Slot(int, float, float, int, float, float, result=bool)
+    def selectAcross(self, first: int, u0: float, v0: float, last: int, u1: float, v1: float) -> bool:  # noqa: N802
+        """Auswahl über Seitengrenzen: von (u0, v0) auf Seite ``first`` bis (u1, v1) auf Seite ``last``."""
+        if first == last:
+            self._across_pending = None
+            return self.selectRange(first, u0, v0, u1, v1)
+        if last < first:
+            first, u0, v0, last, u1, v1 = last, u1, v1, first, u0, v0
+        first, last = max(0, first), min(self.pageCount - 1, last, first + MAX_SELECTION_PAGES - 1)
+        if first > last:
+            return False
+        missing = [page for page in range(first, last + 1) if page not in self._texts]
+        if missing:
+            self._across_pending = (first, u0, v0, last, u1, v1)
+            for page in missing:
+                self.loadText(page)
+            return False
+        self._across_pending = None
+        start = self._index_at(first, u0, v0, nearest=True)
+        end = self._index_at(last, u1, v1, nearest=True)
+        if start < 0:  # erste Seite ohne Text: ab der nächsten Seite mit Text
+            start = 0
+        if end < 0:
+            end = max(0, len(self._texts[last].boxes) - 1)
+        self._set_selection(first, start, end, last)
+        return True
+
+    def _set_selection(self, page: int, start: int, end: int, last: int | None = None) -> None:
+        last = page if last is None else last
+        self._selection = (page, start, last, end)
+        rects: dict[str, list] = {}
+        for current in range(page, last + 1):
+            boxes = self._texts[current].boxes
+            lo = start if current == page else 0
+            hi = end if current == last else len(boxes) - 1
+            if boxes and lo <= hi:
+                rects[str(current)] = _line_rects(boxes[lo : hi + 1])
         self.selectionPage = page
-        self.selectionRects = _line_rects(table.boxes[start : end + 1])
+        self.selectionRects = rects.get(str(page), [])
+        self.selectionPages = rects
+
+    def text_rects(self, page: int, start: int, count: int) -> list[list[float]] | None:
+        """Zeilenrechtecke von Zeichen einer Seite – ``None``, solange ihre Textschicht noch lädt."""
+        table = self._texts.get(page)
+        if table is None:
+            self.loadText(page)
+            return None
+        if start < 0 or count <= 0:
+            return []
+        return _line_rects(table.boxes[start : start + count])
+
+    def selection_spans(self) -> list[tuple[int, int, int]]:
+        """Die Auswahl je Seite: (Seite, Anfang, Anzahl Zeichen)."""
+        if self._selection is None:
+            return []
+        page, start, last, end = self._selection
+        spans = []
+        for current in range(page, last + 1):
+            table = self._texts.get(current)
+            if table is None or not table.boxes:
+                continue
+            lo = start if current == page else 0
+            hi = end if current == last else len(table.boxes) - 1
+            if lo <= hi:
+                spans.append((current, lo, hi - lo + 1))
+        return spans
 
     @Slot()
     def clearSelection(self) -> None:  # noqa: N802
@@ -584,10 +662,13 @@ class DocumentController(Observable):
     def clear_selection(self) -> None:
         self._select_all_pending.clear()  # eine neue Auswahl, ein Klick oder eine Änderung ersetzt die Bitte
         self._selection = None
+        self._across_pending = None
         if self.selectionPage != -1:
             self.selectionPage = -1
         if self.selectionRects:
             self.selectionRects = []
+        if self.selectionPages:
+            self.selectionPages = {}
 
     @Slot()
     def copySelection(self) -> None:  # noqa: N802
@@ -596,20 +677,24 @@ class DocumentController(Observable):
         if not (self.permissions or {}).get("copy", True):
             self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben kein Kopieren von Text.", title="Kopieren nicht erlaubt")
             return
-        page, start, end = self._selection
-        self.run(lambda session: session.text(page, start, end - start + 1), lambda text: self.app.copy_text(text, "Text kopiert."), refresh=False, priority=VIEW)
+        spans = self.selection_spans()
+        self.run(lambda session: "\n".join(session.text(page, start, count) for page, start, count in spans), lambda text: self.app.copy_text(text, "Text kopiert."), refresh=False, priority=VIEW)
 
     @Slot(str)
     def markSelection(self, kind: str) -> None:  # noqa: N802
         """Auswahl markieren, unterstreichen oder durchstreichen (Anmerkung)."""
         if self._selection is None or kind not in ("highlight", "underline", "strikeout") or not self.edit_allowed("annotate"):
             return
-        page = self._selection[0]
-        rects = [list(rect) for rect in self.selectionRects]
+        pages = {page: [list(rect) for rect in rects] for page, rects in self.selectionPages.items()}
         color = self.markColor if kind == "highlight" else self.toolColor
-        self.run(lambda session: session.markup(page, kind, rects, color, ""), lambda _key: (self.clear_selection(), self.loadAnnotations()), busy="")
+        self.run(lambda session: session.markup_pages(kind, pages, color), lambda _result: (self.clear_selection(), self.loadAnnotations()), busy="")
 
     # Suche ---------------------------------------------------------------------------------------------------------
+    @Slot()
+    def compareWith(self) -> None:  # noqa: N802
+        """»Mit anderer Fassung vergleichen …« (Alle Werkzeuge)."""
+        self.reader.compare_with(self)
+
     @Slot()
     def requestSearch(self) -> None:  # noqa: N802
         self.searchFocusSerial = self.searchFocusSerial + 1
@@ -1235,13 +1320,29 @@ class DocumentController(Observable):
 
     def _on_worker(self, func: Callable[[Any], Any]) -> Any:
         """Aus dem Thread der Texterkennung: ``func(session)`` im Arbeitsthread ausführen und warten."""
-        task = self.engine.submit(lambda: func(self.session), priority=BACKGROUND, label="texterkennung")
+        closed = object()
+
+        def work():
+            if self.session is None or self.session.closed:
+                return closed  # Tab geschlossen: das Dokument nicht neu öffnen
+            return func(self.session)
+
+        task = self.engine.submit(work, priority=BACKGROUND, label="texterkennung")
         result = self.engine.wait(task, timeout=600)
-        if task.cancelled:
+        if task.cancelled or result is closed:
             from tools.pdf_editor import ocr
 
             raise ocr.OcrCancelled()
         return result
+
+    def start_ocr_all(self, languages: list[str]) -> None:
+        """Nach dem Scannen: alle Seiten erkennen, ohne Rückfrage (Sprachen wie zuletzt gewählt)."""
+        if self.ocrRunning or self.pageCount == 0 or self.session is None:
+            return
+        installed = [entry["code"] for entry in self.reader.ocrLanguages]
+        chosen = [code for code in languages if code in installed] or installed[:1]
+        if chosen:
+            self._start_ocr(list(range(self.pageCount)), chosen, False)
 
     def _start_ocr(self, pages: list[int], languages: list[str], redo: bool) -> None:
         from tools.pdf_editor import ocr
@@ -1257,6 +1358,8 @@ class DocumentController(Observable):
         started = time.monotonic()
 
         def progress(done: int, total: int, page: int) -> None:
+            if self._closing:
+                return
             self.ocrDone, self.ocrTotal = done, total
             self.ocrStatus = f"Seite {page + 1} wird erkannt ({done + 1} von {total})" if done < total else "Erkannter Text wird übernommen und geprüft …"
 
@@ -1291,6 +1394,8 @@ class DocumentController(Observable):
             self._ocr_cancel = None
 
         def done(summary: dict) -> None:
+            if self._closing:
+                return  # Tab während der Erkennung geschlossen
             finished()
             if summary.get("state") is not None:
                 self.apply_state(summary["state"])
@@ -1310,6 +1415,8 @@ class DocumentController(Observable):
             self.app.notify("reader", "success", message, title="Text erkannt", auto_hide=12000)
 
         def failed(exc: BaseException, details: str) -> None:
+            if self._closing:
+                return
             finished()
             if isinstance(exc, ocr.OcrCancelled):
                 self.app.notify("reader", "info", "Die Texterkennung wurde abgebrochen. Das Dokument ist unverändert.", title="Abgebrochen", auto_hide=8000)
@@ -1977,6 +2084,42 @@ class DocumentController(Observable):
         stem = self._stem()
         self.run(lambda session: session.export_images(chosen, folder, stem, fmt, dpi), lambda written: self.app.notify("reader", "success", f"{len(written)} {'Bild' if len(written) == 1 else 'Bilder'} gespeichert in {folder}", title="Exportiert", auto_hide=8000), refresh=False, busy="Seiten werden exportiert …")
 
+    @Slot(str)
+    def convertDocument(self, fmt: str) -> None:  # noqa: N802
+        """In Word (.docx), Excel (.xlsx) oder Text (.txt) umwandeln: neue Datei neben dem PDF, danach öffnen oder zeigen."""
+        from tools.pdf_editor import convert
+
+        if fmt not in convert.FORMATS:
+            return
+        if not (self.permissions or {}).get("copy", True):
+            self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben keinen Export von Inhalten.", title="Nicht möglich")
+            return
+        label = {"docx": "Word", "xlsx": "Excel", "txt": "Text"}[fmt]
+        target = self.reader.pick_save_file(self._stem() + convert.FORMATS[fmt], f"Als {label} speichern")
+        if not target:
+            return
+        if not target.lower().endswith(convert.FORMATS[fmt]):
+            target += convert.FORMATS[fmt]
+        if self.path and os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(self.path)):
+            self.app.notify("reader", "warning", "Die umgewandelte Datei braucht einen eigenen Namen.", title="Nicht gespeichert")
+            return
+
+        def done(result) -> None:
+            path = str(result.path)
+            # Jeder Satz ein ganzer Text des Katalogs – nur so erscheint er auf Englisch vollständig übersetzt
+            count = "1 Seite" if result.pages == 1 else f"{result.pages} Seiten"
+            message = f"{count} gespeichert als {os.path.basename(path)}."
+            if result.empty:
+                where = ", ".join(str(i + 1) for i in result.empty[:6]) + (" …" if len(result.empty) > 6 else "")
+                if fmt == "docx":
+                    message += f" Seite {where} ohne Text als Bild übernommen – für Scans vorher »Text erkennen (OCR)« verwenden."
+                else:
+                    message += f" Seite {where} ohne Text übersprungen – für Scans vorher »Text erkennen (OCR)« verwenden."
+            self.app.notify("reader", "warning" if result.empty else "success", message, title=f"In {label} umgewandelt", auto_hide=12000,
+                            actions=[("Öffnen", lambda: self.reader.openExternal(path)), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+
+        self.run(lambda session: session.convert(fmt, target, []), done, refresh=False, busy=f"Wird in {label} umgewandelt …")
+
     @Slot()
     def showProperties(self) -> None:  # noqa: N802
         def done(props) -> None:
@@ -1994,7 +2137,7 @@ class DocumentController(Observable):
     def runAction(self, name: str) -> None:  # noqa: N802
         """Werkzeug oder Dialog eines Schnellwerkzeugs (gleich nach dem Öffnen aufgerufen)."""
         handlers = {
-            "optimize": self.optimizeDocument, "redact": lambda: self.setTool("redact"), "redactSearch": self.searchRedact,
+            "optimize": self.optimizeDocument, "pdfa": self.pdfaDocument, "redact": lambda: self.setTool("redact"), "redactSearch": self.searchRedact,
             "protect": self.protectDocument, "watermark": self.watermarkDocument, "headerFooter": self.headerFooterDocument,
             "clean": self.cleanDocument, "flatten": self.flattenDocument, "sign": lambda: self.setTool("signature"),
             "stamp": lambda: self.setTool("stamp"), "crop": lambda: self.cropPages([]),
@@ -2168,6 +2311,105 @@ class DocumentController(Observable):
 
         self.run(lambda session: session.size_now(), show, refresh=False, busy="Größe wird ermittelt …")
 
+    @Slot()
+    def pdfaDocument(self) -> None:  # noqa: N802
+        """PDF/A-2b-Kopie für die Archivierung speichern – das Original bleibt unverändert."""
+        target = self.reader.pick_save_pdf(f"{self._stem()}_PDFA.pdf", "Als PDF/A speichern")
+        if not target:
+            return
+
+        def done(result: dict) -> None:
+            parts = []
+            if result["fonts"]:
+                parts.append(f"{result['fonts']} {'Schrift' if result['fonts'] == 1 else 'Schriften'} eingebettet")
+            parts.extend(result["notes"])
+            message = "PDF/A-2b für die Archivierung" + (f" – {', '.join(parts)}." if parts else ".")
+            path = result["path"]
+            self.app.notify("reader", "success", message, title="PDF/A-Kopie gespeichert", auto_hide=12000, actions=[("Öffnen", lambda: self.reader.open_paths([path])), ("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+
+        self.run(lambda session: session.pdfa_copy(target), done, refresh=False, busy="PDF/A wird erstellt …")
+
+    # Digitale Signatur (seit 4.0 Beta 6) -----------------------------------------------------------------------------
+    @Slot()
+    def digitalSign(self) -> None:  # noqa: N802
+        """Mit einem Zertifikat (Windows oder .pfx-Datei) signieren. Signiert wird die gespeicherte Datei; das Ergebnis
+        ist eine neue Datei, die gleich geöffnet wird – das Original bleibt unverändert."""
+        if self.session is None or self.pageCount == 0:
+            return
+        if self.state.get("encrypted"):
+            self.app.notify("reader", "warning", "Kennwortgeschützte PDFs lassen sich nicht signieren. Bitte zuerst den Kennwortschutz entfernen (Schützen › Kennwortschutz).", title="Signieren nicht möglich")
+            return
+        if self.dirty or not self.path:
+            answer, _data = self.app.dialogs.ask("confirm", "Zuerst speichern?", "Signiert wird die gespeicherte Datei. Ihre Änderungen werden vorher gespeichert.", primary="Speichern und signieren", close="Abbrechen")
+            if answer != "primary":
+                return
+            self.save(then=lambda ok: self.app.timers.later(f"reader:sign:{self.ident}", 0, self._sign_dialog) if ok else None)
+            return
+        self._sign_dialog()
+
+    def _sign_dialog(self) -> None:
+        from tools.pdf_editor import digsig
+
+        if self.session is None:
+            return
+        reader = self.reader
+        data = {
+            "certificates": digsig.store_certificates(), "pageCount": self.pageCount, "current": self.currentPage,
+            "reason": reader.sign_defaults.get("reason", ""), "location": reader.sign_defaults.get("location", ""),
+            "visible": bool(reader.sign_defaults.get("visible", True)), "thumbprint": reader.sign_defaults.get("thumbprint", ""),
+        }
+        answer, result = self.app.dialogs.ask("digital_sign", "Digital signieren", "", primary="Signieren …", close="Abbrechen", data=data, width=600)
+        if answer != "primary" or self.session is None:
+            return
+        result = dict(result or {})
+        spec = {"thumbprint": str(result.get("thumbprint") or ""), "file": str(result.get("file") or ""), "password": str(result.get("password") or "")}
+        if not spec["thumbprint"] and not spec["file"]:
+            return
+        options = {"reason": str(result.get("reason") or ""), "location": str(result.get("location") or ""),
+                   "visible": bool(result.get("visible")), "visiblePage": int(result.get("page", self.currentPage))}
+        reader.remember_sign_defaults({"reason": options["reason"], "location": options["location"], "visible": options["visible"], "thumbprint": spec["thumbprint"]})
+        target = reader.pick_save_pdf(f"{self._stem()} (signiert).pdf", "Signierte Datei speichern")
+        if not target:
+            return
+        if self.path and os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(self.path)):
+            self.app.notify("reader", "warning", "Bitte einen anderen Dateinamen wählen – das geöffnete Original bleibt unverändert.", title="Signieren nicht möglich")
+            return
+
+        def done(info: dict) -> None:
+            path = info["path"]
+            self.app.notify("reader", "success", f"Signiert von {info['signer']}. Die signierte Datei ist geöffnet; jede weitere Änderung macht die Signatur ungültig.", title="Digital signiert", auto_hide=12000, actions=[("Ordner öffnen", lambda: self.reader.showInFolder(path))])
+            self.reader.open_paths([path])
+
+        self.run(lambda session: session.sign_copy(target, spec, options), done, refresh=False, busy="Wird signiert …")
+
+    @Slot(result=str)
+    def pickCertificateFile(self) -> str:  # noqa: N802
+        """Zertifikatsdatei für »Digital signieren« wählen (aus dem Dialog)."""
+        from .. import files
+
+        return files.open_file("Zertifikatsdatei wählen", self.app.initial_dir("zertifikat", self.reader.source_dir), "Zertifikate (*.pfx *.p12);;Alle Dateien (*.*)")
+
+    @Slot()
+    def checkSignatures(self) -> None:  # noqa: N802
+        """Alle Signaturen der gespeicherten Datei prüfen und anzeigen."""
+        if self.session is None:
+            return
+        if not self.path:
+            self.app.notify("reader", "info", "Dieses Dokument ist noch nicht gespeichert und enthält keine Signatur.", title="Keine Signatur")
+            return
+
+        def done(found: list) -> None:
+            if not found:
+                self.app.notify("reader", "info", "Dieses PDF enthält keine digitale Signatur.", title="Keine Signatur", auto_hide=8000)
+                return
+            message = "Geprüft wird die gespeicherte Datei – ohne Internet." + (" Ungespeicherte Änderungen sind nicht berücksichtigt." if self.dirty else "")
+            _answer, result = self.app.dialogs.ask("signatures", "Signaturen", message, primary="", close="Schließen", data={"signatures": found}, width=640)
+            page = int((result or {}).get("page", -1))  # »Zum Feld«
+            if 0 <= page < self.pageCount:
+                self.goTo(page)
+
+        self.run(lambda session: session.verify_signatures(), done, refresh=False, busy="Signaturen werden geprüft …")
+
     # Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen ----------------------------------------------------------------
     @Slot()
     def headerFooterDocument(self) -> None:  # noqa: N802
@@ -2264,8 +2506,14 @@ class DocumentController(Observable):
         """Ausgewählten Text zum Schwärzen vormerken (je Zeile ein Bereich)."""
         if self._selection is None:
             return
-        page, start, end = self._selection
-        self.run(lambda session: session.selection_rects(page, start, end - start + 1), lambda rects: (self._add_marks(page, rects), self.clear_selection()), refresh=False, priority=VIEW)
+        spans = self.selection_spans()
+
+        def marked(found: list) -> None:
+            for page, rects in found:
+                self._add_marks(page, rects)
+            self.clear_selection()
+
+        self.run(lambda session: [(page, session.selection_rects(page, start, count)) for page, start, count in spans], marked, refresh=False, priority=VIEW)
 
     @Slot(int, str)
     def removeRedactMark(self, page: int, ident: str) -> None:  # noqa: N802
@@ -2871,7 +3119,7 @@ class DocumentController(Observable):
         self.cancel_search()
         if self._ocr_cancel is not None:
             self._ocr_cancel.set()  # beendet einen laufenden Tesseract-Prozess
-        for timer in ("recovery", "nudge", "saved", "links"):
+        for timer in ("recovery", "nudge", "fieldnudge", "saved", "links"):
             self.app.timers.cancel(f"reader:{timer}:{self.ident}")
         for task in self._pending.values():
             task.cancel()

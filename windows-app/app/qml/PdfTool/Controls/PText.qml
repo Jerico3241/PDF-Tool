@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Text in einer der zentralen Schriftstufen und Farbtöne.
 Text {
@@ -29,5 +30,5 @@ Text {
     textFormat: Text.PlainText
     verticalAlignment: Text.AlignVCenter
     Accessible.role: Accessible.StaticText
-    Accessible.name: text
+    Accessible.name: I18n.tr(text, I18n.revision)
 }

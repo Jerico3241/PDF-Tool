@@ -134,12 +134,12 @@ class DiagnoseController(Observable):
         root, backups = self.root, self.backup.folder()
         facts = info.system_facts(VERSION, self._channel(), self.root, INSTALL_DIR)
         qml = list(application.MESSAGES)
-        update_log = self._update_log()
+        extra = [path for path in (self._update_log(), self._handoff_log()) if path is not None]
 
         def work() -> Path:
             found = checks.run_checks(root, backups)
             cfg, _reason = read_json(root / "gui-config.json")
-            return support.create_package(folder, root, INSTALL_DIR, VERSION, facts, found, cfg if isinstance(cfg, dict) else {}, qml, extra_logs=[update_log] if update_log else None)
+            return support.create_package(folder, root, INSTALL_DIR, VERSION, facts, found, cfg if isinstance(cfg, dict) else {}, qml, extra_logs=extra or None)
 
         def done(path: Path) -> None:
             self._end()
@@ -167,6 +167,15 @@ class DiagnoseController(Observable):
             from updater.store import default_dir
 
             path = default_dir() / "update-start.log"
+        except Exception:  # noqa: BLE001
+            return None
+        return path if path.is_file() else None
+
+    def _handoff_log(self) -> Path | None:
+        try:
+            from handoff import handoff_log_path
+
+            path = handoff_log_path()
         except Exception:  # noqa: BLE001
             return None
         return path if path.is_file() else None

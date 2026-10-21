@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Mehrzeiliges Eingabefeld (reiner Text, z. B. Notiz) – wächst mit dem Inhalt bis ``maxLines``.
 Rectangle {
@@ -72,7 +73,7 @@ Rectangle {
             selectByMouse: true
             textFormat: TextEdit.PlainText
             Accessible.role: Accessible.EditableText
-            Accessible.name: root.label !== "" ? root.label : root.placeholderText
+            Accessible.name: I18n.tr(root.label !== "" ? root.label : root.placeholderText, I18n.revision)
             onCursorRectangleChanged: flick.ensureVisible(cursorRectangle)
             onTextChanged: if (activeFocus) root.edited()
             Keys.onReturnPressed: (event) => root.handleReturn(event)
@@ -82,7 +83,7 @@ Rectangle {
             Text {
                 x: area.leftPadding
                 y: area.topPadding
-                text: root.placeholderText
+                text: I18n.tr(root.placeholderText, I18n.revision)
                 font: area.font
                 color: area.placeholderTextColor
                 visible: !area.length && !area.preeditText

@@ -5,9 +5,10 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// Leiste oben nach dem Vorbild von Adobe Acrobat: ≡ Menü, ⌂ Start, je ein Tab für geöffnete Werkzeuge
-// (Vertragsübersichten, PDF reparieren, Einstellungen) und für jedes geöffnete PDF, »+« öffnet weitere PDFs;
-// rechts Kurzanleitung und Einstellungen. Sie liegt auf dem Hintergrund (Mica), der aktive Tab geht in die
+// Leiste oben nach dem Vorbild von Adobe Acrobat: ⌂ Start, je ein Tab für geöffnete Werkzeuge
+// (Vertragsübersichten, PDF reparieren) und für jedes geöffnete PDF, »+« öffnet weitere PDFs; rechts »?« mit dem
+// Hilfe-Menü und das Zahnrad für die Einstellungen (seit 4.0 Beta 7 ohne eigenen Tab und ohne ≡ Menü – jeder Befehl
+// hat genau einen Platz). Sie liegt auf dem Hintergrund (Mica), der aktive Tab geht in die
 // Inhaltsebene darunter über. Die Akzentmarkierung gleitet zum aktiven Tab und folgt ihm, wenn Tabs
 // hinzukommen, wegfallen oder die Dokument-Tabs gescrollt werden.
 // Bewegung der Dokument-Tabs: ein neuer Tab blendet ein, ein geschlossener blendet aus, die übrigen rücken weich
@@ -21,7 +22,7 @@ Item {
     objectName: "appTabs"
     implicitHeight: Metrics.appBarHeight
     Accessible.role: Accessible.PageTabList
-    Accessible.name: "Start, Werkzeuge und Dokumente"
+    Accessible.name: I18n.tr("Start, Werkzeuge und Dokumente", I18n.revision)
 
     function toolInfo(key) {
         if (key === "settings") return { title: "Einstellungen", icon: "settings" }
@@ -35,7 +36,7 @@ Item {
     // (sonst werden sie gleichmäßig schmaler, der Name gekürzt); die Dokument-Tabs teilen sich den Rest und werden wie in
     // Edge schmaler – reicht auch das nicht, zeigt die Leiste nur ganze, gleich breite Tabs und ‹ › zum Blättern.
     // Alle Breiten folgen aus der Breite der Leiste, nie aus der Liste selbst (das gäbe eine Schleife).
-    readonly property real fixedWidth: menuButton.width + homeTab.width + addButton.width + helpButton.width + settingsButton.width + 6 * row.spacing
+    readonly property real fixedWidth: homeTab.width + addButton.width + helpButton.width + settingsButton.width + 5 * row.spacing
     readonly property real toolTabCap: {
         var count = toolTabs.count
         if (count === 0) return 0
@@ -64,9 +65,15 @@ Item {
     readonly property string activeKey: App.currentPage === "home" ? "home"
                                        : (App.currentPage === "settings" ? "settings"
                                        : (App.currentTool === "reader" ? (Reader.hasDocument ? "doc:" + Reader.currentKey : "") : App.currentTool))
+    // Kürzel eines Befehls ohne Klammern (»F1«) – ``Shortcuts.hints`` liefert » (F1)« für Kurzinfos
+    function keyText(command) {
+        var hint = Shortcuts.hints[command] || ""
+        return hint.replace(/^\s*\(/, "").replace(/\)\s*$/, "")
+    }
     function tabItem(key) {
         if (key === "") return null
         if (key === "home") return homeTab
+        if (key === "settings") return settingsButton
         if (key.indexOf("doc:") === 0) {
             var index = Reader.tabs.indexOf(key.substring(4))
             return index >= 0 ? docs.itemAtIndex(index) : null
@@ -156,21 +163,12 @@ Item {
         anchors.rightMargin: 6
         spacing: 2
 
-        PIconButton {
-            id: menuButton
-            objectName: "appMenuButton"
-            Layout.alignment: Qt.AlignBottom
-            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
-            iconName: "navigation"
-            tip: "Menü"
-            onClicked: appMenu.popup(menuButton, 0, menuButton.height + 4)
-        }
         AppTab {
             id: homeTab
             objectName: "tabHome"
             Layout.alignment: Qt.AlignBottom
             iconName: "home"
-            tooltip: "Start (Strg+1)"
+            tooltip: I18n.tr("Start" + Shortcuts.hints["app.home"], I18n.revision)
             active: bar.activeKey === "home"
             onClicked: App.navigate("home")
         }
@@ -189,9 +187,9 @@ Item {
                 // volle Breite, solange die Dokument-Tabs ihren Mindestplatz haben – sonst schmaler (Name gekürzt)
                 Layout.preferredWidth: Math.min(implicitWidth, Math.max(Metrics.appTabMinWidth, bar.toolTabCap))
                 iconName: info.icon
-                title: info.title
+                title: I18n.tr(info.title, I18n.revision)
                 closable: true
-                closeTip: "Tab schließen (Strg+W) – Eingaben bleiben erhalten"
+                closeTip: I18n.tr("Tab schließen" + Shortcuts.hints["app.closeTab"] + " – Eingaben bleiben erhalten", I18n.revision)
                 active: bar.activeKey === modelData
                 onClicked: App.navigate(modelData)
                 onCloseRequested: App.closeTab(modelData)
@@ -225,7 +223,7 @@ Item {
                 implicitWidth: Metrics.appTabScroll
                 implicitHeight: 28
                 iconName: "chevron_left"
-                tip: "Vorherige Tabs"
+                tip: I18n.tr("Vorherige Tabs", I18n.revision)
                 focusPolicy: Qt.NoFocus
                 enabled: docs.contentX > docs.originX + 0.5
                 onClicked: docsWheel.move(true, -bar.docPitch, true)
@@ -245,7 +243,7 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 snapMode: bar.docsOverflow ? ListView.SnapToItem : ListView.NoSnap
                 Accessible.role: Accessible.PageTabList
-                Accessible.name: "Geöffnete Dokumente"
+                Accessible.name: I18n.tr("Geöffnete Dokumente", I18n.revision)
                 readonly property string activeKey: Reader.currentKey
                 function revealActive() {
                     var index = Reader.tabs.indexOf(activeKey)
@@ -307,14 +305,14 @@ Item {
                         elideMode: Text.ElideMiddle
                         iconName: "document_pdf"
                         // ohne ».pdf« (das Symbol zeigt es) – der vollständige Pfad steht im Tooltip
-                        title: docSlot.name.replace(/\.pdf$/i, "") || docSlot.name
-                        tooltip: docSlot.tip
+                        title: I18n.tr(docSlot.name.replace(/\.pdf$/i, "") || docSlot.name, I18n.revision)
+                        tooltip: I18n.tr(docSlot.tip, I18n.revision)
                         unsaved: docSlot.dirty
                         showDirty: true
                         closable: true
                         closeName: "readerTabClose"
                         dirtyName: "readerTabDirty"
-                        closeTip: "Schließen (Strg+W)"
+                        closeTip: I18n.tr("Schließen" + Shortcuts.hints["app.closeTab"], I18n.revision)
                         active: bar.activeKey === "doc:" + docSlot.key
                         onClicked: Reader.showTab(docSlot.key)
                         onCloseRequested: Reader.closeTab(docSlot.key)
@@ -365,7 +363,7 @@ Item {
                 implicitWidth: Metrics.appTabScroll
                 implicitHeight: 28
                 iconName: "chevron_right"
-                tip: "Weitere Tabs"
+                tip: I18n.tr("Weitere Tabs", I18n.revision)
                 focusPolicy: Qt.NoFocus
                 enabled: docs.contentX < docs.originX + docs.contentWidth - docs.width - 0.5
                 onClicked: docsWheel.move(true, bar.docPitch, true)
@@ -377,7 +375,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "add"
-            tip: "PDF öffnen (Strg+O)"
+            tip: I18n.tr("PDF öffnen" + Shortcuts.hints["app.open"], I18n.revision)
             onClicked: Reader.openDialog()
         }
         Item { Layout.fillWidth: true }
@@ -387,8 +385,11 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "question_circle"
-            tip: "Kurzanleitung (F1)"
-            onClicked: App.showHelp()
+            tip: I18n.tr("Hilfe", I18n.revision)
+            toggle: true
+            checked: helpMenu.opened
+            // Ein zweiter Klick schließt das Menü (der Druck auf »?« zählt nicht als Klick daneben, siehe closePolicy)
+            onClicked: helpMenu.opened ? helpMenu.close() : helpMenu.open()
         }
         PIconButton {
             id: settingsButton
@@ -396,8 +397,10 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "settings"
-            tip: "Einstellungen (Strg+4)"
-            onClicked: App.navigate("settings")
+            tip: I18n.tr("Einstellungen" + Shortcuts.hints["app.settings"], I18n.revision)
+            toggle: true
+            checked: App.currentPage === "settings"  // die Einstellungen haben keinen eigenen Tab
+            onClicked: App.currentPage === "settings" ? App.leaveSettings() : App.navigate("settings")
         }
     }
 
@@ -453,20 +456,26 @@ Item {
         NumberAnimation { id: glide; target: indicator; property: "progress"; to: 1; duration: Motion.indicator; easing.type: Motion.decelerate }
     }
 
+    // Hilfe-Menü (»?«): Kurzanleitung, Tastenkürzel, Neuerungen, Über. Rechtsbündig unter »?«: Die Lage ist an die
+    // Breite gebunden (steht sie erst beim Öffnen fest, rückt das Menü nicht nach) und es wächst beim Einblenden von
+    // der rechten oberen Ecke aus – sonst schöbe es sich erst nach rechts und dann zurück nach links.
     PMenu {
-        id: appMenu
-        objectName: "appMenu"
-        PMenuItem { objectName: "menuOpen"; text: "PDF öffnen …"; iconName: "folder_open"; onTriggered: Reader.openDialog() }
-        PMenuItem { objectName: "menuHome"; text: "Start"; iconName: "home"; onTriggered: App.navigate("home") }
-        PMenuItem { objectName: "menuSettings"; text: "Einstellungen"; iconName: "settings"; onTriggered: App.navigate("settings") }
+        id: helpMenu
+        objectName: "helpMenu"
+        parent: helpButton
+        x: helpButton.width - width
+        y: helpButton.height + 4
+        transformOrigin: Item.TopRight
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        PMenuItem { objectName: "menuHelp"; text: I18n.tr("Kurzanleitung", I18n.revision); hint: I18n.tr(bar.keyText("app.help"), I18n.revision); iconName: "question_circle"; onTriggered: helpMenu.afterClose = function() { App.showHelp() } }
+        PMenuItem { objectName: "menuShortcuts"; text: I18n.tr("Tastenkürzel", I18n.revision); hint: I18n.tr(bar.keyText("app.shortcuts"), I18n.revision); iconName: "keyboard"; onTriggered: helpMenu.afterClose = function() { Shortcuts.showOverview() } }
         T.MenuSeparator {
             topPadding: 4
             bottomPadding: 4
-            contentItem: Rectangle { implicitWidth: 180; implicitHeight: 1; color: Theme.divider }
+            contentItem: Rectangle { implicitWidth: 200; implicitHeight: 1; color: Theme.divider }
         }
-        PMenuItem { objectName: "menuHelp"; text: "Kurzanleitung"; iconName: "question_circle"; onTriggered: App.showHelp() }
-        PMenuItem { objectName: "menuNews"; text: "Neu in dieser Version"; iconName: "megaphone"; onTriggered: App.showChangelog() }
-        PMenuItem { objectName: "menuAbout"; text: "Über PDF Tool"; iconName: "info"; onTriggered: App.showAbout() }
+        PMenuItem { objectName: "menuNews"; text: I18n.tr("Neu in dieser Version", I18n.revision); iconName: "megaphone"; onTriggered: helpMenu.afterClose = function() { App.showChangelog() } }
+        PMenuItem { objectName: "menuAbout"; text: I18n.tr("Über PDF Tool", I18n.revision); iconName: "info"; onTriggered: helpMenu.afterClose = function() { App.showAbout() } }
     }
 
     // Kontextmenü eines Dokument-Tabs. Die Aktion läuft erst nach dem Ausblenden (Rückfragen beim Schließen).
@@ -478,34 +487,34 @@ Item {
         property int row: -1
         PMenuItem {
             objectName: "tabMenuClose"
-            text: "Schließen"
+            text: I18n.tr("Schließen", I18n.revision)
             iconName: "dismiss"
             onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeTab(key) } }
         }
         PMenuItem {
             objectName: "tabMenuCloseOthers"
-            text: "Andere Tabs schließen"
+            text: I18n.tr("Andere Tabs schließen", I18n.revision)
             iconName: "dismiss_circle"
             enabled: Reader.tabs.count > 1
             onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeOtherTabs(key) } }
         }
         PMenuItem {
             objectName: "tabMenuCloseRight"
-            text: "Tabs rechts schließen"
+            text: I18n.tr("Tabs rechts schließen", I18n.revision)
             iconName: "arrow_next"
             enabled: tabMenu.row >= 0 && tabMenu.row < Reader.tabs.count - 1
             onTriggered: { var key = tabMenu.key; tabMenu.afterClose = function() { Reader.closeTabsRight(key) } }
         }
         PMenuItem {
             objectName: "tabMenuCopyPath"
-            text: "Pfad kopieren"
+            text: I18n.tr("Pfad kopieren", I18n.revision)
             iconName: "copy"
             enabled: tabMenu.path !== ""
             onTriggered: App.copyPath(tabMenu.path)
         }
         PMenuItem {
             objectName: "tabMenuShowFolder"
-            text: "Im Ordner anzeigen"
+            text: I18n.tr("Im Ordner anzeigen", I18n.revision)
             iconName: "folder_open"
             enabled: tabMenu.path !== ""
             onTriggered: { var path = tabMenu.path; tabMenu.afterClose = function() { Reader.showInFolder(path) } }
@@ -517,7 +526,7 @@ Item {
         }
         PMenuItem {
             objectName: "tabMenuReopen"
-            text: "Geschlossenen Tab wieder öffnen"
+            text: I18n.tr("Geschlossenen Tab wieder öffnen", I18n.revision)
             iconName: "arrow_undo"
             enabled: Reader.canReopen
             onTriggered: tabMenu.afterClose = function() { Reader.reopenClosed() }

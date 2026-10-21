@@ -56,23 +56,43 @@ def child(item, name: str):
 
 # --- Werkzeugleiste ------------------------------------------------------------------------------------------------
 def test_toolbar_menus_open_and_tools_switch(reader_app, tmp_path: Path) -> None:
+    """Schnellwerkzeuge links (Menüs für Kommentar, Zeichnen, Unterschrift) und »Alle Werkzeuge« mit Namen."""
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "Leiste.pdf"))
-    toolbar = h.item("readerToolbar")
-    for button, name in (("readerProtect", "readerProtectMenu"), ("readerPageDesign", "readerPageDesignMenu"), ("readerSignMenu", "readerSignToolMenu")):
-        menu = child(toolbar, name)
+    quick = h.item("readerQuickTools")
+    for button, name in (("readerCommentMenu", "readerCommentToolMenu"), ("readerDrawMenu", "readerDrawToolMenu"), ("readerSignMenu", "readerSignToolMenu")):
+        menu = child(quick, name)
         click(h, center(h.item(button)))
         assert wait_until(lambda: menu.property("opened"), 3), name
         key(h, Qt.Key.Key_Escape)
         assert wait_until(lambda: not menu.property("visible"), 3)
-    for tool in ("redact", "stamp", "link"):
+    workspace = h.item("readerQuickToolsArea").parentItem()
+    panel = child(workspace, "readerAllToolsPanel")  # Popup: hängt nicht im Elementbaum
+    for opener in ("readerAllTools", "readerQuickAllTools"):  # Befehlsleiste oder Schnellwerkzeuge
+        click(h, center(h.item(opener)))
+        assert wait_until(lambda: panel.property("opened"), 3), opener
+        key(h, Qt.Key.Key_Escape)
+        assert wait_until(lambda: not panel.property("visible"), 3)
+    # Ein Werkzeug aus der Liste: eingeschaltet, Liste zu, »Alle Werkzeuge« markiert
+    click(h, center(h.item("readerAllTools")))
+    assert wait_until(lambda: panel.property("opened"), 3)
+    click(h, center(h.item("readerToolLink")))
+    assert wait_until(lambda: not panel.property("visible"), 3)
+    assert doc.tool == "link" and h.item("readerQuickAllTools").property("checked") is True
+    for tool in ("redact", "signature"):  # Befehle zum Arbeiten (Anwenden, Unterschrift wählen): Leiste immer
         doc.setTool(tool)
         pump(0.2)
         assert doc.tool == tool and h.item("readerToolOptionsCard").isVisible()
-    assert h.item("readerRedactApply") is not None and h.item("readerProtect").property("checked") is False
+    for tool in ("link", "hand", "editText", "stamp", "ink"):  # keine Bedienhinweise; Einstellungen erst auf Klick (4.0.0-beta.2)
+        doc.setTool(tool)
+        pump(0.4)
+        assert doc.tool == tool and not h.item("readerToolOptionsCard").isVisible()
+    doc.setTool("select")
+    pump(0.1)
+    assert h.item("readerQuickAllTools").property("checked") is False
     doc.setTool("redact")
     pump(0.1)
-    assert h.item("readerProtect").property("checked") is True  # Schwärzen ist aktiv: »Schützen« markiert
+    assert h.item("readerQuickAllTools").property("checked") is True  # Schwärzen ist aktiv: »Alle Werkzeuge« markiert
     h.item("readerView").forceActiveFocus()
     key(h, Qt.Key.Key_Escape)
     assert doc.tool == "select"
@@ -344,3 +364,57 @@ def test_new_dialogs_render_and_collect(reader_app, tmp_path: Path, monkeypatch)
     assert h.item("cropBottom").property("text") == "20" and h.item("cropContent").property("acceptable") is True
     h.app.dialogs.shutdown()
     pump(0.3)
+
+
+def test_dialog_from_all_tools_is_visible(ui_app, tmp_path: Path, monkeypatch) -> None:
+    """»Alle Werkzeuge« › »Text erkennen (OCR) …«: der Dialog erscheint, nicht nur die Abdunklung (4.0 Beta 5).
+    Die Texterkennung wird erst gesucht, während der Dialog offen ist – Deutsch ist danach vorgewählt."""
+    import time
+
+    from PySide6.QtCore import QTimer
+
+    from qtapp import dialogs
+    from qtapp.reader import controller
+    from tools.pdf_editor import ocr
+
+    class Engine:
+        languages = ["deu", "eng", "fra"]
+
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", None)
+    monkeypatch.setattr(ocr, "find_engine", lambda *args, **kwargs: (time.sleep(0.5), Engine())[1])
+    monkeypatch.setitem(controller._OCR_PROBE, "done", False)
+    h = ui_app
+    h.app.dialogs.shutdown()
+    h.navigate("reader", 0.3)
+    open_pdf(h, samples.standard_text(tmp_path / "werkzeuge.pdf"))
+    seen: dict = {}
+
+    def respond() -> None:
+        service = h.app.dialogs
+        if not service.open:
+            QTimer.singleShot(50, respond)
+            return
+        pump(1.0)
+        button = h.item("dialogPrimaryButton")
+        opacity, item = 1.0, button
+        while item is not None:  # wirklich zu sehen: kein Vorfahre durchsichtig (der Dialog blendete nie ein)
+            opacity, item = opacity * item.opacity(), item.parentItem()
+        seen.update(kind=service.request.get("kind"), shown=button is not None and button.isVisible() and opacity == 1,
+                    enabled=button.property("enabled") if button else None, deu=h.item("ocrLanguage_deu").property("checked"))
+        service.answer(service.request["id"], "close", {})
+
+    QTimer.singleShot(50, respond)
+    workspace = h.item("readerQuickToolsArea").parentItem()
+    panel = child(workspace, "readerAllToolsPanel")
+    click(h, center(h.item("readerAllTools")))
+    assert wait_until(lambda: panel.property("opened"), 3)
+    entry = h.item("readerMenuOcr")
+    flick = entry
+    while flick is not None and flick.property("contentY") is None:
+        flick = flick.parentItem()
+    flick.setProperty("contentY", max(0.0, entry.mapToItem(flick.property("contentItem"), 0, 0).y() - 100))
+    pump(0.3)
+    click(h, center(entry))
+    assert wait_until(lambda: "kind" in seen, 10)
+    assert seen["kind"] == "ocr" and seen["shown"], seen
+    assert seen["deu"] is True and seen["enabled"] is True, seen

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 3.2.0-beta.2 (Beta zum Testen)
+Version 4.0.0-beta.8
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -21,6 +21,9 @@ Werkzeuge für PDF-Dateien:
   einem Vergleich mit dem letzten Vertragsstand des Kunden; mit Vorlagen
   für die Darstellung und einem Regelwerk, das Werte der Übersicht nach
   eigenen Regeln anpasst (die Excel-Datei bleibt dabei unverändert).
+- Stapel-Aktionen: viele PDFs auf einmal verkleinern, mit Seitenzahlen oder
+  Wasserzeichen versehen, Text erkennen, bereinigen, mit Kennwort schützen
+  oder als PDF/A speichern – jede als neue Datei.
 - PDF reparieren: analysiert beschädigte PDF-Dateien – eine oder mehrere auf
   einmal – und versucht, lesbare Inhalte in neue PDFs zu übertragen; bei
   Bedarf baut es die Dokumentstruktur aus den noch vorhandenen Objekten neu
@@ -31,41 +34,161 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-3.2.0-beta.2.exe
+PDF-Tool-Setup-4.0.0-beta.8.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
-qpdf, pypdfium2 mit PDFium, pypdf, fontTools) und die Texterkennung
-Tesseract mit deutschen und englischen Sprachdaten sowie die Laufzeit des
+qpdf, pypdfium2 mit PDFium, pypdf, fontTools, comtypes, cryptography,
+asn1crypto) und die
+Texterkennung Tesseract mit Sprachdaten für Deutsch, Englisch, Französisch,
+Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch und
+Russisch sowie die Laufzeit des
 optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
 qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
 
-Neu in Version 3.2 (Beta 2) – KI-Assistent (optional)
------------------------------------------------------
-Standardmäßig aus: Solange Sie ihn nicht einschalten, lädt PDF Tool nichts
-und belegt weder Speicherplatz noch Arbeitsspeicher dafür.
-- Einschalten unter Einstellungen → KI-Assistent und ein Sprachmodell
-  wählen: „Genau“ (Qwen3.5 4B, 2,6 GB, braucht beim Antworten rund 5 GB
-  Arbeitsspeicher) oder „Kompakt“ (Qwen3.5 2B, 1,2 GB, rund 2 GB, etwa
-  doppelt so schnell, etwas ungenauer). Geladen wird erst nach
-  „Herunterladen“ – von Hugging Face über HTTPS, mit Prüfung der
-  Prüfsumme; der Download lässt sich anhalten und fortsetzen.
-- Im Reader: Seitenleiste „KI-Assistent“ (rechts). Fragen eintippen oder
-  „Dokument zusammenfassen“ – die Antworten nennen die Seiten, ein Klick
-  darauf springt dorthin. Antworten können Fehler enthalten; bitte auf den
-  genannten Seiten prüfen.
-- Dokumente, Fragen und Antworten verlassen den PC nicht und werden nicht
-  gespeichert. „Modell entfernen …“ löscht das Modell wieder; auch die
-  Deinstallation entfernt es.
+Neu in Version 4.0 Beta 8 – Fehler behoben
+-------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Das Hilfe-Menü „?“ springt beim Öffnen nicht mehr hin und her und
+  schließt sich beim zweiten Klick.
+- Strg+W und das Zahnrad schließen die Einstellungen wieder.
+- Digitale Signatur: manche gültige Signaturen galten als beschädigt.
+- PDF in Excel: Nummern mit führender Null oder „+“ bleiben Text,
+  Tausenderpunkte nur, wo das PDF welche hatte, Text mit „=“ am Anfang
+  wird keine Formel.
+- Englische Oberfläche: „Ctrl“ statt „Strg“, Meldungen vollständig
+  übersetzt, eigene Fragen an den KI-Assistenten bleiben unverändert.
+- Automatische Updates warten, bis PDF Tool fertig gestartet ist und alle
+  PDFs offen sind.
+
+Neu in Version 4.0 Beta 7 – Updates von selbst, aufgeräumte Leiste
+-------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Updates: PDF Tool sucht bei jedem Start und installiert ein gefundenes
+  Update selbst. Danach startet es neu und öffnet die PDFs wieder. Mit
+  ungespeicherten Änderungen wartet es. Abschaltbar unter Einstellungen →
+  Updates → „Updates automatisch installieren“.
+- In den Einstellungen wird „Nach Updates suchen“ nach einem Fund zu
+  „Jetzt installieren“; die Neuerungen stehen direkt darunter. Die
+  Hinweisleiste über den Seiten gibt es nicht mehr.
+- Leiste oben: kein ≡ Menü mehr. „?“ öffnet das Hilfe-Menü (Kurzanleitung,
+  Tastenkürzel, Neuerungen, Über), das Zahnrad die Einstellungen – ohne
+  eigenen Tab.
+- Behoben: In den Stapel-Aktionen wurde beim Anklicken eines Kästchens kurz
+  ein anderes grau.
+
+Neu in Version 4.0 Beta 6 – Englisch, Signatur, Umwandeln, KI
+----------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Englische Oberfläche: Einstellungen → Sprache (Deutsch, Englisch oder wie
+  Windows). Umschalten ohne Neustart. Standard ist die Sprache von Windows.
+- Digitale Signatur: PDF mit einem Zertifikat (Windows-Zertifikatspeicher oder
+  .pfx-Datei) signieren; vorhandene Signaturen werden geprüft und angezeigt.
+- Umwandeln: PDF in Word, Excel oder Text (Alle Werkzeuge → „Text erkennen,
+  umwandeln und exportieren“); Word-, Excel- und PowerPoint-Dateien in PDF
+  (braucht Microsoft Office).
+- KI-Assistent: Dokument übersetzen (als neues PDF), Fragen an mehrere PDFs
+  oder einen ganzen Ordner; die Antwort nennt Datei und Seite. Gescannte
+  Seiten liest er über die Texterkennung.
+- Behoben: „Text erkennen“ dunkelte in Beta 5 nur den Bildschirm ab, ohne
+  den Dialog zu zeigen.
+
+Neu in Version 4.0 Beta 5 – Scannen, Vorlesen, Sprachen, Tastenkürzel
+---------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Scannen: Startseite → „Scannen“. Scanner wählen, Vorlagenglas oder Einzug,
+  Farbe und Auflösung; die Seiten werden direkt eine PDF, auf Wunsch gleich
+  durchsuchbar (Texterkennung).
+- Vorlesen: Strg+Umschalt+Y liest die Auswahl oder das Dokument ab der
+  aktuellen Seite mit den Stimmen von Windows vor. Das gesprochene Wort ist
+  markiert; Pause, Tempo und Stimme in der Leiste über dem Dokument.
+- Texterkennung in zehn Sprachen: neu Französisch, Italienisch, Spanisch,
+  Niederländisch, Portugiesisch, Polnisch, Türkisch und Russisch.
+- Text über Seitengrenzen markieren: einfach über die Seite hinaus ziehen;
+  Kopieren, Hervorheben und Schwärzen gelten für alle gewählten Seiten.
+- Tastenkürzel: Übersicht aller Kürzel (Strg+F1, Einstellungen →
+  Tastenkürzel), jedes lässt sich ändern oder entfernen.
+
+Neu in Version 4.0 Beta 4 – Outlook, Taskleiste, Symbol
+--------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
+- PDF-Anhänge aus Outlook (klassisch und neu) öffnen sich wieder, auch wenn
+  eine Defender-Regel Outlook verbietet, Programme direkt zu starten: Windows
+  startet PDF Tool jetzt selbst und übergibt die Datei.
+  Ein Übergabe-Protokoll (im Support-Paket) zeigt, ob ein Start ankommt.
+- Taskleiste: Rechtsklick auf PDF Tool zeigt „PDF Tool“ statt „Python“.
+- App-Symbol: in Taskleiste und Explorer (16–24 Pixel) scharf gezeichnet;
+  PDF-Dateien in der Sprungliste zeigen das neue statt des alten Symbols.
+
+Neu in Version 4.0 Beta 3 – Aufräumen: Fehler behoben, schneller, stabiler
+---------------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
+- Ein-Klick-Update: läuft jetzt wirklich ohne Setup-Assistent (der Helfer lief
+  aus dem Ordner, den das Setup ersetzt). Wirksam ab dem nächsten Update.
+- PDF-Anhänge aus Outlook öffnen sich wieder, auch wenn PDF Tool schon läuft.
+- Vertragsübersichten: Datum als Text in der Excel-Liste („01.02.2021“) wird
+  immer deutsch gelesen (vorher teils Monat und Tag vertauscht).
+- PDF Reader: schneller beim Blättern großer PDFs; Seitenleiste springt nach
+  dem Löschen von Seiten nicht mehr nach oben; keine Fehlermeldung mehr beim
+  schnellen Schließen eines Tabs; Vergleichen langer Dokumente in Sekunden.
+- Neustart nach einer Wiederherstellung, Stapel-Aktionen und Einstellungen
+  stabiler.
 
 
-Neu in Version 3.2 (Beta 1) – Schützen und Weitergeben
-------------------------------------------------------
-Beta-Version zum Testen: Sie erscheint nur mit „Beta-Versionen erhalten“
-(Einstellungen → Updates). Der Fenstertitel lautet „PDF Tool 3.2.0 Beta“.
+Neu in Version 4.0 Beta 2 – Werkzeugleiste wie bei Acrobat, Vergleichen, geteilte Ansicht, Präsentation
+-------------------------------------------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Zweiter Teil von Version 4.0.
+- Neue Werkzeugleiste im Reader: oben nur noch Datei-Befehle (Öffnen,
+  Speichern, Drucken, E-Mail, Rückgängig) und links „Alle Werkzeuge“; links
+  neben dem Dokument die Schnellwerkzeuge (Auswählen, Verschieben,
+  Kommentieren, Zeichnen, Text hinzufügen, Text bearbeiten, Objekt
+  bearbeiten, Unterschreiben). „Alle Werkzeuge“ zeigt jedes Werkzeug mit
+  Namen, in Gruppen. Die Einstellungen eines Werkzeugs (Farbe, Stärke …)
+  erscheinen mit einem zweiten Klick auf das Werkzeug; Esc beendet es.
+- Mit anderer Fassung vergleichen (Alle Werkzeuge): die ältere Fassung
+  wählen – beide PDFs stehen nebeneinander, Unterschiede im Text sind farbig
+  markiert (geändert gelb, neu grün, entfernt rot) und rechts als Liste zum
+  Durchklicken.
+- Geteilte Ansicht: zwei PDFs nebeneinander im selben Fenster (Ansicht →
+  „Geteilte Ansicht“ oder Alle Werkzeuge), jedes mit eigener Seite und
+  eigenem Zoom.
+- Präsentation (F5): Vollbild auf schwarzem Grund, eine ganze Seite nach der
+  anderen mit Pfeiltasten, Leertaste oder Bild auf/ab; Esc beendet sie.
+
+
+Neu in Version 4.0 Beta 1 – Stapel-Aktionen, PDF/A, PDF aus Bildern, Updates mit einem Klick
+---------------------------------------------------------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“). Erster Teil von Version 4.0.
+- Stapel-Aktionen (Startseite oder Strg+6): PDFs wählen oder hineinziehen,
+  Aktionen ankreuzen – Text erkennen, bereinigen, reduzieren, Wasserzeichen,
+  Seitenzahlen, verkleinern, PDF/A, Kennwortschutz – und „Alle bearbeiten“.
+  Die Reihenfolge ist fest und immer richtig. Jede PDF wird als neue Datei
+  gespeichert („_bearbeitet“ oder eigener Zusatz); Originale und vorhandene
+  Dateien werden nie überschrieben.
+- Als PDF/A speichern (Reader → „Schützen“, Schnellwerkzeug): archivfähige
+  Kopie nach PDF/A-2b – fehlende Schriften werden aus Windows eingebettet,
+  Skripte, Anhänge und Ähnliches entfernt; die Meldung nennt, was geändert
+  wurde.
+- PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF, BMP, GIF, WebP) in das
+  Fenster ziehen, über das Schnellwerkzeug wählen oder im Explorer markieren
+  → Rechtsklick → „Senden an“ → „PDF Tool (Bilder zu PDF)“. Reihenfolge,
+  Seitengröße (wie das Bild, A4, Letter) und Rand wählen; Fotos behalten ihre
+  Qualität, gedrehte Handyfotos stehen richtig herum.
+- Updates mit einem Klick: PDF Tool lädt eine neue Version nach der
+  automatischen Prüfung selbst herunter. „Jetzt installieren“ aktualisiert
+  ohne Setup-Assistent und startet PDF Tool danach neu. Gilt ab dem Update
+  von 4.0.0-beta.1 auf eine spätere Version.
+- Einstellungen aufgeräumt: oben eine Leiste mit den Bereichen Allgemein,
+  PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose
+  und Info – statt einer langen Seite.
+
+
+Neu in Version 3.2 – Schützen und Weitergeben, KI-Assistent, schneller Start
+-----------------------------------------------------------------------------
+Freigegebene Version (getestet als Betas 3.2.0-beta.1 bis 3.2.0-beta.5).
 Neue Schaltflächen im Reader: „Schützen“ (Schild), „Seiten gestalten“,
 „Unterschreiben“ und das Werkzeug „Links“.
 - Schwärzen: Bereiche aufziehen oder Text markieren; „Schwärzen anwenden“
@@ -97,6 +220,49 @@ Neue Schaltflächen im Reader: „Schützen“ (Schild), „Seiten gestalten“,
   die PDFs der letzten Sitzung (Einstellungen → PDF Reader).
 - Nachtmodus (Seiten dunkel, nur die Anzeige) und Schnellwerkzeuge auf der
   Startseite: PDF wählen, das Werkzeug startet sofort.
+
+KI-Assistent (optional, standardmäßig aus): Solange Sie ihn nicht
+einschalten, lädt PDF Tool nichts und belegt weder Speicherplatz noch
+Arbeitsspeicher dafür.
+- Einschalten unter Einstellungen → KI-Assistent und ein Sprachmodell
+  wählen: „Genau“ (Qwen3.5 4B, 2,6 GB, braucht beim Antworten rund 5 GB
+  Arbeitsspeicher) oder „Kompakt“ (Qwen3.5 2B, 1,2 GB, rund 2 GB, etwa
+  doppelt so schnell, etwas ungenauer). Geladen wird erst nach
+  „Herunterladen“ – von Hugging Face über HTTPS, mit Prüfung der
+  Prüfsumme; der Download lässt sich anhalten und fortsetzen.
+- Im Reader: Seitenleiste „KI-Assistent“ (rechts). Fragen eintippen oder
+  „Dokument zusammenfassen“ – die Antworten nennen die Seiten, ein Klick
+  darauf springt dorthin. Antworten können Fehler enthalten; bitte auf den
+  genannten Seiten prüfen.
+- Dokumente, Fragen und Antworten verlassen den PC nicht und werden nicht
+  gespeichert. „Modell entfernen …“ löscht das Modell wieder; auch die
+  Deinstallation entfernt es.
+
+Vertragsübersichten: Unter der Excel-Liste gibt es zwei Schalter,
+„Gekündigte Verträge mit aufführen“ und „Abgelaufene Verträge mit
+aufführen“ (standardmäßig aus). So lassen sich nur gekündigte, nur
+abgelaufene oder beide zusammen in die Übersicht aufnehmen; in der PDF
+steht ihr Status in Rot unter der Vertragsnummer. Andere Status (z. B.
+„Inaktiv“) bleiben ausgeblendet.
+
+Im Hintergrund bereithalten (Einstellungen → Verhalten, standardmäßig an):
+- PDF Tool startet mit Windows unsichtbar und baut sich dabei schon auf.
+  Öffnen Sie es danach (Startmenü, Desktop oder Doppelklick auf eine PDF),
+  erscheint das Fenster sofort – auch beim ersten Mal nach dem Hochfahren.
+- Das Schließen-Kreuz schließt nur das Fenster: Ihre PDFs werden wie
+  gewohnt geschlossen (mit Rückfrage bei ungespeicherten Änderungen), PDF
+  Tool bleibt mit seinem Symbol im Infobereich der Taskleiste (rechts
+  unten, ggf. hinter dem Pfeil „^“). Klick auf das Symbol öffnet das
+  Fenster wieder.
+- Ganz beenden: Rechtsklick auf das Symbol → „Beenden“.
+- Ausgeschaltet verhält sich PDF Tool wie bisher: kein Symbol, kein Start
+  mit Windows, das Kreuz beendet die App.
+
+Windows: PDF Tool startet über ein eigenes Startprogramm „PDF-Tool.exe“
+und erscheint in „Öffnen mit“ und unter Einstellungen → Apps →
+Standard-Apps mit eigenem Symbol. Die Standard-App für PDF ändert das Setup
+nicht – das entscheiden Sie.
+
 
 Neu in Version 3.1 – PDF Reader & Editor, Tabs statt Seitenleiste
 ------------------------------------------------------------------
@@ -370,9 +536,10 @@ Aktualisieren
 -------------
 Ab Version 2.7.2 meldet PDF Tool neue Versionen selbst: Einstellungen →
 Updates → „Nach Updates suchen“, oder der Hinweis nach der automatischen
-Prüfung. „Herunterladen“ und danach „Jetzt installieren“ – PDF Tool beendet
-sich, das Setup startet und aktualisiert die vorhandene Installation. Am
-Ende kann PDF Tool direkt wieder gestartet werden.
+Prüfung. Ab Version 4.0 lädt PDF Tool das Update nach der automatischen
+Prüfung selbst herunter; „Jetzt installieren“ beendet PDF Tool, installiert
+das Update ohne Setup-Assistent und startet PDF Tool wieder. Klappt die
+stille Installation nicht, erscheint das Setup wie bisher.
 
 Beta-Versionen erhalten (Einstellungen → Updates; Standard: aus): Aus
 erhält PDF Tool nur freigegebene Versionen (Kanal „Stable“). Eingeschaltet
@@ -385,6 +552,61 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
+Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
+einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.7 auf 4.0.0-beta.8 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent – oder von selbst beim Start.
+
+Update von PDF Tool 4.0.0-beta.6 auf 4.0.0-beta.7 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent.
+
+Update von PDF Tool 4.0.0-beta.5 auf 4.0.0-beta.6 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent.
+
+Update von PDF Tool 4.0.0-beta.4 auf 4.0.0-beta.5 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent.
+
+Update von PDF Tool 4.0.0-beta.3 auf 4.0.0-beta.4 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent (unter Windows getestet: Beta 3 läuft im
+Hintergrund, das Update installiert still und startet PDF Tool neu).
+
+Update von PDF Tool 3.2.0 (oder älter) auf 4.0.0-beta.1 (Kanal „Beta“): Das
+Setup ersetzt die Programmdateien – dieses eine Mal noch mit dem Setup-
+Assistenten, ab dem nächsten Update mit einem Klick. Alle Einstellungen und
+Daten bleiben unverändert.
+
+Update von PDF Tool 3.1.0 auf 3.2.0: Das Setup ersetzt die
+Programmdateien, legt das Startprogramm „PDF-Tool.exe“ und die Laufzeit
+des KI-Assistenten im Unterordner „ai“ an. Beim ersten Start trägt PDF
+Tool sich unter „Start mit Windows“ ein (Einstellung „Im Hintergrund
+bereithalten“, standardmäßig an; im Task-Manager unter „Autostart-Apps“
+als „PDF Tool“). Alle Einstellungen und Daten bleiben unverändert; der
+KI-Assistent ist aus, bis Sie ihn einschalten. Wer eine Beta von 3.2 nutzt
+(Kanal „Beta“), erhält 3.2.0 als Update; Daten, Einstellungen und der
+Kanal „Beta“ bleiben erhalten.
+
+Update von PDF Tool 3.2.0-beta.4 auf 3.2.0-beta.5 (Kanal „Beta“): Aus dem
+Schalter „Gekündigte und abgelaufene Verträge mit aufführen“ werden zwei
+getrennte Schalter. War er an, sind nach dem Update beide an. Alle anderen
+Einstellungen und Daten bleiben unverändert.
+
+Update von PDF Tool 3.2.0-beta.3, 3.2.0-beta.2, 3.2.0-beta.1 oder 3.1.0
+auf 3.2.0-beta.4 (Kanal „Beta“): Das Setup ersetzt die Programmdateien.
+Beim ersten Start trägt PDF Tool sich unter „Start mit Windows“ ein
+(Einstellung „Im Hintergrund bereithalten“, standardmäßig an; im
+Task-Manager unter „Autostart-Apps“ als „PDF Tool“). Alle Einstellungen
+und Daten bleiben unverändert.
+
+Update von PDF Tool 3.2.0-beta.2, 3.2.0-beta.1 oder 3.1.0 auf 3.2.0-beta.3
+(Kanal „Beta“): Das Setup ersetzt die Programmdateien und legt das
+Startprogramm „PDF-Tool.exe“ an. Verknüpfungen und „Öffnen mit“ zeigen
+danach Symbol und Namen von PDF Tool, und PDF Tool erscheint unter
+Einstellungen → Apps → Standard-Apps (die Standard-App für PDF ändert das
+Setup nicht – das entscheiden Sie). Alle Einstellungen und Daten bleiben
+unverändert.
 
 Update von PDF Tool 3.2.0-beta.1 oder 3.1.0 auf 3.2.0-beta.2 (Kanal
 „Beta“): Das Setup ersetzt nur die Programmdateien und legt die Laufzeit
@@ -530,6 +752,11 @@ Kundenakte – „Kunden“.
    zusätzliche Angaben: der Rechnungsempfänger (bei mehreren „3 erkannt“
    mit Auswahl daneben) und Hinweise. Kundennummer und Firmenname aus der
    Datei werden übernommen, sofern sie darin stehen.
+   Die Schalter „Gekündigte Verträge mit aufführen“ und „Abgelaufene
+   Verträge mit aufführen“ unter der Excel-Liste nehmen auch Verträge mit
+   dem Anwenderstatus „Gekündigt“ bzw. „Abgelaufen“ in die Übersicht auf –
+   einzeln oder beide zusammen; in der PDF steht ihr Status rot unter der
+   Vertragsnummer. Die Schalter gelten auch für den Stapel.
 2. Firmenname und Kundennummer eintragen, sofern sie nicht aus der Excel
    stammen. Mit eingeschalteter Kundenakte: Ist ein Rechnungsempfänger als
    Kunde bekannt, erscheint „Bekannter Kunde gefunden“: „Übernehmen“ füllt
@@ -833,7 +1060,9 @@ Einstellungen
 -------------
 Seite „Einstellungen“: App-Design (Wie Windows, Hell, Dunkel), Akzentfarbe
 (Windows-Akzentfarbe oder eine eigene Farbe), Mica-Material, Animationen
-(Vollständig, Reduziert, Aus), Kundenakte und Informationen zur App.
+(Vollständig, Reduziert, Aus), „Im Hintergrund bereithalten“ (Start mit
+Windows und Symbol im Infobereich, standardmäßig an), Kundenakte und
+Informationen zur App.
 Einstellungen der Werkzeuge stehen im jeweiligen Werkzeug.
 
 
@@ -860,7 +1089,9 @@ Deinstallation
 --------------
 Einstellungen → Apps → Installierte Apps → „PDF Tool“ → Deinstallieren.
 
-Entfernt werden Programmdateien, Verknüpfungen und der Eintrag in den
+Läuft PDF Tool im Hintergrund, zuerst über das Symbol im Infobereich →
+„Beenden“ schließen. Entfernt werden Programmdateien, Verknüpfungen, der
+Eintrag unter „Start mit Windows“ und der Eintrag in den
 Windows-Einstellungen. Anschließend fragt die Deinstallation, ob auch Ihre
 gespeicherten Einstellungen gelöscht werden sollen (Standard: Nein) – dazu
 gehören Kundenakten, Vertragsstände, der gespeicherte Stapel und die bei

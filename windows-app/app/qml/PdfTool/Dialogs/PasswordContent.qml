@@ -23,12 +23,12 @@ ColumnLayout {
         field.forceActiveFocus(Qt.OtherFocusReason)
     }
 
-    PFieldLabel { text: root.data_.label || "Passwort"; first: true }
+    PFieldLabel { text: I18n.tr(root.data_.label || "Passwort", I18n.revision); first: true }
     PTextField {
         id: field
         objectName: "dialogPassword"
         Layout.fillWidth: true
-        label: root.data_.label || "Passwort"
+        label: I18n.tr(root.data_.label || "Passwort", I18n.revision)
         echoMode: TextInput.Password
         passwordCharacter: "●"
         inputMethodHints: Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
@@ -43,7 +43,7 @@ ColumnLayout {
         }
     }
     PText {
-        text: "Das Passwort wird nur für dieses Dokument im Arbeitsspeicher gehalten und nirgends gespeichert."
+        text: I18n.tr("Das Passwort wird nur für dieses Dokument im Arbeitsspeicher gehalten und nirgends gespeichert.", I18n.revision)
         textStyle: "caption"
         tone: "secondary"
         wrap: true

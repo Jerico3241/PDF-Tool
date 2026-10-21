@@ -1073,6 +1073,44 @@ def test_excel_analysis_shows_only_real_values(ui_app, tmp_path: Path) -> None:
     assert empfaenger and empfaenger[0].isVisible()
 
 
+def test_switch_lists_cancelled_and_expired_contracts_too(ui_app, tmp_path: Path, config_file: Path) -> None:
+    """Schalter »Gekündigte …« und »Abgelaufene Verträge mit aufführen« (je einzeln oder beide): Prüfung, Bereitschaft
+    und Einstellung."""
+    h = ui_app
+    o = h.overview
+    pfad = write_excel(
+        tmp_path / "status.xlsx",
+        [
+            ["V-1", datetime(2023, 1, 1), "jährlich", 10.0, "Sofort", "Eins", "a@b.de", 7, "Firma", "Gekündigt"],
+            ["V-2", datetime(2022, 1, 1), "jährlich", 20.0, "Sofort", "Zwei", "a@b.de", 7, "Firma", "Abgelaufen"],
+            ["V-3", datetime(2021, 1, 1), "jährlich", 30.0, "Sofort", "Drei", "a@b.de", 7, "Firma", "Inaktiv"],
+        ],
+    )
+    h.navigate("create", 0.3)
+    gekuendigt, abgelaufen = h.item("createCancelledContracts"), h.item("createExpiredContracts")
+    assert gekuendigt.isVisible() and abgelaufen.isVisible()
+    assert not gekuendigt.property("checked") and not abgelaufen.property("checked")
+    o.use_excel(str(pfad))
+    info = hinweis(h, "info_excel")
+    assert wait_until(lambda: info.severity == "warning", 60)  # aus: nur Gekündigte und Abgelaufene – keine aktiven
+    assert "kein aktiver Vertrag" in info.message
+    o.gekuendigt = True  # wie ein Klick auf den Schalter »Gekündigte …«
+    assert wait_until(lambda: info.severity == "success" and "gekündigt" in info.message, 60)
+    assert info.message == "0 aktive Verträge · 1 gekündigt · 2 inaktiv ausgeblendet"
+    assert gekuendigt.property("checked") and not abgelaufen.property("checked")
+    o.gekuendigt, o.abgelaufen = False, True  # nur »Abgelaufene …«
+    assert wait_until(lambda: info.message == "0 aktive Verträge · 1 abgelaufen · 2 inaktiv ausgeblendet", 60), info.message
+    o.gekuendigt = True  # beide
+    assert wait_until(lambda: info.message == "0 aktive Verträge · 2 gekündigt/abgelaufen · 1 inaktiv ausgeblendet", 60), info.message
+    pump(0.3)
+    assert "Keine aktiven" not in o.readyText
+    h.app.persist()
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert data["vertraege_gekuendigt"] is True and data["vertraege_abgelaufen"] is True and "vertraege_beendete" not in data
+    o.gekuendigt = o.abgelaufen = False
+    assert wait_until(lambda: info.severity == "warning", 60)
+
+
 def test_missing_columns_are_reported(ui_app, tmp_path: Path) -> None:
     h = ui_app
     o = h.overview

@@ -239,7 +239,7 @@ def test_versions_are_consistent() -> None:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "3.2.0-beta.2"
+    assert appstate.VERSION == version == "4.0.0-beta.8"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]
@@ -341,3 +341,15 @@ def test_config_file_json_is_valid(tmp_path: Path) -> None:
     target = tmp_path / "c.json"
     appstate.save_config({"liste": [1, 2]}, target)
     assert json.loads(target.read_text(encoding="utf-8")) == {"liste": [1, 2]}
+
+
+def test_german_date_text_is_read_day_first():
+    engine._lade_pandas()
+    import datetime
+
+    import pandas as pd
+
+    werte = pd.Series(["01.02.2021", "05.03.2022", "13.02.2021", datetime.datetime(2020, 4, 5), None, "", "2021-07-08"])
+    gelesen = [None if pd.isna(stamp) else stamp.strftime("%Y-%m-%d") for stamp in engine.datum_spalte(werte)]
+    assert gelesen == ["2021-02-01", "2022-03-05", "2021-02-13", "2020-04-05", None, None, "2021-07-08"]
+    assert engine.fmt_date("01.02.2021") == "01.02.2021"

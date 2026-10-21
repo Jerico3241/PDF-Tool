@@ -443,7 +443,10 @@ def test_hit_testing_is_exact_at_low_and_high_zoom(reader_app, tmp_path: Path, z
     pump(0.5)
     click(h, page_point(h, 0, *center(line["view"])))
     assert chosen(doc) == ["Von-Hünefeld-Str. 3"]
-    # Knapp über der Zeile liegt die vorige, knapp darunter die nächste
+    # Knapp über der Zeile liegt die vorige, knapp darunter die nächste (Zeilenanfang in die Mitte holen –
+    # bei 400 % läge er sonst neben der Ansicht)
+    doc.reveal(0, line["view"][0] + 5, center(line["view"])[1])
+    pump(0.5)
     click(h, page_point(h, 0, line["view"][0] + 5, line["view"][1] - 3))
     assert chosen(doc) == ["Hottgenroth Software AG"]
     click(h, page_point(h, 0, line["view"][0] + 5, line["view"][3] + 3))

@@ -20,8 +20,8 @@ ColumnLayout {
         id: search
         Layout.fillWidth: true
         visible: root.request.data ? root.request.data.search !== false : true
-        label: "Kundenakten durchsuchen"
-        placeholderText: "Firma, Kundennummer oder E-Mail suchen"
+        label: I18n.tr("Kundenakten durchsuchen", I18n.revision)
+        placeholderText: I18n.tr("Firma, Kundennummer oder E-Mail suchen", I18n.revision)
         text: Customers.pickerSearch
         focus: visible
         onTextEdited: Customers.pickerSearch = text
@@ -35,7 +35,7 @@ ColumnLayout {
         }
         Component.onCompleted: if (visible) forceActiveFocus()
     }
-    PText { text: Customers.pickerCount; textStyle: "caption"; tone: "secondary" }
+    PText { text: I18n.tr(Customers.pickerCount, I18n.revision); textStyle: "caption"; tone: "secondary" }
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: Math.min(5, Math.max(1, list.count)) * 56 + 8
@@ -55,7 +55,7 @@ ColumnLayout {
             currentIndex: -1
             focus: !search.visible
             Accessible.role: Accessible.List
-            Accessible.name: "Kundenakten"
+            Accessible.name: I18n.tr("Kundenakten", I18n.revision)
             onCurrentIndexChanged: if (currentIndex >= 0) root.chosen = Customers.pickerModel.get(currentIndex).id
             Keys.onReturnPressed: (event) => { if (root.chosen !== "") Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
             Keys.onEnterPressed: (event) => { if (root.chosen !== "") Dialogs.answer(root.request.id, "primary", root.collect()); event.accepted = true }
@@ -85,7 +85,7 @@ ColumnLayout {
                 width: list.width
                 height: 56
                 Accessible.role: Accessible.ListItem
-                Accessible.name: company + ", " + subtitle
+                Accessible.name: I18n.tr(company + ", " + subtitle, I18n.revision)
                 PListItem {
                     anchors.fill: parent
                     anchors.margins: 2
@@ -102,10 +102,10 @@ ColumnLayout {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0
-                        PText { text: row.company; textStyle: "bodyStrong"; elide: Text.ElideMiddle; Layout.fillWidth: true }
-                        PText { text: row.subtitle; textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                        PText { text: I18n.tr(row.company, I18n.revision); textStyle: "bodyStrong"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                        PText { text: I18n.tr(row.subtitle, I18n.revision); textStyle: "caption"; tone: "secondary"; elide: Text.ElideMiddle; Layout.fillWidth: true }
                     }
-                    PText { text: row.when; textStyle: "caption"; tone: "secondary" }
+                    PText { text: I18n.tr(row.when, I18n.revision); textStyle: "caption"; tone: "secondary" }
                 }
                 MouseArea {
                     id: mouse

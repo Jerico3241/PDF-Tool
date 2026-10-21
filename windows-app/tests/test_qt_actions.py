@@ -1,0 +1,339 @@
+"""Qt-Oberfläche (4.0): Werkzeug »Stapel-Aktionen«, »PDF aus Bildern« und »Als PDF/A speichern« im Reader.
+
+Die Abläufe laufen über die Controller (``Actions``, ``Reader``); Dateiauswahl und Dialoge sind vorgegeben
+(``files.RESPONSES``, ``dialogs.ask``). Geprüft wird, dass die Seite ohne QML-Meldungen lädt, Schritte und
+Einstellungen nach einem Neustart bleiben, das Kennwort nie gespeichert wird und die Dateien wirklich
+entstehen – ohne die Originale zu ändern.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pikepdf
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import editorsamples as samples
+from conftest import neustart, pump, wait_until
+
+from tools.pdf_editor import fonts, pdfa
+
+
+@pytest.fixture(autouse=True)
+def substitute_fonts(monkeypatch):
+    monkeypatch.setenv("PDFTOOL_FONT_DIRS", str(samples.vera_path().parent))
+    fonts.find_system_font.cache_clear()
+    yield
+    fonts.find_system_font.cache_clear()
+
+
+def controller(h):
+    return h.runtime.actions.controller
+
+
+def test_page_loads_and_lists_dropped_pdfs(ui_app, tmp_path: Path) -> None:
+    h = ui_app
+    h.app.openShortcut(6)
+    pump(0.4)
+    assert h.app.currentPage == "actions" and h.item("actionsPage") is not None
+    assert h.item("actionsDropZone").isVisible()
+    a = samples.standard_text(tmp_path / "a.pdf")
+    b = samples.standard_text(tmp_path / "b.pdf")
+    (tmp_path / "notiz.txt").write_text("x", encoding="utf-8")
+    h.app.drop([str(a), str(b), str(tmp_path / "notiz.txt"), str(a)])  # doppelt und keine PDF: nur einmal a, b
+    pump(0.3)
+    c = controller(h)
+    assert c.count == 2 and [row["name"] for row in c.files] == ["a.pdf", "b.pdf"]
+    assert h.item("actionsFiles").isVisible() and not h.item("actionsDropZone").isVisible()
+    assert not c.canStart and c.problem == "Bitte mindestens eine Aktion wählen."
+    assert not h.messages()
+
+
+def test_step_checkboxes_hover_and_click_only_themselves(ui_app) -> None:
+    """Beta 6: ein Klick auf ein Kästchen ließ kurz ein anderes grau (»gehovert«) erscheinen, weil die ganze Liste neu
+    entstand. Seit Beta 7 bleibt sie stehen: nur das Kästchen unter dem Mauszeiger ist hervorgehoben."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+
+    h = ui_app
+    h.app.openShortcut(6)
+    pump(0.4)
+    ocr = h.item("actionsStep_ocr")
+    protect = h.item("actionsStep_protect")
+    point = ocr.mapToScene(QPointF(10, ocr.height() / 2)).toPoint()
+    QTest.mouseMove(h.window, point)
+    pump(0.2)
+    assert ocr.property("hovered") is True and protect.property("hovered") is False
+    QTest.mouseClick(h.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    pump(0.1)
+    assert "ocr" in controller(h).chosen and ocr.property("checked") is True
+    assert h.item("actionsStep_ocr") is ocr  # dieselben Kästchen – nichts neu erzeugt
+    hovered = [key for key in ("clean", "flatten", "watermark", "numbers", "optimize", "pdfa", "protect") if h.item(f"actionsStep_{key}") is not None and h.item(f"actionsStep_{key}").property("hovered")]
+    assert hovered == [] and ocr.property("hovered") is True
+    assert not h.messages()
+
+
+def test_steps_settings_survive_restart_without_password(ui_app, config_file: Path) -> None:
+    h = ui_app
+    c = controller(h)
+    c.setStep("numbers", True)
+    c.setStep("protect", True)
+    c.setPassword("geheim123")
+    c.setNumberFormat("zahl_von")
+    c.setSuffix("_fertig")
+    assert c.summary == "Seitenzahlen → Kennwortschutz"
+    c.setStep("pdfa", True)  # schließt den Kennwortschutz aus
+    assert [s["key"] for s in c.steps if s["checked"]] == ["numbers", "pdfa"]
+    h.app.persist()
+    assert "geheim123" not in config_file.read_text(encoding="utf-8")
+    h = neustart(h)
+    c = controller(h)
+    assert [s["key"] for s in c.steps if s["checked"]] == ["numbers", "pdfa"]
+    assert c.numberFormat == "zahl_von" and c.suffix == "_fertig" and not c.hasPassword
+    stored = json.loads(config_file.read_text(encoding="utf-8"))["stapel_aktionen"]
+    assert stored["schritte"] == ["numbers", "pdfa"]
+
+
+def test_run_creates_new_files_and_keeps_originals(ui_app, tmp_path: Path) -> None:
+    h = ui_app
+    c = controller(h)
+    sources = [samples.standard_text(tmp_path / f"brief{n}.pdf", pages=2) for n in (1, 2)]
+    (tmp_path / "brief1_bearbeitet.pdf").write_bytes(b"vorhanden")  # wird nie überschrieben
+    originals = [p.read_bytes() for p in sources]
+    c.add([str(p) for p in sources])
+    c.setStep("numbers", True)
+    c.setStep("pdfa", True)
+    c.setSuffix("_bearbeitet")
+    assert c.canStart
+    c.start()
+    assert wait_until(lambda: not c.running, 60)
+    assert c.resultTone == "success" and c.resultText.startswith("2 von 2 PDFs bearbeitet")
+    assert [p.read_bytes() for p in sources] == originals
+    assert (tmp_path / "brief1_bearbeitet.pdf").read_bytes() == b"vorhanden"
+    first, second = tmp_path / "brief1_bearbeitet (2).pdf", tmp_path / "brief2_bearbeitet.pdf"
+    for result in (first, second):
+        assert pdfa.check(result.read_bytes()) == []
+    assert [row["state"] for row in c.files] == ["done", "done"]
+    assert c.files[0]["outputName"] == first.name
+
+
+def test_protected_and_broken_files_do_not_stop_the_run(ui_app, tmp_path: Path) -> None:
+    h = ui_app
+    c = controller(h)
+    locked = samples.encrypted(tmp_path / "geheim.pdf")
+    broken = tmp_path / "kaputt.pdf"
+    broken.write_bytes(b"%PDF-1.7\nkaputt")
+    good = samples.standard_text(tmp_path / "gut.pdf")
+    c.add([str(locked), str(broken), str(good)])
+    c.setStep("watermark", True)
+    c.start()
+    assert wait_until(lambda: not c.running, 60)
+    assert [row["state"] for row in c.files] == ["skipped", "error", "done"]
+    assert c.resultTone == "warning" and "1 mit Fehler" in c.resultText and "1 ausgelassen" in c.resultText
+    with pikepdf.open(tmp_path / "gut_bearbeitet.pdf") as pdf:
+        assert len(pdf.pages) == 1
+
+
+def test_output_folder_needs_an_existing_folder(ui_app, tmp_path: Path) -> None:
+    from qtapp import files
+
+    h = ui_app
+    c = controller(h)
+    c.add([str(samples.standard_text(tmp_path / "a.pdf"))])
+    c.setStep("optimize", True)
+    files.RESPONSES.append("")  # Ordnerauswahl abgebrochen
+    c.setOutMode("folder")
+    assert not c.canStart and "Ausgabeordner" in c.problem
+    target = tmp_path / "ziel"
+    target.mkdir()
+    files.RESPONSES.append(str(target))
+    c.pickOutDir()
+    assert c.canStart
+    c.start()
+    assert wait_until(lambda: not c.running, 60)
+    assert (target / "a_bearbeitet.pdf").is_file()
+
+
+def test_images_to_pdf_from_the_home_quick_tool(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from PIL import Image
+
+    from qtapp import files
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    for name, size in (("eins.jpg", (400, 300)), ("zwei.png", (200, 300))):
+        Image.new("RGB", size, (10, 120, 200)).save(tmp_path / name)
+    asked: list = []
+
+    def ask(kind, title, message="", **options):
+        asked.append((kind, options.get("data")))
+        data = options.get("data") or {}
+        return "primary", {"order": [f["path"] for f in reversed(data["files"])], "pageSize": "a4", "margin": "small"}
+
+    monkeypatch.setattr(h.app.dialogs, "ask", ask)
+    files.RESPONSES.extend([[str(tmp_path / "eins.jpg"), str(tmp_path / "zwei.png")], str(tmp_path / "bilder")])
+    r.quickTool("images")
+    assert wait_until(lambda: r.tabs.count == 1, 30)
+    assert asked[0][0] == "images" and [f["name"] for f in asked[0][1]["files"]] == ["eins.jpg", "zwei.png"]
+    with pikepdf.open(tmp_path / "bilder.pdf") as pdf:
+        sizes = [tuple(round(float(v)) for v in page.mediabox[2:]) for page in pdf.pages]
+    assert sizes == [(595, 842), (842, 595)]  # umgekehrte Reihenfolge, A4 hoch bzw. quer
+    h.app.persist()
+    assert h.runtime.reader.controller.config()["reader_bilder"]["seite"] == "a4"
+
+
+def test_dropped_images_start_images_to_pdf(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from PIL import Image
+
+    h = ui_app
+    Image.new("RGB", (100, 100)).save(tmp_path / "scan.png")
+    asked: list = []
+    monkeypatch.setattr(h.app.dialogs, "ask", lambda kind, title, message="", **options: (asked.append(kind), ("close", None))[1])
+    h.app.drop([str(tmp_path / "scan.png")])
+    pump(0.3)
+    assert asked == ["images"]
+
+
+def test_reader_saves_a_pdfa_copy(ui_app, tmp_path: Path) -> None:
+    from qtapp import files
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    source = samples.standard_text(tmp_path / "vertrag.pdf")
+    r.open_paths([str(source)])
+    assert wait_until(lambda: r.current is not None and r.current.pageCount == 1, 30)
+    files.RESPONSES.append(str(tmp_path / "vertrag_PDFA.pdf"))
+    r.current.pdfaDocument()
+    assert wait_until(lambda: (tmp_path / "vertrag_PDFA.pdf").is_file(), 30)
+    assert pdfa.check((tmp_path / "vertrag_PDFA.pdf").read_bytes()) == []
+    assert wait_until(lambda: h.app.notices.get("reader").shown, 10)
+    assert h.app.notices.get("reader").title == "PDF/A-Kopie gespeichert"
+
+
+class FakeScanner:
+    """Attrappe der Scanner-Schnittstelle: Vorlagenglas eine Seite je Durchgang, Einzug ``sheets`` Blätter."""
+
+    def __init__(self, sheets: int = 3, fail_after: int | None = None) -> None:
+        self.sheets = sheets
+        self.fail_after = fail_after
+        self.calls: list = []
+
+    def scanners(self):
+        from tools.pdf_editor import scan
+
+        return [scan.Scanner("wia-1", "Büroscanner"), scan.Scanner("wia-2", "Zweiter Scanner")]
+
+    def pages(self, ident, settings, target, start):
+        from PIL import Image
+
+        self.calls.append((ident, settings, start))
+        count = self.sheets if settings.source == "feeder" else 1
+        for index in range(start, start + count):
+            if self.fail_after is not None and index >= self.fail_after:
+                raise RuntimeError("Treiber")
+            path = target / f"Seite-{index + 1:04d}.png"
+            Image.new("RGB", (int(8.27 * settings.dpi / 10), int(11.69 * settings.dpi / 10)), (250, 250, 250)).save(path)  # A4 bei dpi/10
+            yield path
+
+
+def test_scan_flatbed_pages_into_a_pdf(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from qtapp import files
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    fake = FakeScanner()
+    monkeypatch.setattr(scan, "_TEST_BACKEND", fake)
+    asked: list = []
+    answers = iter([("primary", {"scanner": "wia-2", "source": "flatbed", "color": "gray", "dpi": 300, "ocr": False}), ("primary", {}), ("secondary", {})])
+
+    def ask(kind, title, message="", **options):
+        asked.append((kind, title, options.get("data")))
+        return next(answers)
+
+    monkeypatch.setattr(h.app.dialogs, "ask", ask)
+    files.RESPONSES.append(str(tmp_path / "scan"))
+    r.quickTool("scan")
+    assert wait_until(lambda: r.tabs.count == 1, 30)
+    assert asked[0][0] == "scan" and [s["name"] for s in asked[0][2]["scanners"]] == ["Büroscanner", "Zweiter Scanner"]
+    assert [entry[1] for entry in asked[1:]] == ["1 Seite gescannt", "2 Seiten gescannt"]
+    assert [(ident, settings.color, start) for ident, settings, start in fake.calls] == [("wia-2", "gray", 0), ("wia-2", "gray", 1)]
+    with pikepdf.open(tmp_path / "scan.pdf") as pdf:
+        sizes = [tuple(round(float(v)) for v in page.mediabox[2:]) for page in pdf.pages]
+    assert sizes == [(60, 84), (60, 84)]  # 248 × 350 Pixel bei 300 dpi
+    h.app.persist()
+    stored = r.config()["reader_scan"]
+    assert stored["scanner"] == "wia-2" and stored["farbe"] == "gray" and stored["ocr"] is False
+
+
+def test_scan_feeder_and_driver_failure_keeps_pages(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from qtapp import files
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    monkeypatch.setattr(scan, "_TEST_BACKEND", FakeScanner(sheets=4, fail_after=2))
+    asked: list = []
+    answers = iter([("primary", {"scanner": "wia-1", "source": "feeder", "color": "color", "dpi": 150, "ocr": False}), ("secondary", {})])
+
+    def ask(kind, title, message="", **options):
+        asked.append((kind, title, message))
+        return next(answers)
+
+    monkeypatch.setattr(h.app.dialogs, "ask", ask)
+    files.RESPONSES.append(str(tmp_path / "einzug.pdf"))
+    r.scanToPdf()
+    assert wait_until(lambda: r.tabs.count == 1, 30)
+    assert asked[1][1] == "Scan fehlgeschlagen" and "2 Seiten sind schon gescannt" in asked[1][2]
+    with pikepdf.open(tmp_path / "einzug.pdf") as pdf:
+        assert len(pdf.pages) == 2
+
+
+def test_scan_without_scanner_explains(ui_app, monkeypatch) -> None:
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+
+    class Empty(FakeScanner):
+        def scanners(self):
+            return []
+
+    monkeypatch.setattr(scan, "_TEST_BACKEND", Empty())
+    r.scanToPdf()
+    assert wait_until(lambda: h.app.notices.get("reader").shown and h.app.notices.get("reader").title == "Kein Scanner gefunden", 10)
+    assert not r._scanning
+
+
+def test_scan_dialog_renders_and_collects(ui_app, tmp_path: Path, monkeypatch) -> None:
+    from PySide6.QtCore import QTimer
+
+    from qtapp import dialogs
+    from tools.pdf_editor import scan
+
+    h = ui_app
+    r = h.runtime.reader.controller
+    monkeypatch.setattr(scan, "_TEST_BACKEND", FakeScanner())
+    monkeypatch.setattr(dialogs, "AUTO_ANSWER", None)
+    seen: dict = {}
+
+    def look():
+        request = h.app.dialogs.request
+        if not request or request.get("kind") != "scan":
+            QTimer.singleShot(100, look)
+            return
+        seen["scanner"] = h.item("scanScanner").property("displayText")
+        h.item("scanFeeder").setProperty("checked", True)
+        h.item("scanFeeder").clicked.emit()
+        seen["messages"] = list(h.messages())
+        h.app.dialogs.answer(request["id"], "close", {})
+
+    QTimer.singleShot(200, look)
+    r.scanToPdf()
+    assert wait_until(lambda: "messages" in seen, 15)
+    assert seen["scanner"] == "Büroscanner" and seen["messages"] == []
+    assert wait_until(lambda: not r._scanning, 5)

@@ -1,10 +1,10 @@
 """Setup starten – erst nach dem Beenden der App, nie durch Überschreiben eigener Dateien.
 
-Die App startet den Hilfsprozess ``launch.py`` (mit der eingebetteten Laufzeit, ohne
+Die App startet den Hilfsprozess ``launch.py`` (mit einer Kopie der eingebetteten Laufzeit neben dem Setup, ohne
 Konsolenfenster, vom App-Prozess gelöst) und beendet sich dann wie über das Schließen-Kreuz.
-Der Hilfsprozess wartet auf ihr Ende, prüft das Setup erneut und startet es. Das Inno-Setup
-aktualisiert die vorhandene Installation (gleiche AppId) und bietet am Ende »PDF Tool starten«
-an. Benutzerdaten liegen außerhalb des Programmordners und bleiben unberührt.
+Der Hilfsprozess wartet auf ihr Ende, prüft das Setup erneut und startet es – seit 4.0 still (nur
+ein Fortschrittsfenster, keine Fragen des Assistenten) und startet PDF Tool danach neu. Das Inno-Setup
+aktualisiert die vorhandene Installation (gleiche AppId) mit den bisherigen Einstellungen des Setups. Benutzerdaten liegen außerhalb des Programmordners und bleiben unberührt.
 
 Protokoll (Kategorie ``installer``): Start des Hilfsprozesses mit dem Namen des Setups – ohne
 Ordner. Was der Hilfsprozess danach tut, steht in seinem eigenen Protokoll (``update-start.log``).
@@ -13,6 +13,7 @@ Ordner. Was der Hilfsprozess danach tut, steht in seinem eigenen Protokoll (``up
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -37,21 +38,63 @@ def helper_python() -> Path:
     return executable
 
 
-def command(setup: Path, sha256: str, wait_pid: int, log: Path | None = None, python: Path | None = None) -> list[str]:
-    args = [str(python or helper_python()), "-I", str(LAUNCH_SCRIPT), "--setup", str(setup), "--sha256", sha256, "--wait", str(int(wait_pid))]
+HELPER_FOLDER = "update-helfer"
+# Was der Hilfsprozess nicht braucht (groß): Pakete der App
+HELPER_SKIP = ("site-packages", "__pycache__", "test", "tkinter", "idlelib", "ensurepip", "venv")
+
+
+def helper_copy(folder: Path, python: Path | None = None) -> tuple[Path, Path]:
+    """Laufzeit (ohne Pakete der App) und ``launch.py`` nach ``folder`` kopieren. Das Setup ersetzt den Ordner
+    ``runtime`` der Installation; liefe der Hilfsprozess von dort, wären ``pythonw.exe`` und ``python313.dll``
+    belegt, und das stille Setup scheiterte (»ließ sich nicht im Hintergrund installieren«)."""
+    source = Path(python or helper_python())
+    runtime = source.parent
+    target = folder / HELPER_FOLDER
+    shutil.rmtree(target, ignore_errors=True)  # Rest eines früheren Updates (der Hilfsprozess ist längst beendet)
+    if target.exists():
+        target = folder / f"{HELPER_FOLDER}-{os.getpid()}"
+        shutil.rmtree(target, ignore_errors=True)
+    shutil.copytree(runtime, target / "runtime", ignore=shutil.ignore_patterns(*HELPER_SKIP))
+    script = target / LAUNCH_SCRIPT.name
+    shutil.copy2(LAUNCH_SCRIPT, script)
+    return target / "runtime" / source.name, script
+
+
+def restart_target() -> Path | None:
+    """Startprogramm der Installation (``PDF-Tool.exe`` neben ``app``) – nach dem stillen Update starten."""
+    candidate = LAUNCH_SCRIPT.parents[2] / "PDF-Tool.exe"
+    return candidate if candidate.is_file() else None
+
+
+def command(setup: Path, sha256: str, wait_pid: int, log: Path | None = None, python: Path | None = None, silent: bool = True, restart: bool = True, script: Path | None = None) -> list[str]:
+    args = [str(python or helper_python()), "-I", str(script or LAUNCH_SCRIPT), "--setup", str(setup), "--sha256", sha256, "--wait", str(int(wait_pid))]
     if log is not None:
         args += ["--log", str(log)]
+    if silent:
+        args.append("--silent")
+        target = restart_target() if restart else None
+        if target is not None:
+            args += ["--restart", str(target)]
     return args
 
 
 class Launcher:
     """Startet den Hilfsprozess. Tests ersetzen ihn durch eine Attrappe (``qtapp.updates.create_launcher``)."""
 
-    def __init__(self, python: Path | None = None) -> None:
+    def __init__(self, python: Path | None = None, silent: bool = True, restart: bool = True) -> None:
         self.python = python
+        self.silent = silent
+        self.restart = restart
 
     def start(self, setup: Path, sha256: str, wait_pid: int, log: Path | None = None) -> subprocess.Popen:
-        args = command(setup, sha256, wait_pid, log, self.python)
+        python, script = self.python, None
+        if os.name == "nt" and python is None:
+            try:
+                python, script = helper_copy(Path(setup).parent)
+            except OSError as exc:  # z. B. Platte voll: wie bisher aus der Installation (das Setup erscheint dann sichtbar)
+                logger.warning("Laufzeit für den Hilfsprozess nicht kopiert: %s", type(exc).__name__)
+                python, script = None, None
+        args = command(setup, sha256, wait_pid, log, python, self.silent, self.restart, script)
         options: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "close_fds": True, "cwd": str(Path(setup).parent)}
         if os.name == "nt":
             flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP

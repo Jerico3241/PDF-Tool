@@ -21,7 +21,7 @@ from conftest import _prepare, neustart, pump, wait_until
 
 import appstate
 from qtapp.app import window_title
-from tools.registry import CONTRACTS, READER, REPAIR
+from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR
 
 
 def test_start_and_version(app) -> None:
@@ -76,9 +76,9 @@ def test_navigation_all_pages_and_rapid_switching(app) -> None:
 
 def test_start_page_shows_tool_cards(app) -> None:
     tools = app.app.tools
-    assert [tool["key"] for tool in tools] == [READER.key, CONTRACTS.key, REPAIR.key]
-    assert [tool["title"] for tool in tools] == ["PDF Reader & Editor", "Vertragsübersichten", "PDF reparieren"]
-    assert [tool["shortcut"] for tool in tools] == ["Strg+5", "Strg+2", "Strg+3"]
+    assert [tool["key"] for tool in tools] == [READER.key, ACTIONS.key, CONTRACTS.key, REPAIR.key]
+    assert [tool["title"] for tool in tools] == ["PDF Reader & Editor", "Stapel-Aktionen", "Vertragsübersichten", "PDF reparieren"]
+    assert [tool["shortcut"] for tool in tools] == ["Strg+5", "Strg+6", "Strg+2", "Strg+3"]
 
 
 def _szene(item) -> tuple[float, float, float, float]:
@@ -117,7 +117,7 @@ def _ganze_woerter(werkzeug) -> None:
         assert breitestes <= text.width(), (name, text.property("text"), breitestes, text.width())
 
 
-WERKZEUGE = ("toolCard_reader", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
+WERKZEUGE = ("toolCard_reader", "toolCard_actions", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
 
 
 def _pruefe_startseite(h) -> tuple[bool, int]:
@@ -156,14 +156,16 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
         _ganze_woerter(werkzeug)
     spalten = len({lage[0] for lage in lagen})
     if spalten > 1:
-        assert len({lage[1] for lage in lagen}) == 1 and len({lage[3] for lage in lagen}) == 1  # eine Zeile, gleich hoch
-        for teil in ("toolIcon", "toolTitle", "toolOpen"):
-            for werkzeug in werkzeuge[1:]:
-                assert _teil(werkzeuge[0], teil)[:2] == _teil(werkzeug, teil)[:2], teil
-        rechte_kanten = {round(_teil(w, "toolShortcut")[0] + _teil(w, "toolShortcut")[2]) for w in werkzeuge}
-        assert len(rechte_kanten) == 1  # Tastenkürzel rechtsbündig
-        for vorher, danach in zip(lagen, lagen[1:]):
-            assert danach[0] - (vorher[0] + vorher[2]) == 8
+        for start in range(0, len(werkzeuge), spalten):  # je Zeile: gleich hoch, Teile auf einer Linie
+            zeile, zeilenlagen = werkzeuge[start:start + spalten], lagen[start:start + spalten]
+            assert len({lage[1] for lage in zeilenlagen}) == 1 and len({lage[3] for lage in zeilenlagen}) == 1
+            for teil in ("toolIcon", "toolTitle", "toolOpen"):
+                for werkzeug in zeile[1:]:
+                    assert _teil(zeile[0], teil)[:2] == _teil(werkzeug, teil)[:2], teil
+            rechte_kanten = {round(_teil(w, "toolShortcut")[0] + _teil(w, "toolShortcut")[2]) for w in zeile}
+            assert len(rechte_kanten) == 1  # Tastenkürzel rechtsbündig
+            for vorher, danach in zip(zeilenlagen, zeilenlagen[1:]):
+                assert danach[0] - (vorher[0] + vorher[2]) == 8
     erste, letzte = min(lage[0] for lage in lagen), max(lage[0] + lage[2] for lage in lagen)
     assert abs((erste - k[0]) - (k[0] + k[2] - letzte)) <= 1  # mittig in der Karte
     return nebeneinander, spalten
@@ -179,10 +181,10 @@ def _alle(wurzel) -> list:
 
 
 # Fenstergrößen (geräteunabhängige Pixel) und erwarteter Aufbau: (Werkzeuge und Ablagefläche nebeneinander,
-# Spalten der Werkzeuge). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
+# Spalten der Werkzeuge – vier Werkzeuge stehen zwei mal zwei). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
 # bei 150 %.
-GROESSEN = (((1920, 1080), (True, 3)), ((2560, 1440), (True, 3)), ((1366, 768), (True, 3)), ((1280, 720), (True, 3)),
-            ((1093, 614), (True, 3)), ((900, 700), (False, 3)), ((760, 700), (False, 1)))
+GROESSEN = (((1920, 1080), (True, 2)), ((2560, 1440), (True, 2)), ((1366, 768), (True, 2)), ((1280, 720), (True, 2)),
+            ((1093, 614), (True, 2)), ((900, 700), (False, 2)), ((760, 700), (False, 2)))
 
 
 @pytest.mark.parametrize("groesse,aufbau", GROESSEN)
@@ -218,7 +220,7 @@ def test_start_page_is_symmetric_at_every_scale(skalierung: str) -> None:
 
 def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
     h = ui_app
-    for groesse, aufbau in (((1366, 768), (True, 3)), ((900, 700), (False, 3))):
+    for groesse, aufbau in (((1366, 768), (True, 2)), ((900, 700), (False, 2))):
         h.window.resize(*groesse)
         pump(0.4)
         werkzeuge = [h.item(name) for name in WERKZEUGE]
@@ -238,17 +240,17 @@ def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(u
     h = ui_app
     h.window.resize(1093, 614)
     pump(0.4)
-    assert _pruefe_startseite(h) == (True, 3)
+    assert _pruefe_startseite(h) == (True, 2)
     werkzeug = h.item(WERKZEUGE[0])
     kuerzel = werkzeug.property("shortcut")
-    werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+F12")  # Fußzeile breiter als ein Drittel der Karte
+    werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+Feststelltaste+Rollen+Pause+Druck+F12")  # Fußzeile breiter als die halbe Karte (auch mit Segoe UI)
     pump(0.4)
     assert _pruefe_startseite(h) == (True, 1)
     rest = _szene(werkzeug)[2] - (_teil(werkzeug, "toolShortcut")[0] + _teil(werkzeug, "toolShortcut")[2])
     assert rest >= 12  # Innenabstand rechts bleibt frei
     werkzeug.setProperty("shortcut", kuerzel)
     pump(0.4)
-    assert _pruefe_startseite(h) == (True, 3)
+    assert _pruefe_startseite(h) == (True, 2)
 
 
 def test_start_page_tools_open_their_tool(app) -> None:
@@ -264,7 +266,7 @@ def test_start_page_tools_open_their_tool(app) -> None:
         assert app.app.currentPage == page
     app.navigate("home", 0.4)
     karten = [app.item(name) for name in WERKZEUGE]
-    assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 3
+    assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 4
     files.RESPONSES.append([])  # Dateiauswahl: abbrechen
     item = app.item("toolCard_reader")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
@@ -294,18 +296,22 @@ def test_beta_is_marked_in_window_title_and_settings(qt_application, config_file
     h = Harness(ui=True)
     try:
         assert h.app.windowTitle == titel and h.window.title() == titel
+        h.runtime.settings.setSection("info")
         h.navigate("settings", 0.3)
-        etikett, updates = h.item("infoBeta"), h.item("updateCurrentBeta")
+        etikett = h.item("infoBeta")
         beta = version != "4.2.0"
         assert etikett.property("visible") is beta and etikett.property("text") == ("Beta" if beta else "")
-        assert etikett.property("tone") == updates.property("tone") == "accent"
-        assert etikett.property("height") == updates.property("height")  # gleiches, dezentes Etikett
         if beta:  # in der Zeile der Info-Karte, mittig neben »Über«
             karte = h.item("infoCard")
             ueber = next(e for e in _alle(karte) if e.property("text") == "Über" and e.inherits("QQuickAbstractButton"))
             ex, ey, ew, eh = _szene(etikett)
             ux, uy, _uw, uh = _szene(ueber)
             assert ex + ew <= ux and abs((ey + eh / 2) - (uy + uh / 2)) <= 0.5
+        h.runtime.settings.setSection("updates")  # dasselbe Etikett im Bereich »Updates«
+        pump(0.2)
+        updates = h.item("updateCurrentBeta")
+        assert etikett.property("tone") == updates.property("tone") == "accent"
+        assert etikett.property("height") == updates.property("height")  # gleiches, dezentes Etikett
         messages = h.messages()
     finally:
         h.close()
@@ -329,6 +335,9 @@ def test_shortcuts_open_tools(app) -> None:
     app.app.openShortcut(5)
     pump(0.2)
     assert files.RESPONSES == [] and app.app.currentPage == "settings"
+    app.app.openShortcut(6)
+    pump(0.2)
+    assert app.app.currentTool == ACTIONS.key and app.app.currentPage == "actions"
     app.app.openShortcut(1)
     pump(0.2)
     assert app.app.currentPage == "home"
@@ -422,26 +431,24 @@ def test_theme_accent_and_profile_apply_live_and_persist(app, config_file: Path)
 def test_tools_open_as_tabs_next_to_start_and_close_again(app) -> None:
     """Adobe-Prinzip: Werkzeuge erscheinen beim Öffnen als Tab neben ⌂ Start (in der Reihenfolge des Öffnens) und
     bleiben, bis man sie schließt – Eingaben bleiben dabei erhalten. Ist der geschlossene Tab zu sehen, folgt der
-    rechts daneben, sonst der links daneben bzw. Start. Strg+W schließt den Tab des sichtbaren Werkzeugs."""
+    rechts daneben, sonst der links daneben bzw. Start. Strg+W schließt den Tab des sichtbaren Werkzeugs. Die
+    Einstellungen haben keinen eigenen Tab (seit 4.0 Beta 7): das Zahnrad ist markiert, solange sie zu sehen sind."""
     a = app.app
     assert app.item("navigationPane") is None and app.item("appTabs").isVisible()
     assert a.openTabs == [] and app.item("tabHome").property("active") is True
     app.navigate("repair", 0.3)
     app.navigate("layout", 0.3)  # eine Ansicht der Vertragsübersichten
     app.navigate("settings", 0.3)
-    assert a.openTabs == ["repair", "contracts", "settings"]
-    assert app.item("tab_settings").property("active") and not app.item("tab_repair").property("active")
+    assert a.openTabs == ["repair", "contracts"] and app.item("tab_settings") is None
+    assert app.item("appSettingsButton").property("checked") and not app.item("tab_repair").property("active")
     app.navigate("home", 0.3)
-    assert a.openTabs == ["repair", "contracts", "settings"] and app.item("tabHome").property("active")
+    assert a.openTabs == ["repair", "contracts"] and app.item("tabHome").property("active")
+    assert not app.item("appSettingsButton").property("checked")
     # Klick auf einen Tab: das Werkzeug mit seiner zuletzt gezeigten Ansicht
     tab = app.item("tab_contracts")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, tab.mapToScene(QPointF(30, tab.height() / 2)).toPoint())
     pump(0.4)
     assert a.currentPage == "layout" and tab.property("active")
-    # den sichtbaren Tab schließen: der rechts daneben folgt
-    a.closeTab("contracts")
-    pump(0.3)
-    assert a.openTabs == ["repair", "settings"] and a.currentPage == "settings"
     # Strg+W: Tab des sichtbaren Werkzeugs – ganz rechts, also folgt der links daneben
     QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
     pump(0.3)
@@ -481,10 +488,11 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     assert any(ziel + 2 < lage < vorher - 2 for lage in lagen) == (app.theme.effectiveProfile == "full")  # unterwegs (nur »Vollständig«)
     pump(0.4)
     assert abs(mitte(marker) - ziel) < 1
-    app.navigate("settings", 0.4)
+    app.navigate("settings", 0.6)
+    assert abs(mitte(marker) - mitte(app.item("appSettingsButton"))) < 1  # Einstellungen: unter dem Zahnrad
     app.navigate("layout", 0.6)
     assert abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
-    app.app.closeTab("settings")  # links vom aktiven Tab: dieser rückt nach, die Markierung bleibt darunter
+    app.app.closeTab("repair")  # links vom aktiven Tab: dieser rückt nach, die Markierung bleibt darunter
     pump(0.6)
     assert app.app.currentPage == "layout" and abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
     app.settings.setProfile("off")
@@ -494,19 +502,106 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     assert not app.messages()
 
 
-def test_menu_offers_open_settings_help_and_about(app) -> None:
-    """≡ Menü: PDF öffnen, Start, Einstellungen, Kurzanleitung, Neuerungen, Über – ein Eintrag führt dorthin."""
-    button = app.item("appMenuButton")
+def test_help_menu_replaces_the_app_menu(app) -> None:
+    """Seit 4.0 Beta 7 kein ≡ Menü mehr (jeder Eintrag hatte schon einen Knopf): »?« öffnet das Hilfe-Menü mit
+    Kurzanleitung, Tastenkürzel, Neuerungen und Über – ein Eintrag öffnet seinen Dialog nach dem Schließen."""
+    assert app.item("appMenuButton") is None and app.item("appMenu") is None
+    button = app.item("appHelpButton")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
     pump(0.4)
-    assert app.item("appMenu").property("opened") is True
-    names = ("menuOpen", "menuHome", "menuSettings", "menuHelp", "menuNews", "menuAbout")
-    assert [app.item(name).property("text") for name in names] == ["PDF öffnen …", "Start", "Einstellungen", "Kurzanleitung", "Neu in dieser Version", "Über PDF Tool"]
-    entry = app.item("menuSettings")
+    assert app.item("helpMenu").property("opened") is True
+    names = ("menuHelp", "menuShortcuts", "menuNews", "menuAbout")
+    assert [app.item(name).property("text") for name in names] == ["Kurzanleitung", "Tastenkürzel", "Neu in dieser Version", "Über PDF Tool"]
+    assert app.item("menuHelp").property("hint") == "F1" and app.item("menuShortcuts").property("hint") == "Strg+F1"
+    entry = app.item("menuAbout")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, entry.mapToScene(QPointF(entry.width() / 2, entry.height() / 2)).toPoint())
-    pump(0.5)
-    assert app.app.currentPage == "settings" and app.item("appMenu").property("opened") is False
+    pump(0.6)
+    assert app.item("helpMenu").property("opened") is False
+    assert app.app.dialogs.history and app.app.dialogs.history[-1]["kind"] == "about"
     assert not app.messages()
+
+
+def test_help_menu_opens_in_place_under_the_button(app) -> None:
+    """Das Hilfe-Menü liegt rechtsbündig unter »?« und bleibt beim Einblenden dort – es schob sich in Beta 7 erst nach
+    rechts und dann zurück nach links."""
+    import time
+
+    app.settings.setProfile("full")  # mit Animationen
+    button = app.item("appHelpButton")
+    menu = app.item("helpMenu")
+    surface = menu.property("contentItem").parentItem()  # Fläche des Menüs (mit Skalierung beim Einblenden)
+    rechts = button.mapToScene(QPointF(button.width(), 0)).x()
+    try:
+        QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
+        kanten = []
+        ende = time.monotonic() + 0.5
+        while time.monotonic() < ende:
+            pump(0.01)
+            if menu.property("visible"):
+                kanten.append(surface.mapToScene(QPointF(surface.width(), 0)).x())
+        assert menu.property("opened") is True and kanten
+        assert max(kanten) - min(kanten) < 1.5, kanten  # weder nach rechts noch nach links gewandert
+        assert abs(kanten[-1] - rechts) < 1.5
+    finally:
+        menu.close()
+        pump(0.3)
+        app.settings.setProfile("full")
+    assert not app.messages()
+
+
+def _press(app, item, hold: float = 0.15) -> None:
+    """Klick wie mit der Maus: drücken, kurz halten, loslassen."""
+    point = item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint()
+    QTest.mousePress(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    pump(hold)
+    QTest.mouseRelease(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    pump(0.5)
+
+
+def test_second_click_on_help_closes_the_menu(app) -> None:
+    """Der Druck auf »?« schloss das offene Menü, das Loslassen öffnete es wieder (bis 4.0 Beta 7)."""
+    button, menu = app.item("appHelpButton"), app.item("helpMenu")
+    _press(app, button)
+    assert menu.property("opened") is True and button.property("checked")
+    _press(app, button)
+    assert menu.property("visible") is False and not button.property("checked")
+
+
+def test_leaving_the_settings_with_ctrl_w_or_the_gear(app) -> None:
+    """Die Einstellungen haben seit Beta 7 keinen Tab: Strg+W und ein Klick auf das markierte Zahnrad führen zurück."""
+    a = app.app
+    a.openTool(REPAIR.key)
+    pump(0.3)
+    app.navigate("settings", 0.3)
+    QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+    pump(0.3)
+    assert a.currentPage == "repair" and a.openTabs == ["repair"]
+    app.navigate("settings", 0.3)
+    _press(app, app.item("appSettingsButton"))
+    assert a.currentPage == "repair"
+    # Seite davor gibt es nicht mehr: zum Start
+    app.navigate("settings", 0.3)
+    a.closeTab(REPAIR.key)
+    QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+    pump(0.3)
+    assert a.currentPage == "home"
+
+
+def test_key_names_follow_the_language(ui_app, monkeypatch) -> None:
+    """Auf Englisch stand im Hilfe-Menü und in Kurzinfos »Strg+F1« statt »Ctrl+F1«."""
+    import i18n
+
+    monkeypatch.delenv(i18n.FORCE_VARIABLE, raising=False)
+    shortcuts = ui_app.runtime.shortcuts
+    assert shortcuts.labels["app.shortcuts"] == "Strg+F1"
+    try:
+        ui_app.runtime.language.setChoice("en")
+        pump(0.3)
+        assert shortcuts.labels["app.shortcuts"] == "Ctrl+F1" and ui_app.item("menuShortcuts").property("hint") == "Ctrl+F1"
+    finally:
+        ui_app.runtime.language.setChoice("de")
+        pump(0.3)
+    assert shortcuts.labels["app.shortcuts"] == "Strg+F1"
 
 
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
@@ -621,6 +716,8 @@ def test_mouse_wheel_moves_the_same_distance_for_every_notch(app) -> None:
     appmod.tune_wheel(app.qt)  # einmal je Anwendung – ein zweiter Aufruf ändert nichts
     assert hints.wheelScrollLines() == lines
     app.app.dialogs.shutdown()
+    app.runtime.settings.setSection("data")  # der längste Bereich der Einstellungen – in einem niedrigen Fenster
+    app.window.resize(800, 380)
     app.navigate("settings", 0.4)
     scrollers = [item for item in app.items("wheelScroll") if item.isVisible()]
     assert len(scrollers) == 1

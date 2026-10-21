@@ -81,16 +81,27 @@ class Runtime(QObject):
         self.cfg = cfg
         self.theme = ThemeController(cfg, self)
         self.app = AppController(cfg, self)
+        # Sprache zuerst: alle weiteren Controller und die Oberfläche übersetzen über ``i18n``
+        from .language import LanguageController
+
+        self.language = LanguageController(self.app, cfg, self)
         self.app.theme = self.theme
         self.settings = SettingsController(self.app, self.theme, self)
         self.app.settings = self.settings
         self.app.register_config(self.theme.config)
+        # Im Hintergrund bereithalten (Infobereich, Start mit Windows) – eingerichtet erst von ``main``
+        from .background import Background
+
+        self.background = Background(self.app, cfg, self)
+        self.app.background = self.background
+        self.settings.attach_background(self.background)
         self.singletons: dict[str, QObject] = {
             "ThemeBackend": self.theme,
             "App": self.app,
             "Settings": self.settings,
             "Dialogs": self.app.dialogs,
             "Notices": self.app.notices,
+            "I18n": self.language,
         }
         self.preview_lookup: Callable[[str], object] = lambda _ident: None
         self.image_providers: dict[str, Callable[[], object]] = {}  # weitere Bildquellen der Werkzeuge (je Engine neu)
@@ -107,6 +118,7 @@ class Runtime(QObject):
         self.backup = BackupController(self.app, self)
         self.diagnose = DiagnoseController(self.app, self.backup, self.updates, self)
         self.updates.backup = self.backup
+        self.updates.reader = self.singletons.get("Reader")
         for controller in (self.backup, self.diagnose):
             self.app.register_work(controller.running_work)
         self.singletons["Backup"] = self.backup
@@ -117,6 +129,18 @@ class Runtime(QObject):
         self.assistant = AssistantController(self.app, cfg, self)
         self.assistant.attach_reader(self.singletons["Reader"])
         self.singletons["Assistant"] = self.assistant
+        # Tastenkürzel: ein Verzeichnis aller Befehle, eigene Kürzel (Einstellungen › Tastenkürzel)
+        from .shortcuts import ShortcutsController
+
+        self.shortcuts = ShortcutsController(self.app, cfg, self)
+        self.singletons["Shortcuts"] = self.shortcuts
+        self.language.observe("language", lambda _code: self.shortcuts.refresh())
+        # Vorlesen (Sprachausgabe von Windows) – richtet sich erst beim ersten Vorlesen ein
+        from .speech import SpeechController
+
+        self.speech = SpeechController(self.app, cfg, self)
+        self.speech.attach_reader(self.singletons["Reader"])
+        self.singletons["Speech"] = self.speech
         self.app.observe("ready", lambda ready: (self.backup.start(), self.diagnose.start()) if ready else None)
         # Windows-Einstellungen (Design, Akzentfarbe, Animationseffekte) sofort übernehmen
         from . import system
@@ -238,8 +262,11 @@ def finish_incubation(engine: QQmlEngine | None, timeout: float = 2.0) -> None:
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
-def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow:
-    """Fenster verdeckt zeigen und nach dem ersten fertigen Bild aufdecken."""
+def show_window(runtime: Runtime, engine: QQmlApplicationEngine, visible: bool = True) -> QQuickWindow:
+    """Fenster verdeckt zeigen und nach dem ersten fertigen Bild aufdecken.
+
+    ``visible=False`` (Start mit Windows im Hintergrund): Oberfläche fertig aufbauen, das Fenster aber erst
+    zeigen, wenn es gebraucht wird (``App.present_window``) – dann ebenso verdeckt bis zum ersten Bild."""
     roots = engine.rootObjects()
     if not roots:
         raise RuntimeError("Die Oberfläche konnte nicht geladen werden:\n" + "\n".join(MESSAGES[-10:]))
@@ -251,33 +278,52 @@ def show_window(runtime: Runtime, engine: QQmlApplicationEngine) -> QQuickWindow
     state.apply()
     app.geometry = state
     hwnd = int(window.winId())  # natives Fenster anlegen (noch unsichtbar)
+    from .background import launcher_path
+
+    winsys.set_window_identity(hwnd, launcher_path())  # Taskleiste: »PDF Tool« statt »Python«
     app.apply_chrome()
     runtime.theme.darkChanged.connect(app.apply_chrome)
     runtime.theme.revisionChanged.connect(app.apply_chrome)
-    cloaked = native_windows() and winsys.can_cloak() and winsys.set_cloak(hwnd, True)
-
-    shown = False
+    started = False
+    cloaked = False
+    waiting = False  # auf das erste Bild nach dem Zeigen
 
     def first_frame() -> None:
         # Mehrere Bilder können schon eingereiht sein (QueuedConnection) – nur das erste zählt.
-        nonlocal shown
-        if shown:
+        nonlocal started, cloaked, waiting
+        if not waiting:
             return
-        shown = True
+        waiting = False
         window.frameSwapped.disconnect(first_frame)
         if cloaked:
             winsys.set_cloak(hwnd, False)
+            cloaked = False
+        if started:
+            return
+        started = True
         from diagnostics.applog import UI
         from diagnostics.applog import get as get_log
 
         get_log(UI).info("Oberfläche bereit: Fenster %d × %d, Skalierung %d %%", window.width(), window.height(), round(window.devicePixelRatio() * 100))
         app.after_start()
 
-    window.frameSwapped.connect(first_frame, Qt.ConnectionType.QueuedConnection)
-    if placement.maximized:
-        window.showMaximized()
-    else:
-        window.show()
+    def present() -> None:
+        nonlocal cloaked, waiting
+        if not waiting:
+            waiting = True
+            window.frameSwapped.connect(first_frame, Qt.ConnectionType.QueuedConnection)
+        cloaked = native_windows() and winsys.can_cloak() and winsys.set_cloak(hwnd, True)
+        if state.maximized:
+            window.showMaximized()
+        else:
+            window.show()
+        if started:  # wieder gezeigt (Infobereich, weiterer Start): nach vorn holen
+            window.raise_()
+            window.requestActivate()
+
+    app.presenter = present
+    if visible:
+        present()
     return window
 
 
@@ -336,14 +382,27 @@ def main(argv: list[str] | None = None) -> int:
     # »Öffnen mit«: PDFs aus der Befehlszeile – läuft PDF Tool schon, öffnet die laufende App sie
     from . import instance
 
-    paths = instance.pdf_arguments((argv if argv is not None else sys.argv)[1:])
-    if paths:
+    from . import background
+
+    arguments = (argv if argv is not None else sys.argv)[1:]
+    paths = instance.pdf_arguments(arguments)
+    hidden = background.ARGUMENT in arguments and not paths
+    if hidden:
+        # Start mit Windows: nur mit eingeschalteter Einstellung und nur, wenn PDF Tool noch nicht läuft
+        if not background.enabled_in(cfg):
+            background.sync_autostart(False)
+            return 0
+        if instance.forward([], show=False):
+            return 0
+    else:
+        # Läuft PDF Tool schon (sichtbar oder im Hintergrund), zeigt die laufende App ihr Fenster bzw. öffnet die PDFs
         winsys.allow_foreground()
-        if instance.forward(paths):
+        if instance.forward(paths, show=True):
             return 0
     runtime = Runtime(cfg)
-    if paths:
-        # PDF per Doppelklick bzw. »Öffnen mit«: gleich im Reader beginnen – er ist im ersten Bild fertig,
+    if any(path.lower().endswith(".pdf") for path in paths):
+        # PDF per Doppelklick bzw. »Öffnen mit«: gleich im Reader beginnen (Bilder über »Senden an«: Startseite und
+        # »PDF aus Bildern«) – er ist im ersten Bild fertig,
         # ohne Umweg über die Startseite (sie lädt danach im Hintergrund wie die übrigen Seiten)
         runtime.app.navigate("reader")
 
@@ -353,15 +412,18 @@ def main(argv: list[str] | None = None) -> int:
 
     sys.excepthook = report
     engine = create_engine(runtime)
-    window = show_window(runtime, engine)
+    window = show_window(runtime, engine, visible=False) if hidden else show_window(runtime, engine)
     reader = runtime.reader.controller
+    runtime.background.attach(qt_app)
+    # Abmelden oder Herunterfahren von Windows: Einstellungen sichern, bevor Windows den Prozess beendet
+    qt_app.commitDataRequest.connect(lambda _manager: runtime.app.persist() if not runtime.app.closing else None)
 
     def open_received(received: list[str]) -> None:
-        if window.visibility() == window.Visibility.Minimized:
-            window.showNormal()
-        window.raise_()
-        window.requestActivate()
-        reader.open_external(received)
+        if not received and runtime.app.closing:
+            return
+        runtime.app.present_window()
+        if received:
+            reader.open_external(received)
 
     server = instance.InstanceServer(open_received, runtime)
     runtime.app.at_shutdown(server.close)
@@ -387,7 +449,18 @@ def restart_app() -> None:
     Instanz alles gespeichert hat – die neue liest beim Start den neuen Stand."""
     import subprocess
 
-    args = [sys.executable, *sys.orig_argv[1:]] if getattr(sys, "orig_argv", None) else [sys.executable, *sys.argv]
+    # Nur Interpreter-Optionen und Startskript übernehmen: ohne »--hintergrund« (sonst käme PDF Tool unsichtbar
+    # oder gar nicht zurück) und ohne die PDFs vom ursprünglichen Start
+    original = list(getattr(sys, "orig_argv", None) or [])
+    if original and len(original) >= len(sys.argv):
+        args = [sys.executable, *original[1 : len(original) - len(sys.argv) + 1]]
+    else:
+        args = [sys.executable, *sys.argv[:1]]
+    from .background import launcher_path
+
+    launcher = launcher_path()
+    if launcher is not None:
+        args = [str(launcher)]  # über PDF-Tool.exe: Symbol und Name von PDF Tool statt Python
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

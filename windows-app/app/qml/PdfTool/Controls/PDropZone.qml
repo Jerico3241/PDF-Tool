@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import PdfTool.Style
+import PdfTool.Backend
 
 // Ablagefläche für Drag & Drop: gestrichelter Rahmen; beim Darüberziehen wechseln Rahmen,
 // Fläche und Symbol weich in die Akzentfarbe, das Symbol hebt sich leicht an.
@@ -14,7 +15,7 @@ Item {
     implicitHeight: column.implicitHeight + 48
     implicitWidth: 320
     Accessible.role: Accessible.Grouping
-    Accessible.name: title
+    Accessible.name: I18n.tr(title, I18n.revision)
 
     Rectangle {
         anchors.fill: parent
@@ -57,7 +58,7 @@ Item {
         }
         PText {
             width: parent.width
-            text: root.title
+            text: I18n.tr(root.title, I18n.revision)
             textStyle: "bodyStrong"
             horizontalAlignment: Text.AlignHCenter
             wrap: true
@@ -65,7 +66,7 @@ Item {
         }
         PText {
             width: parent.width
-            text: root.text
+            text: I18n.tr(root.text, I18n.revision)
             tone: "secondary"
             horizontalAlignment: Text.AlignHCenter
             wrap: true

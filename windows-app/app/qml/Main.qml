@@ -15,7 +15,7 @@ ApplicationWindow {
     width: 1140
     height: 800
     visible: false
-    title: App.windowTitle
+    title: I18n.tr(App.windowTitle, I18n.revision)
     color: Theme.background
     font: Typography.body
 
@@ -26,7 +26,7 @@ ApplicationWindow {
         objectName: "shell"
         anchors.fill: parent
         focus: true
-        pages.order: ["home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "settings"]
+        pages.order: ["home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "actions", "settings"]
         pages.components: ({
             "home": homePage,
             "reader": readerPage,
@@ -39,6 +39,7 @@ ApplicationWindow {
             "comparison": comparisonPage,
             "customers": customersPage,
             "repair": repairPage,
+            "actions": actionsPage,
             "settings": settingsPage
         })
     }
@@ -53,5 +54,6 @@ ApplicationWindow {
     Component { id: comparisonPage; ComparisonPage {} }
     Component { id: customersPage; CustomersPage {} }
     Component { id: repairPage; RepairPage {} }
+    Component { id: actionsPage; ActionsPage {} }
     Component { id: settingsPage; SettingsPage { onThemeRequested: (apply) => shell.changeTheme(apply) } }
 }

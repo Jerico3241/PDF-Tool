@@ -167,9 +167,9 @@ def test_analysis_matches_single_mode_and_caches_unchanged_files(tmp_path: Path)
     calls = []
     original = analyzer.analyze_file
 
-    def counting(path):
+    def counting(path, *args):
         calls.append(path)
-        return original(path)
+        return original(path, *args)
 
     analyzer.analyze_file, saved = counting, analyzer.analyze_file
     try:

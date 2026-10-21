@@ -135,7 +135,7 @@ def run_job(job: Job, cancelled: Callable[[], bool], analyze: Callable = analyze
     """Eine PDF erstellen (Hintergrund-Thread). Wirft nie – jedes Ergebnis ist ein ``JobResult``."""
     from engine import Abgebrochen, PdfAuftrag, ausgabe_pfad, erstelle_pdf
 
-    from ..preview import RENDER_LOCK
+    from ..preview import BUILD_LOCK
 
     started = time.monotonic()
 
@@ -164,7 +164,7 @@ def run_job(job: Job, cancelled: Callable[[], bool], analyze: Callable = analyze
         for attempt in range(3):
             try:
                 auftrag = PdfAuftrag(**job.fields, zielordner=Path(job.folder), ausgabe=target, ueberschreiben=overwrite, abbrechen=cancelled)
-                with RENDER_LOCK:  # nie parallel zu Vorschau oder Einzel-PDF
+                with BUILD_LOCK:  # nie parallel zu Vorschau oder Einzel-PDF
                     path = erstelle_pdf(auftrag)
                 break
             except FileExistsError:

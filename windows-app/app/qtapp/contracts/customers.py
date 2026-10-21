@@ -299,7 +299,7 @@ class CustomerController(Observable):
                 "info",
                 OPTIONAL_HINT,
                 title="Kundenakte",
-                actions=(("Einstellungen öffnen", lambda: self.app.navigate("settings")),),
+                actions=(("Einstellungen öffnen", lambda: self.app.settings.show("contracts") if self.app.settings is not None else self.app.navigate("settings")),),
                 status=False,
                 animate=False,
             )

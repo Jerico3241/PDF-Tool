@@ -18,19 +18,19 @@ ColumnLayout {
         closable: false
         shown: root.view !== null && root.view.noteText !== ""
         severity: root.view ? root.view.noteSeverity : "info"
-        title: root.view ? root.view.noteTitle : ""
-        message: root.view ? root.view.noteText : ""
+        title: I18n.tr(root.view ? root.view.noteTitle : "", I18n.revision)
+        message: I18n.tr(root.view ? root.view.noteText : "", I18n.revision)
     }
     RowLayout {
         Layout.fillWidth: true
         visible: root.view !== null && root.view.mode === "comparison"
         spacing: 12
-        PText { text: root.view ? root.view.headline : ""; textStyle: "bodyStrong"; Layout.fillWidth: true }
+        PText { text: I18n.tr(root.view ? root.view.headline : "", I18n.revision); textStyle: "bodyStrong"; Layout.fillWidth: true }
         PButton {
             visible: root.showOpen
-            text: "Vergleich öffnen"
+            text: I18n.tr("Vergleich öffnen", I18n.revision)
             iconName: "branch_compare"
-            tip: "Alle Änderungen mit Einzelheiten anzeigen"
+            tip: I18n.tr("Alle Änderungen mit Einzelheiten anzeigen", I18n.revision)
             onClicked: Comparison.openDetails()
         }
     }

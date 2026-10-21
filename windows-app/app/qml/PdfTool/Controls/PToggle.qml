@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Umschalter: Daumen gleitet, Spur wechselt die Farbe; Hover vergrößert den Daumen leicht.
 // Links steht auf Wunsch »Ein«/»Aus« (wie in den Einstellungen von Windows 11).
@@ -17,7 +18,7 @@ T.Switch {
     focusPolicy: Qt.StrongFocus
     font: Typography.body
     Accessible.role: Accessible.CheckBox
-    Accessible.name: label !== "" ? label : (text !== "" ? text : tip)
+    Accessible.name: I18n.tr(label !== "" ? label : (text !== "" ? text : tip), I18n.revision)
     Accessible.checked: checked
 
     Text {
@@ -26,13 +27,13 @@ T.Switch {
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: track.left
         anchors.rightMargin: 12
-        text: control.checked ? "Ein" : "Aus"
+        text: I18n.tr(control.checked ? "Ein" : "Aus", I18n.revision)
         font: control.font
         color: control.enabled ? Theme.textPrimary : Theme.disabled
         // Breite von »Aus« und »Ein« angleichen – der Schalter bleibt an seinem Platz
         width: Math.max(metrics.advanceWidth, implicitWidth)
         horizontalAlignment: Text.AlignRight
-        TextMetrics { id: metrics; font: control.font; text: "Aus" }
+        TextMetrics { id: metrics; font: control.font; text: I18n.tr("Aus", I18n.revision) }
     }
 
     indicator: Rectangle {
@@ -71,7 +72,7 @@ T.Switch {
     contentItem: Item {}
 
     PToolTip {
-        text: control.tip
+        text: I18n.tr(control.tip, I18n.revision)
         visible: control.tip !== "" && control.hovered
     }
 }

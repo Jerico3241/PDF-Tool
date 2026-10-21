@@ -258,6 +258,26 @@ def test_drag_a_document_tab_to_a_new_place(app, tmp_path: Path) -> None:
 
 
 # --- Letzte Sitzung -------------------------------------------------------------------------------------------------
+def test_pdfs_reopen_once_after_an_automatic_update(ui_app, tmp_path: Path, config_file: Path) -> None:
+    """Automatisches Update (4.0 Beta 7): auch ohne die Einstellung »letzte Sitzung« öffnet der Neustart danach die
+    PDFs einmal wieder – der übernächste Start nicht mehr."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    assert h.settings.readerRestoreSession is False
+    open_many(h, tmp_path, "eins", "zwei")
+    reader(h).restore_after_update = True  # wie vor dem Beenden für das Setup
+    h = neustart(h)
+    r = reader(h)
+    assert wait_until(lambda: r.tabs.count == 2 and r.opening == 0, 30)
+    settle(h)
+    assert names(h) == ["eins.pdf", "zwei.pdf"]
+    h = neustart(h)
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    assert "reader_sitzung_update" not in data and "reader_sitzung" not in data
+    pump(1.0)
+    assert reader(h).tabs.count == 0
+
+
 def test_session_restore_off_by_default_and_on_after_enabling(ui_app, tmp_path: Path, config_file: Path) -> None:
     """Standard: aus – nach einem Neustart sind keine PDFs offen, die Einstellungen enthalten keine Liste. Eingeschaltet
     merkt sich das Beenden die geöffneten PDFs (Pfad, Seite, das aktive); der nächste Start öffnet sie im Hintergrund
@@ -446,7 +466,7 @@ def test_night_mode_survives_a_restart(ui_app) -> None:
 
 # --- Schnellwerkzeuge der Startseite --------------------------------------------------------------------------------
 def test_quick_tools_open_a_pdf_and_start_the_tool(ui_app, tmp_path: Path, monkeypatch) -> None:
-    """Startseite → Schnellwerkzeuge: acht Kacheln; ein Klick wählt eine PDF, öffnet sie im Tab und startet das
+    """Startseite → Schnellwerkzeuge: zehn Kacheln; ein Klick wählt eine PDF, öffnet sie im Tab und startet das
     Werkzeug, sobald das Dokument geöffnet und aktiv ist (``runAction``). »Zusammenführen« hängt weitere PDFs an.
     Abgebrochene Auswahl: nichts geschieht; ein schon offenes Dokument wird aktiv und das Werkzeug startet dort."""
     from qtapp import files
@@ -459,14 +479,14 @@ def test_quick_tools_open_a_pdf_and_start_the_tool(ui_app, tmp_path: Path, monke
     monkeypatch.setattr(DocumentController, "runAction", lambda self, name: calls.append((self.ident, name, r.current is self)), raising=False)
     monkeypatch.setattr(DocumentController, "mergeFiles", lambda self: calls.append((self.ident, "merge", r.current is self)))
     tiles = {entry["action"]: entry for entry in r.quickTools}
-    assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
-    assert list(tiles) == ["optimize", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
+    assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Als PDF/A speichern", "PDF aus Bildern", "Scannen", "Office in PDF", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
+    assert list(tiles) == ["optimize", "pdfa", "images", "scan", "office", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
     h.navigate("home", 0.3)
     for action in tiles:
         tile = h.item(f"quickTool_{action}")
         assert tile is not None and tile.isVisible() and tile.property("title") == tiles[action]["title"]
     grid = h.item("homeQuickGrid")
-    assert grid.property("columns") in (1, 2, 4)
+    assert grid.property("columns") in (1, 2, 5)
     # Abgebrochen: nichts
     click(h, center(h.item("quickTool_optimize")))
     pump(0.3)

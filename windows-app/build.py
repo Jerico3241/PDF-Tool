@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -107,6 +108,15 @@ TESSDATA = {
     "deu.traineddata": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
     "eng.traineddata": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
     "osd.traineddata": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff",
+    # seit 4.0.0-beta.5: weitere Sprachen (zusammen 27 MB)
+    "fra.traineddata": "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
+    "ita.traineddata": "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827",
+    "spa.traineddata": "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
+    "nld.traineddata": "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6",
+    "por.traineddata": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
+    "pol.traineddata": "c4476cdbc0e33d898d32345122b7be1cbf85ace15f920f06c7714756e1ef79b2",
+    "tur.traineddata": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7",
+    "rus.traineddata": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225",
 }
 OCR = PAYLOAD / "ocr"  # passt zu tools/pdf_editor/ocr.py (BUNDLED_DIR)
 
@@ -122,6 +132,9 @@ LLAMA_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_REL
 LLAMA_SHA256 = "a23e548c6b3525c38bcfeceaff919786ae06741857043cb670279b70100e5483"  # Datei des Releases, über HTTPS von github.com
 LLAMA_BACKENDS = "ggml-cpu-*.dll"  # lädt llama-server zur Laufzeit (nicht in den Importtabellen)
 AI = PAYLOAD / "ai"  # passt zu assistant/runtime.py (BUNDLED_DIR)
+# Startprogramm PDF-Tool.exe (Symbol und Name von PDF Tool in »Öffnen mit«, bei den Standard-Apps und im Startmenü)
+LAUNCHER_SOURCE = ROOT / "installer" / "launcher"
+LAUNCHER = PAYLOAD / "PDF-Tool.exe"
 
 # Was die App zur Laufzeit nicht braucht – seit 2.7.0 auch kein tkinter/Tcl/Tk mehr (Qt-Oberfläche)
 RUNTIME_REMOVE = [
@@ -145,6 +158,7 @@ SITE_REMOVE_SUFFIXES = {".pyi", ".pxd", ".pyx", ".c", ".h", ".cpp", ".lib", ".a"
 # Diese Dateien müssen im fertigen Paket liegen
 REQUIRED_PAYLOAD = [
     "VERSION",
+    "PDF-Tool.exe",
     "README.txt",
     "THIRD_PARTY_LICENSES.md",
     "LICENSE",
@@ -160,6 +174,9 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/packaging/__init__.py",
     "runtime/Lib/site-packages/pypdfium2/__init__.py",
     "runtime/Lib/site-packages/pypdf/__init__.py",
+    "runtime/Lib/site-packages/comtypes/client/__init__.py",
+    "runtime/Lib/site-packages/cryptography/hazmat/bindings/_rust.pyd",
+    "runtime/Lib/site-packages/asn1crypto/cms.py",
     "runtime/Lib/site-packages/pypdfium2_raw/pdfium.dll",
     "runtime/Lib/site-packages/shiboken6/__init__.py",
     "runtime/Lib/site-packages/shiboken6/Shiboken.pyd",
@@ -193,7 +210,12 @@ REQUIRED_PAYLOAD = [
     "app/design.py",
     "app/mica.py",
     "app/winsys.py",
+    "app/handoff.py",
+    "app/i18n/__init__.py",
+    "app/i18n/en.json",
+    "app/qtapp/language.py",
     "app/qtapp/application.py",
+    "app/qtapp/background.py",
     "app/qtapp/app.py",
     "app/qtapp/repair.py",
     "app/qtapp/settings.py",
@@ -248,6 +270,10 @@ REQUIRED_PAYLOAD = [
     "app/tools/pdf_repair/recovery/scanner.py",
     "app/tools/pdf_repair/recovery/rebuild.py",
     "app/tools/pdf_editor/ocr.py",
+    "app/tools/pdf_editor/pdfa.py",
+    "app/tools/pdf_editor/imagepdf.py",
+    "app/tools/pdf_actions/runner.py",
+    "app/qtapp/actions.py",
     "assets/icon.ico",
     "assets/hott_logo_final.png",
     "ocr/tesseract.exe",
@@ -256,6 +282,14 @@ REQUIRED_PAYLOAD = [
     "ocr/tessdata/deu.traineddata",
     "ocr/tessdata/eng.traineddata",
     "ocr/tessdata/osd.traineddata",
+    "ocr/tessdata/fra.traineddata",
+    "ocr/tessdata/ita.traineddata",
+    "ocr/tessdata/spa.traineddata",
+    "ocr/tessdata/nld.traineddata",
+    "ocr/tessdata/por.traineddata",
+    "ocr/tessdata/pol.traineddata",
+    "ocr/tessdata/tur.traineddata",
+    "ocr/tessdata/rus.traineddata",
     "app/assistant/runtime.py",
     "app/qtapp/assistant.py",
     "ai/llama-server.exe",
@@ -528,6 +562,62 @@ def prepare_ai(target: Path, search: list[Path]) -> None:
     remove(unpacked)
 
 
+def _vcvars() -> Path | None:
+    """vcvars64.bat von Visual Studio (Build Tools) über vswhere – unter Windows."""
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    if not vswhere.is_file():
+        return None
+    found = subprocess.run(
+        [str(vswhere), "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-find", r"VC\Auxiliary\Build\vcvars64.bat"],
+        capture_output=True, text=True, check=False,
+    ).stdout.strip().splitlines()
+    return Path(found[0]) if found and Path(found[0]).is_file() else None
+
+
+def build_launcher(target: Path, version: str) -> None:
+    """``PDF-Tool.exe`` aus ``installer/launcher`` bauen: startet ``runtime\\pythonw.exe -s -OO app\\start.py`` mit den
+    übergebenen Argumenten und trägt Symbol, Name und Version von PDF Tool. Windows: Visual C++ (vswhere), sonst
+    MinGW-w64 (``x86_64-w64-mingw32-gcc``/``windres``)."""
+    work = BUILD / "launcher"
+    remove(work)
+    shutil.copytree(LAUNCHER_SOURCE, work)
+    shutil.copy2(ASSETS / "icon.ico", work / "icon.ico")
+    numbers = [int(part) for part in re.findall(r"\d+", version.split("-")[0])[:3]] + [0, 0, 0]
+    number = ",".join(str(value) for value in numbers[:3] + [0])
+    # Version für die Ressourcen (launcher.rc bindet version.h ein) – keine Anführungszeichen auf der Befehlszeile
+    (work / "version.h").write_text(f'#define PDFTOOL_VERSION_NUM {number}\n#define PDFTOOL_VERSION_STR "{version}"\n', encoding="ascii")
+    log("Baue das Startprogramm PDF-Tool.exe …")
+    if sys.platform == "win32":
+        vcvars = _vcvars()
+        if vcvars is None:
+            fail("Visual C++ (Build Tools) nicht gefunden – nötig für PDF-Tool.exe (vswhere, Komponente VC.Tools.x86.x64).")
+        script = work / "build.cmd"
+        script.write_text(
+            "@echo off\r\n"
+            f'call "{vcvars}" >nul || exit /b 1\r\n'
+            "rc /nologo /fo launcher.res launcher.rc || exit /b 1\r\n"
+            "cl /nologo /O1 /MT /W4 /WX /DUNICODE /D_UNICODE launcher.c launcher.res /Fe:PDF-Tool.exe /link /SUBSYSTEM:WINDOWS user32.lib ole32.lib uuid.lib || exit /b 1\r\n",
+            encoding="ascii",
+        )
+        result = subprocess.run(["cmd", "/c", str(script)], cwd=str(work), capture_output=True, text=True, check=False)
+    else:
+        gcc, windres = shutil.which("x86_64-w64-mingw32-gcc"), shutil.which("x86_64-w64-mingw32-windres")
+        if not gcc or not windres:
+            fail("MinGW-w64 (x86_64-w64-mingw32-gcc und -windres) nicht gefunden – nötig für PDF-Tool.exe außerhalb von Windows.")
+        result = subprocess.run([windres, "-i", "launcher.rc", "-O", "coff", "-o", "launcher.res.o"], cwd=str(work), capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            result = subprocess.run(
+                [gcc, "-O2", "-Wall", "-Wextra", "-Werror", "-municode", "-mwindows", "-static", "-s", "launcher.c", "launcher.res.o", "-o", "PDF-Tool.exe", "-lole32", "-luuid"],
+                cwd=str(work), capture_output=True, text=True, check=False,
+            )
+    built = work / "PDF-Tool.exe"
+    if result.returncode != 0 or not built.is_file():
+        fail("PDF-Tool.exe konnte nicht gebaut werden:\n" + (result.stdout + result.stderr)[-3000:])
+    shutil.copy2(built, target)
+    log(f"  PDF-Tool.exe ({target.stat().st_size // 1024} KB)")
+    remove(work)
+
+
 def prepare_payload(version: str, compile_pyc: bool) -> None:
     runtime = PAYLOAD / "runtime"
     runtime.mkdir(parents=True)
@@ -556,6 +646,7 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copy2(ROOT.parent / "THIRD_PARTY_LICENSES.md", PAYLOAD / "THIRD_PARTY_LICENSES.md")
     shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von PDF Tool, ohne Zustimmungsseite im Setup
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
+    build_launcher(LAUNCHER, version)
     prepare_ocr(OCR)
     prepare_ai(AI, [runtime, site / "PySide6"])
 

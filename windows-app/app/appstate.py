@@ -141,12 +141,20 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "KI-Assistent (optional, standardmäßig aus): Fragen zum geöffneten PDF stellen und Dokumente zusammenfassen – mit Seitenangaben zum Anklicken, vollständig auf diesem PC. Einschalten unter Einstellungen → KI-Assistent.",
-    "Das Sprachmodell lädt PDF Tool nur auf Ihren Wunsch (1,2 oder 2,6 GB, mit Prüfsumme) – und »Modell entfernen« gibt den Speicherplatz jederzeit wieder frei. Dokumente, Fragen und Antworten verlassen den PC nicht.",
-    "Schützen und Weitergeben (seit Beta 1): Schwärzen, Dokument bereinigen, Kennwortschutz mit AES-256, Reduzieren und PDF verkleinern – über die Schaltfläche »Schützen«.",
-    "Seiten gestalten, unterschreiben und stempeln: Kopf- und Fußzeile, Seitenzahlen, Wasserzeichen, Zuschneiden, Lesezeichen und Links; Unterschrift zeichnen oder aus einem Bild einlesen.",
-    "Per E-Mail senden aus Reader, Vertragsübersicht und Stapel; Tabs umordnen und wieder öffnen (Strg+Umschalt+T), letzte Sitzung auf Wunsch, Nachtmodus und Schnellwerkzeuge auf der Startseite.",
-    "Beta-Version zum Testen (Einstellungen → Updates: »Beta-Versionen erhalten«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
+    "Beta 4.0 – achter Teil: Fehler behoben. Das Hilfe-Menü springt nicht mehr und schließt sich beim zweiten Klick auf »?«, Strg+W und das Zahnrad schließen die Einstellungen, Signaturen und PDF in Excel arbeiten genauer, die englische Oberfläche übersetzt vollständiger, automatische Updates warten, bis alle PDFs offen sind.",
+    "Aus Beta 7: Updates suchen und installieren sich beim Start von selbst (PDFs öffnen sich danach wieder), in den Einstellungen wird der Knopf zu »Jetzt installieren« und zeigt die Neuerungen. Oben ist aufgeräumt: kein ≡ Menü mehr, »?« ist das Hilfe-Menü, die Einstellungen öffnen sich ohne eigenen Tab.",
+    "Aus Beta 6: Englische Oberfläche (Einstellungen → Sprache), digitale Signatur mit Zertifikat, PDF in Word, Excel oder Text umwandeln (und Office-Dateien in PDF), der KI-Assistent übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner. Texterkennung startet wieder richtig.",
+    "Aus Beta 5: Scannen direkt in eine PDF (Startseite → »Scannen«), Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y), Texterkennung in zehn Sprachen, Text über Seitengrenzen markieren und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).",
+    "Aus Beta 4: PDF-Anhänge aus Outlook öffnen sich wieder (auch mit strengen Defender-Regeln), in der Taskleiste steht »PDF Tool« statt »Python«, das Symbol ist auch klein scharf.",
+    "Aus Beta 3: aufgeräumt. PDF-Anhänge aus Outlook öffnen sich wieder, Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
+    "Aus Beta 2: Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
+    "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",
+    "Aus Beta 1: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
+    "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Alle Werkzeuge« → »Schützen« und als Schnellwerkzeug.",
+    "PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF …) in die App ziehen oder im Explorer über Rechtsklick → »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
+    "Updates mit einem Klick: PDF Tool lädt neue Versionen selbst herunter. »Jetzt installieren« aktualisiert ohne Setup-Assistent und startet die App danach neu.",
+    "Aufgeräumte Einstellungen: oben eine Leiste mit den Bereichen Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose und Info.",
+    "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 
 DEFAULT_REGELN = [{"enthaelt": "Hott-KI", "zyklus": "jährlich"}]
@@ -281,7 +289,8 @@ def migrate_legacy_config(target: Path | None = None, legacy: Path | None = None
 
 
 def load_config(path: Path | None = None) -> dict:
-    """Liest die Einstellungen. Beschädigte Dateien liefern leere Einstellungen."""
+    """Liest die Einstellungen. Beschädigte Dateien liefern leere Einstellungen; die beschädigte Datei bleibt als
+    ``….defekt`` liegen, damit das nächste Speichern sie nicht spurlos ersetzt."""
     target = Path(path or CONFIG_FILE)
     if path is None:
         migrate_legacy_config(target)
@@ -289,9 +298,19 @@ def load_config(path: Path | None = None) -> dict:
         return {}
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError:
+        return {}
+    except ValueError:
+        _keep_damaged(target)
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _keep_damaged(target: Path) -> None:
+    try:
+        shutil.copy2(target, target.with_name(target.name + ".defekt"))
+    except OSError:
+        pass
 
 
 def save_config(data: dict, path: Path | None = None) -> bool:
@@ -303,6 +322,8 @@ def save_config(data: dict, path: Path | None = None) -> bool:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(data, handle, ensure_ascii=False, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())  # Stromausfall beim Abmelden: keine leere Datei
             os.replace(temp, target)
         finally:
             if os.path.exists(temp):

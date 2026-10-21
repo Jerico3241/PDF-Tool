@@ -145,6 +145,38 @@ SPALTE_MAIL = ("Rechnungsempfänger Email", "Rechnungsempfaenger Email")
 SPALTE_KUNDE = ("Kundennummer", "Kd-Nr.", "KdNr")
 SPALTE_FIRMA = ("Firmenname", "Firma", "Kunde")
 SPALTE_STATUS = ("Anwenderstatus", "Status")
+# Beendete Verträge (Anwenderstatus), die auf Wunsch mit in der Übersicht stehen – mit Status-Hinweis
+GEKUENDIGT = "Gekündigt"
+ABGELAUFEN = "Abgelaufen"
+BEENDET = {"gekündigt": GEKUENDIGT, "gekuendigt": GEKUENDIGT, "abgelaufen": ABGELAUFEN}
+
+
+def beendete_auswahl(beendete) -> frozenset[str]:
+    """Welche beendeten Verträge mit in die Übersicht gehören: ``True`` beide (früherer gemeinsamer Schalter), ``False``/leer
+    keine, sonst eine Sammlung aus »Gekündigt« und »Abgelaufen« (ein einzelner Text gilt als Sammlung mit einem Wert)."""
+    if beendete is True:
+        return frozenset((GEKUENDIGT, ABGELAUFEN))
+    if not beendete:
+        return frozenset()
+    if isinstance(beendete, str):
+        beendete = (beendete,)
+    return frozenset(wert for wert in beendete if wert in (GEKUENDIGT, ABGELAUFEN))
+
+
+def beendete_werte(beendete) -> tuple[str, ...]:
+    """Auswahl in fester Reihenfolge (»Gekündigt« vor »Abgelaufen«) – für Aufträge und Einstellungen."""
+    auswahl = beendete_auswahl(beendete)
+    return tuple(wert for wert in (GEKUENDIGT, ABGELAUFEN) if wert in auswahl)
+
+
+def beendet_art(beendete) -> str:
+    """»gekündigt«, »abgelaufen« oder »gekündigt/abgelaufen« (leer ohne Auswahl) – für die Zahl in der Prüfung."""
+    return "/".join(wert.lower() for wert in beendete_werte(beendete))
+
+
+def _beendet_schluessel(beendete) -> list[str]:
+    auswahl = beendete_auswahl(beendete)
+    return [schluessel for schluessel, wert in BEENDET.items() if wert in auswahl]
 # Für die PDF zusätzlich zur Vertragsnummer erforderlich (Anzeigename, Varianten)
 PDF_SPALTEN = (
     ("Beginnt am", SPALTE_BEGINN),
@@ -166,11 +198,31 @@ def clean_bemerkung(text: str) -> str:
     return text.strip()
 
 
+def als_datum(value):
+    """Ein Zellwert als Datum. Text wird deutsch gelesen (»01.02.2021« = 1. Februar), auch wenn pandas aus
+    dem ersten Wert sonst Monat-zuerst raten würde; echte Excel-Datumswerte bleiben, wie sie sind."""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return pd.NaT
+        for muster in ("%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d.%m.%Y %H:%M"):
+            stamp = pd.to_datetime(text, format=muster, errors="coerce")
+            if not pd.isna(stamp):
+                return stamp
+        return pd.to_datetime(text, errors="coerce", dayfirst=True)
+    return pd.to_datetime(value, errors="coerce")
+
+
+def datum_spalte(werte: "pd.Series") -> "pd.Series":
+    """Eine Spalte als Datum (siehe ``als_datum``), Zelle für Zelle."""
+    return pd.to_datetime(werte.map(als_datum), errors="coerce")
+
+
 def fmt_date(d) -> str:
     if pd.isna(d):
         return "–"
     if not hasattr(d, "strftime"):
-        d = pd.to_datetime(d, errors="coerce")
+        d = als_datum(d)
         if pd.isna(d):
             return "–"
     return d.strftime("%d.%m.%Y")
@@ -304,6 +356,7 @@ class Vertragsdaten:
     netto: float | str | None = None
     zahlungsart: str | None = None
     zeile: int | None = None  # Excel-Zeile – nur zur Information, nie Identität
+    status: str = ""  # leer: aktiv; sonst »Gekündigt« bzw. »Abgelaufen« (nur wenn ausgewählt, ``beendete``)
 
     def anzeige(self, regeln=None) -> dict[str, str]:
         """Die Werte der Vertragsübersicht ohne Regelwerk (Zyklus-Regeln: ``regeln``)."""
@@ -352,11 +405,11 @@ def _rohbetrag(value) -> float | str | None:
 def _iso_datum(value) -> str | None:
     if value is None:
         return None
-    stamp = pd.to_datetime(value, errors="coerce")
+    stamp = als_datum(value)
     return None if pd.isna(stamp) else stamp.strftime("%Y-%m-%d")
 
 
-def vertragsdaten(df: "pd.DataFrame", col_vertrag: str, col_bemerkung: str = "", col_beginn: str = "", col_zyklus: str = "", col_netto: str = "", col_zahlung: str = "", col_beginn_roh: str = "") -> list[Vertragsdaten]:
+def vertragsdaten(df: "pd.DataFrame", col_vertrag: str, col_bemerkung: str = "", col_beginn: str = "", col_zyklus: str = "", col_netto: str = "", col_zahlung: str = "", col_beginn_roh: str = "", col_status: str = "") -> list[Vertragsdaten]:
     """Rohwerte je Vertrag in der Reihenfolge von ``df`` (bereits gefiltert und sortiert).
 
     ``col_beginn`` enthält die als Datum gelesenen Werte (wie für Sortierung und PDF),
@@ -377,6 +430,7 @@ def vertragsdaten(df: "pd.DataFrame", col_vertrag: str, col_bemerkung: str = "",
                 netto=_rohbetrag(row[col_netto]) if col_netto else None,
                 zahlungsart=_rohtext(row[col_zahlung]) if col_zahlung else None,
                 zeile=None if quelle is None or pd.isna(quelle) else int(quelle),
+                status=BEENDET.get(str(row[col_status]).strip().casefold(), "") if col_status else "",
             )
         )
     return liste
@@ -439,6 +493,8 @@ class PdfAuftrag:
     abbrechen: Callable[[], bool] | None = None
     # Ergebnis: die Verträge der erstellten PDF (Rohwerte) – Grundlage des Vertragsstands
     vertraege: tuple = field(default=(), repr=False)
+    # Gekündigte und abgelaufene Verträge mit aufführen (Anwenderstatus; in der PDF mit Status-Hinweis)
+    beendete: bool | tuple[str, ...] = False  # mit aufführen: »Gekündigt«, »Abgelaufen« (True: beide)
 
 
 DEFAULT_DATEINAME = "Vertragsuebersicht_Kd{kd}.pdf"
@@ -595,14 +651,46 @@ def excel_stile(tabelle: ExcelTabelle, daten: "pd.DataFrame", spalten: list[str]
     return read_styles(tabelle.pfad, rows, [c for c in cols if c] + [vertrag], expected)
 
 
-def nur_aktive(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Nur Zeilen mit Anwenderstatus Aktiv. Fehlt die Spalte, bleibt die Liste unverändert."""
+def nur_aktive(df: pd.DataFrame, beendete=False) -> tuple[pd.DataFrame, int]:
+    """Nur Zeilen mit Anwenderstatus Aktiv – dazu die in ``beendete`` gewählten (»Gekündigt«, »Abgelaufen«, ``True``: beide).
+    Fehlt die Spalte, bleibt die Liste unverändert. Zweiter Wert: Zahl der ausgeblendeten Zeilen."""
     col = _col(df, *SPALTE_STATUS, required=False)
     if not col:
         return df, 0
     status = df[col].astype(str).str.strip().str.casefold()
-    aktiv = df.loc[status.eq("aktiv")].copy()
-    return aktiv, int(len(df) - len(aktiv))
+    behalten = status.eq("aktiv")
+    schluessel = _beendet_schluessel(beendete)
+    if schluessel:
+        behalten |= status.isin(schluessel)
+    gefiltert = df.loc[behalten].copy()
+    return gefiltert, int(len(df) - len(gefiltert))
+
+
+def zahl_beendete(df: pd.DataFrame, beendete=True) -> int:
+    """Zahl der gewählten beendeten Verträge (Anwenderstatus; ``True``: gekündigte und abgelaufene) – 0 ohne Statusspalte."""
+    col = _col(df, *SPALTE_STATUS, required=False)
+    schluessel = _beendet_schluessel(beendete)
+    if not col or not schluessel:
+        return 0
+    return int(df[col].astype(str).str.strip().str.casefold().isin(schluessel).sum())
+
+
+def vertragstext(aktiv: int, beendet: int = 0, art: str = "gekündigt/abgelaufen") -> str:
+    """»5 aktive Verträge«, »1 aktiver Vertrag«, »5 aktive Verträge · 2 gekündigt« (``art``: wie ``beendet_art``)."""
+    text = "Keine aktiven Verträge" if aktiv == 0 else ("1 aktiver Vertrag" if aktiv == 1 else f"{aktiv} aktive Verträge")
+    if beendet:
+        text += f" · {beendet} {art or 'gekündigt/abgelaufen'}"
+    return text
+
+
+def keine_vertraege_text(beendete=False) -> str:
+    """Fehlermeldung ohne passende Zeilen – nennt die gewählten Status mit."""
+    auswahl = beendete_werte(beendete)
+    if not auswahl:
+        return "Die Excel enthält keine aktiven Verträge."
+    namen = {GEKUENDIGT: "gekündigten", ABGELAUFEN: "abgelaufenen"}
+    teile = ["aktiven"] + [namen[wert] for wert in auswahl]
+    return f"Die Excel enthält keine {', '.join(teile[:-1])} oder {teile[-1]} Verträge."
 
 
 def _eindeutig(df: pd.DataFrame, spalte: str) -> list[str]:
@@ -625,16 +713,20 @@ def _lesefehler(exc: BaseException) -> str:
     return f"Die Datei konnte nicht als Excel-Liste gelesen werden ({text})."
 
 
-def pruefe_excel(pfad: Path, regeln=None) -> dict:
+def pruefe_excel(pfad: Path, regeln=None, beendete=False) -> dict:
     """Liest die Liste nur zur Kontrolle, ohne ein PDF zu schreiben.
 
-    Ergebnis: ``aktiv``/``inaktiv`` (Anzahl), ``mails``, ``kunden`` und ``firmen``
+    ``beendete``: die gewählten beendeten Verträge (»Gekündigt«, »Abgelaufen«; ``True``: beide) gehören mit zur
+    Übersicht (``beendet``: ihre Zahl, ``beendet_art``: »gekündigt«, »abgelaufen« oder »gekündigt/abgelaufen«;
+    ``zeilen``/``vertraege`` enthalten sie dann mit Status). Nicht gewählte zählen zu ``inaktiv``.
+
+    Ergebnis: ``aktiv``/``beendet``/``inaktiv`` (Anzahl), ``mails``, ``kunden`` und ``firmen``
     (nur Werte, die tatsächlich in der Datei stehen), ``fehlend`` (für die PDF
     benötigte Spalten, die fehlen), ``hinweise``, ``fett`` (fett formatierte
     Zellen, die übernommen werden) und ``zeilen`` (Vorschau).
     """
     _lade_pandas()
-    leer = {"ok": False, "text": "", "kunden": [], "mails": [], "firmen": [], "zeilen": [], "vertraege": [], "aktiv": 0, "inaktiv": 0, "fehlend": [], "hinweise": [], "fett": 0}
+    leer = {"ok": False, "text": "", "kunden": [], "mails": [], "firmen": [], "zeilen": [], "vertraege": [], "aktiv": 0, "beendet": 0, "beendet_art": "", "inaktiv": 0, "fehlend": [], "hinweise": [], "fett": 0}
     pfad = Path(pfad)
     if not pfad.is_file():
         return {**leer, "text": "Datei nicht gefunden."}
@@ -645,12 +737,14 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
     except Exception as exc:  # noqa: BLE001 - jede Lesestörung wird verständlich gemeldet
         return {**leer, "text": _lesefehler(exc)}
     daten = df.dropna(subset=[col_vertrag]).copy()
-    daten, ausgeblendet = nur_aktive(daten)
+    daten, ausgeblendet = nur_aktive(daten, beendete)
+    col_status = _col(df, *SPALTE_STATUS, required=False)
+    beendet = zahl_beendete(daten, beendete)
     col_beginn = _col(df, *SPALTE_BEGINN, required=False)
     if col_beginn:
-        daten["_sort"] = pd.to_datetime(daten[col_beginn], errors="coerce")
+        daten["_sort"] = datum_spalte(daten[col_beginn])
         daten = daten.sort_values("_sort", kind="stable")
-    anzahl = int(len(daten))
+    anzahl = int(len(daten)) - beendet  # aktive Verträge
     col_kunde = _col(df, *SPALTE_KUNDE, required=False)
     col_mail = _col(df, *SPALTE_MAIL, required=False)
     col_firma = _col(df, *SPALTE_FIRMA, required=False)
@@ -668,21 +762,16 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
     if not col_mail:
         hinweise.append("Keine Spalte »Rechnungsempfänger Email«: Empfänger bitte selbst eintragen.")
     fett = 0
-    if anzahl:
+    if len(daten):
         stile = excel_stile(tabelle, daten, [col_vertrag, col_bem, col_beginn, col_zyk, col_netto, col_zahlung], col_vertrag)
         spalten = [tabelle.excel_spalte(name) for name in (col_vertrag, col_bem, col_beginn, col_zyk, col_netto, col_zahlung) if name]
         fett = sum(1 for row in daten[SOURCE_ROW].tolist() for col in spalten if stile.bold(row, col))
-    vertraege = vertragsdaten(daten, col_vertrag, col_bem, "_sort" if col_beginn else "", col_zyk, col_netto, col_zahlung, col_beginn)
+    vertraege = vertragsdaten(daten, col_vertrag, col_bem, "_sort" if col_beginn else "", col_zyk, col_netto, col_zahlung, col_beginn, col_status or "")
     zeilen = []
     for vertrag in vertraege:
         werte = vertrag.anzeige(regeln)
-        zeilen.append({"nr": vertrag.nummer, "text": werte["beschreibung"], "zyklus": werte["zyklus"], "netto": werte["netto"] if col_netto else "–"})
-    if anzahl == 0:
-        text = "Keine aktiven Verträge"
-    elif anzahl == 1:
-        text = "1 aktiver Vertrag"
-    else:
-        text = f"{anzahl} aktive Verträge"
+        zeilen.append({"nr": vertrag.nummer, "text": werte["beschreibung"], "zyklus": werte["zyklus"], "netto": werte["netto"] if col_netto else "–", "status": vertrag.status})
+    text = vertragstext(anzahl, beendet, beendet_art(beendete))
     if ausgeblendet:
         text += f" · {ausgeblendet} inaktiv ausgeblendet"
     if len(kunden) == 1:
@@ -706,6 +795,8 @@ def pruefe_excel(pfad: Path, regeln=None) -> dict:
         "zeilen": zeilen,
         "vertraege": vertraege,
         "aktiv": anzahl,
+        "beendet": beendet,
+        "beendet_art": beendet_art(beendete) if beendet else "",
         "inaktiv": int(ausgeblendet),
         "fehlend": fehlend,
         "hinweise": hinweise,
@@ -775,6 +866,13 @@ def _zeichne_block(canvas, teile: list[tuple[object, float]], x: float, oben: fl
         flowable.drawOn(canvas, x, y)
 
 
+def _status_hinweis(status: str) -> str:
+    """Status-Hinweis unter der Vertragsnummer (nur bei gekündigten und abgelaufenen Verträgen)."""
+    if not status:
+        return ""
+    return f'<br/><font size="6.5" color="#B3261E"><b>{escape_markup(status)}</b></font>'
+
+
 def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
     _lade_pdf()
     excel = Path(auftrag.excel)
@@ -802,13 +900,14 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
 
     # Filtern und Sortieren ändern die Werte in _source_excel_row nicht.
     df = df.dropna(subset=[col_vertrag]).copy()
-    df, _ausgeblendet = nur_aktive(df)
+    df, _ausgeblendet = nur_aktive(df, auftrag.beendete)
     if df.empty:
-        raise ValueError("Die Excel enthält keine aktiven Verträge.")
+        raise ValueError(keine_vertraege_text(auftrag.beendete))
+    col_status = _col(df, *SPALTE_STATUS, required=False)
     df["_beginn_roh"] = df[col_beginn]
-    df[col_beginn] = pd.to_datetime(df[col_beginn], errors="coerce")
+    df[col_beginn] = datum_spalte(df[col_beginn])
     df = df.sort_values(col_beginn, kind="stable").reset_index(drop=True)
-    vertraege = vertragsdaten(df, col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung, "_beginn_roh")
+    vertraege = vertragsdaten(df, col_vertrag, col_bemerkung, col_beginn, col_zyklus, col_netto, col_zahlung, "_beginn_roh", (col_status or "") if beendete_auswahl(auftrag.beendete) else "")
 
     _pruefe_abbruch(auftrag)
     _status(auftrag, "Formatierung wird gelesen …")
@@ -1009,7 +1108,7 @@ def erstelle_pdf(auftrag: PdfAuftrag) -> Path:
                     # Art wird aus der Bemerkung abgeleitet und übernimmt deren Formatierung;
                     # eine vom Regelwerk gesetzte Art erscheint als Text (maskiert, nie als Markup).
                     zelle(_ART_MARKUP.get(werte["art"]) or escape_markup(werte["art"]), col_bemerkung),
-                    zelle(escape_markup(werte["nummer"]), col_vertrag),
+                    zelle(escape_markup(werte["nummer"]) + _status_hinweis(vertrag.status), col_vertrag),
                     zelle(escape_markup(werte["beschreibung"]), col_bemerkung),
                     zelle(escape_markup(werte["beginn"]), col_beginn),
                     zelle(escape_markup(werte["zyklus"]), col_zyklus),

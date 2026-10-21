@@ -27,12 +27,12 @@ Rectangle {
         anchors.rightMargin: 1
         spacing: 0
         PanelHeader {
-            title: root.titles[root.shown] || ""
+            title: I18n.tr(root.titles[root.shown] || "", I18n.revision)
             current: root.shown
             tabs: [
                 { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerTabThumbs" },
                 { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerTabOutline" },
-                { key: "search", icon: "search", tip: "Suchen (Strg+F)", name: "readerTabSearch" },
+                { key: "search", icon: "search", tip: "Suchen" + Shortcuts.hints["app.find"], name: "readerTabSearch" },
                 { key: "attachments", icon: "attach", tip: "Anhänge", name: "readerTabAttachments" }
             ]
             onTabSelected: (key) => root.chosen(key)
@@ -40,7 +40,7 @@ Rectangle {
             PText {
                 objectName: "readerAttachmentsCount"
                 visible: root.shown === "attachments" && root.doc !== null && root.doc.attachmentCount > 0
-                text: root.doc ? String(root.doc.attachmentCount) : ""
+                text: I18n.tr(root.doc ? String(root.doc.attachmentCount) : "", I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
             }

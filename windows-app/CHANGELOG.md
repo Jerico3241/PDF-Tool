@@ -2,6 +2,281 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.8
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.8.md).
+
+- Hilfe-Menü: Position an die Breite gebunden, `transformOrigin: TopRight` (kein Sprung beim Einblenden),
+  `CloseOnPressOutsideParent`, damit »?« es wieder schließt.
+- Einstellungen: `App.leaveSettings()` kehrt zur vorherigen Seite zurück (Strg+W, Zahnrad).
+- Tastenkürzel: englische Tastennamen bei englischer Oberfläche (`Shortcuts.refresh` beim Sprachwechsel).
+- Signatur: `_check_cms` lädt die CMS-Daten ohne `rstrip` (Signaturen mit Null-Byte am Ende galten als beschädigt).
+- Excel-Export: `number()` lässt »+…« und führende Nullen als Text, Tausendertrennung nur bei Währung oder
+  vorhandenen Trennzeichen; Text mit »=« am Anfang ist Typ `s`.
+- i18n: kurze Muster fangen keine ganzen Sätze mehr, eigene Eingaben (`own`) im Assistenten werden nicht übersetzt,
+  Meldungen als ganze Sätze im Katalog.
+- Updates: automatische Installation erst nach `app.ready` und `still_opening()`, `restore_after_update` nur bei
+  automatischer Installation, `installNow` stoppt den wartenden Versuch, `_auto_tries` wird zurückgesetzt.
+
+# PDF Tool 4.0.0-beta.7
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.7.md).
+
+- Updates: Prüfung bei jedem Start (`_start_check`, danach weiter höchstens alle 24 Stunden), automatische
+  Installation (`update_auto_installieren`, Standard an): geladen, dann `installNow` ohne Klick – wartet auf laufende
+  Verarbeitung und ungespeicherte Dokumente (`ReaderController.unsaved`, alle 30 s, höchstens 20-mal je Sitzung).
+  Vor dem Beenden merkt sich der Reader die PDFs (`reader_sitzung_update`) und öffnet sie nach dem Neustart einmal
+  wieder, auch ohne die Einstellung »letzte Sitzung«.
+- Update-Karte: ein Knopf je Zustand (`Updates.action`: check, install, cancel; `act()`), »Jetzt installieren« lädt
+  und installiert in einem Schritt; Release Notes in der Karte (`Updates.notes`, `Controls/PReleaseNotes.qml`).
+  `Shell/UpdateBanner.qml` entfällt.
+- Leiste oben: ≡ Menü entfällt, »?« öffnet das Hilfe-Menü (`helpMenu`, Einträge über `afterClose`), die
+  Einstellungen haben keinen Tab mehr (`tab_for`), das Zahnrad ist markiert und trägt die Akzentmarkierung.
+- Stapel-Aktionen: die Liste der Schritte entsteht nicht mehr bei jedem Klick neu (`stepList`, `chosen`).
+
+# PDF Tool 4.0.0-beta.6
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.6.md).
+
+- Englische Oberfläche: `app/i18n` übersetzt fertige deutsche Texte über den Katalog `i18n/en.json` (ganze Texte und
+  Muster mit Platzhaltern, deren Inhalt rekursiv übersetzt wird; sonst Zeile für Zeile, Satz für Satz; Dateinamen
+  bleiben). Jede QML-Textbindung läuft über `I18n.tr(…, I18n.revision)` (`tools/i18n_qml.py`), neue Texte findet
+  `tools/i18n_extract.py`; `test_i18n.py` prüft beides. Einstellung `sprache` (system, de, en), Umschalten ohne
+  Neustart (`qtapp/language.py`). Tests laufen mit `PDFTOOL_SPRACHE=de`.
+- Digitale Signatur: `tools/pdf_editor/digsig.py` (PAdES-Basis mit cryptography und asn1crypto), Zertifikate aus dem
+  Windows-Speicher oder PKCS#12, Prüfen vorhandener Signaturen.
+- Umwandeln: `tools/pdf_editor/convert.py` (Text, Word als eigenes WordprocessingML, Excel mit openpyxl; Tabellen,
+  Überschriften, Zahlen und Datumswerte) und `office.py` (Office-Dateien über COM in PDF).
+- KI-Assistent: `assistant/library.py` (mehrere PDFs oder ein Ordner, Scans über Tesseract), `translation.py`
+  (übersetztes PDF), Quellen mit Datei und Seite (`src:`-Links).
+- Behoben: Dialoge aus einem Menü oder Popup öffnen erst nach dem Schließen (`Qt.callLater`) – »Text erkennen« blieb
+  sonst ohne Dialog.
+- Neue Laufzeitpakete: cryptography 50.0.2 mit cffi, asn1crypto 1.5.1.
+
+# PDF Tool 4.0.0-beta.5
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.5.md).
+
+- Scannen: `tools/pdf_editor/scan.py` holt Seiten über WIA (`WIA.DeviceManager`, comtypes, dynamische
+  Automatisierung) – Vorlagenglas je Durchgang eine Seite, Einzug bis `WIA_ERROR_PAPER_EMPTY`; WIA-Fehlercodes
+  werden zu Meldungen, fertige Seiten bleiben bei einem Abbruch erhalten. Schnellwerkzeug »Scannen«, Dialog
+  `ScanContent.qml`, PDF über `imagepdf.create`, danach auf Wunsch `start_ocr_all`.
+- Vorlesen: `tools/pdf_editor/speech.py` (SAPI `SpVoice`, asynchron im GUI-Thread; `prepare` setzt getrennte Wörter
+  zusammen und ordnet den Sprechtext den Zeichen der Seite zu) und `qtapp/speech.py` (QML `Speech`: Seite für Seite,
+  Wortmarkierung über `speechWord`, Pause, Tempo, Stimme; endet bei Tabwechsel). Leiste `SpeechBar.qml`.
+- Texterkennung: Sprachdaten `fra`, `ita`, `spa`, `nld`, `por`, `pol`, `tur`, `rus` (tessdata_fast, gleicher Commit,
+  zusammen 27 MB); `ocr.display_order` stellt Deutsch und Englisch voran.
+- Auswahl über Seiten: `_selection` ist (erste Seite, Anfang, letzte Seite, Ende), `selectionPages` je Seite die
+  Rechtecke, `selectAcross` und Rollen am Rand der Ansicht (PageView). Markieren über mehrere Seiten in einer
+  `commands.group`.
+- Tastenkürzel: `qtapp/shortcuts.py` (QML `Shortcuts`) verzeichnet alle Befehle mit Standardkürzeln; alle
+  `Shortcut`-Elemente lesen `Shortcuts.keys`, Kurzinfos `Shortcuts.hints`, die Statuszeile `localize`. Eigene Kürzel
+  in `tastenkuerzel` (nur Abweichungen), Übersicht `ShortcutsContent.qml`.
+- Neues Laufzeitpaket: comtypes 1.4.17 (MIT, reines Python).
+
+# PDF Tool 4.0.0-beta.4
+
+Beta zum Testen, ohne neue Funktionen. Details in den [Release Notes](release-notes/4.0.0-beta.4.md).
+
+- Dateizuordnung: `shell\open\command` der ProgID `PDFTool.Dokument` (und `Applications\PDF-Tool.exe`) trägt
+  `DelegateExecute` = `{61E62B6E-0FE6-46A2-8AF1-BD670901BF3B}`; `PDF-Tool.exe -Embedding` ist der COM-Server dazu
+  (`IExecuteCommand`, `IObjectWithSelection`). Windows startet PDF Tool so über den COM-Dienst statt als Kindprozess
+  des Aufrufers – die Defender-ASR-Regel für Office-Kommunikationsanwendungen blockierte `olk.exe`/Outlook beim
+  Start von `PDF-Tool.exe`.
+- Outlook-Anhänge: `start.py` setzt das Ereignis für `PDF-Tool.exe` (`signal_started`) erst, wenn die App selbst
+  startet; bei einer Übergabe endet `PDF-Tool.exe` mit dem Übergabe-Prozess, also danach. Vorher endete es schon
+  vor der Übergabe. `handoff.note` schreibt `uebergabe.log` (Art des Ordners, gesichert, angenommen – keine
+  Dateinamen), das Support-Paket enthält es.
+- Taskleiste: `winsys.set_window_identity` setzt AppUserModel-ID, Neustart-Befehl, Symbol und Namen am Fenster;
+  `restart_app` startet über `PDF-Tool.exe`.
+- App-Symbol: 16, 20 und 24 px pixelgenau gezeichnet (`scripts/make_icons.py`). Dateisymbol der ProgID und in
+  »Öffnen mit«: eigene Ressource `PDF-Tool.exe,-2` (`DocIcon`), damit der Symbol-Zwischenspeicher von Windows
+  nicht das alte Symbol unter `,0` weiter zeigt.
+- CI: Ein-Klick-Update auf echtem Windows (`tests/smoke_one_click.ps1`: Vorversion läuft im Hintergrund, ihr
+  Hilfsprozess installiert still) und Outlook-Anhang bei laufender App (`smoke_installer.ps1`, 4d).
+
+# PDF Tool 4.0.0-beta.3
+
+Beta zum Testen. Aufräum-Beta ohne neue Funktionen: Fehler, Abstürze und langsame Stellen. Details in den
+[Release Notes](release-notes/4.0.0-beta.3.md).
+
+- Updater: `installer.helper_copy` kopiert die Laufzeit (ohne `site-packages`) und `launch.py` neben das Setup
+  (`update-helfer`); der Hilfsprozess belegt so keine Dateien in `{app}\runtime`, die das stille Setup ersetzt.
+- Outlook-Anhänge: `handoff.secure_transient` kopiert Dateien aus `INetCache\Content.Outlook` und dem Temp-Ordner
+  nach `%LOCALAPPDATA%\PDF-Tool\Anhaenge` (7 Tage), bevor `start.py` übergibt; `PDF-Tool.exe` wartet auf das
+  Ereignis aus `signal_started` (höchstens 15 s) statt sofort zu enden. `winsys.bring_to_front` in
+  `present_window`; `InstanceServer` protokolliert Übergaben (Anzahl, vorhanden).
+- `application.restart_app` startet ohne `--hintergrund` und ohne die PDFs des ursprünglichen Starts.
+- `engine.als_datum`/`datum_spalte`: Text-Datumswerte deutsch (Tag zuerst) statt pandas-Raten je Spalte.
+- `preview.BUILD_LOCK`: PDF-Erzeugung (Vorschau, Einzel-PDF, Stapel) nacheinander, ohne die PDFium-Sperre zu halten.
+- `appstate.save_config` mit `fsync`; beschädigte `gui-config.json` bleibt als `….defekt`.
+- Stapel-Aktionen: fortlaufende Schlüssel (`_next_key`) statt Listenlänge.
+- Reader: `PageResponse.cancel` meldet `finished` (Qt räumt abgebrochene Bilder sonst nicht ab, einmalig über
+  `_delivered`); Aufträge nach dem Schließen eines Tabs öffnen das Dokument nicht neu und melden nichts an das
+  gelöschte Objekt (`_CLOSED`, `_closing`, auch Texterkennung); `fieldnudge`-Timer beim Schließen;
+  `open_paths` übergeht Dateien, die gerade geöffnet werden.
+- QML: `DocumentView` holt die Markierungstabellen einmal je Änderung (`hitMap`, `linkMap` …), `PageView` liest
+  nur ihren Eintrag; Seitenmaße einmal je Ansicht in `ThumbnailPanel`/`OrganizeView`; Seitenleiste und Raster
+  behalten die Stelle nach Löschen/Einfügen; `zoomAt` ordnet nur einmal neu an.
+- Vergleichen: erst Zeilen, dann Wörter in geänderten Abschnitten (`_opcodes`), abbrechbar (`cancelled`).
+- Tests: Datum als Text (`test_core.py`), Laufzeit-Kopie des Hilfsprozesses (`test_updater_flow.py`).
+
+# PDF Tool 4.0.0-beta.2
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Zweiter Teil von 4.0: Werkzeugleiste des Readers nach
+dem Vorbild von Acrobat, Vergleichen, geteilte Ansicht und Präsentation. Details in den
+[Release Notes](release-notes/4.0.0-beta.2.md).
+
+- Reader-Werkzeugleiste: `ReaderToolbar.qml` nur noch mit Datei-Befehlen und »Alle Werkzeuge«;
+  `QuickTools.qml` (Schnellwerkzeuge links neben dem Dokument, senkrechte Akzentmarkierung) und `AllTools.qml`
+  (Popup mit allen Werkzeugen und Befehlen in Gruppen; Befehle laufen erst nach dem Schließen). Die Menüs
+  »Schützen«, »Seiten gestalten« und »Formular« entfallen. `ToolOptions.qml` ohne Bedienhinweise und »Fertig«;
+  reine Einstellungen erst nach erneutem Klick auf das gewählte Werkzeug (`ReaderPage.toolSettingsOpen`), ein
+  Druck in eine Seite (`DocumentView.interacted`) schließt sie. `PInfoBar.autoHide`: Hinweise zum Dokument
+  schließen nach 5 s (nicht, solange die Maus darauf steht).
+- Vergleichen: `tools/pdf_editor/compare.py` (Wörter mit Lage aus den Zeichen der Seite, `difflib` über beide
+  Fassungen, Rechtecke je Zeile zusammengefasst, Zusammenfassung); `Session.compare_words`; Reader
+  `compare_with`/`compare_paths`/`start_compare`, `showCompare`, `nextCompare`, `endCompare`; Dokument
+  `compareRects`/`currentCompare`, Ebene in `PageView.qml`, Liste `ComparePanel.qml` in der rechten Leiste.
+- Geteilte Ansicht: Reader `splitKey`/`splitDoc`, `toggleSplit`, `openSplitDialog`, `setSplit`, `swapSplit`;
+  `SplitPane.qml` mit eigener `DocumentView`. Die Ansicht holt die gemerkte Stelle eines Tabs über einen eigenen
+  Timer statt `Qt.callLater` (entfällt mit der Ansicht).
+- Präsentation: Reader `presenting`, `startPresentation` (F5), Ende über `leaveFullScreen`/Esc mit
+  wiederhergestellter Ansicht; schwarzer Grund und Blättern mit allen Tasten in `DocumentView.qml`.
+- Tests: `test_compare.py`, `test_qt_reader_v40.py`; angepasst: Werkzeugleiste (`test_qt_protect.py`,
+  `test_qt_reader_motion.py`, `test_qt_forms_v31.py`), Breite der Dokumentfläche (`test_qt_reader_layout.py`),
+  Zeilenanfang bei 400 % (`test_qt_objects.py`).
+
+# PDF Tool 4.0.0-beta.1
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Erster Teil von 4.0: Stapel-Aktionen, Als PDF/A speichern,
+PDF aus Bildern, Updates mit einem Klick und aufgeräumte Einstellungen. Details in den
+[Release Notes](release-notes/4.0.0-beta.1.md).
+
+- `tools/pdf_editor/pdfa.py`: PDF/A-2b-Kopie (`save_copy`, `convert`, `check`) – nicht eingebettete einfache
+  Schriften werden durch Teilmengen von Systemschriften ersetzt (fontTools, ToUnicode; symbolisch mit (3,0)-cmap,
+  wenn die Kodierung von WinAnsi abweicht), sRGB-OutputIntent aus Pillow/ImageCms, XMP mit der Standardbibliothek
+  (ohne lxml), JavaScript/Anhänge/Signaturwerte entfernt, Anmerkungs-Flags und Erscheinungsbilder angeglichen.
+  Mit veraPDF (PDF/A-2b) an den Beispieldokumenten der Tests geprüft.
+- `tools/pdf_editor/imagepdf.py`: PDF aus Bildern – JPEG unverändert (DCTDecode), EXIF-Ausrichtung, Transparenz
+  auf Weiß, mehrseitige TIFFs, Seitengröße und Rand; unlesbare Dateien werden übersprungen und genannt.
+- `tools/pdf_actions` (`actions`, `runner`): Stapel-Aktionen mit fester Reihenfolge; `optimize.optimize_bytes`
+  als gemeinsamer Kern von »PDF verkleinern«.
+- Oberfläche: Werkzeug »Stapel-Aktionen« (`qtapp/actions.py`, `ActionsPage.qml`, Strg+6, eigener Tab), Reader
+  `pdfaDocument` und Menüpunkt, Schnellwerkzeuge »Als PDF/A speichern« und »PDF aus Bildern«, Dialog
+  `ImagesContent.qml`; gezogene Bilder und Bilder aus der Befehlszeile starten »PDF aus Bildern«. Startseite:
+  vier Werkzeuge zwei mal zwei, Schnellwerkzeuge in fünf Spalten.
+- Setup: Verknüpfung »Senden an« → »PDF Tool (Bilder zu PDF)«.
+- Öffnen aus anderen Programmen: `EditorDocument.open` liest junge Dateien über `read_settled` (wartet bei Sperre
+  oder fehlendem `%%EOF` bis 8 s, endet nach 1 s ohne Änderung); `handoff._connect` wartet bis 2 s auf eine belegte
+  Named Pipe statt eine zweite App zu starten; `PDF-Tool.exe` startet die App mit `CREATE_BREAKAWAY_FROM_JOB`
+  (Hottgenroth »Kaufmann«); fehlende Outlook-Kopien (`Content.Outlook`) zählen bei der letzten Sitzung nicht als Fehler.
+- Neues App-Symbol (»Pdf« von Magnific auf Flaticon, Namensnennung in THIRD_PARTY_LICENSES.md und im Fenster
+  »Über«; Vorlage `assets/icon-source.png`): `scripts/make_icons.py` verkleinert die Vorlage
+  statt selbst zu zeichnen; `icon.ico` (16–256 px), Favicons und Logo neu, `public/favicon.svg` entfällt.
+- Updates: automatischer Download nach der automatischen Prüfung (einmal je Version); der Hilfsprozess
+  installiert still (`/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`), startet danach nur `PDF-Tool.exe` neu und
+  zeigt das Setup sichtbar, wenn die stille Installation scheitert.
+- Einstellungen in Bereichen (`Settings.section`, `setSection`, `show`); »Einstellungen öffnen« der Kundenakte
+  springt zu »Vertragsübersichten«.
+- Tests: `test_editor_pdfa.py`, `test_editor_imagepdf.py`, `test_pdf_actions.py`, `test_qt_actions.py`,
+  angepasste Qt-Tests (Startseite, Einstellungsbereiche); `smoke_runtime.py` prüft PDF/A, PDF aus Bildern und
+  Stapel-Aktionen mit der Laufzeit des Setups, `smoke_installer.ps1` misst die Zeit bis zum Fenster des
+  Setup-Assistenten.
+
+# PDF Tool 3.2.0
+
+Freigegebene Version – getestet als Betas 3.2.0-beta.1 bis 3.2.0-beta.5, Funktionsumfang wie 3.2.0-beta.5.
+Für Anwender von 3.1 neu: Schützen und Weitergeben, der optionale KI-Assistent, getrennte Schalter für gekündigte
+und abgelaufene Verträge, „Im Hintergrund bereithalten“ und das eigene Startprogramm – im Einzelnen in den
+Abschnitten der Betas unten und in den [Release Notes](release-notes/3.2.0.md).
+
+- Version 3.2.0; README.txt, Neuerungen und Release Notes beschreiben 3.2 als freigegebene Version für Anwender
+  von 3.1. Der Programmcode ist gegenüber 3.2.0-beta.5 unverändert.
+
+# PDF Tool 3.2.0-beta.5
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Gekündigte und abgelaufene Verträge je mit eigenem Schalter.
+Details in den [Release Notes](release-notes/3.2.0-beta.5.md).
+
+- `engine.py`: `beendete` nimmt eine Auswahl aus »Gekündigt« und »Abgelaufen« (`True`: beide, wie bisher);
+  `beendete_auswahl`, `beendete_werte`, `beendet_art`, `keine_vertraege_text`; `zahl_beendete(df, beendete)`;
+  `pruefe_excel` meldet zusätzlich `beendet_art` (»gekündigt«, »abgelaufen«, »gekündigt/abgelaufen«).
+- `ExcelAnalysis.ended_kind`, `contract_summary(…, ended_kind=…)`, `pdf_fields` übergibt die Auswahl;
+  `ended_selection(cfg)` liest die Einstellungen `vertraege_gekuendigt` und `vertraege_abgelaufen` (ohne sie gilt
+  der frühere Schalter `vertraege_beendete`: an = beide; er wird beim nächsten Speichern entfernt).
+- Oberfläche: Schalter `createCancelledContracts` und `createExpiredContracts` (`Contracts.gekuendigt`,
+  `Contracts.abgelaufen`); Stapel (`AnalysisCache.beendete`, `resolver.Defaults.beendete`) mit derselben Auswahl.
+- Tests: `test_ended_contracts.py` (einzeln, beide, Fehlermeldung, Übernahme des alten Schalters),
+  `test_qt_contracts::test_switch_lists_cancelled_and_expired_contracts_too`.
+- Excel-Prüfung: Laufen mehrere Prüfungen gleichzeitig (Schalter schnell nacheinander), zählt nur die neueste –
+  ein älteres Ergebnis überschreibt die Anzeige nicht mehr.
+- CI: Die Startzeit-Messung läuft nur noch, wenn ein Pull Request Dateien des Programmstarts ändert (oder bei
+  einem manuellen Lauf); main-Läufe vor einer Veröffentlichung messen nicht erneut.
+
+# PDF Tool 3.2.0-beta.4
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). „Im Hintergrund bereithalten“ (Standard: an): Start mit
+Windows ohne Fenster, Symbol im Infobereich, das Schließen-Kreuz versteckt nur das Fenster. Details in den
+[Release Notes](release-notes/3.2.0-beta.4.md).
+
+## Hintergrundbetrieb
+
+- `qtapp/background.py`: Einstellung `hintergrund` (fehlt: an), `QSystemTrayIcon` mit „PDF Tool öffnen“ und
+  „Beenden“, Hinweis beim ersten Verstecken (`hintergrund_hinweis`), Autostart-Eintrag
+  `HKCU\…\Run\PDF Tool` = `"…\PDF-Tool.exe" --hintergrund` (nur installiert, nur bei Abweichung geschrieben;
+  `winsys.run_entry`/`set_run_entry`). Ohne Infobereich bleibt das alte Verhalten.
+- `AppController`: `requestClose` versteckt das Fenster bei aktivem Hintergrundbetrieb (`hide_window`: Werkzeuge
+  geben ihre Dokumente frei – `ReaderTool.release` mit Rückfrage „Das Fenster wird geschlossen.“, laufendes
+  Speichern bleibt offen); `present_window` (verdeckt bis zum ersten Bild, Reader öffnet die gemerkte Sitzung
+  wieder), `quit_app` (Infobereich), `quit_wanted` für Update (`UpdatesController._quit_app`), Neustart und
+  „Beenden“. `commitDataRequest` speichert beim Abmelden von Windows.
+- `show_window(…, visible=False)` für den Start mit `--hintergrund`; der Start endet sofort, wenn die
+  Einstellung aus ist (und entfernt den Eintrag) oder PDF Tool schon läuft.
+- Weiterer Start: `handoff.early_forward` (ohne Qt, direkt über die Named Pipe) in `start.py`; Nachricht mit
+  `show` – ohne Pfade zeigt die laufende App ihr Fenster (`instance.received`). Gemeinsame Teile
+  (`server_name`, `pdf_arguments`) in `handoff.py`.
+- Einstellungen → Verhalten: Karte `backgroundCard` mit `backgroundToggle` (`Settings.setBackground`).
+- Setup: Deinstallation entfernt den Autostart-Eintrag. `smoke_installer.ps1` 4c: Eintrag, Start mit
+  `--hintergrund` ohne Fenster und nur einmal, weiterer Start zeigt das Fenster (Zeit als Meldung am Lauf).
+- Übergabe über Qt (`instance.forward`): die laufende App trennt nach ihrem »ok« nicht mehr selbst; der weitere
+  Start wertet eine schon angekommene Antwort auch dann aus, wenn Windows die Verbindung bereits als getrennt meldet.
+- Tests: `test_qt_background.py`.
+
+# PDF Tool 3.2.0-beta.3
+
+Beta zum Testen (Schalter „Beta-Versionen erhalten“). Gekündigte und abgelaufene Verträge wahlweise in der
+Vertragsübersicht, eigenes Startprogramm mit Symbol für „Öffnen mit“ und die Standard-Apps, Startzeit-Messung
+unter Windows in der CI. Details in den [Release Notes](release-notes/3.2.0-beta.3.md).
+
+## Vertragsübersichten
+
+- `engine.py`: `BEENDET` (»Gekündigt«, »Abgelaufen«), `nur_aktive(df, beendete)`, `zahl_beendete`,
+  `Vertragsdaten.status`; `pruefe_excel(…, beendete)` meldet `beendet`; `PdfAuftrag.beendete` – in der PDF
+  steht der Status rot unter der Vertragsnummer (`_status_hinweis`).
+- `ExcelAnalysis.ended`, `contract_summary(…, ended=…)`, `excel_issues` und `usable` zählen beendete Verträge
+  nur mit Schalter; `pdf_fields(…, beendete=…)`.
+- Oberfläche: Schalter `createEndedContracts` unter „Excel-Liste“ (Einstellung `vertraege_beendete`, Standard
+  aus); Umschalten prüft die Excel und den Stapel neu (`BatchController.ended_changed`,
+  `AnalysisCache.beendete`/`clear`, `resolver.Defaults.beendete`).
+- Tests: `test_ended_contracts.py`, `test_qt_contracts::test_switch_lists_cancelled_and_expired_contracts_too`.
+
+## Windows-Integration
+
+- `installer/launcher`: Startprogramm `PDF-Tool.exe` (C, Symbol, Versionsangaben, Manifest) – startet
+  `runtime\pythonw.exe -s -OO app\start.py` mit den unveränderten Argumenten und endet; `build.py` baut es
+  (`build_launcher`: Visual C++ über vswhere, sonst MinGW-w64).
+- Setup: Verknüpfungen, `[Run]`, ProgID-Befehl und -Symbol auf `PDF-Tool.exe`; `Applications\PDF-Tool.exe`
+  (FriendlyAppName, DefaultIcon, SupportedTypes); `Software\PDF-Tool\Capabilities` und
+  `RegisteredApplications` für die Standard-Apps. Die Standard-App für .pdf bleibt unverändert.
+- `smoke_installer.ps1`: Versionsangaben, Registrierung, Start über `PDF-Tool.exe`, Entfernen.
+
+## CI
+
+- Neuer Schritt „Startzeit unter Windows messen“: Vorversion und neue Version still installieren, den
+  Programmstart mit der eigenen Laufzeit messen (`tests/bench_windows.ps1`, `tests/bench_compare.py`), Mediane
+  in der Zusammenfassung und als Meldung am Lauf. Nur Messung, hält den Lauf nicht an.
+
 # PDF Tool 3.2.0-beta.2
 
 Beta zum Testen (Schalter „Beta-Versionen erhalten“). Optionaler KI-Assistent: Fragen zum geöffneten PDF und

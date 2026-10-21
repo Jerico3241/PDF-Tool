@@ -24,3 +24,9 @@ SignatureContent 1.0 SignatureContent.qml
 LinkContent 1.0 LinkContent.qml
 CropContent 1.0 CropContent.qml
 AssistantSetupContent 1.0 AssistantSetupContent.qml
+ImagesContent 1.0 ImagesContent.qml
+ScanContent 1.0 ScanContent.qml
+ShortcutsContent 1.0 ShortcutsContent.qml
+DigitalSignContent 1.0 DigitalSignContent.qml
+SignaturesContent 1.0 SignaturesContent.qml
+TranslateContent 1.0 TranslateContent.qml

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Auswahlliste im Stil von Windows 11: Aufklappliste mit weicher Einblendung (Deckkraft + leichte
 // Bewegung), Markierung des gewählten Eintrags, Tastatur (↑ ↓ Pos1 Ende, Eingabe, Esc, Tippen).
@@ -19,8 +20,8 @@ T.ComboBox {
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.ComboBox
-    Accessible.name: label !== "" ? label : (tip !== "" ? tip : placeholder)
-    Accessible.description: displayText
+    Accessible.name: I18n.tr(label !== "" ? label : (tip !== "" ? tip : placeholder), I18n.revision)
+    Accessible.description: I18n.tr(displayText, I18n.revision)
 
     delegate: T.ItemDelegate {
         id: item
@@ -35,9 +36,9 @@ T.ComboBox {
         highlighted: control.highlightedIndex === index
         font: control.font
         Accessible.role: Accessible.ListItem
-        Accessible.name: itemText
+        Accessible.name: I18n.tr(itemText, I18n.revision)
         contentItem: Text {
-            text: item.itemText
+            text: I18n.tr(item.itemText, I18n.revision)
             font: item.font
             color: Theme.textPrimary
             elide: Text.ElideRight
@@ -76,7 +77,7 @@ T.ComboBox {
     }
 
     contentItem: Text {
-        text: control.currentIndex >= 0 ? control.displayText : control.placeholder
+        text: I18n.tr(control.currentIndex >= 0 ? control.displayText : control.placeholder, I18n.revision)
         font: control.font
         color: !control.enabled ? Theme.disabled : (control.currentIndex >= 0 ? Theme.textPrimary : Theme.textSecondary)
         verticalAlignment: Text.AlignVCenter
@@ -144,7 +145,7 @@ T.ComboBox {
     }
 
     PToolTip {
-        text: control.tip
+        text: I18n.tr(control.tip, I18n.revision)
         visible: control.tip !== "" && control.hovered && !control.popup.visible
     }
 }

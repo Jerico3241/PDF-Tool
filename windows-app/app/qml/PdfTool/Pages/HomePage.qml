@@ -13,8 +13,8 @@ import PdfTool.Controls
 PPage {
     id: page
     objectName: "homePage"
-    title: "Willkommen bei " + App.appName
-    subtitle: "Werkzeuge für PDF-Dateien – alle Dateien werden lokal auf diesem PC verarbeitet."
+    title: I18n.tr("Willkommen bei " + App.appName, I18n.revision)
+    subtitle: I18n.tr("Werkzeuge für PDF-Dateien – alle Dateien werden lokal auf diesem PC verarbeitet.", I18n.revision)
     centered: true
     maxContentWidth: Metrics.homeMaxWidth
     readonly property bool wide: contentWidth >= Metrics.homeSideBySideFrom
@@ -63,8 +63,8 @@ PPage {
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         Accessible.role: Accessible.Button
-        Accessible.name: title
-        Accessible.description: description
+        Accessible.name: I18n.tr(title, I18n.revision)
+        Accessible.description: I18n.tr(description, I18n.revision)
         background: PListItem { hovered: tool.hovered; pressed: tool.pressed; focused: tool.visualFocus; radius: Metrics.radiusCard }
         contentItem: Item {}
         RowLayout {
@@ -85,15 +85,15 @@ PPage {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: Metrics.s4
-                PText { objectName: "toolTitle"; Layout.fillWidth: true; text: tool.title; textStyle: "bodyStrong"; wrap: true }
-                PText { objectName: "toolDescription"; Layout.fillWidth: true; text: tool.description; tone: "secondary"; textStyle: "caption"; wrap: true }
+                PText { objectName: "toolTitle"; Layout.fillWidth: true; text: I18n.tr(tool.title, I18n.revision); textStyle: "bodyStrong"; wrap: true }
+                PText { objectName: "toolDescription"; Layout.fillWidth: true; text: I18n.tr(tool.description, I18n.revision); tone: "secondary"; textStyle: "caption"; wrap: true }
                 Item { Layout.fillHeight: true }  // Fußzeile unten – bei allen Werkzeugen auf derselben Höhe
                 RowLayout {
                     id: footer
                     Layout.fillWidth: true
                     Layout.topMargin: Metrics.s4
                     spacing: Metrics.s6
-                    PText { objectName: "toolOpen"; text: "Öffnen"; tone: "accent" }
+                    PText { objectName: "toolOpen"; text: I18n.tr("Öffnen", I18n.revision); tone: "accent" }
                     PIcon {
                         name: "chevron_right"
                         size: 12
@@ -105,7 +105,7 @@ PPage {
                         }
                     }
                     Item { Layout.fillWidth: true }
-                    PText { objectName: "toolShortcut"; text: tool.shortcut; textStyle: "caption"; tone: "tertiary"; visible: text !== "" }
+                    PText { objectName: "toolShortcut"; text: I18n.tr(tool.shortcut, I18n.revision); textStyle: "caption"; tone: "tertiary"; visible: text !== "" }
                 }
             }
         }
@@ -132,8 +132,8 @@ PPage {
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         Accessible.role: Accessible.Button
-        Accessible.name: title
-        Accessible.description: description
+        Accessible.name: I18n.tr(title, I18n.revision)
+        Accessible.description: I18n.tr(description, I18n.revision)
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         background: PListItem { hovered: quick.hovered; pressed: quick.pressed; focused: quick.visualFocus; radius: Metrics.radiusCard }
@@ -160,12 +160,12 @@ PPage {
                 objectName: "quickToolTitle"
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
-                text: quick.title
+                text: I18n.tr(quick.title, I18n.revision)
                 wrap: true
                 maximumLineCount: 2
             }
         }
-        PToolTip { text: quick.description; visible: quick.hovered && quick.description !== "" }
+        PToolTip { text: I18n.tr(quick.description, I18n.revision); visible: quick.hovered && quick.description !== "" }
     }
 
     GridLayout {
@@ -182,7 +182,7 @@ PPage {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.alignment: Qt.AlignTop
-            title: "Werkzeuge"
+            title: I18n.tr("Werkzeuge", I18n.revision)
             iconName: "toolbox"
             // Werkzeuge gleich breit auf ganzen Pixeln, die Gruppe mittig in der Karte (Rest höchstens 2 px). Die Hülle
             // bekommt die ganze Breite der Karte – ein Raster mit fester Breite begrenzte sonst die Spalte der Karte.
@@ -207,7 +207,7 @@ PPage {
                     x: Math.floor((available - width) / 2)
                     width: columns * toolWidth + (columns - 1) * columnSpacing
                     height: implicitHeight
-                    columns: toolsCard.width >= Metrics.homeToolsInRowFrom && Math.floor((available - 2 * columnSpacing) / 3) >= toolMinimum ? 3 : 1
+                    columns: toolsCard.width >= Metrics.homeToolsInRowFrom && Math.floor((available - 3 * columnSpacing) / 4) >= toolMinimum ? 4 : (Math.floor((available - columnSpacing) / 2) >= toolMinimum ? 2 : 1)
                     columnSpacing: Metrics.s8
                     rowSpacing: Metrics.s4
                     Repeater {
@@ -218,9 +218,9 @@ PPage {
                             Layout.preferredWidth: toolGrid.toolWidth
                             Layout.fillHeight: true
                             iconName: modelData.icon
-                            title: modelData.title
-                            description: modelData.description
-                            shortcut: modelData.shortcut
+                            title: I18n.tr(modelData.title, I18n.revision)
+                            description: I18n.tr(modelData.description, I18n.revision)
+                            shortcut: Shortcuts.labels["app." + modelData.key] || ""
                             // Reader ohne geöffnetes Dokument: Dateiauswahl (er zeigt Dokumente, keine eigene Seite)
                             onClicked: App.openTool(modelData.key)
                             onMinimumWidthChanged: toolGrid.measure()
@@ -243,15 +243,15 @@ PPage {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Metrics.s8
                 spacing: Metrics.s8
-                PText { text: "Schnellwerkzeuge"; textStyle: "bodyStrong"; Accessible.role: Accessible.Heading }
+                PText { text: I18n.tr("Schnellwerkzeuge", I18n.revision); textStyle: "bodyStrong"; Accessible.role: Accessible.Heading }
                 PText {
                     Layout.fillWidth: true
-                    text: "PDF wählen – sie öffnet sich im Reader, das Werkzeug startet sofort."
+                    text: I18n.tr("PDF wählen – sie öffnet sich im Reader, das Werkzeug startet sofort.", I18n.revision)
                     textStyle: "caption"
                     tone: "secondary"
                 }
             }
-            // Gleich breite Felder auf ganzen Pixeln: vier Spalten, sonst zwei bzw. eine – nie schmaler, als Symbol und das
+            // Gleich breite Felder auf ganzen Pixeln: fünf Spalten, sonst zwei bzw. eine – nie schmaler, als Symbol und das
             // längste Wort eines Namens brauchen. Die Hülle bekommt die ganze Breite der Karte (wie bei den Werkzeugen).
             Item {
                 Layout.fillWidth: true
@@ -271,7 +271,7 @@ PPage {
                     }
                     width: available
                     height: implicitHeight
-                    columns: available >= 4 * tileMinimum + 3 * columnSpacing ? 4 : (available >= 2 * tileMinimum + columnSpacing ? 2 : 1)
+                    columns: available >= 5 * tileMinimum + 4 * columnSpacing ? 5 : (available >= 2 * tileMinimum + columnSpacing ? 2 : 1)
                     columnSpacing: Metrics.s8
                     rowSpacing: Metrics.s4
                     Repeater {
@@ -282,8 +282,8 @@ PPage {
                             Layout.preferredWidth: quickGrid.tileWidth
                             Layout.fillHeight: true
                             iconName: modelData.icon
-                            title: modelData.title
-                            description: modelData.description
+                            title: I18n.tr(modelData.title, I18n.revision)
+                            description: I18n.tr(modelData.description, I18n.revision)
                             onClicked: Reader.quickTool(modelData.action)
                             onMinimumWidthChanged: quickGrid.measure()
                             Component.onCompleted: quickGrid.measure()
@@ -300,15 +300,15 @@ PPage {
             Layout.preferredWidth: page.wide ? Metrics.homeDropWidth : -1
             highlighted: App.dragActive && App.dragAccepted
             iconName: "document_pdf"
-            title: Reader.opening > 0 ? "Wird geöffnet …" : "PDF hierher ziehen"
-            text: "oder eine Datei auswählen. Mehrere PDFs öffnen sich in eigenen Tabs."
+            title: I18n.tr(Reader.opening > 0 ? "Wird geöffnet …" : "PDF hierher ziehen", I18n.revision)
+            text: I18n.tr("oder eine Datei auswählen. Mehrere PDFs öffnen sich in eigenen Tabs, Bilder werden zu einer PDF.", I18n.revision)
             actions: [
                 PButton {
                     objectName: "homeOpenButton"
                     kind: "accent"
                     iconName: "folder_open"
-                    text: "Datei öffnen"
-                    tip: "Strg+O"
+                    text: I18n.tr("Datei öffnen", I18n.revision)
+                    tip: I18n.tr(Shortcuts.labels["app.open"], I18n.revision)
                     busy: Reader.opening > 0
                     onClicked: Reader.openDialog()
                 }
@@ -322,7 +322,7 @@ PPage {
         objectName: "homeRecent"
         Layout.fillWidth: true
         Layout.topMargin: Metrics.toolCardGap
-        title: "Zuletzt verwendet"
+        title: I18n.tr("Zuletzt verwendet", I18n.revision)
         iconName: "history"
         readonly property bool showFolder: width >= Metrics.homeRecentFolderFrom
         // Spalten (Kopf und Zeilen gleich): Symbol, Name, Ordner, Geöffnet, Größe, zwei Schaltflächen
@@ -335,7 +335,7 @@ PPage {
             objectName: "homeRecentClear"
             kind: "subtle"
             iconName: "delete"
-            text: "Liste leeren"
+            text: I18n.tr("Liste leeren", I18n.revision)
             visible: Reader.recent.length > 0
             onClicked: Reader.clearRecent()
         }
@@ -343,7 +343,7 @@ PPage {
             objectName: "homeRecentEmpty"
             Layout.fillWidth: true
             visible: Reader.recent.length === 0
-            text: "Noch keine PDFs geöffnet. Geöffnete PDFs erscheinen hier – ein Klick öffnet sie wieder."
+            text: I18n.tr("Noch keine PDFs geöffnet. Geöffnete PDFs erscheinen hier – ein Klick öffnet sie wieder.", I18n.revision)
             tone: "secondary"
             wrap: true
         }
@@ -360,10 +360,10 @@ PPage {
                 anchors.rightMargin: 4
                 spacing: Metrics.s12
                 Item { Layout.preferredWidth: Metrics.iconSizeMedium }
-                PText { Layout.preferredWidth: recentCard.nameWidth; text: "Name"; textStyle: "caption"; tone: "secondary" }
-                PText { Layout.preferredWidth: recentCard.folderWidth; text: "Ordner"; textStyle: "caption"; tone: "secondary"; visible: recentCard.showFolder }
-                PText { Layout.preferredWidth: Metrics.homeRecentWhenWidth; text: "Geöffnet"; textStyle: "caption"; tone: "secondary" }
-                PText { Layout.preferredWidth: Metrics.homeRecentSizeWidth; text: "Größe"; textStyle: "caption"; tone: "secondary"; horizontalAlignment: Text.AlignRight }
+                PText { Layout.preferredWidth: recentCard.nameWidth; text: I18n.tr("Name", I18n.revision); textStyle: "caption"; tone: "secondary" }
+                PText { Layout.preferredWidth: recentCard.folderWidth; text: I18n.tr("Ordner", I18n.revision); textStyle: "caption"; tone: "secondary"; visible: recentCard.showFolder }
+                PText { Layout.preferredWidth: Metrics.homeRecentWhenWidth; text: I18n.tr("Geöffnet", I18n.revision); textStyle: "caption"; tone: "secondary" }
+                PText { Layout.preferredWidth: Metrics.homeRecentSizeWidth; text: I18n.tr("Größe", I18n.revision); textStyle: "caption"; tone: "secondary"; horizontalAlignment: Text.AlignRight }
                 Item { Layout.preferredWidth: recentCard.buttonsWidth }
             }
         }
@@ -377,11 +377,11 @@ PPage {
                 Layout.fillWidth: true
                 implicitHeight: 44
                 Accessible.role: Accessible.ListItem
-                Accessible.name: modelData.name + (modelData.missing ? " (nicht mehr vorhanden)" : "")
+                Accessible.name: I18n.tr(modelData.name + (modelData.missing ? " (nicht mehr vorhanden)" : ""), I18n.revision)
                 PListItem { anchors.fill: parent; hovered: hover.hovered && !entry.modelData.missing; pressed: tap.pressed }
                 HoverHandler { id: hover; cursorShape: entry.modelData.missing ? Qt.ArrowCursor : Qt.PointingHandCursor }
                 TapHandler { id: tap; enabled: !entry.modelData.missing; onTapped: Reader.openRecent(entry.modelData.path) }
-                PToolTip { text: entry.modelData.path; visible: hover.hovered && !recentCard.showFolder }
+                PToolTip { text: I18n.tr(entry.modelData.path, I18n.revision); visible: hover.hovered && !recentCard.showFolder }
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 12
@@ -393,38 +393,38 @@ PPage {
                         color: entry.modelData.missing ? Theme.textTertiary : Theme.accent
                         size: Metrics.iconSizeMedium
                     }
-                    PText { Layout.preferredWidth: recentCard.nameWidth; text: entry.modelData.name; tone: entry.modelData.missing ? "tertiary" : ""; elide: Text.ElideMiddle }
+                    PText { Layout.preferredWidth: recentCard.nameWidth; text: I18n.tr(entry.modelData.name, I18n.revision); tone: entry.modelData.missing ? "tertiary" : ""; elide: Text.ElideMiddle }
                     PText {
                         Layout.preferredWidth: recentCard.folderWidth
                         visible: recentCard.showFolder
-                        text: entry.modelData.folder
+                        text: I18n.tr(entry.modelData.folder, I18n.revision)
                         textStyle: "caption"
                         tone: "secondary"
                         elide: Text.ElideMiddle
                     }
                     PText {
                         Layout.preferredWidth: Metrics.homeRecentWhenWidth
-                        text: entry.modelData.missing ? "Nicht mehr vorhanden" : entry.modelData.opened
+                        text: I18n.tr(entry.modelData.missing ? "Nicht mehr vorhanden" : entry.modelData.opened, I18n.revision)
                         textStyle: "caption"
                         tone: entry.modelData.missing ? "tertiary" : "secondary"
                         elide: Text.ElideRight
                     }
                     PText {
                         Layout.preferredWidth: Metrics.homeRecentSizeWidth
-                        text: entry.modelData.size
+                        text: I18n.tr(entry.modelData.size, I18n.revision)
                         textStyle: "caption"
                         tone: "secondary"
                         horizontalAlignment: Text.AlignRight
                     }
                     PIconButton {
                         iconName: "folder_open"
-                        tip: "Im Ordner zeigen"
+                        tip: I18n.tr("Im Ordner zeigen", I18n.revision)
                         enabled: !entry.modelData.missing
                         onClicked: Reader.showInFolder(entry.modelData.path)
                     }
                     PIconButton {
                         iconName: "dismiss"
-                        tip: "Aus der Liste entfernen"
+                        tip: I18n.tr("Aus der Liste entfernen", I18n.revision)
                         onClicked: Reader.removeRecent(entry.modelData.path)
                     }
                 }
@@ -444,7 +444,7 @@ PPage {
             Layout.topMargin: 1
         }
         PText {
-            text: "Alle Dateien werden lokal auf diesem PC verarbeitet. Es wird nichts hochgeladen. PDF-JavaScript wird nie ausgeführt. Gespeichert wird erst nach einer Prüfung der neuen Datei – das Original bleibt bei einem Fehler unverändert."
+            text: I18n.tr("Alle Dateien werden lokal auf diesem PC verarbeitet. Es wird nichts hochgeladen. PDF-JavaScript wird nie ausgeführt. Gespeichert wird erst nach einer Prüfung der neuen Datei – das Original bleibt bei einem Fehler unverändert.", I18n.revision)
             textStyle: "caption"
             tone: "secondary"
             wrap: true

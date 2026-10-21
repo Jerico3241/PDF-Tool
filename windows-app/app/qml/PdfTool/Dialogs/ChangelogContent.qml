@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // »Neu in Version …«: Punkte der Neuerungen.
 ColumnLayout {
@@ -16,8 +17,8 @@ ColumnLayout {
             required property var modelData
             Layout.fillWidth: true
             spacing: 8
-            PText { text: "•"; tone: "accent"; Layout.alignment: Qt.AlignTop }
-            PText { text: modelData; wrap: true; Layout.fillWidth: true }
+            PText { text: I18n.tr("•", I18n.revision); tone: "accent"; Layout.alignment: Qt.AlignTop }
+            PText { text: I18n.tr(modelData, I18n.revision); wrap: true; Layout.fillWidth: true }
         }
     }
 }

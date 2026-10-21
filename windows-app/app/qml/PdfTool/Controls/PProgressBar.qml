@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Fortschrittsbalken: bestimmt (value 0…1) oder unbestimmt (laufendes Segment – nur sichtbar aktiv).
 Item {
@@ -10,7 +11,7 @@ Item {
     implicitHeight: 4
     implicitWidth: 200
     Accessible.role: Accessible.ProgressBar
-    Accessible.name: indeterminate ? "Wird bearbeitet" : Math.round(value * 100) + " %"
+    Accessible.name: I18n.tr(indeterminate ? "Wird bearbeitet" : Math.round(value * 100) + " %", I18n.revision)
 
     Rectangle {
         anchors.left: parent.left

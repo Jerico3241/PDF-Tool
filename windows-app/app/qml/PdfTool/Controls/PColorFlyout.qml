@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Farbauswahl für Kopf-/Fußzeile: Schnellfarben, weitere Farben und eigene Farbe (#RRGGBB).
 T.Popup {
@@ -36,7 +37,7 @@ T.Popup {
     contentItem: ColumnLayout {
         id: content
         spacing: 8
-        PText { text: "Schriftfarbe"; textStyle: "caption"; tone: "secondary" }
+        PText { text: I18n.tr("Schriftfarbe", I18n.revision); textStyle: "caption"; tone: "secondary" }
         Flow {
             Layout.fillWidth: true
             spacing: 2
@@ -46,13 +47,13 @@ T.Popup {
                     required property var modelData
                     size: 34
                     swatchColor: modelData.value
-                    tip: modelData.name + " (" + modelData.value + ")"
+                    tip: I18n.tr(modelData.name + " (" + modelData.value + ")", I18n.revision)
                     selected: flyout.document && flyout.document.color.toUpperCase() === String(modelData.value).toUpperCase()
                     onClicked: flyout.choose(modelData.value)
                 }
             }
         }
-        PText { text: "Weitere Farben"; textStyle: "caption"; tone: "secondary"; Layout.topMargin: 4 }
+        PText { text: I18n.tr("Weitere Farben", I18n.revision); textStyle: "caption"; tone: "secondary"; Layout.topMargin: 4 }
         Flow {
             Layout.fillWidth: true
             spacing: 2
@@ -62,7 +63,7 @@ T.Popup {
                     required property var modelData
                     size: 28
                     swatchColor: modelData.value
-                    tip: modelData.name + " (" + modelData.value + ")"
+                    tip: I18n.tr(modelData.name + " (" + modelData.value + ")", I18n.revision)
                     selected: flyout.document && flyout.document.color.toUpperCase() === String(modelData.value).toUpperCase()
                     onClicked: flyout.choose(modelData.value)
                 }
@@ -76,15 +77,15 @@ T.Popup {
                 id: hex
                 Layout.fillWidth: true
                 preferredWidth: 120
-                placeholderText: "#RRGGBB"
-                label: "Eigene Farbe"
+                placeholderText: I18n.tr("#RRGGBB", I18n.revision)
+                label: I18n.tr("Eigene Farbe", I18n.revision)
                 text: flyout.document && flyout.document.color !== "" ? flyout.document.color : ""
                 validator: RegularExpressionValidator { regularExpression: /#?[0-9A-Fa-f]{0,6}/ }
                 onSubmitted: apply.clicked()
             }
             PButton {
                 id: apply
-                text: "Übernehmen"
+                text: I18n.tr("Übernehmen", I18n.revision)
                 enabled: /^#?[0-9A-Fa-f]{6}$/.test(hex.text)
                 onClicked: flyout.choose(hex.text.charAt(0) === "#" ? hex.text : "#" + hex.text)
             }

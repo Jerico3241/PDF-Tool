@@ -20,6 +20,8 @@ ListView {
     readonly property real ratio: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
     readonly property int thumbWidth: Reader.thumbWidth
 
+    // Seitenmaße einmal je Änderung holen – nicht je Zeile die ganze Liste (große PDFs)
+    readonly property var sizes: doc ? doc.pageSizes : []
     model: doc ? doc.pageCount : 0
     clip: true
     reuseItems: true
@@ -35,16 +37,18 @@ ListView {
     highlightFollowsCurrentItem: false
     T.ScrollBar.vertical: PScrollBar {}
     Accessible.role: Accessible.List
-    Accessible.name: "Seitenminiaturen"
+    Accessible.name: I18n.tr("Seitenminiaturen", I18n.revision)
 
     onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
+    // Seiten gelöscht oder eingefügt: das Modell beginnt neu (oben) – zurück zur aktuellen Seite
+    onCountChanged: currentIndex = Qt.binding(function() { return list.doc ? list.doc.currentPage : -1 })
     Keys.onUpPressed: if (doc) doc.goTo(doc.currentPage - 1)
     Keys.onDownPressed: if (doc) doc.goTo(doc.currentPage + 1)
 
     delegate: Item {
         id: row
         required property int index
-        readonly property var size: list.doc && index < list.doc.pageSizes.length ? list.doc.pageSizes[index] : [595, 842]
+        readonly property var size: index < list.sizes.length ? list.sizes[index] : [595, 842]
         readonly property real aspect: size[1] / Math.max(1, size[0])
         readonly property real thumbW: Math.min(list.thumbWidth, 200 / aspect)  // sehr hohe Seiten: höchstens 200 hoch
         readonly property real thumbHeight: thumbW * aspect
@@ -52,7 +56,7 @@ ListView {
         width: list.width
         height: thumbHeight + 32
         Accessible.role: Accessible.ListItem
-        Accessible.name: "Seite " + (index + 1)
+        Accessible.name: I18n.tr("Seite " + (index + 1), I18n.revision)
         Accessible.selected: current
 
         PListItem {
@@ -85,7 +89,7 @@ ListView {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: paper.bottom
             anchors.topMargin: 4
-            text: String(row.index + 1)
+            text: I18n.tr(String(row.index + 1), I18n.revision)
             textStyle: "caption"
             tone: row.current ? "accent" : "secondary"
         }
@@ -107,15 +111,15 @@ ListView {
         objectName: "readerThumbnailMenu"
         property int page: 0
         readonly property var pages: [page]
-        PMenuItem { text: "Anzeigen"; iconName: "eye"; onTriggered: list.doc.goTo(pageMenu.page) }
-        PMenuItem { text: "Nach rechts drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: list.doc.rotatePages(pageMenu.pages, 90) }
-        PMenuItem { text: "Nach links drehen"; iconName: "arrow_rotate_counterclockwise"; onTriggered: list.doc.rotatePages(pageMenu.pages, -90) }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; onTriggered: list.doc.duplicatePages(pageMenu.pages) }
-        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: list.doc.copyPages(pageMenu.pages) }
-        PMenuItem { text: "Einfügen danach"; iconName: "clipboard_paste"; visible: Reader.pageClip > 0; onTriggered: list.doc.pastePages(pageMenu.page + 1) }
-        PMenuItem { text: "Leere Seite danach einfügen"; iconName: "document_add"; onTriggered: list.doc.insertBlankPage(pageMenu.page + 1) }
-        PMenuItem { text: "Als neue PDF speichern …"; iconName: "arrow_export"; onTriggered: list.doc.extractPages(pageMenu.pages) }
-        PMenuItem { text: "Drucken …"; iconName: "print"; onTriggered: list.doc.printPages(pageMenu.pages) }
-        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: list.doc.deletePages(pageMenu.pages) }
+        PMenuItem { text: I18n.tr("Anzeigen", I18n.revision); iconName: "eye"; onTriggered: list.doc.goTo(pageMenu.page) }
+        PMenuItem { text: I18n.tr("Nach rechts drehen", I18n.revision); iconName: "arrow_rotate_clockwise"; onTriggered: list.doc.rotatePages(pageMenu.pages, 90) }
+        PMenuItem { text: I18n.tr("Nach links drehen", I18n.revision); iconName: "arrow_rotate_counterclockwise"; onTriggered: list.doc.rotatePages(pageMenu.pages, -90) }
+        PMenuItem { text: I18n.tr("Duplizieren", I18n.revision); iconName: "document_copy"; onTriggered: list.doc.duplicatePages(pageMenu.pages) }
+        PMenuItem { text: I18n.tr("Kopieren", I18n.revision); iconName: "copy"; onTriggered: list.doc.copyPages(pageMenu.pages) }
+        PMenuItem { text: I18n.tr("Einfügen danach", I18n.revision); iconName: "clipboard_paste"; visible: Reader.pageClip > 0; onTriggered: list.doc.pastePages(pageMenu.page + 1) }
+        PMenuItem { text: I18n.tr("Leere Seite danach einfügen", I18n.revision); iconName: "document_add"; onTriggered: list.doc.insertBlankPage(pageMenu.page + 1) }
+        PMenuItem { text: I18n.tr("Als neue PDF speichern …", I18n.revision); iconName: "arrow_export"; onTriggered: list.doc.extractPages(pageMenu.pages) }
+        PMenuItem { text: I18n.tr("Drucken …", I18n.revision); iconName: "print"; onTriggered: list.doc.printPages(pageMenu.pages) }
+        PMenuItem { text: I18n.tr("Löschen", I18n.revision); iconName: "delete"; onTriggered: list.doc.deletePages(pageMenu.pages) }
     }
 }

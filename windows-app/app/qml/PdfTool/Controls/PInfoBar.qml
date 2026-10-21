@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // InfoBar (Hinweis) mit Stufe, Titel, Text und Aktionen. Erscheint mit Höhe, Deckkraft und
 // leichter Bewegung, verschwindet ebenso – ohne hektische Sprünge. Ein neuer Inhalt in einem
@@ -19,8 +20,28 @@ Item {
     property var actions: notice ? notice.actions : []
     property bool animate: notice ? notice.animate : true
     property int topMargin: 8
+    // Nach so vielen Millisekunden von selbst schließen (0 = bleibt); solange die Maus darauf steht, nicht
+    property int autoHide: 0
     signal actionTriggered(int index)
     signal closed()
+
+    function dismiss() {
+        if (root.notice)
+            root.notice.close()
+        root.closed()
+    }
+    onShownChanged: if (shown && autoHide > 0) hideTimer.restart(); else hideTimer.stop()
+    Component.onCompleted: if (shown && autoHide > 0) hideTimer.restart()
+    onMessageChanged: if (shown && autoHide > 0) hideTimer.restart()
+    Timer {
+        id: hideTimer
+        interval: root.autoHide
+        onTriggered: {
+            if (barHover.hovered) restart()
+            else if (root.shown) root.dismiss()
+        }
+    }
+    HoverHandler { id: barHover }
 
     readonly property bool animating: heightAnim.running || fadeAnim.running
     readonly property real barHeight: bar.implicitHeight + topMargin
@@ -31,7 +52,7 @@ Item {
     clip: animating
     opacity: shown ? 1 : 0
     Accessible.role: Accessible.AlertMessage
-    Accessible.name: (title !== "" ? title + ": " : "") + message
+    Accessible.name: I18n.tr((title !== "" ? title + ": " : "") + message, I18n.revision)
 
     Behavior on implicitHeight {
         enabled: root.animate && Motion.infoBar > 0
@@ -92,7 +113,7 @@ Item {
                 Text {
                     id: text
                     width: Math.min(implicitWidth, flow.width)
-                    text: root.title !== "" ? "<b>" + root.escapeHtml(root.title) + "</b>&nbsp;&nbsp;" + root.escapeHtml(root.message) : root.escapeHtml(root.message)
+                    text: I18n.tr(root.title !== "" ? "<b>" + root.escapeHtml(root.title) + "</b>&nbsp;&nbsp;" + root.escapeHtml(root.message) : root.escapeHtml(root.message), I18n.revision)
                     textFormat: Text.StyledText
                     font: Typography.body
                     color: Theme.textPrimary
@@ -104,7 +125,7 @@ Item {
                     PButton {
                         required property int index
                         required property var modelData
-                        text: String(modelData)
+                        text: I18n.tr(String(modelData), I18n.revision)
                         onClicked: {
                             // Die Aktion kann denselben Hinweis mit anderen Aktionen ersetzen – dann
                             // entsteht diese Schaltfläche neu. Danach nur noch lokale Werte verwenden.
@@ -119,14 +140,10 @@ Item {
             PIconButton {
                 visible: root.closable
                 iconName: "dismiss"
-                tip: "Schließen"
+                tip: I18n.tr("Schließen", I18n.revision)
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: -4
-                onClicked: {
-                    if (root.notice)
-                        root.notice.close()
-                    root.closed()
-                }
+                onClicked: root.dismiss()
             }
         }
     }

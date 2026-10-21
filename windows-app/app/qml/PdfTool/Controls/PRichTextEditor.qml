@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Kopf-/Fußzeilen-Editor: Formatleiste (Schrift, Größe, Fett, Kursiv, Unterstrichen,
 // Durchgestrichen, Farbe, Ausrichtung, Rückgängig/Wiederholen) und ein Textfeld auf weißem
@@ -36,32 +37,32 @@ ColumnLayout {
         PComboBox {
             id: fontCombo
             preferredWidth: 156
-            label: "Schriftart"
-            tip: "Schriftart"
-            placeholder: "Schriftart"
+            label: I18n.tr("Schriftart", I18n.revision)
+            tip: I18n.tr("Schriftart", I18n.revision)
+            placeholder: I18n.tr("Schriftart", I18n.revision)
             model: editor.document ? editor.document.families : []
             currentIndex: editor.document ? editor.document.families.indexOf(editor.document.fontFamily) : -1
-            displayText: editor.document && editor.document.fontFamily !== "" ? editor.document.fontFamily : ""
+            displayText: I18n.tr(editor.document && editor.document.fontFamily !== "" ? editor.document.fontFamily : "", I18n.revision)
             onActivated: (index) => { editor.document.setFontFamily(editor.document.families[index]); editor.refocus() }
         }
         PComboBox {
             id: sizeCombo
             preferredWidth: 72
-            label: "Schriftgröße"
-            tip: "Schriftgröße (pt)"
-            placeholder: "Größe"
+            label: I18n.tr("Schriftgröße", I18n.revision)
+            tip: I18n.tr("Schriftgröße (pt)", I18n.revision)
+            placeholder: I18n.tr("Größe", I18n.revision)
             model: editor.document ? editor.document.sizes : []
             currentIndex: editor.document ? editor.document.sizes.indexOf(editor.document.fontSize) : -1
-            displayText: editor.document ? editor.document.fontSize : ""
+            displayText: I18n.tr(editor.document ? editor.document.fontSize : "", I18n.revision)
             onActivated: (index) => { editor.document.setFontSize(editor.document.sizes[index]); editor.refocus() }
         }
         Separator {}
         Row {
             spacing: 2
-            PFormatButton { glyph: "B"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, weight: Font.Bold }); tip: "Fett (Strg+B)"; active: editor.document ? editor.document.bold : false; mixed: editor.document ? editor.document.mixed.indexOf("bold") >= 0 : false; onClicked: { editor.document.toggle("bold"); editor.refocus() } }
-            PFormatButton { glyph: "I"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, italic: true }); tip: "Kursiv (Strg+I)"; active: editor.document ? editor.document.italic : false; mixed: editor.document ? editor.document.mixed.indexOf("italic") >= 0 : false; onClicked: { editor.document.toggle("italic"); editor.refocus() } }
-            PFormatButton { glyph: "U"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, underline: true }); tip: "Unterstrichen (Strg+U)"; active: editor.document ? editor.document.underline : false; mixed: editor.document ? editor.document.mixed.indexOf("underline") >= 0 : false; onClicked: { editor.document.toggle("underline"); editor.refocus() } }
-            PFormatButton { glyph: "S"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, strikeout: true }); tip: "Durchgestrichen"; active: editor.document ? editor.document.strike : false; mixed: editor.document ? editor.document.mixed.indexOf("strike") >= 0 : false; onClicked: { editor.document.toggle("strike"); editor.refocus() } }
+            PFormatButton { glyph: "B"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, weight: Font.Bold }); tip: I18n.tr("Fett (Strg+B)", I18n.revision); active: editor.document ? editor.document.bold : false; mixed: editor.document ? editor.document.mixed.indexOf("bold") >= 0 : false; onClicked: { editor.document.toggle("bold"); editor.refocus() } }
+            PFormatButton { glyph: "I"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, italic: true }); tip: I18n.tr("Kursiv (Strg+I)", I18n.revision); active: editor.document ? editor.document.italic : false; mixed: editor.document ? editor.document.mixed.indexOf("italic") >= 0 : false; onClicked: { editor.document.toggle("italic"); editor.refocus() } }
+            PFormatButton { glyph: "U"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, underline: true }); tip: I18n.tr("Unterstrichen (Strg+U)", I18n.revision); active: editor.document ? editor.document.underline : false; mixed: editor.document ? editor.document.mixed.indexOf("underline") >= 0 : false; onClicked: { editor.document.toggle("underline"); editor.refocus() } }
+            PFormatButton { glyph: "S"; glyphFont: Qt.font({ family: Typography.family, pixelSize: 15, strikeout: true }); tip: I18n.tr("Durchgestrichen", I18n.revision); active: editor.document ? editor.document.strike : false; mixed: editor.document ? editor.document.mixed.indexOf("strike") >= 0 : false; onClicked: { editor.document.toggle("strike"); editor.refocus() } }
         }
         T.AbstractButton {
             id: colorButton
@@ -71,7 +72,7 @@ ColumnLayout {
             hoverEnabled: true
             focusPolicy: Qt.TabFocus
             Accessible.role: Accessible.Button
-            Accessible.name: "Schriftfarbe"
+            Accessible.name: I18n.tr("Schriftfarbe", I18n.revision)
             background: Rectangle {
                 radius: Metrics.radiusControl
                 color: colorButton.pressed ? Theme.subtlePressed : (colorButton.hovered || flyout.visible ? Theme.subtleHover : "transparent")
@@ -82,7 +83,7 @@ ColumnLayout {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 5
-                    text: "A"
+                    text: I18n.tr("A", I18n.revision)
                     font: Qt.font({ family: Typography.family, pixelSize: 15, weight: Font.DemiBold })
                     color: Theme.textPrimary
                 }
@@ -100,7 +101,7 @@ ColumnLayout {
                 }
             }
             onClicked: flyout.visible ? flyout.close() : flyout.open()
-            PToolTip { text: "Schriftfarbe"; visible: colorButton.hovered && !flyout.visible }
+            PToolTip { text: I18n.tr("Schriftfarbe", I18n.revision); visible: colorButton.hovered && !flyout.visible }
             PColorFlyout {
                 id: flyout
                 y: colorButton.height + 4
@@ -111,15 +112,15 @@ ColumnLayout {
         Separator {}
         Row {
             spacing: 2
-            PFormatButton { iconName: "text_align_left"; tip: "Linksbündig (Strg+L)"; active: editor.document ? editor.document.alignment === "left" : false; onClicked: { editor.document.setAlignment("left"); editor.refocus() } }
-            PFormatButton { iconName: "text_align_center"; tip: "Zentriert (Strg+E)"; active: editor.document ? editor.document.alignment === "center" : false; onClicked: { editor.document.setAlignment("center"); editor.refocus() } }
-            PFormatButton { iconName: "text_align_right"; tip: "Rechtsbündig (Strg+R)"; active: editor.document ? editor.document.alignment === "right" : false; onClicked: { editor.document.setAlignment("right"); editor.refocus() } }
+            PFormatButton { iconName: "text_align_left"; tip: I18n.tr("Linksbündig (Strg+L)", I18n.revision); active: editor.document ? editor.document.alignment === "left" : false; onClicked: { editor.document.setAlignment("left"); editor.refocus() } }
+            PFormatButton { iconName: "text_align_center"; tip: I18n.tr("Zentriert (Strg+E)", I18n.revision); active: editor.document ? editor.document.alignment === "center" : false; onClicked: { editor.document.setAlignment("center"); editor.refocus() } }
+            PFormatButton { iconName: "text_align_right"; tip: I18n.tr("Rechtsbündig (Strg+R)", I18n.revision); active: editor.document ? editor.document.alignment === "right" : false; onClicked: { editor.document.setAlignment("right"); editor.refocus() } }
         }
         Separator {}
         Row {
             spacing: 2
-            PFormatButton { iconName: "arrow_undo"; tip: "Rückgängig (Strg+Z)"; enabled: area.canUndo; opacity: enabled ? 1 : 0.4; onClicked: { area.undo(); editor.refocus() } }
-            PFormatButton { iconName: "arrow_redo"; tip: "Wiederholen (Strg+Y)"; enabled: area.canRedo; opacity: enabled ? 1 : 0.4; onClicked: { area.redo(); editor.refocus() } }
+            PFormatButton { iconName: "arrow_undo"; tip: I18n.tr("Rückgängig (Strg+Z)", I18n.revision); enabled: area.canUndo; opacity: enabled ? 1 : 0.4; onClicked: { area.undo(); editor.refocus() } }
+            PFormatButton { iconName: "arrow_redo"; tip: I18n.tr("Wiederholen (Strg+Y)", I18n.revision); enabled: area.canRedo; opacity: enabled ? 1 : 0.4; onClicked: { area.redo(); editor.refocus() } }
         }
     }
 
@@ -174,7 +175,7 @@ ColumnLayout {
                 selectByMouse: true
                 persistentSelection: true
                 Accessible.role: Accessible.EditableText
-                Accessible.name: editor.label
+                Accessible.name: I18n.tr(editor.label, I18n.revision)
                 // Einfügemarke in der Höhe der aktuellen Schrift auf der Grundlinie (Maße aus Python,
                 // ``RichTextDocument.caret…``) – Kopf- und Fußzeile verwenden genau diese eine Logik
                 cursorDelegate: PTextCaret {
@@ -219,7 +220,7 @@ ColumnLayout {
                     x: area.leftPadding
                     y: area.topPadding
                     width: area.width - area.leftPadding - area.rightPadding
-                    text: editor.placeholderText
+                    text: I18n.tr(editor.placeholderText, I18n.revision)
                     font: editor.document && editor.document.caretFont ? editor.document.caretFont : Typography.body
                     horizontalAlignment: {
                         const align = editor.document ? editor.document.alignment : ""

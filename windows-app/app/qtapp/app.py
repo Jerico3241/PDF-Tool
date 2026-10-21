@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
-from tools.registry import CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
+from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
 from updater.semver import Version
 
 import winsys
@@ -30,10 +30,10 @@ from .timers import Timers
 HOME = "home"
 SETTINGS = "settings"
 PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
-SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key)  # Strg+1 … Strg+5
+SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key, ACTIONS.key)  # Strg+1 … Strg+6
 # Mit eigenem Tab neben ⌂ Start: diese Werkzeuge und die Einstellungen. Der Reader zeigt seine Dokumente als Tabs.
-TAB_KEYS = (CONTRACTS.key, REPAIR.key, SETTINGS)
-HOME_HINT = "Strg+5  PDF Reader & Editor   ·   Strg+2  Vertragsübersichten   ·   Strg+3  PDF reparieren"
+TAB_KEYS = (ACTIONS.key, CONTRACTS.key, REPAIR.key, SETTINGS)
+HOME_HINT = "Strg+5  Reader   ·   Strg+6  Stapel   ·   Strg+2  Vertragsübersichten   ·   Strg+3  Reparieren"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
     "Lokale Windows-App mit Werkzeugen für PDF-Dateien: PDFs lesen, bearbeiten, organisieren und "
@@ -116,6 +116,7 @@ class AppController(Observable):
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.cfg = cfg
+        self.key_text: Callable[[str], str] = lambda text: text  # Statuszeile: eigene Tastenkürzel (shortcuts.py)
         self.state = State(cfg)
         self.timers = Timers(self, on_exception=self.report_exception)
         self.worker = Worker(self, on_exception=self.report_exception)
@@ -129,8 +130,12 @@ class AppController(Observable):
         self._tools: dict[str, ToolHooks] = {}
         self._config_parts: list[Callable[[], dict]] = []
         self.restart_requested = False  # nach dem Beenden neu starten (Wiederherstellung)
+        self.background = None  # Background: Symbol im Infobereich, Start mit Windows
+        self.quit_wanted = False  # ganz beenden (Infobereich »Beenden«, Update) – nicht nur das Fenster schließen
+        self.presenter: Callable[[], None] | None = None  # zeigt das Fenster (verdeckt bis zum ersten Bild)
         self._at_shutdown: list[Callable[[], None]] = []
         self._last_page: dict[str, str] = {}
+        self._before_settings = ""  # Seite vor den Einstellungen: Strg+W bzw. ein Klick aufs Zahnrad kehrt dorthin zurück
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
         self.documents_open: Callable[[], bool] = lambda: False  # geöffnete PDFs im Reader (setzt der Reader)
         self.navigations = 0  # Seitenwechsel (Tests, Diagnose)
@@ -222,6 +227,8 @@ class AppController(Observable):
         if not self.available(page) or page == self.currentPage:
             return
         previous = self.currentPage
+        if page == SETTINGS:
+            self._before_settings = previous
         if previous:
             _tool, hooks = self._page_tool(previous)
             if hooks is not None:
@@ -240,12 +247,24 @@ class AppController(Observable):
         self.refresh_hint()
 
     def tab_for(self, page: str) -> str:
-        """Tab einer Seite: das Werkzeug (Vertragsübersichten, PDF reparieren) bzw. »settings« – Start und der
-        Reader haben keinen eigenen (die Dokumente des Readers sind Tabs)."""
+        """Tab einer Seite: das Werkzeug (Vertragsübersichten, PDF reparieren) – Start, die Einstellungen (seit 4.0
+        Beta 7: das Zahnrad ist markiert) und der Reader haben keinen eigenen (die Dokumente des Readers sind Tabs)."""
         if page == SETTINGS:
-            return SETTINGS
+            return ""
         info = tool_for_page(page)
         return info.key if info is not None and info.key in TAB_KEYS else ""
+
+    @Slot()
+    def leaveSettings(self) -> None:  # noqa: N802
+        """Einstellungen schließen (Strg+W, Klick auf das markierte Zahnrad): zurück zur Seite davor, sonst zum Start."""
+        if self.currentPage != SETTINGS:
+            return
+        back = self._before_settings
+        tab = self.tab_for(back) if back else ""
+        if back and back != SETTINGS and (not tab or tab in self.openTabs):  # ein geschlossener Werkzeug-Tab bleibt zu
+            self.navigate(back)
+        if self.currentPage == SETTINGS:  # Seite davor gibt es nicht mehr (Werkzeug geschlossen, kein Dokument)
+            self.navigate(HOME)
 
     @Slot(str)
     def closeTab(self, key: str) -> None:  # noqa: N802
@@ -286,7 +305,7 @@ class AppController(Observable):
 
     def refresh_hint(self) -> None:
         _key, hooks = self._page_tool()
-        self.hint = hooks.hint(self.currentPage) if hooks is not None else HOME_HINT
+        self.hint = self.key_text(hooks.hint(self.currentPage) if hooks is not None else HOME_HINT)
 
     # Tastenkürzel ------------------------------------------------------------------------------------
     @Slot()
@@ -556,14 +575,84 @@ class AppController(Observable):
 
     @Slot(result=bool)
     def requestClose(self) -> bool:  # noqa: N802
-        """Fenster soll schließen: Werkzeuge dürfen nachfragen (z. B. laufender Stapel)."""
+        """Fenster soll schließen: Werkzeuge dürfen nachfragen (z. B. laufender Stapel).
+
+        Mit »Im Hintergrund bereithalten« schließt das Kreuz nur das Fenster (``False``: das Fenster bleibt
+        bestehen und wird versteckt) – außer PDF Tool soll ganz enden (Infobereich »Beenden«, Update, Neustart)."""
         if self.closing:
             return True
+        if self.background is not None and self.background.active and not self.quit_wanted and not self.restart_requested:
+            self.hide_window()
+            return False
         for hooks in self._tools.values():
             if not hooks.confirm_close():
                 return False
         self.shutdown()
+        if self.background is not None:
+            self.background.finished()
         return True
+
+    def hide_window(self) -> bool:
+        """Fenster verstecken, PDF Tool bleibt im Infobereich. Dokumente schließen wie beim Beenden (Rückfrage bei
+        ungespeicherten Änderungen); laufende Arbeit (Stapel, Reparatur) geht im Hintergrund weiter."""
+        for hooks in self._tools.values():
+            release = getattr(hooks, "release", None)
+            if release is not None and not release():
+                return False
+        if self.window is not None:
+            self.window.hide()
+        self.navigate(HOME)
+        self.persist()
+        if self.background is not None:
+            self.background.hidden()
+        from diagnostics.applog import get as get_log
+
+        get_log("app").info("Fenster geschlossen – PDF Tool bleibt im Hintergrund")
+        return True
+
+    @Slot()
+    def present_window(self) -> None:
+        """Fenster zeigen (Infobereich, weiterer Start, »Öffnen mit«) und nach vorn holen."""
+        if self.closing:
+            return
+        window = self.window
+        if window is None:
+            return
+        if self.presenter is not None and not window.isVisible():
+            self.presenter()
+            for hooks in self._tools.values():
+                shown = getattr(hooks, "shown", None)
+                if shown is not None:
+                    shown()
+            winsys.bring_to_front(int(window.winId()))
+            return
+        if window.visibility() == window.Visibility.Minimized:
+            window.showNormal()
+        window.raise_()
+        window.requestActivate()
+        winsys.bring_to_front(int(window.winId()))
+
+    @Slot()
+    def quit_app(self) -> None:
+        """PDF Tool ganz beenden (Infobereich »Beenden«). Rückfragen der Werkzeuge erscheinen im Fenster."""
+        if self.closing:
+            return
+        self.quit_wanted = True
+        window = self.window
+        if window is None:
+            if not self.requestClose():
+                self.quit_wanted = False
+            return
+        if not window.isVisible():
+            if not self.running_work():
+                # Versteckt sind alle Dokumente schon geschlossen – es gibt nichts zu fragen
+                if not self.requestClose():
+                    self.quit_wanted = False
+                return
+            self.present_window()  # Rückfragen (z. B. laufender Stapel) brauchen ein sichtbares Fenster
+        window.close()
+        if not self.closing:
+            self.quit_wanted = False
 
     def shutdown(self) -> None:
         if self.closing:

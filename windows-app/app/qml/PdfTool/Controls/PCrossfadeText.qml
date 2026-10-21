@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Text, der bei Änderungen weich überblendet (alter Text aus, neuer ein – gleichzeitig).
 Item {
@@ -15,7 +16,7 @@ Item {
     implicitWidth: Math.max(a.implicitWidth, b.implicitWidth)
     implicitHeight: Math.max(a.implicitHeight, b.implicitHeight, 1)
     Accessible.role: Accessible.StaticText
-    Accessible.name: text
+    Accessible.name: I18n.tr(text, I18n.revision)
 
     onTextChanged: {
         var target = _front ? b : a

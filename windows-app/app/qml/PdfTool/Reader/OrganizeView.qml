@@ -21,6 +21,7 @@ FocusScope {
     id: root
     objectName: "readerOrganizeView"
     property var doc: null
+    readonly property var sizes: doc ? doc.pageSizes : []  // einmal je Änderung, nicht je Zelle
     property var selection: ({})
     property int anchorIndex: -1
     readonly property var selectedPages: {
@@ -223,25 +224,25 @@ FocusScope {
                 y: 8
                 width: parent.width - 16
                 spacing: 4
-                PIconButton { iconName: "arrow_rotate_counterclockwise"; tip: "Nach links drehen"; onClicked: root.doc.rotatePages(root.chosen(), -90) }
-                PIconButton { objectName: "readerOrganizeRotate"; iconName: "arrow_rotate_clockwise"; tip: "Nach rechts drehen"; onClicked: root.doc.rotatePages(root.chosen(), 90) }
-                PIconButton { objectName: "readerOrganizeDelete"; iconName: "delete"; tip: "Löschen (Entf)"; onClicked: root.deleteChosen() }
-                PIconButton { iconName: "document_copy"; tip: "Duplizieren"; onClicked: root.duplicateChosen() }
-                PIconButton { iconName: "document_add"; tip: "Leere Seite danach einfügen"; onClicked: root.insertBlankAfter() }
-                PIconButton { objectName: "readerOrganizeInsertFile"; iconName: "document_arrow_up"; tip: "Seiten aus PDF danach einfügen …"; onClicked: root.insertFileAfter() }
-                PButton { iconName: "arrow_export"; text: "Als neue PDF"; tip: "Gewählte Seiten als neue PDF speichern (extrahieren)"; onClicked: root.doc.extractPages(root.chosen()) }
-                PButton { iconName: "document_landscape_split"; text: "Teilen …"; onClicked: root.doc.splitDocument("") }
-                PButton { iconName: "image"; text: "Als Bilder"; tip: "Gewählte Seiten als PNG (150 dpi) speichern"; onClicked: root.doc.exportImages(root.chosen(), "png", 150) }
-                PIconButton { objectName: "readerOrganizeCopy"; iconName: "copy"; tip: "Kopieren (Strg+C) – auch zum Einfügen in einem anderen Tab"; onClicked: root.doc.copyPages(root.chosen()) }
-                PIconButton { objectName: "readerOrganizeCut"; iconName: "cut"; tip: "Ausschneiden (Strg+X)"; onClicked: root.doc.cutPages(root.chosen()) }
-                PIconButton { objectName: "readerOrganizePaste"; iconName: "clipboard_paste"; tip: "Einfügen (Strg+V) – hinter der Auswahl bzw. am Ende"; enabled: Reader.pageClip > 0; onClicked: root.pasteAfter() }
-                PIconButton { objectName: "readerOrganizePrint"; iconName: "print"; tip: "Gewählte Seiten drucken"; onClicked: root.doc.printPages(root.chosen()) }
-                PButton { objectName: "readerOrganizeOcr"; iconName: "document_search"; text: "Text erkennen …"; tip: "Gescannte Seiten durchsuchbar machen (OCR)"; enabled: !root.doc.ocrRunning; onClicked: root.doc.recognizeText(root.hasSelection ? root.selectedPages : []) }
+                PIconButton { iconName: "arrow_rotate_counterclockwise"; tip: I18n.tr("Nach links drehen", I18n.revision); onClicked: root.doc.rotatePages(root.chosen(), -90) }
+                PIconButton { objectName: "readerOrganizeRotate"; iconName: "arrow_rotate_clockwise"; tip: I18n.tr("Nach rechts drehen", I18n.revision); onClicked: root.doc.rotatePages(root.chosen(), 90) }
+                PIconButton { objectName: "readerOrganizeDelete"; iconName: "delete"; tip: I18n.tr("Löschen (Entf)", I18n.revision); onClicked: root.deleteChosen() }
+                PIconButton { iconName: "document_copy"; tip: I18n.tr("Duplizieren", I18n.revision); onClicked: root.duplicateChosen() }
+                PIconButton { iconName: "document_add"; tip: I18n.tr("Leere Seite danach einfügen", I18n.revision); onClicked: root.insertBlankAfter() }
+                PIconButton { objectName: "readerOrganizeInsertFile"; iconName: "document_arrow_up"; tip: I18n.tr("Seiten aus PDF danach einfügen …", I18n.revision); onClicked: root.insertFileAfter() }
+                PButton { iconName: "arrow_export"; text: I18n.tr("Als neue PDF", I18n.revision); tip: I18n.tr("Gewählte Seiten als neue PDF speichern (extrahieren)", I18n.revision); onClicked: root.doc.extractPages(root.chosen()) }
+                PButton { iconName: "document_landscape_split"; text: I18n.tr("Teilen …", I18n.revision); onClicked: root.doc.splitDocument("") }
+                PButton { iconName: "image"; text: I18n.tr("Als Bilder", I18n.revision); tip: I18n.tr("Gewählte Seiten als PNG (150 dpi) speichern", I18n.revision); onClicked: root.doc.exportImages(root.chosen(), "png", 150) }
+                PIconButton { objectName: "readerOrganizeCopy"; iconName: "copy"; tip: I18n.tr("Kopieren (Strg+C) – auch zum Einfügen in einem anderen Tab", I18n.revision); onClicked: root.doc.copyPages(root.chosen()) }
+                PIconButton { objectName: "readerOrganizeCut"; iconName: "cut"; tip: I18n.tr("Ausschneiden (Strg+X)", I18n.revision); onClicked: root.doc.cutPages(root.chosen()) }
+                PIconButton { objectName: "readerOrganizePaste"; iconName: "clipboard_paste"; tip: I18n.tr("Einfügen (Strg+V) – hinter der Auswahl bzw. am Ende", I18n.revision); enabled: Reader.pageClip > 0; onClicked: root.pasteAfter() }
+                PIconButton { objectName: "readerOrganizePrint"; iconName: "print"; tip: I18n.tr("Gewählte Seiten drucken", I18n.revision); onClicked: root.doc.printPages(root.chosen()) }
+                PButton { objectName: "readerOrganizeOcr"; iconName: "document_search"; text: I18n.tr("Text erkennen …", I18n.revision); tip: I18n.tr("Gescannte Seiten durchsuchbar machen (OCR)", I18n.revision); enabled: !root.doc.ocrRunning; onClicked: root.doc.recognizeText(root.hasSelection ? root.selectedPages : []) }
                 PText {
                     objectName: "readerOrganizeCount"
                     height: Metrics.controlHeight
                     leftPadding: 8
-                    text: root.hasSelection ? root.selectedPages.length + " von " + root.pagesText(root.doc.pageCount) + " gewählt" : (root.doc ? root.pagesText(root.doc.pageCount) + " – klicken zum Auswählen, ziehen zum Verschieben" : "")
+                    text: I18n.tr(root.hasSelection ? root.selectedPages.length + " von " + root.pagesText(root.doc.pageCount) + " gewählt" : (root.doc ? root.pagesText(root.doc.pageCount) + " – klicken zum Auswählen, ziehen zum Verschieben" : ""), I18n.revision)
                     verticalAlignment: Text.AlignVCenter
                     tone: "secondary"
                     textStyle: "caption"
@@ -257,6 +258,27 @@ FocusScope {
             focus: true
             clip: true
             model: root.doc ? root.doc.pageCount : 0
+            // Seiten gelöscht oder eingefügt: das Modell beginnt neu (oben) – die Stelle bleibt
+            property real keptY: 0
+            property int keptCount: 0
+            property bool restoring: false
+            onContentYChanged: if (!restoring && count === keptCount && count > 0) keptY = contentY
+            onCountChanged: {
+                if (keptCount > 0 && count > 0) {
+                    restoring = true
+                    restoreLater.restart()  // erst nach dem Neuaufbau (Timer statt Qt.callLater: endet mit der Ansicht)
+                }
+                keptCount = count
+            }
+            Timer {
+                id: restoreLater
+                interval: 0
+                onTriggered: {
+                    if (grid.count > 0)
+                        grid.contentY = Math.max(grid.originY - grid.topMargin, Math.min(grid.keptY, grid.originY + grid.contentHeight + grid.bottomMargin - grid.height))
+                    grid.restoring = false
+                }
+            }
             cellWidth: Math.max(root.thumbBox + 24, Math.floor((width - 16) / Math.max(1, Math.floor((width - 16) / (root.thumbBox + 24)))))
             cellHeight: root.thumbBox * 1.42 + 40
             leftMargin: 8
@@ -269,13 +291,13 @@ FocusScope {
             boundsBehavior: Flickable.StopAtBounds
             T.ScrollBar.vertical: PScrollBar {}
             Accessible.role: Accessible.List
-            Accessible.name: "Seiten"
+            Accessible.name: I18n.tr("Seiten", I18n.revision)
 
             delegate: Item {
                 id: cell
                 required property int index
                 readonly property bool isCell: true
-                readonly property var size: root.doc && index < root.doc.pageSizes.length ? root.doc.pageSizes[index] : [595, 842]
+                readonly property var size: index < root.sizes.length ? root.sizes[index] : [595, 842]
                 readonly property real fit: Math.min(root.thumbBox / size[0], root.thumbBox * 1.42 / size[1])
                 readonly property bool chosen: root.selection[index] === true
                 // gezogene Seiten: Platzhalter an der neuen Stelle – Rahmen im Akzentton, Seite abgeblendet (die
@@ -286,7 +308,7 @@ FocusScope {
                 width: grid.cellWidth
                 height: grid.cellHeight
                 Accessible.role: Accessible.ListItem
-                Accessible.name: "Seite " + (index + 1)
+                Accessible.name: I18n.tr("Seite " + (index + 1), I18n.revision)
                 Accessible.selected: chosen
 
                 // Lage: die eigene Zelle oder (beim Ziehen, nach einer Änderung) eine andere Stelle, von der aus
@@ -375,7 +397,7 @@ FocusScope {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 8
-                    text: String(cell.shownAt + 1)
+                    text: I18n.tr(String(cell.shownAt + 1), I18n.revision)
                     tone: cell.chosen ? "accent" : "secondary"
                     textStyle: "caption"
                 }
@@ -544,7 +566,7 @@ FocusScope {
         id: ghost
         objectName: "readerOrganizeGhost"
         readonly property int first: root.selectedPages.length > 0 ? root.selectedPages[0] : -1
-        readonly property var size: root.doc && first >= 0 && first < root.doc.pageSizes.length ? root.doc.pageSizes[first] : [595, 842]
+        readonly property var size: first >= 0 && first < root.sizes.length ? root.sizes[first] : [595, 842]
         readonly property real fit: Math.min(root.thumbBox * 0.6 / size[0], root.thumbBox * 0.85 / size[1])
         readonly property point at: grid.mapToItem(root, dragArea.pointerX, dragArea.pointerY)
         visible: opacity > 0
@@ -580,25 +602,25 @@ FocusScope {
             height: 22
             radius: 11
             color: Theme.accent
-            PText { id: countText; anchors.centerIn: parent; text: String(root.selectedPages.length); color: Theme.textOnAccent; textStyle: "caption" }
+            PText { id: countText; anchors.centerIn: parent; text: I18n.tr(String(root.selectedPages.length), I18n.revision); color: Theme.textOnAccent; textStyle: "caption" }
         }
     }
     PMenu {
         id: pageMenu
-        PMenuItem { text: "Nach rechts drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages(root.chosen(), 90) }
-        PMenuItem { text: "Nach links drehen"; iconName: "arrow_rotate_counterclockwise"; onTriggered: root.doc.rotatePages(root.chosen(), -90) }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; onTriggered: root.duplicateChosen() }
-        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyPages(root.chosen()) }
-        PMenuItem { text: "Ausschneiden"; iconName: "cut"; onTriggered: root.doc.cutPages(root.chosen()) }
-        PMenuItem { text: "Einfügen danach"; iconName: "clipboard_paste"; visible: Reader.pageClip > 0; onTriggered: root.pasteAfter() }
-        PMenuItem { text: "Als neue PDF speichern …"; iconName: "arrow_export"; onTriggered: root.doc.extractPages(root.chosen()) }
-        PMenuItem { text: "Drucken …"; iconName: "print"; onTriggered: root.doc.printPages(root.chosen()) }
-        PMenuItem { text: "Text erkennen …"; iconName: "document_search"; enabled: !root.doc.ocrRunning; onTriggered: root.doc.recognizeText(root.chosen()) }
-        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.deleteChosen() }
-        PMenuItem { text: "Anzeigen"; iconName: "eye"; onTriggered: { Reader.setOrganize(false); root.doc.goTo(root.chosen()[0]) } }
+        PMenuItem { text: I18n.tr("Nach rechts drehen", I18n.revision); iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages(root.chosen(), 90) }
+        PMenuItem { text: I18n.tr("Nach links drehen", I18n.revision); iconName: "arrow_rotate_counterclockwise"; onTriggered: root.doc.rotatePages(root.chosen(), -90) }
+        PMenuItem { text: I18n.tr("Duplizieren", I18n.revision); iconName: "document_copy"; onTriggered: root.duplicateChosen() }
+        PMenuItem { text: I18n.tr("Kopieren", I18n.revision); iconName: "copy"; onTriggered: root.doc.copyPages(root.chosen()) }
+        PMenuItem { text: I18n.tr("Ausschneiden", I18n.revision); iconName: "cut"; onTriggered: root.doc.cutPages(root.chosen()) }
+        PMenuItem { text: I18n.tr("Einfügen danach", I18n.revision); iconName: "clipboard_paste"; visible: Reader.pageClip > 0; onTriggered: root.pasteAfter() }
+        PMenuItem { text: I18n.tr("Als neue PDF speichern …", I18n.revision); iconName: "arrow_export"; onTriggered: root.doc.extractPages(root.chosen()) }
+        PMenuItem { text: I18n.tr("Drucken …", I18n.revision); iconName: "print"; onTriggered: root.doc.printPages(root.chosen()) }
+        PMenuItem { text: I18n.tr("Text erkennen …", I18n.revision); iconName: "document_search"; enabled: !root.doc.ocrRunning; onTriggered: root.doc.recognizeText(root.chosen()) }
+        PMenuItem { text: I18n.tr("Löschen", I18n.revision); iconName: "delete"; onTriggered: root.deleteChosen() }
+        PMenuItem { text: I18n.tr("Anzeigen", I18n.revision); iconName: "eye"; onTriggered: { Reader.setOrganize(false); root.doc.goTo(root.chosen()[0]) } }
     }
     PMenu {
         id: emptyMenu
-        PMenuItem { text: "Seiten am Ende einfügen"; iconName: "clipboard_paste"; onTriggered: root.doc.pastePages(root.doc.pageCount) }
+        PMenuItem { text: I18n.tr("Seiten am Ende einfügen", I18n.revision); iconName: "clipboard_paste"; onTriggered: root.doc.pastePages(root.doc.pageCount) }
     }
 }

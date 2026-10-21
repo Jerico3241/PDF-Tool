@@ -100,6 +100,9 @@ def main() -> int:
     check(importlib.util.find_spec("tkinter") is None, "tkinter gehört nicht mehr zur Laufzeit (Qt-Oberfläche)")
     import PySide6
     from PySide6 import QtCore, QtGui, QtNetwork, QtPrintSupport, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
+    import comtypes.client  # noqa: F401 - Scannen (WIA)
+    import asn1crypto.cms  # noqa: F401 - digitale Signatur (CMS)
+    from cryptography.hazmat.primitives.serialization import pkcs12  # noqa: F401 - digitale Signatur (.pfx)
     import fontTools
     import numpy
     import openpyxl
@@ -167,7 +170,22 @@ def main() -> int:
     check(hasattr(qt_comparison, "ComparisonView") and qt_comparison.FIRST_SAVED.startswith("Erster Vertragsstand gespeichert"), "Vertragsvergleich fehlt")
     check(hasattr(rebuild, "write_classic") and hasattr(scanner, "scan"), "Rohrekonstruktion fehlt")
 
-    check([tool.key for tool in registry.TOOLS] == ["reader", "contracts", "repair"], "Werkzeuge fehlen")
+    from tools.pdf_editor import scan as scanning
+
+    check(isinstance(scanning.default_backend(), scanning.WiaBackend), "Scannen: WIA-Schnittstelle (comtypes) fehlt")
+    try:  # CI-Rechner haben keinen Scanner und oft keinen WIA-Dienst – nur: kein Absturz, sondern Liste oder Meldung
+        print(f"Scannen: {len(scanning.scanners())} Scanner gefunden")
+    except scanning.ScanError as exc:
+        print(f"Scannen: {exc}")
+    from tools.pdf_editor import speech as speaking
+
+    try:  # Vorlesen: Sprachausgabe von Windows (SAPI) – CI-Rechner haben meist englische Stimmen
+        voices = speaking.default_backend().voices()
+        print(f"Vorlesen: {len(voices)} Stimme(n): {', '.join(voice.name for voice in voices[:4])}")
+    except speaking.SpeechError as exc:
+        print(f"Vorlesen: {exc}")
+
+    check([tool.key for tool in registry.TOOLS] == ["reader", "actions", "contracts", "repair"], "Werkzeuge fehlen")
     check(hasattr(qt_contracts, "ContractsTool") and hasattr(qt_repair, "RepairTool") and hasattr(qt_reader, "ReaderTool"), "Werkzeuge der Oberfläche fehlen")
     check(qt_instance.server_name().startswith(qt_instance.PREFIX), "»Öffnen mit« fehlt")
     check(registry.CONTRACTS.pages == ("create", "batch", "layout", "preview", "templates", "rules", "comparison", "customers"), "Ansichten von Vertragsübersichten fehlen")
@@ -474,7 +492,7 @@ def main() -> int:
     engine = editor_ocr.find_engine()
     check(engine is not None, "Texterkennung: keine Engine gefunden (ocr\\tesseract.exe)")
     check(engine.executable.parent == (app_dir.parent / "ocr").resolve(), f"Texterkennung: nicht die gebündelte Engine ({engine.executable})")
-    check({"deu", "eng"} <= set(engine.languages) and engine.orientation, f"Texterkennung: Sprachdaten {engine.languages}")
+    check({"deu", "eng", "fra", "ita", "spa", "nld", "por", "pol", "tur", "rus"} <= set(engine.languages) and engine.orientation, f"Texterkennung: Sprachdaten {engine.languages}")
     scan = write_scan_pdf(work / "editor-scan.pdf")
     dokument = EditorDocument.open(str(scan))
     try:
@@ -497,6 +515,39 @@ def main() -> int:
         gelesen.close()
     check("Hottgenroth" in seite and "4711" in seite, "Texterkennung: erkannter Text nach dem Speichern nicht lesbar")
     print(f"Texterkennung: Tesseract {engine.version} (gebündelt, Sprachen {', '.join(engine.languages)}), {erkannt.words} Wörter, Sicherheit {erkannt.confidence:.0f} %, {dauer:.1f} s")
+    # 4.0: Als PDF/A speichern (Schriften aus C:\Windows\Fonts eingebettet, sRGB-Profil aus Pillow/ImageCms),
+    # PDF aus Bildern und Stapel-Aktionen mit der Laufzeit des Setups – ohne lxml
+    from PIL import Image
+
+    from tools.pdf_actions import actions as batch_actions
+    from tools.pdf_actions import runner as batch_runner
+    from tools.pdf_editor import imagepdf as editor_imagepdf
+    from tools.pdf_editor import pdfa as editor_pdfa
+
+    archiv, archiv_info = editor_pdfa.convert(adresse.read_bytes())
+    check(editor_pdfa.check(archiv) == [], "PDF/A: Kurzprüfung nicht bestanden")
+    check(archiv_info.fonts >= 1, "PDF/A: keine Ersatzschrift eingebettet")
+    Image.new("RGB", (640, 480), (30, 90, 200)).save(work / "foto.jpg", quality=90)
+    Image.new("RGBA", (300, 200), (200, 0, 0, 128)).save(work / "grafik.png")
+    bilder = editor_imagepdf.create([work / "foto.jpg", work / "grafik.png"], work / "bilder.pdf", page_size="a4")
+    check(bilder.pages == 2 and not bilder.skipped, f"PDF aus Bildern: {bilder}")
+    plan = batch_actions.Plan(steps=[batch_actions.NUMBERS, batch_actions.OPTIMIZE, batch_actions.PDFA])
+    stapel = batch_runner.process(adresse, work / "adresse_bearbeitet.pdf", plan)
+    check(editor_pdfa.check(stapel.target.read_bytes()) == [], "Stapel-Aktionen: Ergebnis ist kein PDF/A")
+    print(f"PDF/A: {archiv_info.fonts} Schriften eingebettet; PDF aus Bildern: {bilder.pages} Seiten; Stapel-Aktionen: {plan.summary()}")
+    # 4.0.0-beta.2: Vergleichen (Wörter mit Lage über PDFium, difflib aus der Laufzeit)
+    from qtapp.reader.session import Session
+    from tools.pdf_editor import compare as editor_compare
+
+    sitzung = Session.open("vergleich", str(adresse))
+    try:
+        woerter, ohne_text = sitzung.compare_words()
+    finally:
+        sitzung.close()
+    vergleich = editor_compare.compare(woerter, woerter[:-1])
+    check(len(woerter) > 3 and not ohne_text, f"Vergleichen: {len(woerter)} Wörter, ohne Text {ohne_text}")
+    check([change.kind for change in vergleich.changes] == ["removed"], f"Vergleichen: {editor_compare.summary(vergleich)}")
+    print(f"Vergleichen: {len(woerter)} Wörter, {editor_compare.summary(vergleich)}")
     ai_check(app_dir, work)
 
     if args.part == "runtime":
@@ -690,6 +741,10 @@ def ui_probe(qt_application, full: bool) -> None:
         QTimer.singleShot(250, lambda: step(actions))
 
     def first() -> None:
+        import winsys
+
+        # Taskleiste: Name und Symbol von PDF Tool statt Python (Eigenschaften des Fensters, echtes Windows-Fenster)
+        shown["identity"] = winsys.set_window_identity(int(window.winId()), Path(sys.executable))
         shown["visible"] = window.isVisible()
         shown["page"] = app.currentPage
         shown["title"] = window.title()
@@ -798,6 +853,7 @@ def ui_probe(qt_application, full: bool) -> None:
     qt_app_title = window_title(VERSION)  # »PDF Tool«, bei einer Beta mit Versionsnummer
     check("error" not in shown, f"Fehler beim Programmstart:\n{shown.get('error')}")
     check(shown.get("visible") is True and shown.get("ready") is True, "Hauptfenster wurde nicht angezeigt")
+    check(shown.get("identity") is True, "Taskleiste: Name und Symbol von PDF Tool ließen sich nicht setzen")
     check(shown.get("page") == "home", "Startseite fehlt")
     check(shown.get("title") == qt_app_title, f"Fenstertitel: {shown.get('title')} statt {qt_app_title}")
     check(not shown.get("messages"), "Meldungen der QML-Engine:\n" + "\n".join(shown.get("messages") or []))

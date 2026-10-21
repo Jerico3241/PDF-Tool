@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
 import PdfTool.Controls
+import PdfTool.Backend
 
 // Umschalter im Kopf einer Seitenleiste: kleine Symbol-Reiter (der Name steht im Tooltip). Der gewählte
 // Reiter liegt auf einer zurückhaltenden Akzentfläche mit Akzentsymbol; die Fläche gleitet zum neu
@@ -50,7 +51,7 @@ Item {
                 hoverEnabled: true
                 focusPolicy: Qt.TabFocus
                 Accessible.role: Accessible.PageTab
-                Accessible.name: modelData.tip
+                Accessible.name: I18n.tr(modelData.tip, I18n.revision)
                 Accessible.selected: active
                 onClicked: root.selected(modelData.key)
                 Keys.onReturnPressed: root.selected(modelData.key)
@@ -69,7 +70,7 @@ Item {
                     }
                 }
                 PToolTip {
-                    text: tab.modelData.tip
+                    text: I18n.tr(tab.modelData.tip, I18n.revision)
                     visible: tab.hovered && !tab.pressed
                     x: (tab.width - implicitWidth) / 2
                     y: tab.height + Metrics.s4

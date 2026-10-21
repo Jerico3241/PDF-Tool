@@ -7,6 +7,7 @@ from __future__ import annotations
 def build_tools(runtime) -> None:
     """Controller der Werkzeuge anlegen und als QML-Singletons eintragen."""
     from .contracts.tool import ContractsTool
+    from .actions import ActionsTool
     from .reader.controller import ReaderTool
     from .repair import RepairTool
 
@@ -34,4 +35,8 @@ def build_tools(runtime) -> None:
     runtime.reader = reader
     runtime.singletons["Reader"] = reader.controller
     runtime.image_providers["pdfpage"] = reader.controller.provider
+    app.reader_controller = reader.controller  # Ergebnisse der Stapel-Aktionen im Reader öffnen
+    batch_actions = ActionsTool(app, runtime.cfg)
+    runtime.actions = batch_actions
+    runtime.singletons["Actions"] = batch_actions.controller
     contracts.start()

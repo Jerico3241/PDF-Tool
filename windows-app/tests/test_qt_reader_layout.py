@@ -20,6 +20,7 @@ from conftest import neustart, pump, wait_until
 from test_qt_reader import click, open_pdf, reader, settle, window_point
 
 LEFT_WIDTH, RIGHT_WIDTH, RAIL = 300, 280, 44  # Metrics.readerLeftPanelWidth / readerRightPanelWidth / readerRailWidth
+QUICK = 40 + 2 * 8  # Schnellwerkzeuge zwischen linker Leiste und Dokument (Metrics.readerQuickToolsWidth + Rand)
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ def test_left_panel_keeps_its_width_and_the_document_does_not_move(reader_app, t
         positions.add(round(left_x(view)))
         sizes.add(round(view.width()))
     assert widths == {LEFT_WIDTH}
-    assert positions == {round(right_x(panel))}  # die Dokumentfläche beginnt an der Leiste
+    assert positions == {round(right_x(panel)) + QUICK}  # die Dokumentfläche beginnt nach Leiste und Schnellwerkzeugen
     assert len(sizes) == 1
 
 
@@ -92,7 +93,7 @@ def test_tabs_in_the_header_switch_and_the_strip_reopens(reader_app, tmp_path: P
     assert r.leftPanel == ""
     assert wait_until(lambda: not h.item("readerLeftPanel").isVisible(), 3)
     rail, view = h.item("readerLeftRail"), h.item("readerView")
-    assert round(rail.width()) == RAIL and round(left_x(view)) == round(right_x(rail))
+    assert round(rail.width()) == RAIL and round(left_x(view)) == round(right_x(rail)) + QUICK
     # Wieder öffnen über den Streifen – gleich mit dem gewünschten Inhalt
     press(h, "readerRailOutline")
     assert r.leftPanel == "outline" and "Lesezeichen" in titles(h)
@@ -223,6 +224,10 @@ def test_many_tabs_show_whole_tabs_with_arrows_and_move_by_one_tab(reader_app, t
     takt = leiste.property("docPitch")
     assert takt == 146 and docs.width() == leiste.property("docsShown") * takt - 2 and docs.width() >= 144
 
+    def versatz() -> float:
+        # Bildlauf ab dem Anfang der Liste: Werden Tabs schmaler, verschiebt die ListView ihren Ursprung (originX)
+        return docs.property("contentX") - docs.property("originX")
+
     def ganz_zu_sehen(tab) -> bool:
         return left_x(docs) - 0.5 <= left_x(tab) and right_x(tab) <= right_x(docs) + 0.5
 
@@ -240,7 +245,7 @@ def test_many_tabs_show_whole_tabs_with_arrows_and_move_by_one_tab(reader_app, t
     assert ganz_zu_sehen(h.item("readerTab_5")) and nur_ganze_tabs()  # zuletzt geöffnet = aktiv
     r.activate(r.tabs.keys()[0])
     pump(0.5)
-    assert ganz_zu_sehen(h.item("readerTab_0")) and docs.property("contentX") == 0
+    assert ganz_zu_sehen(h.item("readerTab_0")) and versatz() == 0
     assert not zurueck.property("enabled") and weiter.property("enabled")
     assert h.item("readerTab_0").property("title") == "Dokument mit einem recht langen Namen 0"
     mitte = docs.mapToScene(QPointF(docs.width() / 2, docs.height() / 2))
@@ -253,22 +258,22 @@ def test_many_tabs_show_whole_tabs_with_arrows_and_move_by_one_tab(reader_app, t
             pump(0.3)
 
     rad(1)
-    assert docs.property("contentX") == pytest.approx(takt) and nur_ganze_tabs() and zurueck.property("enabled")
+    assert versatz() == pytest.approx(takt) and nur_ganze_tabs() and zurueck.property("enabled")
     press(h, "readerTabsForward")
-    assert docs.property("contentX") == pytest.approx(2 * takt) and nur_ganze_tabs()
+    assert versatz() == pytest.approx(2 * takt) and nur_ganze_tabs()
     rad(20)  # nie über das Ende hinaus
     ende = docs.property("contentWidth") - docs.width()
-    assert docs.property("contentX") == pytest.approx(ende) and ende % takt == pytest.approx(0) and nur_ganze_tabs()
+    assert versatz() == pytest.approx(ende) and ende % takt == pytest.approx(0) and nur_ganze_tabs()
     assert not weiter.property("enabled")
     press(h, "readerTabsBack")
-    assert docs.property("contentX") == pytest.approx(ende - takt)
+    assert versatz() == pytest.approx(ende - takt)
     rad(-30)
-    assert docs.property("contentX") == pytest.approx(0)
+    assert versatz() == pytest.approx(0)
     # Breites Fenster: alle Tabs haben Platz – keine Pfeile, kein Bildlauf
     h.window.resize(1920, 1080)
     pump(0.6)
     assert not leiste.property("docsOverflow") and not zurueck.isVisible() and not weiter.isVisible()
-    assert docs.property("contentX") == 0 and docs.width() == docs.property("contentWidth")
+    assert versatz() == 0 and docs.width() == docs.property("contentWidth")
 
 
 def test_closing_with_many_tabs_leaves_no_qml_messages(reader_app, tmp_path: Path, capfd) -> None:

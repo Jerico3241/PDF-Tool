@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import PdfTool.Style
+import PdfTool.Backend
 
 // Sieht aus wie ein Auswahlfeld, öffnet aber einen Suchdialog (viele Einträge, z. B. Kundenakten).
 T.AbstractButton {
@@ -13,7 +14,7 @@ T.AbstractButton {
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.ComboBox
-    Accessible.name: tip !== "" ? tip : placeholder
+    Accessible.name: I18n.tr(tip !== "" ? tip : placeholder, I18n.revision)
 
     background: Rectangle {
         radius: Metrics.radiusControl
@@ -38,7 +39,7 @@ T.AbstractButton {
             x: 11
             width: parent.width - 11 - 34
             anchors.verticalCenter: parent.verticalCenter
-            text: control.text !== "" ? control.text : control.placeholder
+            text: I18n.tr(control.text !== "" ? control.text : control.placeholder, I18n.revision)
             font: Typography.body
             color: !control.enabled ? Theme.disabled : (control.text !== "" ? Theme.textPrimary : Theme.textSecondary)
             elide: Text.ElideRight
@@ -52,5 +53,5 @@ T.AbstractButton {
             color: Theme.textSecondary
         }
     }
-    PToolTip { text: control.tip; visible: control.tip !== "" && control.hovered }
+    PToolTip { text: I18n.tr(control.tip, I18n.revision); visible: control.tip !== "" && control.hovered }
 }

@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.pdf_editor import annotations, attachments, commands, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
+from tools.pdf_editor import annotations, attachments, commands, compare, convert, crop, export, flatten, formdesign, forms, images, links, metadata, objectops, ocr, optimize, outline, pagemarks, pages, pdfa, protect, recovery, redact, render, sanitize, save, stamps, textedit, textlayer
 from tools.pdf_editor import objects as object_edit
 from tools.pdf_editor.document import EditorDocument
 from tools.pdf_editor.errors import EditorError
@@ -137,6 +137,18 @@ class Session:
     def text(self, page: int, start: int, count: int) -> str:
         return textlayer.text(self.document, page, start, count)
 
+    def raw_text(self, page: int, start: int = 0, count: int = -1) -> str:
+        """Text wie PDFium ihn liefert – ein Zeichen je Zeichen der Seite (Vorlesen: Wort markieren)."""
+        from pdfium_lock import PDFIUM_LOCK
+
+        if not 0 <= page < self.document.page_count:
+            return ""
+        with PDFIUM_LOCK:
+            textpage = self.document.textpage(page)
+            if count < 0:
+                count = textpage.count_chars() - start
+            return textpage.get_text_range(start, count) if count > 0 else ""
+
     def page_texts(self, limit: int = 2_000_000) -> list[str]:
         """Text aller Seiten (KI-Assistent) – zusammen höchstens ``limit`` Zeichen; danach folgen leere Seiten."""
         result: list[str] = []
@@ -150,6 +162,30 @@ class Session:
             used += len(value)
             result.append(value)
         return result
+
+    def compare_words(self, cancelled=lambda: False) -> tuple[list, list[int]]:
+        """Alle Wörter des Dokuments für »Vergleichen« (Seite, Text, Rechteck in Anzeige-Punkten) und die Seiten ohne Text."""
+        from pdfium_lock import PDFIUM_LOCK
+
+        words, empty = [], []
+        for page in range(self.document.page_count):
+            if cancelled():
+                break
+            geo = self.document.geometry(page)
+            chars = []
+            with PDFIUM_LOCK:
+                textpage = self.document.textpage(page)
+                for i in range(textpage.count_chars()):
+                    char = textpage.get_text_range(i, 1)
+                    left, bottom, right, top = textpage.get_charbox(i, loose=True)
+                    chars.append((char, geo.rect_to_view(normalize((left, bottom, right, top)))))
+            found = compare.words_from_chars(page, chars)
+            if not found:
+                empty.append(page)
+            words.extend(found)
+            if len(words) > compare.MAX_WORDS:
+                break
+        return words, empty
 
     def selection_rects(self, page: int, start: int, count: int) -> list[list[float]]:
         geo = self.document.geometry(page)
@@ -486,6 +522,14 @@ class Session:
         rects = [geo.rect_to_page(normalize(tuple(rect))) for rect in view_rects]
         return annotations.add_markup(self.document, self.history, page, kind, rects, style=annotations.Style(color=_rgb(color)), contents=contents)
 
+    def markup_pages(self, kind: str, pages: dict, color: str) -> None:
+        """Eine Auswahl über mehrere Seiten markieren – ein Schritt zum Rückgängigmachen."""
+        title = "Text " + {"highlight": "markieren", "underline": "unterstreichen", "strikeout": "durchstreichen"}.get(kind, "markieren")
+        with commands.group(self.document, self.history, title):
+            for page, rects in pages.items():
+                if rects:
+                    self.markup(int(page), kind, rects, color, "")
+
     def add_note(self, page: int, u: float, v: float, text: str, color: str) -> str:
         x, y = self.document.geometry(page).to_page(u, v)
         return annotations.add_note(self.document, self.history, page, x, y, text, style=annotations.Style(color=_rgb(color)))
@@ -687,6 +731,10 @@ class Session:
     def export_images(self, indexes: list[int], folder: str, stem: str, fmt: str, dpi: int) -> list[str]:
         return [str(path) for path in export.export_pages(self.document, indexes, folder, stem, fmt=fmt, dpi=dpi)]
 
+    def convert(self, fmt: str, target: str, indexes: list[int]) -> convert.Result:
+        """In Word, Excel oder Text umwandeln (neue Datei ``target``)."""
+        return convert.convert(self.document, target, fmt, indexes)
+
     # Eigenschaften ---------------------------------------------------------------------------------------------
     def properties(self) -> dict:
         """Eigenschaften für den Dialog: bearbeitbare Felder und fertige Angaben (nur Struktur)."""
@@ -761,8 +809,41 @@ class Session:
         result = optimize.optimize_copy(self.document, target, level)
         return {"path": str(result.path), "before": result.before, "after": result.after, "images": result.images, "skipped": result.skipped, "percent": result.saved_percent}
 
+    def pdfa_copy(self, target: str) -> dict:
+        result = pdfa.save_copy(self.document, target)
+        return {"path": str(result.path), "fonts": result.fonts, "notes": list(result.notes)}
+
     def marks_present(self) -> dict:
         return pagemarks.present(self.document)
+
+    # Digitale Signaturen (seit 4.0 Beta 6) ---------------------------------------------------------------------
+    def file_bytes(self) -> bytes:
+        """Die Datei, wie sie gespeichert ist – signiert und geprüft wird immer die gespeicherte Fassung."""
+        path = self.document.path
+        if not path:
+            raise EditorError("Das Dokument ist noch nicht gespeichert.")
+        return Path(path).read_bytes()
+
+    def sign_copy(self, target: str, signer_spec: dict, options: dict) -> dict:
+        from tools.pdf_editor import digsig
+
+        signer = make_signer(signer_spec)
+        try:
+            data = digsig.sign_pdf(self.file_bytes(), signer, digsig.SignOptions(
+                reason=str(options.get("reason") or ""), location=str(options.get("location") or ""),
+                visible_page=int(options.get("visiblePage", -1)) if options.get("visible") else -1,
+            ))
+        finally:
+            close = getattr(signer, "close", None)
+            if close is not None:
+                close()
+        save.write_copy(self.document, data, Path(target))
+        return {"path": str(target), "signer": digsig.cert_info(signer.certificate).subject}
+
+    def verify_signatures(self) -> list[dict]:
+        from tools.pdf_editor import digsig
+
+        return [digsig.summary(report) for report in digsig.verify_pdf(self.file_bytes())]
 
     def add_header_footer(self, spec: dict) -> dict:
         items = [pagemarks.TextMark(str(text), position) for position, text in (spec.get("items") or {}).items() if position in pagemarks.POSITIONS and str(text).strip()]
@@ -999,3 +1080,21 @@ def _text_style(style: dict | None):
         underline=bool(style["underline"]) if style.get("underline") is not None else None,
         strike=bool(style["strike"]) if style.get("strike") is not None else None,
     )
+
+
+def make_signer(spec: dict):
+    """Signierer aus der Auswahl im Dialog: Zertifikat aus Windows (Fingerabdruck) oder Datei mit Kennwort."""
+    from tools.pdf_editor import digsig
+
+    if spec.get("file"):
+        try:
+            data = Path(str(spec["file"])).read_bytes()
+        except OSError as exc:
+            raise digsig.SignError("Die Zertifikatsdatei lässt sich nicht lesen.") from exc
+        return digsig.FileSigner(data, str(spec.get("password") or ""))
+    if digsig.TEST_SIGNER is not None:
+        return digsig.TEST_SIGNER(str(spec.get("thumbprint") or ""))
+    from tools.pdf_editor import winsign
+
+    return winsign.StoreSigner(str(spec.get("thumbprint") or ""))
+

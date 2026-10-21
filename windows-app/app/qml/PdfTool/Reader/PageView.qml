@@ -35,7 +35,7 @@ Item {
     height: area.height
     objectName: "readerPage_" + page
     Accessible.role: Accessible.Graphic
-    Accessible.name: "Seite " + (page + 1)
+    Accessible.name: I18n.tr("Seite " + (page + 1), I18n.revision)
 
     // --- Seitenbild ----------------------------------------------------------------------------------------
     property int shownPage: -1
@@ -179,7 +179,7 @@ Item {
     Item {
         id: hitLayer
         objectName: "readerHitLayer"
-        readonly property var rects: root.doc && root.page >= 0 ? (root.doc.hitRects[root.key] || []) : []
+        readonly property var rects: root.doc && root.page >= 0 ? (root.host.hitMap[root.key] || []) : []
         anchors.fill: parent
         opacity: rects.length > 0 ? 1 : 0
         Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
@@ -193,6 +193,40 @@ Item {
                 height: Math.max(2, (modelData[3] - modelData[1]) * root.s)
                 color: Theme.searchHit
             }
+        }
+    }
+    // Vergleichen: Unterschiede zur anderen Fassung (geändert gelb, neu grün, entfernt rot); die gewählte
+    // Änderung mit Rahmen
+    Item {
+        objectName: "readerCompareLayer"
+        readonly property var rects: root.doc && root.page >= 0 ? (root.host.compareMap[root.key] || []) : []
+        anchors.fill: parent
+        visible: rects.length > 0
+        Repeater {
+            model: parent.rects
+            Rectangle {
+                required property var modelData
+                x: modelData[0] * root.s
+                y: modelData[1] * root.s
+                width: Math.max(2, (modelData[2] - modelData[0]) * root.s)
+                height: Math.max(2, (modelData[3] - modelData[1]) * root.s)
+                color: Theme.compareMarks[modelData[4]] || Theme.compareMarks[0]
+            }
+        }
+    }
+    Repeater {
+        model: root.doc && root.doc.currentCompare.page === root.page ? root.doc.currentCompare.rects : []
+        Rectangle {
+            required property var modelData
+            objectName: "readerCurrentCompare"
+            x: modelData[0] * root.s - 2
+            y: modelData[1] * root.s - 2
+            width: (modelData[2] - modelData[0]) * root.s + 4
+            height: (modelData[3] - modelData[1]) * root.s + 4
+            color: "transparent"
+            radius: 2
+            border.width: 2
+            border.color: Theme.searchHitCurrent
         }
     }
     Repeater {
@@ -218,8 +252,22 @@ Item {
             }
         }
     }
+    // Vorlesen: das gerade gesprochene Wort
     Repeater {
-        model: root.doc && root.doc.selectionPage === root.page ? root.doc.selectionRects : []
+        model: root.doc && root.doc.speechWord.page === root.page ? root.doc.speechWord.rects : []
+        Rectangle {
+            required property var modelData
+            objectName: "readerSpeechWord"
+            x: modelData[0] * root.s - 1
+            y: modelData[1] * root.s - 1
+            width: (modelData[2] - modelData[0]) * root.s + 2
+            height: (modelData[3] - modelData[1]) * root.s + 2
+            radius: 2
+            color: Theme.searchHit
+        }
+    }
+    Repeater {
+        model: root.doc && root.doc.selectionPage >= 0 ? (root.doc.selectionPages[String(root.page)] || []) : []
         Rectangle {
             required property var modelData
             x: modelData[0] * root.s
@@ -244,18 +292,18 @@ Item {
         }
         return best
     }
-    readonly property var annotationsHere: doc && page >= 0 ? (doc.annotationPages[key] || []) : []
+    readonly property var annotationsHere: doc && page >= 0 ? (host.annotationMap[key] || []) : []
     readonly property var blocksHere: doc && doc.blocksPage === page && tool === "editText" ? doc.blocks : []
     readonly property var imagesHere: doc && doc.imagesPage === page && tool === "image" ? doc.images : []
-    readonly property var fieldsHere: doc && page >= 0 && tool === "form" ? (doc.fieldPages[key] || []) : []
+    readonly property var fieldsHere: doc && page >= 0 && tool === "form" ? (host.fieldMap[key] || []) : []
     // Formular gestalten: Widgets dieser Seite und das gewählte (mit seiner aktuellen Lage)
-    readonly property var designHere: doc && page >= 0 && tool === "formDesign" ? (doc.designPages[key] || []) : []
+    readonly property var designHere: doc && page >= 0 && tool === "formDesign" ? (host.designMap[key] || []) : []
     readonly property var fieldChosen: doc && tool === "formDesign" && doc.fieldSelection.page === page ? doc.fieldSelection : null
     readonly property var selected: doc ? doc.selectedObject : ({})
     readonly property bool selectedHere: selected.page === page && selected.kind !== undefined
     // Links dieser Seite (Anklicken mit »Auswählen«, Bearbeiten mit dem Link-Werkzeug) und vorgemerkte Schwärzungen
-    readonly property var linksHere: doc && page >= 0 ? (doc.linkPages[key] || []) : []
-    readonly property var marksHere: doc && page >= 0 ? (doc.redactMarks[key] || []) : []
+    readonly property var linksHere: doc && page >= 0 ? (host.linkMap[key] || []) : []
+    readonly property var marksHere: doc && page >= 0 ? (host.markMap[key] || []) : []
     function linkAt(u, v) { return smallestAt(linksHere, u, v, 0) }
     function linkLabel(link) {
         if (!link) return ""
@@ -266,7 +314,7 @@ Item {
     }
 
     // --- Objekt bearbeiten: Objekte dieser Seite, Auswahl, Treffer -----------------------------------------
-    readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (doc.objectPages[key] || null) : null
+    readonly property var objectsHere: doc && page >= 0 && tool === "objects" ? (host.objectMap[key] || null) : null
     readonly property var objectItems: objectsHere ? objectsHere.segments.concat(objectsHere.images, objectsHere.paths || []) : []
     // Räumlicher Index: Objekte je waagerechtem Band von 24 pt (Anzeige-Punkte, einmal je Seitenstand) –
     // beim Bewegen der Maus wird nur das Band unter dem Zeiger geprüft, nicht jedes Objekt der Seite
@@ -451,7 +499,7 @@ Item {
             width: parent.width - 16
             elide: Text.ElideMiddle
             textStyle: "caption"
-            text: (linkTip.shown && linkTip.shown.target < 0 && linkTip.shown.uri !== "" ? "↗ " : "→ ") + root.linkLabel(linkTip.shown)
+            text: I18n.tr((linkTip.shown && linkTip.shown.target < 0 && linkTip.shown.uri !== "" ? "↗ " : "→ ") + root.linkLabel(linkTip.shown), I18n.revision)
         }
     }
 
@@ -647,7 +695,7 @@ Item {
             height: Math.max(4, (r[3] - r[1]) * root.s)
             z: chosen ? 9 : 8
             Accessible.role: Accessible.Button
-            Accessible.name: modelData.name
+            Accessible.name: I18n.tr(modelData.name, I18n.revision)
             Rectangle {
                 anchors.fill: parent
                 radius: designBox.modelData.kind === "radio" ? Math.min(width, height) / 2 : 2
@@ -674,7 +722,7 @@ Item {
                     textStyle: "caption"
                     color: Theme.textOnAccent
                     // Optionen einer Gruppe liegen oft dicht beieinander: sonst nur ihr (kurzer) Exportwert
-                    text: designBox.modelData.kind !== "radio" ? designBox.modelData.name : (designBox.chosen || designBox.hovered ? designBox.modelData.name + " · " + designBox.modelData.export : designBox.modelData.export)
+                    text: I18n.tr(designBox.modelData.kind !== "radio" ? designBox.modelData.name : (designBox.chosen || designBox.hovered ? designBox.modelData.name + " · " + designBox.modelData.export : designBox.modelData.export), I18n.revision)
                 }
             }
             // Anfasser an den Ecken: Größe ändern (frei; Umschalt: Seitenverhältnis halten)
@@ -819,6 +867,8 @@ Item {
         property real drilledAt: 0
         property string narrowTo: ""    // Klick ohne Ziehen auf ein Objekt einer Mehrfachauswahl: nur noch dieses
         property bool additive: false
+        property int startPage: -1     // Textauswahl: Seite, auf der das Ziehen begann (die Auswahl kann darüber hinausgehen)
+        property var lastHost: null     // letzter Zeigerpunkt in der Ansicht (Rollen am Rand)
         property real startU: 0
         property real startV: 0
         property real endU: 0
@@ -840,7 +890,10 @@ Item {
             root.dragTo(p, mouse)
         }
         onExited: { hoverKey = ""; hoverItem = null; hoverCorner = false; hoverLink = null }
-        onPressed: (mouse) => root.press(point(mouse), mouse)
+        onPressed: (mouse) => {
+            if (root.host) root.host.interacted()  // Einstellungen des Werkzeugs gehen zu
+            root.press(point(mouse), mouse)
+        }
         onReleased: (mouse) => root.release(point(mouse), mouse)
         onDoubleClicked: (mouse) => {
             var p = point(mouse)
@@ -911,6 +964,8 @@ Item {
         host.focusByPointer()
         pointer.startU = pointer.endU = p.u
         pointer.startV = pointer.endV = p.v
+        pointer.startPage = page
+        pointer.lastHost = null
         pointer.du = pointer.dv = 0
         pointer.action = ""
         if (mouse.button === Qt.RightButton) {
@@ -1147,7 +1202,8 @@ Item {
         pointer.dv = p.v - pointer.startV
         switch (pointer.action) {
         case "text":
-            doc.selectRange(page, pointer.startU, pointer.startV, p.u, p.v)
+            pointer.lastHost = host ? mapToItem(host, mouse.x, mouse.y) : null
+            selectText(mouse.x, mouse.y)
             break
         case "moveImage": {
             var r = pointer.target.view
@@ -1184,6 +1240,37 @@ Item {
         }
         }
     }
+    // Textauswahl bis zum Zeiger – außerhalb dieser Seite auf der Seite darunter bzw. darüber (über Seitengrenzen)
+    function selectText(mx, my) {
+        if (!doc || pointer.startPage < 0) return
+        var target = null
+        if (host && (my < 0 || my > height || mx < 0 || mx > width)) {
+            var hp = mapToItem(host, mx, my)
+            target = host.pointAt(hp.x, hp.y)
+        }
+        if (target && target.page !== pointer.startPage)
+            doc.selectAcross(pointer.startPage, pointer.startU, pointer.startV, target.page, target.u, target.v)
+        else if (page === pointer.startPage)
+            doc.selectRange(page, pointer.startU, pointer.startV, Math.max(0, Math.min(width, mx)) / s, Math.max(0, Math.min(height, my)) / s)
+    }
+    // Ziehen am oberen oder unteren Rand der Ansicht: weiterrollen und die Auswahl mitnehmen
+    Timer {
+        id: edgeScroll
+        interval: 30
+        repeat: true
+        running: pointer.pressed && pointer.action === "text" && pointer.lastHost !== null && root.host !== null
+        onTriggered: {
+            var hp = pointer.lastHost, edge = 28, step = 0
+            if (hp.y < edge) step = -Math.min(40, (edge - hp.y) * 1.5 + 4)
+            else if (hp.y > root.host.height - edge) step = Math.min(40, (hp.y - root.host.height + edge) * 1.5 + 4)
+            if (step === 0) return
+            var before = root.host.contentY
+            root.host.contentY = root.host.clampY(before + step)
+            if (root.host.contentY === before) return
+            var m = root.host.mapToItem(root, hp.x, hp.y)
+            root.selectText(m.x, m.y)
+        }
+    }
     function release(p, mouse) {
         var action = pointer.action
         pointer.action = ""
@@ -1194,8 +1281,8 @@ Item {
         switch (action) {
         case "text":
             if (tool === "redact") {
-                if (doc.selectionPage === page) doc.redactSelection()
-            } else if (tool !== "select" && doc.selectionPage === page) {
+                if (doc.selectionPage >= 0) doc.redactSelection()
+            } else if (tool !== "select" && doc.selectionPage >= 0) {
                 doc.markSelection(tool)
             } else if (tool === "select" && !moved && pointer.pressedLink) {
                 doc.clearSelection()
@@ -1295,7 +1382,7 @@ Item {
         // Text lässt sich immer ändern (sonst als Überlagerung); Bilder und Vektorobjekte nur, wenn sicher möglich
         readonly property bool changeable: chosen.length > 0 && chosen.every(function(item) { return root.isText(item) || item.editable === true })
         PMenuItem {
-            text: "Bearbeiten"
+            text: I18n.tr("Bearbeiten", I18n.revision)
             iconName: "edit"
             visible: objectMenu.oneText
             onTriggered: {
@@ -1303,27 +1390,28 @@ Item {
                 objectMenu.afterClose = function() { root.editObject(item, u) }
             }
         }
-        PMenuItem { text: "Text bearbeiten (ganzer Absatz)"; iconName: "text_edit_style"; visible: objectMenu.oneText; onTriggered: root.editParagraph(objectMenu.first) }
-        PMenuItem { text: "Ersetzen …"; iconName: "image"; visible: objectMenu.oneImage; enabled: objectMenu.changeable; onTriggered: root.doc.replaceImage(root.page, objectMenu.first.index) }
-        PMenuItem { text: "Kopieren"; iconName: "copy"; onTriggered: root.doc.copyObjects() }
-        PMenuItem { text: "Ausschneiden"; iconName: "cut"; enabled: objectMenu.changeable; onTriggered: root.doc.cutObjects() }
-        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; visible: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; enabled: objectMenu.changeable; onTriggered: root.doc.duplicateObject() }
-        PMenuItem { text: "Löschen"; iconName: "delete"; enabled: objectMenu.changeable; onTriggered: root.doc.deleteObjects() }
-        PMenuItem { text: "Drehen (90° im Uhrzeigersinn)"; iconName: "arrow_rotate_clockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(90) }
-        PMenuItem { text: "Drehen (90° gegen den Uhrzeigersinn)"; iconName: "arrow_rotate_counterclockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(-90) }
-        PMenuItem { text: "In den Vordergrund"; iconName: "position_to_front"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(true) }
-        PMenuItem { text: "In den Hintergrund"; iconName: "position_to_back"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(false) }
-        PMenuItem { text: "Eigenschaften"; iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
+        PMenuItem { text: I18n.tr("Text bearbeiten (ganzer Absatz)", I18n.revision); iconName: "text_edit_style"; visible: objectMenu.oneText; onTriggered: root.editParagraph(objectMenu.first) }
+        PMenuItem { text: I18n.tr("Ersetzen …", I18n.revision); iconName: "image"; visible: objectMenu.oneImage; enabled: objectMenu.changeable; onTriggered: root.doc.replaceImage(root.page, objectMenu.first.index) }
+        PMenuItem { text: I18n.tr("Kopieren", I18n.revision); iconName: "copy"; onTriggered: root.doc.copyObjects() }
+        PMenuItem { text: I18n.tr("Ausschneiden", I18n.revision); iconName: "cut"; enabled: objectMenu.changeable; onTriggered: root.doc.cutObjects() }
+        PMenuItem { text: I18n.tr("Einfügen", I18n.revision); iconName: "clipboard_paste"; visible: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: I18n.tr("Duplizieren", I18n.revision); iconName: "document_copy"; enabled: objectMenu.changeable; onTriggered: root.doc.duplicateObject() }
+        PMenuItem { text: I18n.tr("Löschen", I18n.revision); iconName: "delete"; enabled: objectMenu.changeable; onTriggered: root.doc.deleteObjects() }
+        PMenuItem { text: I18n.tr("Drehen (90° im Uhrzeigersinn)", I18n.revision); iconName: "arrow_rotate_clockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(90) }
+        PMenuItem { text: I18n.tr("Drehen (90° gegen den Uhrzeigersinn)", I18n.revision); iconName: "arrow_rotate_counterclockwise"; enabled: objectMenu.changeable; onTriggered: root.doc.rotateObjects(-90) }
+        PMenuItem { text: I18n.tr("In den Vordergrund", I18n.revision); iconName: "position_to_front"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(true) }
+        PMenuItem { text: I18n.tr("In den Hintergrund", I18n.revision); iconName: "position_to_back"; visible: !objectMenu.anyText; enabled: objectMenu.changeable; onTriggered: root.doc.arrangeObjects(false) }
+        PMenuItem { text: I18n.tr("Eigenschaften", I18n.revision); iconName: "text_font"; onTriggered: Reader.showRightPanel("properties") }
     }
     PMenu {
         id: objectPageMenu
         objectName: "readerObjectPageMenu"
         property real u: 0
         property real v: 0
-        PMenuItem { text: "Einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
-        PMenuItem { text: "Hier einfügen"; iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
-        PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
+        PMenuItem { text: I18n.tr("Einfügen", I18n.revision); iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjects() }
+        PMenuItem { text: I18n.tr("Hier einfügen", I18n.revision); iconName: "clipboard_paste"; enabled: Reader.canPaste; onTriggered: root.doc.pasteObjectsAt(root.page, objectPageMenu.u, objectPageMenu.v) }
+        PMenuItem { text: I18n.tr(contextMenu.hasSelection ? "Auswahl vorlesen" : "Ab dieser Seite vorlesen", I18n.revision); iconName: "speaker_2"; onTriggered: { var d = root.doc, p = root.page; contextMenu.afterClose = function() { if (d.selectionPage < 0) d.setCurrentPage(p); Speech.readFromHere() } } }
+        PMenuItem { text: I18n.tr("Alles auswählen (Seite)", I18n.revision); iconName: "select_all_on"; onTriggered: root.doc.selectAllObjects(root.page) }
     }
 
     // Formular gestalten: Befehle des gewählten Feldes und »… hier anlegen« auf freier Fläche
@@ -1332,20 +1420,20 @@ Item {
         objectName: "readerFieldMenu"
         readonly property var chosen: root.doc ? root.doc.fieldSelection : ({})
         readonly property bool copyable: chosen.kind !== "signature" && chosen.kind !== "button"
-        PMenuItem { text: "Eigenschaften …"; iconName: "text_box_settings"; onTriggered: { var d = root.doc; fieldMenu.afterClose = function() { d.editFieldProperties("") } } }
-        PMenuItem { text: "Option hinzufügen"; iconName: "radio_button"; visible: fieldMenu.chosen.kind === "radio"; onTriggered: root.doc.addFieldOption("") }
-        PMenuItem { text: "Duplizieren"; iconName: "document_copy"; visible: fieldMenu.copyable; onTriggered: root.doc.duplicateField("") }
-        PMenuItem { text: "Löschen"; iconName: "delete"; onTriggered: root.doc.deleteField("") }
+        PMenuItem { text: I18n.tr("Eigenschaften …", I18n.revision); iconName: "text_box_settings"; onTriggered: { var d = root.doc; fieldMenu.afterClose = function() { d.editFieldProperties("") } } }
+        PMenuItem { text: I18n.tr("Option hinzufügen", I18n.revision); iconName: "radio_button"; visible: fieldMenu.chosen.kind === "radio"; onTriggered: root.doc.addFieldOption("") }
+        PMenuItem { text: I18n.tr("Duplizieren", I18n.revision); iconName: "document_copy"; visible: fieldMenu.copyable; onTriggered: root.doc.duplicateField("") }
+        PMenuItem { text: I18n.tr("Löschen", I18n.revision); iconName: "delete"; onTriggered: root.doc.deleteField("") }
     }
     PMenu {
         id: fieldPageMenu
         objectName: "readerFieldPageMenu"
         property string at: ""
-        PMenuItem { text: "Textfeld hier"; iconName: "textbox"; onTriggered: root.doc.createFieldAt("text", fieldPageMenu.at) }
-        PMenuItem { text: "Kontrollkästchen hier"; iconName: "checkbox_checked"; onTriggered: root.doc.createFieldAt("checkbox", fieldPageMenu.at) }
-        PMenuItem { text: "Optionsfeld hier"; iconName: "radio_button"; onTriggered: root.doc.createFieldAt("radio", fieldPageMenu.at) }
-        PMenuItem { text: "Dropdown hier"; iconName: "chevron_down"; onTriggered: root.doc.createFieldAt("combo", fieldPageMenu.at) }
-        PMenuItem { text: "Liste hier"; iconName: "list"; onTriggered: root.doc.createFieldAt("list", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Textfeld hier", I18n.revision); iconName: "textbox"; onTriggered: root.doc.createFieldAt("text", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Kontrollkästchen hier", I18n.revision); iconName: "checkbox_checked"; onTriggered: root.doc.createFieldAt("checkbox", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Optionsfeld hier", I18n.revision); iconName: "radio_button"; onTriggered: root.doc.createFieldAt("radio", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Dropdown hier", I18n.revision); iconName: "chevron_down"; onTriggered: root.doc.createFieldAt("combo", fieldPageMenu.at) }
+        PMenuItem { text: I18n.tr("Liste hier", I18n.revision); iconName: "list"; onTriggered: root.doc.createFieldAt("list", fieldPageMenu.at) }
     }
 
     // Schwärzen: eine vorgemerkte Stelle
@@ -1353,18 +1441,18 @@ Item {
         id: markMenu
         objectName: "readerRedactMarkMenu"
         property var mark: null
-        PMenuItem { text: "Markierung entfernen"; iconName: "dismiss"; onTriggered: if (markMenu.mark) root.doc.removeRedactMark(root.page, markMenu.mark.id) }
-        PMenuItem { text: "Alle Markierungen verwerfen"; iconName: "dismiss_circle"; onTriggered: root.doc.clearRedactMarks() }
-        PMenuItem { text: "Schwärzen anwenden …"; iconName: "eye_off"; onTriggered: { var d = root.doc; markMenu.afterClose = function() { d.applyRedaction() } } }
+        PMenuItem { text: I18n.tr("Markierung entfernen", I18n.revision); iconName: "dismiss"; onTriggered: if (markMenu.mark) root.doc.removeRedactMark(root.page, markMenu.mark.id) }
+        PMenuItem { text: I18n.tr("Alle Markierungen verwerfen", I18n.revision); iconName: "dismiss_circle"; onTriggered: root.doc.clearRedactMarks() }
+        PMenuItem { text: I18n.tr("Schwärzen anwenden …", I18n.revision); iconName: "eye_off"; onTriggered: { var d = root.doc; markMenu.afterClose = function() { d.applyRedaction() } } }
     }
     // Link-Werkzeug: ein vorhandener Link
     PMenu {
         id: linkMenu
         objectName: "readerLinkMenu"
         property var link: null
-        PMenuItem { text: "Link bearbeiten …"; iconName: "link_edit"; onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.editLink(page, l.key) } } }
-        PMenuItem { text: "Ziel öffnen"; iconName: "open"; enabled: linkMenu.link !== null && (linkMenu.link.target >= 0 || linkMenu.link.uri !== ""); onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.followLink(page, l.key) } } }
-        PMenuItem { text: "Link entfernen"; iconName: "delete"; onTriggered: root.doc.removeLink(root.page, linkMenu.link.key) }
+        PMenuItem { text: I18n.tr("Link bearbeiten …", I18n.revision); iconName: "link_edit"; onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.editLink(page, l.key) } } }
+        PMenuItem { text: I18n.tr("Ziel öffnen", I18n.revision); iconName: "open"; enabled: linkMenu.link !== null && (linkMenu.link.target >= 0 || linkMenu.link.uri !== ""); onTriggered: { var d = root.doc, l = linkMenu.link, page = root.page; linkMenu.afterClose = function() { d.followLink(page, l.key) } } }
+        PMenuItem { text: I18n.tr("Link entfernen", I18n.revision); iconName: "delete"; onTriggered: root.doc.removeLink(root.page, linkMenu.link.key) }
     }
 
     // Kontextmenü der Seite
@@ -1375,25 +1463,25 @@ Item {
         property real v: 0
         property var link: null
         PMenuItem {
-            text: contextMenu.link ? "Link öffnen: " + root.linkLabel(contextMenu.link) : ""
+            text: I18n.tr(contextMenu.link ? "Link öffnen: " + root.linkLabel(contextMenu.link) : "", I18n.revision)
             iconName: "open"
             visible: contextMenu.link !== null
             onTriggered: { var d = root.doc, l = contextMenu.link, page = root.page; contextMenu.afterClose = function() { d.followLink(page, l.key) } }
         }
-        readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage === root.page
-        PMenuItem { text: "Kopieren"; iconName: "copy"; enabled: contextMenu.hasSelection; onTriggered: root.doc.copySelection() }
-        PMenuItem { text: "Alles auswählen (Seite)"; iconName: "select_all_on"; onTriggered: root.doc.selectAll(root.page) }
-        PMenuItem { text: "Markieren"; iconName: "highlight"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("highlight") }
-        PMenuItem { text: "Unterstreichen"; iconName: "text_underline"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("underline") }
-        PMenuItem { text: "Durchstreichen"; iconName: "text_strikethrough"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("strikeout") }
+        readonly property bool hasSelection: root.doc !== null && root.doc.selectionPage >= 0 && root.doc.selectionPages[String(root.page)] !== undefined
+        PMenuItem { text: I18n.tr("Kopieren", I18n.revision); iconName: "copy"; enabled: contextMenu.hasSelection; onTriggered: root.doc.copySelection() }
+        PMenuItem { text: I18n.tr("Alles auswählen (Seite)", I18n.revision); iconName: "select_all_on"; onTriggered: root.doc.selectAll(root.page) }
+        PMenuItem { text: I18n.tr("Markieren", I18n.revision); iconName: "highlight"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("highlight") }
+        PMenuItem { text: I18n.tr("Unterstreichen", I18n.revision); iconName: "text_underline"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("underline") }
+        PMenuItem { text: I18n.tr("Durchstreichen", I18n.revision); iconName: "text_strikethrough"; enabled: contextMenu.hasSelection; onTriggered: root.doc.markSelection("strikeout") }
         PMenuItem {
-            text: "Notiz hier hinzufügen"
+            text: I18n.tr("Notiz hier hinzufügen", I18n.revision)
             iconName: "comment"
             onTriggered: {
                 var request = { kind: "note", page: root.page, rect: [contextMenu.u, contextMenu.v, contextMenu.u + 220, contextMenu.v + 80], text: "" }
                 contextMenu.afterClose = function() { root.host.openEditor(request) }
             }
         }
-        PMenuItem { text: "Seite drehen"; iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages([root.page], 90) }
+        PMenuItem { text: I18n.tr("Seite drehen", I18n.revision); iconName: "arrow_rotate_clockwise"; onTriggered: root.doc.rotatePages([root.page], 90) }
     }
 }

@@ -33,6 +33,18 @@ READER_ZOOMS = (("last", "Zuletzt verwendet"), ("width", "Seitenbreite"), ("page
 READER_PANELS = (("last", "Zuletzt verwendet"), ("thumbs", "Seiten"), ("outline", "Lesezeichen"), ("none", "Keine"))
 
 
+# Bereiche der Seite (seit 4.0): je Bereich nur seine Karten statt einer langen Liste
+SECTIONS = (
+    ("general", "Allgemein"),
+    ("reader", "PDF Reader"),
+    ("assistant", "KI-Assistent"),
+    ("contracts", "Vertragsübersichten"),
+    ("updates", "Updates"),
+    ("data", "Daten & Diagnose"),
+    ("info", "Info"),
+)
+
+
 def _choice(value: object, options: tuple[tuple[str, str], ...]) -> str:
     """Gespeicherter Wert, wenn er eine der Möglichkeiten ist – sonst »last« (wie bisher)."""
     return value if isinstance(value, str) and value in dict(options) else "last"
@@ -45,6 +57,8 @@ class SettingsController(Observable):
     readerZoomChanged, readerZoom = prop(str, "readerZoom", "last")  # Standardzoom beim Öffnen
     readerPanelChanged, readerPanel = prop(str, "readerPanel", "last")  # Seitenleiste beim Öffnen
     readerRestoreSessionChanged, readerRestoreSession = prop(bool, "readerRestoreSession", False)  # letzte Sitzung beim Start
+    backgroundChanged, background = prop(bool, "background", True)  # im Hintergrund bereithalten (Infobereich, Autostart)
+    sectionChanged, section = prop(str, "section", "general")  # sichtbarer Bereich der Seite
 
     def __init__(self, app, theme: ThemeController, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -55,6 +69,39 @@ class SettingsController(Observable):
         self.set_quietly("readerPanel", _choice(app.cfg.get(READER_PANEL_KEY), READER_PANELS))
         self.set_quietly("readerRestoreSession", app.cfg.get(READER_SESSION_KEY) is True)
         app.register_config(self.config)
+
+    def _sections(self) -> list:
+        return [{"key": key, "label": label} for key, label in SECTIONS]
+
+    @Slot(str)
+    def setSection(self, key: str) -> None:  # noqa: N802
+        if key in dict(SECTIONS):
+            self.section = key
+
+    def show(self, key: str) -> None:
+        """Einstellungen mit dem Bereich ``key`` öffnen (z. B. »updates«)."""
+        self.setSection(key)
+        self.app.navigate("settings")
+
+    def attach_background(self, background) -> None:
+        self._background = background
+        self.set_quietly("background", bool(background.enabled))
+
+    @Slot(bool)
+    def setBackground(self, enabled: bool) -> None:  # noqa: N802
+        """Im Hintergrund bereithalten: Symbol im Infobereich und Start mit Windows (wirkt sofort)."""
+        enabled = bool(enabled)
+        background = getattr(self, "_background", None)
+        if background is None or enabled == self.background:
+            return
+        background.set_enabled(enabled)
+        self.background = enabled
+        self.app.persist()
+        self.app.set_status(
+            "PDF Tool startet mit Windows und bleibt nach dem Schließen im Infobereich bereit." if enabled
+            else "PDF Tool startet nicht mehr mit Windows; das Schließen-Kreuz beendet es wieder.",
+            "success",
+        )
 
     def attach_customers(self, customers) -> None:
         self.customers = customers
@@ -79,9 +126,12 @@ class SettingsController(Observable):
     profiles = Property(list, _profiles, notify=_constant)
     readerZooms = Property(list, _reader_zooms, notify=_constant)
     readerPanels = Property(list, _reader_panels, notify=_constant)
+    sections = Property(list, _sections, notify=_constant)
 
     def _texts(self) -> dict:
-        return {"customerTitle": CUSTOMER_RECORDS_TITLE, "customerText": CUSTOMER_RECORDS_TEXT, "customerNote": CUSTOMER_RECORDS_NOTE}
+        from .background import NOTE, TEXT, TITLE
+
+        return {"backgroundTitle": TITLE, "backgroundText": TEXT, "backgroundNote": NOTE, "customerTitle": CUSTOMER_RECORDS_TITLE, "customerText": CUSTOMER_RECORDS_TEXT, "customerNote": CUSTOMER_RECORDS_NOTE}
 
     texts = Property("QVariantMap", _texts, notify=_constant)
 

@@ -47,7 +47,7 @@ T.Popup {
                     required property var modelData
                     size: 30
                     swatchColor: modelData.value
-                    tip: modelData.name
+                    tip: I18n.tr(modelData.name, I18n.revision)
                     selected: popup.current.toUpperCase() === String(modelData.value).toUpperCase()
                     onClicked: {
                         popup.picked(modelData.value)
@@ -62,14 +62,14 @@ T.Popup {
                 id: hex
                 objectName: "colorCustom"
                 preferredWidth: grid.width - customButton.width - 4
-                label: "Eigene Farbe (#RRGGBB)"
-                placeholderText: "#1E88E5"
+                label: I18n.tr("Eigene Farbe (#RRGGBB)", I18n.revision)
+                placeholderText: I18n.tr("#1E88E5", I18n.revision)
                 text: popup.current
                 onSubmitted: popup.custom(text)
             }
             PButton {
                 id: customButton
-                text: "OK"
+                text: I18n.tr("OK", I18n.revision)
                 onClicked: popup.custom(hex.text)
             }
         }

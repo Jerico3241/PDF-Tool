@@ -26,9 +26,9 @@ ColumnLayout {
     PText {
         Layout.fillWidth: true
         wrap: true
-        text: "Der Assistent beantwortet Fragen zum geöffneten PDF und fasst Dokumente zusammen – vollständig auf diesem PC. Dafür braucht er ein Sprachmodell, das einmal geladen wird."
+        text: I18n.tr("Der Assistent beantwortet Fragen zum geöffneten PDF und fasst Dokumente zusammen – vollständig auf diesem PC. Dafür braucht er ein Sprachmodell, das einmal geladen wird.", I18n.revision)
     }
-    PFieldLabel { text: "Sprachmodell" }
+    PFieldLabel { text: I18n.tr("Sprachmodell", I18n.revision) }
     Repeater {
         model: root.data_.models || []
         Rectangle {
@@ -53,17 +53,17 @@ ColumnLayout {
                     spacing: 2
                     RowLayout {
                         spacing: 8
-                        PText { text: modelData.name; textStyle: "bodyStrong" }
-                        PBadge { visible: modelData.recommended; text: "Empfohlen für diesen PC"; tone: "accent" }
-                        PBadge { visible: modelData.installed; text: "Eingerichtet"; tone: "success" }
+                        PText { text: I18n.tr(modelData.name, I18n.revision); textStyle: "bodyStrong" }
+                        PBadge { visible: modelData.recommended; text: I18n.tr("Empfohlen für diesen PC", I18n.revision); tone: "accent" }
+                        PBadge { visible: modelData.installed; text: I18n.tr("Eingerichtet", I18n.revision); tone: "success" }
                     }
-                    PText { Layout.fillWidth: true; wrap: true; text: modelData.description; tone: "secondary" }
+                    PText { Layout.fillWidth: true; wrap: true; text: I18n.tr(modelData.description, I18n.revision); tone: "secondary" }
                     PText {
                         Layout.fillWidth: true
                         wrap: true
                         textStyle: "caption"
                         tone: "secondary"
-                        text: "Download " + modelData.size + " · braucht beim Antworten rund " + modelData.memory + " Arbeitsspeicher" + (modelData.resume !== "" ? " · " + modelData.resume + " schon geladen (wird fortgesetzt)" : "")
+                        text: I18n.tr("Download " + modelData.size + " · braucht beim Antworten rund " + modelData.memory + " Arbeitsspeicher" + (modelData.resume !== "" ? " · " + modelData.resume + " schon geladen (wird fortgesetzt)" : ""), I18n.revision)
                     }
                 }
             }
@@ -76,8 +76,8 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: root.data_.lowMemory ? "warning" : "secondary"
-        text: (root.data_.ram ? "Arbeitsspeicher dieses PCs: " + root.data_.ram + " · " : "") + "frei auf dem Laufwerk: " + (root.data_.free || "–")
-              + (root.data_.lowMemory ? " – wenig Arbeitsspeicher: Antworten können sehr lange dauern." : "")
+        text: I18n.tr((root.data_.ram ? "Arbeitsspeicher dieses PCs: " + root.data_.ram + " · " : "") + "frei auf dem Laufwerk: " + (root.data_.free || "–")
+              + (root.data_.lowMemory ? " – wenig Arbeitsspeicher: Antworten können sehr lange dauern." : ""), I18n.revision)
     }
     PText {
         Layout.fillWidth: true
@@ -85,6 +85,6 @@ ColumnLayout {
         wrap: true
         textStyle: "caption"
         tone: "secondary"
-        text: "Quelle: Hugging Face (Modelle Qwen3.5, Apache-Lizenz 2.0). PDF Tool lädt die Datei über HTTPS und prüft ihre Prüfsumme, bevor sie verwendet wird. Dokumente, Fragen und Antworten verlassen diesen PC nicht. Das Modell lässt sich in den Einstellungen jederzeit wieder entfernen."
+        text: I18n.tr("Quelle: Hugging Face (Modelle Qwen3.5, Apache-Lizenz 2.0). PDF Tool lädt die Datei über HTTPS und prüft ihre Prüfsumme, bevor sie verwendet wird. Dokumente, Fragen und Antworten verlassen diesen PC nicht. Das Modell lässt sich in den Einstellungen jederzeit wieder entfernen.", I18n.revision)
     }
 }

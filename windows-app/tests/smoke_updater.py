@@ -127,13 +127,15 @@ def main() -> int:
         os.environ["PDFTOOL_E2E_MARKER"] = str(marker)
         placeholder = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(3)"])  # die »App«
         log = folder / "update-start.log"
-        helper = installer.Launcher().start(setup, digest, placeholder.pid, log)
+        helper = installer.Launcher(restart=False).start(setup, digest, placeholder.pid, log)  # kein Neustart der echten App
         time.sleep(1.0)
         check(not marker.exists(), "Setup startete, bevor die App beendet war")
         placeholder.wait(30)
         check(helper.wait(60) == launch.OK, f"Hilfsprozess: Code {helper.returncode} – {log.read_text(encoding='utf-8') if log.exists() else ''}")
         check(wait(lambda: marker.exists(), 30), "Setup-Attrappe wurde nicht gestartet")
-        print("   Hilfsprozess: wartete auf das Ende der App, prüfte erneut, startete das Setup")
+        check("/SILENT" in marker.read_text(encoding="utf-8", errors="replace").upper(), f"Setup nicht still gestartet: {marker.read_text(encoding='utf-8', errors='replace')}")
+        check("Update installiert" in log.read_text(encoding="utf-8"), "Stilles Setup meldet keinen Erfolg")
+        print("   Hilfsprozess: wartete auf das Ende der App, prüfte erneut, installierte still (ohne Assistent)")
         print("   " + " | ".join(line.split(" ", 2)[-1] for line in log.read_text(encoding="utf-8").splitlines()))
         service.install_aborted()
 

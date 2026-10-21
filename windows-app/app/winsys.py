@@ -308,6 +308,55 @@ def register_app_identity() -> None:
 
 
 @_safe(False)
+def set_window_identity(hwnd: int, exe: str | Path | None, name: str = "PDF Tool") -> bool:
+    """Taskleiste: Name, Symbol und Neustart-Befehl des Fensters festlegen. Ohne diese Angaben nimmt Windows sie vom
+    Prozess – ``pythonw.exe`` – und zeigt beim Rechtsklick auf das Symbol »Python« mit dem Python-Logo (findet es
+    keine Startmenü-Verknüpfung mit derselben App-Kennung, etwa nach einem Start über »Öffnen mit«).
+    Eigenschaften des Fensters: PKEY_AppUserModel_ID, …_RelaunchCommand, …_RelaunchIconResource und
+    …_RelaunchDisplayNameResource (nur zusammen wirksam)."""
+    import ctypes
+    from ctypes import wintypes
+
+    if not hwnd or exe is None:
+        return False
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
+
+    class PROPERTYKEY(ctypes.Structure):
+        _fields_ = [("fmtid", GUID), ("pid", wintypes.DWORD)]
+
+    class PROPVARIANT(ctypes.Structure):
+        _fields_ = [("vt", ctypes.c_ushort), ("r1", ctypes.c_ushort), ("r2", ctypes.c_ushort), ("r3", ctypes.c_ushort), ("value", ctypes.c_void_p), ("extra", ctypes.c_void_p)]
+
+    def guid(text: str) -> GUID:
+        value = GUID()
+        ctypes.oledll.ole32.CLSIDFromString(ctypes.c_wchar_p("{" + text + "}"), ctypes.byref(value))
+        return value
+
+    app_model = guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3")
+    store = ctypes.c_void_p()
+    ctypes.oledll.shell32.SHGetPropertyStoreForWindow(ctypes.c_void_p(hwnd), ctypes.byref(guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")), ctypes.byref(store))
+    vtable = ctypes.cast(ctypes.cast(store, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+    release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
+    set_value = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, ctypes.POINTER(PROPERTYKEY), ctypes.POINTER(PROPVARIANT))(vtable[6])
+    commit = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p)(vtable[7])
+    keep = []  # Zeichenketten leben bis nach Commit
+    try:
+        # Reihenfolge wichtig: die Neustart-Angaben vor der Kennung
+        values = ((2, f'"{exe}"'), (3, f"{exe},0"), (4, name), (5, APP_USER_MODEL_ID))
+        for pid, text in values:
+            buffer = ctypes.create_unicode_buffer(text)
+            keep.append(buffer)
+            variant = PROPVARIANT(vt=31, value=ctypes.cast(buffer, ctypes.c_void_p))  # VT_LPWSTR
+            set_value(store, ctypes.byref(PROPERTYKEY(app_model, pid)), ctypes.byref(variant))
+        commit(store)
+    finally:
+        release(store)
+    return True
+
+
+@_safe(False)
 def allow_foreground() -> bool:
     """»Öffnen mit« bei laufender App: Der neue Prozess (vom Explorer gestartet, darf in den
     Vordergrund) erlaubt der laufenden App, ihr Fenster nach vorn zu holen."""
@@ -315,6 +364,60 @@ def allow_foreground() -> bool:
 
     ASFW_ANY = -1
     return bool(ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY))
+
+
+@_safe(False)
+def bring_to_front(hwnd: int) -> bool:
+    """Fenster sicher nach vorn holen, wenn ein anderes Programm vorn ist (z. B. Outlook öffnet einen Anhang in der
+    schon laufenden App). Windows lehnt ``SetForegroundWindow`` sonst oft ab und lässt nur die Taskleiste blinken –
+    das Fenster mit der PDF bliebe unsichtbar hinter Outlook. Kurz an die Eingabe des vorderen Fensters
+    anhängen, dann ist es erlaubt."""
+    import ctypes
+
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    user32.GetForegroundWindow.restype = ctypes.c_void_p
+    foreground = user32.GetForegroundWindow()
+    if not hwnd or foreground == hwnd:
+        return True
+    own = kernel32.GetCurrentThreadId()
+    other = user32.GetWindowThreadProcessId(ctypes.c_void_p(foreground), None) if foreground else 0
+    attached = bool(other) and other != own and bool(user32.AttachThreadInput(own, other, True))
+    try:
+        user32.BringWindowToTop(ctypes.c_void_p(hwnd))
+        return bool(user32.SetForegroundWindow(ctypes.c_void_p(hwnd)))
+    finally:
+        if attached:
+            user32.AttachThreadInput(own, other, False)
+
+
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"  # Start mit Windows (nur dieser Benutzer)
+
+
+@_safe(None)
+def run_entry(name: str) -> str | None:
+    """Befehl eines Eintrags unter »Start mit Windows« (HKCU\\…\\Run), ``None`` ohne Eintrag."""
+    try:
+        value = _registry_value(RUN_KEY, name)
+    except OSError:
+        return None
+    return str(value)
+
+
+@_safe(False)
+def set_run_entry(name: str, command: str | None) -> bool:
+    """Eintrag unter »Start mit Windows« setzen (``command``) bzw. entfernen (``None``). True bei Erfolg."""
+    import winreg
+
+    if command is None:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.DeleteValue(key, name)
+        except FileNotFoundError:
+            pass
+        return True
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, name, 0, winreg.REG_SZ, command)
+    return True
 
 
 def open_path(path: str | Path) -> None:

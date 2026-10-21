@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Style
+import PdfTool.Backend
 
 // Ansichtswahl eines Werkzeugs (z. B. »Übersicht erstellen · Stapel · Darstellung · …«).
 // Die Markierung gleitet zur gewählten Ansicht; Einträge erscheinen und verschwinden weich
@@ -24,7 +25,7 @@ Item {
     implicitWidth: row.implicitWidth
     activeFocusOnTab: true
     Accessible.role: Accessible.PageTabList
-    Accessible.name: "Ansichten"
+    Accessible.name: I18n.tr("Ansichten", I18n.revision)
 
     property int focusIndex: -1
     // Der Repeater meldet ``count``, bevor er die Einträge erzeugt (Seiten entstehen im Hintergrund):
@@ -99,7 +100,7 @@ Item {
                     readonly property bool keyboardFocus: root.activeFocus && root.focusIndex >= 0 && root.availableKeys()[root.focusIndex] === modelData.key
                     // Breite für die fette Schrift der gewählten Ansicht – beim Wechsel springt nichts
                     readonly property real fullWidth: Math.ceil(Math.max(label.implicitWidth, strongWidth.advanceWidth)) + 24
-                    TextMetrics { id: strongWidth; font: Typography.bodyStrong; text: entry.modelData.label }
+                    TextMetrics { id: strongWidth; font: Typography.bodyStrong; text: I18n.tr(entry.modelData.label, I18n.revision) }
                     height: row.height
                     width: available ? fullWidth : 0
                     opacity: available ? 1 : 0
@@ -108,7 +109,7 @@ Item {
                     Behavior on width { enabled: Motion.moves; NumberAnimation { duration: Motion.expand; easing.type: Motion.decelerate } }
                     Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade } }
                     Accessible.role: Accessible.PageTab
-                    Accessible.name: modelData.label
+                    Accessible.name: I18n.tr(modelData.label, I18n.revision)
                     Accessible.selected: isCurrent
 
                     Rectangle {
@@ -124,7 +125,7 @@ Item {
                         id: label
                         anchors.centerIn: parent
                         anchors.verticalCenterOffset: -2
-                        text: entry.modelData.label
+                        text: I18n.tr(entry.modelData.label, I18n.revision)
                         font: entry.isCurrent ? Typography.bodyStrong : Typography.body
                         color: entry.isCurrent ? Theme.textPrimary : Theme.textSecondary
                         textFormat: Text.PlainText

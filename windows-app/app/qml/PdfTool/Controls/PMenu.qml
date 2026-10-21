@@ -12,7 +12,8 @@ T.Menu {
     onClosed: {
         var run = afterClose
         afterClose = null
-        if (run) run()
+        // erst nach »closed«: ein Dialog, der in ``run`` wartet, bliebe sonst unsichtbar (nur abgedunkelt)
+        if (run) Qt.callLater(run)
     }
     implicitWidth: Math.max(200, contentItem.implicitWidth + leftPadding + rightPadding)
     implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding

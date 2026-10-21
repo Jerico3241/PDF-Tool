@@ -375,7 +375,7 @@ Seitenstand (Revision), sonst wird neu analysiert.
 
 ## Schützen und Weitergeben (seit 3.2)
 
-Befehle in der Werkzeugleiste unter **Schützen** (Schild) und **Seiten gestalten**; Engine je Aufgabe ein
+Befehle unter **Schützen** und **Seiten gestalten** (seit 4.0.0-beta.2 Gruppen in »Alle Werkzeuge«); Engine je Aufgabe ein
 Modul in `tools/pdf_editor/`. Jede Änderung ist ein Schritt für Rückgängig und wird beim Speichern wie jede
 andere geprüft (die Datei wird erst ersetzt, wenn die neue fehlerfrei geöffnet und gezeichnet wurde).
 
@@ -439,6 +439,51 @@ andere geprüft (die Datei wird erst ersetzt, wenn die neue fehlerfrei geöffnet
   den Inhalt angepasst (Ränder aus einem Seitenbild mit 500 px Breite); mindestens 36 pt bleiben sichtbar.
   Zugeschnitten wird die CropBox – der Inhalt außerhalb bleibt in der Datei (zum Entfernen: Schwärzen);
   »Zuschnitt zurücksetzen« zeigt wieder die ganze Seite.
+
+## Werkzeugleiste, Vergleichen, geteilte Ansicht, Präsentation (seit 4.0.0-beta.2)
+
+- Werkzeugleiste nach dem Vorbild von Acrobat:
+  - `ReaderToolbar.qml`: »Alle Werkzeuge«, Öffnen, Speichern, Drucken, E-Mail, Rückgängig/Wiederholen, Zustand
+    des Speicherns; rechts Suchen, Seitenansicht (mit »Geteilte Ansicht« und »Präsentation«), Organisieren, Mehr.
+  - `QuickTools.qml`: Karte links neben dem Dokument (54 px, `Metrics.readerQuickToolsWidth`, mit Rand 70 px –
+    die Dokumentfläche beginnt danach). Kommentieren, Zeichnen und Unterschreiben merken das zuletzt benutzte
+    Werkzeug, der Pfeil daneben öffnet die Auswahl. Ist ein Werkzeug aus »Alle Werkzeuge« aktiv, ist »Alle
+    Werkzeuge« markiert. Nicht im Vollbild und beim Organisieren.
+  - `ToolOptions.qml` zeigt keine Bedienhinweise und kein »Fertig« mehr. Werkzeuge mit Befehlen zum Arbeiten
+    (Schwärzen, Unterschrift, Bilder, Formular gestalten) zeigen ihre Leiste sofort; reine Einstellungen
+    (Farbe, Stärke, Größe, Stempelart) erst nach einem erneuten Klick auf das gewählte Werkzeug. Ein Druck in
+    eine Seite, ein anderes Werkzeug oder ein anderes PDF schließt sie. Übrig bleiben Hinweise mit Inhalt
+    (Bild nicht änderbar, keine Formularfelder, Weg der letzten Textänderung).
+  - `AllTools.qml`: Popup neben den Schnellwerkzeugen mit allen Werkzeugen und Befehlen in Gruppen. Ein
+    Werkzeug schaltet sofort um; Befehle mit Dialog laufen erst nach dem Schließen. Esc, × oder ein Eintrag
+    schließen ohne Nachwirkung; ein Klick daneben schließt, ohne dass derselbe Klick die Liste wieder öffnet.
+- Vergleichen (`compare.py`):
+  - `Session.compare_words` liest je Seite die Zeichen mit Rechteck (Anzeige-Punkte) und bildet Wörter
+    (Leerraum, Zeilenwechsel); Seiten ohne Wörter zählen als »ohne Text«.
+  - `compare(alt, neu)`: `difflib.SequenceMatcher` über die Wörter beider Fassungen (weiches Trennzeichen und
+    typografische Anführungszeichen gelten als gleich); je Änderung Art, Text vorher/nachher, Rechtecke je
+    Seite (eine Zeile ein Rechteck) und die Stelle zum Hinspringen – bei »neu«/»entfernt« in der anderen
+    Fassung die Lücke zwischen den Nachbarwörtern. Höchstens 400 000 Wörter je Fassung.
+  - Reader: die gewählte ältere Fassung öffnet als aktueller Tab (links), die neuere rechts in der geteilten
+    Ansicht; Wörter beider Fassungen im Arbeitsthread, der Vergleich selbst als Hintergrundauftrag. Ergebnis
+    in `compareItems`, Markierungen je Dokument in `compareRects` (Art 0/1/2), Liste in der rechten Leiste
+    (»Vergleich«). Schließen eines der beiden PDFs oder der geteilten Ansicht beendet den Vergleich.
+- Geteilte Ansicht: `Reader.splitKey` nennt das rechte Dokument; eine zweite `DocumentView` mit eigenem
+  Dokument (Seite, Zoom, Werkzeug, Darstellung je Dokument). Wird das rechte Dokument aktiviert, tauschen die
+  beiden. Gleiches PDF zweimal nebeneinander gibt es nicht (ein PDF ist nur einmal geöffnet).
+- Präsentation: `startPresentation` merkt Ansicht, Einpassen, Zoom und Werkzeug, schaltet auf Einzelseite,
+  ganze Seite und Vollbild; jedes Ende des Vollbilds (Esc, F11, Fenster minimiert) stellt sie wieder her.
+
+## PDF/A und PDF aus Bildern (seit 4.0.0-beta.1)
+
+- `pdfa.py`: `convert(bytes)` → PDF/A-2b-Bytes oder `PdfaError(problems)`; `save_copy(document, ziel)` speichert
+  den aktuellen Stand (auch ungespeicherte Änderungen) als Kopie, `check(bytes)` ist die Kurzprüfung danach.
+  Einfache Schriften ohne Einbettung werden je Datei einmal durch eine Teilmenge einer Systemschrift ersetzt
+  (`fonts.find_system_font`, fontTools): mit WinAnsi-Kodierung, sonst symbolisch mit (3,0)-cmap; immer mit
+  ToUnicode. CID-Schriften ohne `CIDToGIDMap` erhalten `Identity`. XMP schreibt die Standardbibliothek (die
+  Laufzeit hat kein lxml). Bei der Entwicklung mit veraPDF geprüft; die Tests prüfen mit `check`.
+- `imagepdf.py`: `create(bilder, ziel, page_size, margin)` – je Bild eine Seite, JPEG ohne Neukodierung,
+  geprüft und atomar gespeichert wie »Speichern unter«.
 
 ## KI-Assistent (optional, seit 3.2)
 
