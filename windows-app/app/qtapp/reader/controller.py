@@ -137,6 +137,7 @@ class ReaderController(Observable):
         opened = cfg.get("reader_zuletzt_zeit")
         self._recent_opened = {str(k): str(v) for k, v in opened.items() if isinstance(k, str) and isinstance(v, str) and k in self._recent_paths} if isinstance(opened, dict) else {}
         self._recent_stat: dict[str, tuple[bool, int]] = {}  # Pfad → (vorhanden, Größe) beim letzten Prüfen
+        self._conversions: list[Callable[[], None]] = []  # Office-Dateien zum Ansehen: die erste läuft, die übrigen warten
         view = cfg.get("reader_ansicht") if isinstance(cfg.get("reader_ansicht"), dict) else {}
         self._view = {"fit": view.get("fit", "width") if view.get("fit") in ("width", "page", "") else "width", "zoom": float(view.get("zoom", 100) or 100), "mode": view.get("mode", "continuous")}
         if view.get("links") in LEFT_PANELS:
@@ -388,11 +389,13 @@ class ReaderController(Observable):
             def converted_ok(data: bytes) -> None:
                 self.opening = max(0, self.opening - 1)
                 self._forget_opening(path)
+                self._next_conversion()
                 self._open(path, None, then=then, background=background, converted=data)
 
             def converted_failed(exc: BaseException, details: str) -> None:
                 self.opening = max(0, self.opening - 1)
                 self._forget_opening(path)
+                self._next_conversion()
                 if then is not None:
                     then(None)
                 if background:
@@ -405,7 +408,10 @@ class ReaderController(Observable):
                     self.app.set_status("Nicht geöffnet.", "neutral")
                 self._leave_if_empty()
 
-            self.app.worker.run(lambda: office_pdf(path), converted_ok, converted_failed)
+            # nacheinander in der Reihenfolge der Auswahl – so entstehen die Tabs auch in dieser Reihenfolge
+            self._conversions.append(lambda: self.app.worker.run(lambda: office_pdf(path), converted_ok, converted_failed))
+            if len(self._conversions) == 1:
+                self._conversions[0]()
             return
         self._ids += 1
         ident = f"d{self._ids}"
@@ -515,6 +521,13 @@ class ReaderController(Observable):
                 self._leave_if_empty()
 
         self.engine.submit(work, done, failed, label="öffnen")
+
+    def _next_conversion(self) -> None:
+        """Eine Umwandlung ist fertig: die nächste wartende starten."""
+        if self._conversions:
+            self._conversions.pop(0)
+        if self._conversions:
+            self._conversions[0]()
 
     def _forget_opening(self, path: str) -> None:
         if path in self._opening_paths:
