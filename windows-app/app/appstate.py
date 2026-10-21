@@ -141,20 +141,15 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Beta 4.0 – neunter Teil: Fehler behoben. Das Hilfe-Menü öffnet ruhig, die Kundenakte stürzt beim Sortieren nicht mehr ab, bearbeitete Outlook-Anhänge bleiben erhalten, Seitenzahlen im Stapel lassen Kopf- und Fußzeilen stehen, verbundene Zellen und Datumszahlen in Excel werden richtig gelesen, die Suche läuft nach dem Löschen von Seiten weiter.",
-    "Aus Beta 8: Das Hilfe-Menü springt nicht mehr und schließt sich beim zweiten Klick auf »?«, Strg+W und das Zahnrad schließen die Einstellungen, Signaturen und PDF in Excel arbeiten genauer, die englische Oberfläche übersetzt vollständiger, automatische Updates warten, bis alle PDFs offen sind.",
-    "Aus Beta 7: Updates suchen und installieren sich beim Start von selbst (PDFs öffnen sich danach wieder), in den Einstellungen wird der Knopf zu »Jetzt installieren« und zeigt die Neuerungen. Oben ist aufgeräumt: kein ≡ Menü mehr, »?« ist das Hilfe-Menü, die Einstellungen öffnen sich ohne eigenen Tab.",
-    "Aus Beta 6: Englische Oberfläche (Einstellungen → Sprache), digitale Signatur mit Zertifikat, PDF in Word, Excel oder Text umwandeln (und Office-Dateien in PDF), der KI-Assistent übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner. Texterkennung startet wieder richtig.",
-    "Aus Beta 5: Scannen direkt in eine PDF (Startseite → »Scannen«), Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y), Texterkennung in zehn Sprachen, Text über Seitengrenzen markieren und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).",
-    "Aus Beta 4: PDF-Anhänge aus Outlook öffnen sich wieder (auch mit strengen Defender-Regeln), in der Taskleiste steht »PDF Tool« statt »Python«, das Symbol ist auch klein scharf.",
-    "Aus Beta 3: aufgeräumt. PDF-Anhänge aus Outlook öffnen sich wieder, Updates mit einem Klick laufen jetzt wirklich ohne Setup-Assistent, Datum als Text in Excel-Listen wird richtig gelesen, große PDFs blättern schneller, weniger Fehlermeldungen beim Schließen.",
-    "Aus Beta 2: Neue Werkzeugleiste im Reader wie bei Acrobat: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, alle Werkzeuge mit Namen unter »Alle Werkzeuge«.",
-    "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation (F5).",
-    "Aus Beta 1: »Stapel-Aktionen« (Strg+6) – viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, schützen oder als PDF/A speichern.",
-    "Als PDF/A speichern: archivfähige Kopie (PDF/A-2b) mit eingebetteten Schriften – im Reader unter »Alle Werkzeuge« → »Schützen« und als Schnellwerkzeug.",
-    "PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF …) in die App ziehen oder im Explorer über Rechtsklick → »Senden an« → »PDF Tool (Bilder zu PDF)« zu einer PDF zusammenfügen.",
-    "Updates mit einem Klick: PDF Tool lädt neue Versionen selbst herunter. »Jetzt installieren« aktualisiert ohne Setup-Assistent und startet die App danach neu.",
-    "Aufgeräumte Einstellungen: oben eine Leiste mit den Bereichen Allgemein, PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose und Info.",
+    "Stapel-Aktionen (Strg+6): viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, reduzieren, mit Kennwort schützen oder als PDF/A speichern – jede als neue Datei, die Originale bleiben.",
+    "Neue Werkzeugleiste im Reader: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, »Alle Werkzeuge« mit Namen und in Gruppen. Hinweise zum Dokument blenden sich von selbst aus.",
+    "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation im Vollbild (F5).",
+    "Scannen direkt in eine PDF (Startseite → »Scannen«), Texterkennung in zehn Sprachen, Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y) und Text über Seitengrenzen markieren.",
+    "Digitale Signatur mit Zertifikat (Windows-Zertifikatspeicher oder .pfx) und Prüfen vorhandener Signaturen. PDF in Word, Excel oder Text umwandeln, Office-Dateien in PDF, PDF aus Bildern und Als PDF/A speichern.",
+    "KI-Assistent (optional): übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner – mit Datei und Seite, vollständig auf diesem PC.",
+    "Englische Oberfläche (Einstellungen → Sprache) und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).",
+    "Updates suchen und installieren sich beim Start von selbst; offene PDFs öffnen sich danach wieder. Mit ungespeicherten Änderungen wartet PDF Tool. Abschaltbar unter Einstellungen → Updates.",
+    "Aufgeräumt: oben »?« für die Hilfe und das Zahnrad für die Einstellungen, die Einstellungen mit einer Leiste für ihre Bereiche. PDF-Anhänge aus Outlook öffnen sich zuverlässig, auch mit strengen Defender-Regeln.",
     "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 

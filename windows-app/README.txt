@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.9
+Version 4.0.0
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.9.exe
+PDF-Tool-Setup-4.0.0.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -49,164 +49,37 @@ Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
 
-Neu in Version 4.0 Beta 9 – Fehler behoben
--------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“).
-- Das Hilfe-Menü „?“ öffnet ruhig, ohne kurz zu springen.
-- Kundenakte: Sortieren nach Kundennummer mit Nummern wie „10042“ und
-  „K-77“ ließ PDF Tool abstürzen, danach bei jedem Start.
-- Bearbeitete und gespeicherte Outlook-Anhänge werden nicht mehr nach
-  7 Tagen gelöscht.
-- Stapel-Aktionen: „Seitenzahlen“ entfernt nur alte Seitenzahlen, nicht
-  mehr Kopf- und Fußzeilen oder Bates-Nummern.
-- Vertragsübersichten: verbundene Zellen (z. B. ein Status für mehrere
-  Verträge) gelten für jede Zeile, Datumswerte ohne Datumsformat werden
-  richtig gelesen, ein Dateiname-Muster mit unbekannten Klammern lässt
-  die PDF nicht mehr scheitern.
-- PDF Reader: Suchen nach dem Löschen von Seiten läuft zu Ende; ein
-  fehlgeschlagenes Öffnen zum Vergleichen oder Nebeneinander wirkt nicht
-  mehr später auf ein anderes Dokument; „Beenden“ im Infobereich fragt
-  nach ungespeicherten Änderungen im sichtbaren Fenster.
-- Englische Oberfläche: weitere Texte übersetzt, eigene Tastenkürzel in
-  der Statuszeile.
-- Aktualisierte Pakete (numpy, pikepdf, pypdf, pypdfium2 und weitere).
-
-Neu in Version 4.0 Beta 8 – Fehler behoben
--------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“).
-- Das Hilfe-Menü „?“ springt beim Öffnen nicht mehr hin und her und
-  schließt sich beim zweiten Klick.
-- Strg+W und das Zahnrad schließen die Einstellungen wieder.
-- Digitale Signatur: manche gültige Signaturen galten als beschädigt.
-- PDF in Excel: Nummern mit führender Null oder „+“ bleiben Text,
-  Tausenderpunkte nur, wo das PDF welche hatte, Text mit „=“ am Anfang
-  wird keine Formel.
-- Englische Oberfläche: „Ctrl“ statt „Strg“, Meldungen vollständig
-  übersetzt, eigene Fragen an den KI-Assistenten bleiben unverändert.
-- Automatische Updates warten, bis PDF Tool fertig gestartet ist und alle
-  PDFs offen sind.
-
-Neu in Version 4.0 Beta 7 – Updates von selbst, aufgeräumte Leiste
--------------------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“).
-- Updates: PDF Tool sucht bei jedem Start und installiert ein gefundenes
-  Update selbst. Danach startet es neu und öffnet die PDFs wieder. Mit
+Neu in Version 4.0 – Stapel-Aktionen, Vergleichen, Scannen, Englisch
+---------------------------------------------------------------------
+Freigegebene Version (getestet als Betas 4.0.0-beta.1 bis 4.0.0-beta.9).
+- Stapel-Aktionen (Strg+6): viele PDFs auf einmal verkleinern, mit
+  Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen,
+  reduzieren, mit Kennwort schützen oder als PDF/A speichern – jede als
+  neue Datei, die Originale bleiben.
+- Reader: neue Werkzeugleiste (oben die Datei-Befehle, links die
+  Schnellwerkzeuge, „Alle Werkzeuge“ mit Namen und in Gruppen).
+- Mit anderer Fassung vergleichen (Unterschiede farbig und als Liste),
+  geteilte Ansicht mit zwei PDFs nebeneinander, Präsentation im Vollbild
+  (F5).
+- Scannen direkt in eine PDF (Startseite → „Scannen“), Texterkennung in
+  zehn Sprachen, Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y),
+  Text über Seitengrenzen markieren.
+- Digitale Signatur mit Zertifikat und Prüfen vorhandener Signaturen.
+- Umwandeln: PDF in Word, Excel oder Text, Office-Dateien in PDF, PDF aus
+  Bildern („Senden an“ → „PDF Tool (Bilder zu PDF)“), Als PDF/A speichern.
+- KI-Assistent (optional): Dokumente übersetzen, Fragen an mehrere PDFs
+  oder einen ganzen Ordner – mit Datei und Seite.
+- Englische Oberfläche (Einstellungen → Sprache) und eigene Tastenkürzel
+  (Einstellungen → Tastenkürzel, Strg+F1).
+- Updates: PDF Tool sucht bei jedem Start und installiert ein Update selbst,
+  ohne Setup-Assistent; offene PDFs öffnen sich danach wieder. Mit
   ungespeicherten Änderungen wartet es. Abschaltbar unter Einstellungen →
   Updates → „Updates automatisch installieren“.
-- In den Einstellungen wird „Nach Updates suchen“ nach einem Fund zu
-  „Jetzt installieren“; die Neuerungen stehen direkt darunter. Die
-  Hinweisleiste über den Seiten gibt es nicht mehr.
-- Leiste oben: kein ≡ Menü mehr. „?“ öffnet das Hilfe-Menü (Kurzanleitung,
-  Tastenkürzel, Neuerungen, Über), das Zahnrad die Einstellungen – ohne
-  eigenen Tab.
-- Behoben: In den Stapel-Aktionen wurde beim Anklicken eines Kästchens kurz
-  ein anderes grau.
-
-Neu in Version 4.0 Beta 6 – Englisch, Signatur, Umwandeln, KI
-----------------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“).
-- Englische Oberfläche: Einstellungen → Sprache (Deutsch, Englisch oder wie
-  Windows). Umschalten ohne Neustart. Standard ist die Sprache von Windows.
-- Digitale Signatur: PDF mit einem Zertifikat (Windows-Zertifikatspeicher oder
-  .pfx-Datei) signieren; vorhandene Signaturen werden geprüft und angezeigt.
-- Umwandeln: PDF in Word, Excel oder Text (Alle Werkzeuge → „Text erkennen,
-  umwandeln und exportieren“); Word-, Excel- und PowerPoint-Dateien in PDF
-  (braucht Microsoft Office).
-- KI-Assistent: Dokument übersetzen (als neues PDF), Fragen an mehrere PDFs
-  oder einen ganzen Ordner; die Antwort nennt Datei und Seite. Gescannte
-  Seiten liest er über die Texterkennung.
-- Behoben: „Text erkennen“ dunkelte in Beta 5 nur den Bildschirm ab, ohne
-  den Dialog zu zeigen.
-
-Neu in Version 4.0 Beta 5 – Scannen, Vorlesen, Sprachen, Tastenkürzel
----------------------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“).
-- Scannen: Startseite → „Scannen“. Scanner wählen, Vorlagenglas oder Einzug,
-  Farbe und Auflösung; die Seiten werden direkt eine PDF, auf Wunsch gleich
-  durchsuchbar (Texterkennung).
-- Vorlesen: Strg+Umschalt+Y liest die Auswahl oder das Dokument ab der
-  aktuellen Seite mit den Stimmen von Windows vor. Das gesprochene Wort ist
-  markiert; Pause, Tempo und Stimme in der Leiste über dem Dokument.
-- Texterkennung in zehn Sprachen: neu Französisch, Italienisch, Spanisch,
-  Niederländisch, Portugiesisch, Polnisch, Türkisch und Russisch.
-- Text über Seitengrenzen markieren: einfach über die Seite hinaus ziehen;
-  Kopieren, Hervorheben und Schwärzen gelten für alle gewählten Seiten.
-- Tastenkürzel: Übersicht aller Kürzel (Strg+F1, Einstellungen →
-  Tastenkürzel), jedes lässt sich ändern oder entfernen.
-
-Neu in Version 4.0 Beta 4 – Outlook, Taskleiste, Symbol
---------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
-- PDF-Anhänge aus Outlook (klassisch und neu) öffnen sich wieder, auch wenn
-  eine Defender-Regel Outlook verbietet, Programme direkt zu starten: Windows
-  startet PDF Tool jetzt selbst und übergibt die Datei.
-  Ein Übergabe-Protokoll (im Support-Paket) zeigt, ob ein Start ankommt.
-- Taskleiste: Rechtsklick auf PDF Tool zeigt „PDF Tool“ statt „Python“.
-- App-Symbol: in Taskleiste und Explorer (16–24 Pixel) scharf gezeichnet;
-  PDF-Dateien in der Sprungliste zeigen das neue statt des alten Symbols.
-
-Neu in Version 4.0 Beta 3 – Aufräumen: Fehler behoben, schneller, stabiler
----------------------------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“). Keine neuen Funktionen.
-- Ein-Klick-Update: läuft jetzt wirklich ohne Setup-Assistent (der Helfer lief
-  aus dem Ordner, den das Setup ersetzt). Wirksam ab dem nächsten Update.
-- PDF-Anhänge aus Outlook öffnen sich wieder, auch wenn PDF Tool schon läuft.
-- Vertragsübersichten: Datum als Text in der Excel-Liste („01.02.2021“) wird
-  immer deutsch gelesen (vorher teils Monat und Tag vertauscht).
-- PDF Reader: schneller beim Blättern großer PDFs; Seitenleiste springt nach
-  dem Löschen von Seiten nicht mehr nach oben; keine Fehlermeldung mehr beim
-  schnellen Schließen eines Tabs; Vergleichen langer Dokumente in Sekunden.
-- Neustart nach einer Wiederherstellung, Stapel-Aktionen und Einstellungen
-  stabiler.
-
-
-Neu in Version 4.0 Beta 2 – Werkzeugleiste wie bei Acrobat, Vergleichen, geteilte Ansicht, Präsentation
--------------------------------------------------------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“). Zweiter Teil von Version 4.0.
-- Neue Werkzeugleiste im Reader: oben nur noch Datei-Befehle (Öffnen,
-  Speichern, Drucken, E-Mail, Rückgängig) und links „Alle Werkzeuge“; links
-  neben dem Dokument die Schnellwerkzeuge (Auswählen, Verschieben,
-  Kommentieren, Zeichnen, Text hinzufügen, Text bearbeiten, Objekt
-  bearbeiten, Unterschreiben). „Alle Werkzeuge“ zeigt jedes Werkzeug mit
-  Namen, in Gruppen. Die Einstellungen eines Werkzeugs (Farbe, Stärke …)
-  erscheinen mit einem zweiten Klick auf das Werkzeug; Esc beendet es.
-- Mit anderer Fassung vergleichen (Alle Werkzeuge): die ältere Fassung
-  wählen – beide PDFs stehen nebeneinander, Unterschiede im Text sind farbig
-  markiert (geändert gelb, neu grün, entfernt rot) und rechts als Liste zum
-  Durchklicken.
-- Geteilte Ansicht: zwei PDFs nebeneinander im selben Fenster (Ansicht →
-  „Geteilte Ansicht“ oder Alle Werkzeuge), jedes mit eigener Seite und
-  eigenem Zoom.
-- Präsentation (F5): Vollbild auf schwarzem Grund, eine ganze Seite nach der
-  anderen mit Pfeiltasten, Leertaste oder Bild auf/ab; Esc beendet sie.
-
-
-Neu in Version 4.0 Beta 1 – Stapel-Aktionen, PDF/A, PDF aus Bildern, Updates mit einem Klick
----------------------------------------------------------------------------------------------
-Beta-Version zum Testen (Kanal „Beta“). Erster Teil von Version 4.0.
-- Stapel-Aktionen (Startseite oder Strg+6): PDFs wählen oder hineinziehen,
-  Aktionen ankreuzen – Text erkennen, bereinigen, reduzieren, Wasserzeichen,
-  Seitenzahlen, verkleinern, PDF/A, Kennwortschutz – und „Alle bearbeiten“.
-  Die Reihenfolge ist fest und immer richtig. Jede PDF wird als neue Datei
-  gespeichert („_bearbeitet“ oder eigener Zusatz); Originale und vorhandene
-  Dateien werden nie überschrieben.
-- Als PDF/A speichern (Reader → „Schützen“, Schnellwerkzeug): archivfähige
-  Kopie nach PDF/A-2b – fehlende Schriften werden aus Windows eingebettet,
-  Skripte, Anhänge und Ähnliches entfernt; die Meldung nennt, was geändert
-  wurde.
-- PDF aus Bildern: Fotos und Scans (JPG, PNG, TIFF, BMP, GIF, WebP) in das
-  Fenster ziehen, über das Schnellwerkzeug wählen oder im Explorer markieren
-  → Rechtsklick → „Senden an“ → „PDF Tool (Bilder zu PDF)“. Reihenfolge,
-  Seitengröße (wie das Bild, A4, Letter) und Rand wählen; Fotos behalten ihre
-  Qualität, gedrehte Handyfotos stehen richtig herum.
-- Updates mit einem Klick: PDF Tool lädt eine neue Version nach der
-  automatischen Prüfung selbst herunter. „Jetzt installieren“ aktualisiert
-  ohne Setup-Assistent und startet PDF Tool danach neu. Gilt ab dem Update
-  von 4.0.0-beta.1 auf eine spätere Version.
-- Einstellungen aufgeräumt: oben eine Leiste mit den Bereichen Allgemein,
-  PDF Reader, KI-Assistent, Vertragsübersichten, Updates, Daten & Diagnose
-  und Info – statt einer langen Seite.
-
+- Oben „?“ für die Hilfe und das Zahnrad für die Einstellungen; die
+  Einstellungen mit einer Leiste für ihre Bereiche.
+- PDF-Anhänge aus Outlook öffnen sich zuverlässig, auch mit strengen
+  Defender-Regeln; in der Taskleiste steht „PDF Tool“ mit eigenem Symbol.
+- Viele Fehler behoben, schneller beim Blättern großer PDFs.
 
 Neu in Version 3.2 – Schützen und Weitergeben, KI-Assistent, schneller Start
 -----------------------------------------------------------------------------
@@ -574,6 +447,15 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 3.2.0 (oder älter) auf 4.0.0: Das Setup ersetzt die
+Programmdateien – dieses eine Mal noch mit dem Setup-Assistenten, ab dem
+nächsten Update von selbst. Alle Einstellungen, Kundenakten, Vorlagen,
+Regelwerke und Sicherungen bleiben unverändert.
+
+Update von einer Beta von 4.0 auf 4.0.0 (Kanal „Beta“): von selbst beim
+Start oder mit einem Klick, ohne Setup-Assistent. Daten, Einstellungen und
+der Kanal „Beta“ bleiben erhalten.
 
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
