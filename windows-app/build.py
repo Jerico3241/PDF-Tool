@@ -320,7 +320,11 @@ REQUIRED_NATIVE = [
 
 
 def log(text: str) -> None:
-    print(text, flush=True)
+    try:
+        print(text, flush=True)
+    except UnicodeEncodeError:  # Konsole von Windows (cp1252): Zeichen außerhalb ersetzen, statt den Build abzubrechen
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(encoding, "replace").decode(encoding), flush=True)
 
 
 def annotate(kind: str, title: str, text: str) -> None:
@@ -704,7 +708,7 @@ def probe_office(program: Path) -> None:
     if result.returncode != 0 or not pdf.is_file() or not pdf.read_bytes().startswith(b"%PDF"):
         fail("Probe fehlgeschlagen: LibreOffice hat keine PDF erstellt "
              f"(Code {result.returncode}): {(result.stdout + result.stderr).decode('utf-8', 'replace')[-1500:]}")
-    log(f"  Probe: CSV → PDF ({pdf.stat().st_size // 1024} KB)")
+    log(f"  Probe: CSV -> PDF ({pdf.stat().st_size // 1024} KB)")
     remove(work)
 
 
