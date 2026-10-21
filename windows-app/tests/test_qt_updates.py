@@ -552,3 +552,70 @@ def test_about_shows_the_full_version(start, monkeypatch):
         h.app.showAbout()
         data = h.app.dialogs.history[-1]["data"]
         assert data["version"] == version and data["beta"] is beta
+
+
+# Fehlersuche vor 4.0 Beta 8 ----------------------------------------------------------------------------------------
+def _ready_update(h):
+    u(h).checkNow()
+    settle(h, "available")
+    u(h).download()
+    settle(h, "ready")
+
+
+def test_failed_automatic_install_does_not_reopen_pdfs_later(start, server, monkeypatch, config_file):
+    """Startete das Setup nicht (Hilfsprozess blockiert) oder lehnte die Sicherung ab, blieb »PDFs nach dem Update wieder
+    öffnen« gesetzt – der nächste normale Start öffnete dann alle PDFs, obwohl die Einstellung aus ist."""
+    server.publish("2.7.3")
+    h = start()
+    _ready_update(h)
+
+    class Blocked:
+        def start(self, *args, **kwargs):
+            raise OSError("blockiert")
+
+    monkeypatch.setattr(updates, "create_launcher", lambda: Blocked())
+    u(h)._auto_wanted = True
+    u(h)._try_auto_install()
+    assert wait_until(lambda: u(h).state == "error", 15), u(h).state
+    assert u(h).reader.restore_after_update is False
+    h.app.persist()
+    assert not config(config_file).get("reader_sitzung_update")
+
+
+def test_refused_backup_does_not_reopen_pdfs_later(start, server, monkeypatch):
+    server.publish("2.7.3")
+    h = start()
+    _ready_update(h)
+    monkeypatch.setattr(u(h).backup, "backup_before_update", lambda proceed: False)
+    u(h)._auto_wanted = True
+    u(h)._try_auto_install()
+    pump(0.3)
+    assert u(h).reader.restore_after_update is False and not updates.LAUNCHES
+
+
+def test_downloaded_update_waits_until_the_app_is_ready_and_pdfs_are_open(start, server, monkeypatch, config_file, tmp_path):
+    """Ein schon geladenes Update installierte sich beim Start, bevor die App bereit war – eine per Doppelklick
+    übergebene PDF ging dabei verloren (sie war noch nicht geöffnet und fehlte in der gemerkten Sitzung)."""
+    import pdfsamples as samples
+
+    pdf = str(samples.healthy(tmp_path / "Rechnung.pdf", pages=2))
+    server.publish("2.7.3")
+    h = start()
+    _ready_update(h)
+    monkeypatch.setattr(updates, "AUTO_DOWNLOAD", True)
+    seen = []
+    original = updates.UpdatesController._try_auto_install
+
+    def spy(self):
+        if not self.app.ready and not seen:
+            self.reader.open_external([pdf])  # »Öffnen mit« beim Start
+        seen.append(self.app.ready)
+        return original(self)
+
+    monkeypatch.setattr(updates.UpdatesController, "_try_auto_install", spy)
+    h2 = neustart(h)
+    assert wait_until(lambda: updates.LAUNCHES, 30), u(h2).state
+    assert seen and seen[-1] is True  # installiert erst, wenn die App bereit ist
+    data = config(config_file)
+    assert data.get("reader_sitzung_update") is True
+    assert "Rechnung.pdf" in json.dumps(data.get("reader_sitzung"))  # nach dem Neustart wieder offen

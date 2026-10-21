@@ -47,6 +47,7 @@ START_DELAY_MS = 4000  # automatische Prüfung erst einige Sekunden nach dem ers
 PERIODIC_MS = 60 * 60 * 1000  # stündlich nachsehen, ob 24 Stunden vergangen sind (App bleibt lange offen)
 AUTO_DOWNLOAD = True  # gefundenes Update bei eingeschalteter automatischer Prüfung gleich laden (Tests: aus)
 AUTO_INSTALL_RETRY_MS = 30_000  # automatische Installation wartet (Verarbeitung, ungespeichert): erneut versuchen
+AUTO_INSTALL_START_MS = 2_000  # … oder bis die App fertig gestartet ist und alle PDFs geöffnet sind (zählt nicht als Versuch)
 AUTO_INSTALL_TRIES = 20  # höchstens so oft je Sitzung – sonst beim nächsten Start (das Update ist dann schon geladen)
 
 BETA_TITLE = "Beta-Versionen verwenden?"
@@ -160,6 +161,7 @@ class UpdatesController(Observable):
         self._install_wanted = False  # »Jetzt installieren« vor dem Download: nach dem Laden gleich installieren
         self._auto_wanted = False  # automatisch gefunden und geladen: ohne Klick installieren
         self._auto_tries = 0
+        self._auto_installing = False  # die laufende Installation kam ohne Klick: nach dem Neustart die PDFs wieder öffnen
         self.backup = None  # BackupController: Sicherung vor der Installation
         self.reader = None  # ReaderController: ungespeicherte Dokumente, PDFs nach dem Neustart wieder öffnen
         self.set_quietly("channel", Channel.from_config(cfg.get("update_kanal")).value)
@@ -350,6 +352,7 @@ class UpdatesController(Observable):
         return list(self.app.running_work())
 
     def _block_for_work(self, work: list[str]) -> None:
+        self._auto_installing = False
         self.workHint = f"{WORK_RUNNING} ({', '.join(work)})" if work else WORK_RUNNING
         self.app.set_status(self.workHint, "warning")
         self._sync()
@@ -357,6 +360,13 @@ class UpdatesController(Observable):
     @Slot()
     def installNow(self) -> None:  # noqa: N802
         """»Jetzt installieren«: noch nicht geladen → laden und prüfen, danach gleich installieren."""
+        # Der Klick ersetzt eine wartende automatische Installation (sonst liefe sie während der Sicherung ein zweites Mal)
+        self._auto_wanted = False
+        self._auto_timer.stop()
+        self._install(automatic=False)
+
+    def _install(self, automatic: bool) -> None:
+        self._auto_installing = automatic
         if self.service.state is not S.READY:
             if self.canDownload:
                 self._install_wanted = True
@@ -390,6 +400,12 @@ class UpdatesController(Observable):
         noch einmal (höchstens ``AUTO_INSTALL_TRIES``-mal, danach beim nächsten Start)."""
         if not (self._auto_wanted and self.autoInstall and self.automatic) or self.service.state is not S.READY or self.app.closing:
             return
+        reader = self.reader
+        if not self.app.ready or (reader is not None and reader.still_opening()):
+            # Ein schon geladenes Update ist beim Start sofort bereit: erst fertig starten und die PDFs öffnen (auch eine
+            # per Doppelklick übergebene), sonst gingen sie beim Beenden für das Setup verloren
+            self._auto_timer.start(AUTO_INSTALL_START_MS)
+            return
         unsaved = self.reader.unsaved() if self.reader is not None else []
         work = self._running_work()
         if unsaved or work:
@@ -403,9 +419,7 @@ class UpdatesController(Observable):
             return
         self._auto_wanted = False
         get_log(INSTALLER).info("Automatische Installation von %s", self.offerTitle)
-        if self.reader is not None:
-            self.reader.restore_after_update = True  # nach dem Neustart die PDFs wieder öffnen
-        self.installNow()
+        self._install(automatic=True)
 
     def _launch(self, path, digest: str) -> None:
         """Setup geprüft: Hilfsprozess starten, dann die App beenden (das Setup startet danach)."""
@@ -421,8 +435,12 @@ class UpdatesController(Observable):
             self.service.install_failed(str(exc))
             return
         get_log(INSTALLER).info("Installation von %s: PDF Tool wird beendet, danach startet das Setup", path.name)
+        if self.reader is not None and self._auto_installing:
+            # erst jetzt, unmittelbar vor dem Beenden: Scheitert die Installation vorher, bleibt die Einstellung maßgeblich
+            self.reader.restore_after_update = True
         if self._quit_app():
             return
+        self._auto_installing = False
         if self.reader is not None:
             self.reader.restore_after_update = False
         # Beenden wurde abgelehnt (z. B. Rückfrage eines Werkzeugs): kein Setup, das Update bleibt bereit
@@ -471,6 +489,7 @@ class UpdatesController(Observable):
             self._fetched = str(offer.version)  # einmal je Version: nach »Abbrechen« lädt nichts von selbst neu
             if service.download():
                 self._auto_wanted = self.autoInstall  # fertig geladen: ohne Klick installieren
+                self._auto_tries = 0  # eine neue Version bekommt wieder alle Versuche
                 return  # der Download meldet sich mit seinem eigenen Zustand
         self.state = state.value
         self.lastCheck = when_text(service.last_check)

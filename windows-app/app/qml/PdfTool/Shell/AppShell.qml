@@ -148,9 +148,10 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["app.settings"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
     Shortcut { sequences: Shortcuts.keys["app.reader"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
     Shortcut { sequences: Shortcuts.keys["app.actions"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(6) }
-    // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument)
-    readonly property string currentTab: App.currentPage === "settings" ? "settings" : App.currentTool
-    Shortcut { sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(shell.currentTab) >= 0; onActivated: App.closeTab(shell.currentTab) }
+    // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument); die Einstellungen (ohne eigenen Tab)
+    // schließt Strg+W zurück zur Seite davor
+    Shortcut { sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(App.currentTool) >= 0; onActivated: App.closeTab(App.currentTool) }
+    Shortcut { objectName: "closeSettingsShortcut"; sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage === "settings"; onActivated: App.leaveSettings() }
     // Zuletzt geschlossenes Dokument wieder öffnen – auf jeder Seite, wie im Browser
     Shortcut { objectName: "reopenShortcut"; sequences: Shortcuts.keys["app.reopen"] || []; enabled: !Dialogs.open && Reader.canReopen; onActivated: Reader.reopenClosed() }
 }

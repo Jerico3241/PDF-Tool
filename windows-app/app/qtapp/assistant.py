@@ -38,7 +38,7 @@ HF_SUFFIXES = (".hf.co", ".huggingface.co")  # Speicher von Hugging Face (Weiter
 # Einträge des Gesprächs: question, answer, error oder note; ``rich`` ist die Antwort zum Anzeigen (siehe
 # ``assistant.text.rich``), ``pages`` die genannten Seiten (1-basiert), ``sources`` bei mehreren PDFs die genannten
 # Stellen ({label, file, page})
-ENTRY_ROLES = ("key", "kind", "text", "rich", "pending", "note", "pages", "sources")
+ENTRY_ROLES = ("key", "kind", "text", "rich", "pending", "note", "pages", "sources", "own")
 LIBRARY = "__mehrere__"  # Gespräch über mehrere PDFs (statt eines Dokument-Tabs)
 
 
@@ -403,7 +403,7 @@ class AssistantController(Observable):
     def _push(self, ident: str, entry: dict) -> int:
         conversation = self._conversations.setdefault(ident, [])
         self._serial += 1
-        conversation.append({"key": f"e{self._serial}", "rich": "", "pending": False, "note": "", "pages": [], "sources": [], **entry})
+        conversation.append({"key": f"e{self._serial}", "rich": "", "pending": False, "note": "", "pages": [], "sources": [], "own": False, **entry})
         self._publish(ident)
         return len(conversation) - 1
 
@@ -447,7 +447,7 @@ class AssistantController(Observable):
         if model is None:
             return
         ident = doc.ident
-        self._push(ident, {"kind": "question", "text": question if kind == "question" else "Dokument zusammenfassen"})
+        self._push(ident, {"kind": "question", "text": question if kind == "question" else "Dokument zusammenfassen", "own": kind == "question"})
         index = self._push(ident, {"kind": "answer", "text": "", "pending": True, "note": "Dokument wird gelesen …"})
         self.busy = True
         self._answer_owner = ident
@@ -689,7 +689,7 @@ class AssistantController(Observable):
         model = self._can_answer()
         if model is None or self._library is None or self._library_index is None:
             return
-        self._push(LIBRARY, {"kind": "question", "text": question})
+        self._push(LIBRARY, {"kind": "question", "text": question, "own": True})
         index = self._push(LIBRARY, {"kind": "answer", "text": "", "pending": True, "note": "Passende Stellen werden gesucht …"})
         self.busy = True
         self._answer_owner = LIBRARY
@@ -765,8 +765,9 @@ class AssistantController(Observable):
         if model is None or self._document() is not doc:
             return
         ident = doc.ident
-        pages_text = f"Seite {first + 1}" if first == last else f"Seiten {first + 1}–{last + 1}"
-        self._push(ident, {"kind": "question", "text": f"{pages_text} ins {LANGUAGES[language][1]} übersetzen"})
+        name = LANGUAGES[language][1]
+        asked = f"Seite {first + 1} ins {name} übersetzen" if first == last else f"Seiten {first + 1}–{last + 1} ins {name} übersetzen"
+        self._push(ident, {"kind": "question", "text": asked})
         index = self._push(ident, {"kind": "answer", "text": "", "pending": True, "note": "Dokument wird gelesen …"})
         self.busy = True
         self._answer_owner = ident
@@ -830,9 +831,10 @@ class AssistantController(Observable):
             path = result["path"]
             import os
 
-            text = f"Übersetzung ins {LANGUAGES[language][1]} gespeichert: **{os.path.basename(path)}** ({result['pages']} {'Seite' if result['pages'] == 1 else 'Seiten'})."
+            count = "1 Seite" if result["pages"] == 1 else f"{result['pages']} Seiten"
+            text = f"Übersetzung ins {LANGUAGES[language][1]} gespeichert: **{os.path.basename(path)}** ({count})."
             if result["empty"]:
-                text += f" {result['empty']} {'Seite' if result['empty'] == 1 else 'Seiten'} ohne Text blieben leer."
+                text += " 1 Seite ohne Text blieb leer." if result["empty"] == 1 else f" {result['empty']} Seiten ohne Text blieben leer."
             self._finish(ident, index, text=text, plain=True)
             if self.reader is not None:
                 self.reader.open_paths([path])

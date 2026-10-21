@@ -521,6 +521,89 @@ def test_help_menu_replaces_the_app_menu(app) -> None:
     assert not app.messages()
 
 
+def test_help_menu_opens_in_place_under_the_button(app) -> None:
+    """Das Hilfe-Menü liegt rechtsbündig unter »?« und bleibt beim Einblenden dort – es schob sich in Beta 7 erst nach
+    rechts und dann zurück nach links."""
+    import time
+
+    app.settings.setProfile("full")  # mit Animationen
+    button = app.item("appHelpButton")
+    menu = app.item("helpMenu")
+    surface = menu.property("contentItem").parentItem()  # Fläche des Menüs (mit Skalierung beim Einblenden)
+    rechts = button.mapToScene(QPointF(button.width(), 0)).x()
+    try:
+        QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
+        kanten = []
+        ende = time.monotonic() + 0.5
+        while time.monotonic() < ende:
+            pump(0.01)
+            if menu.property("visible"):
+                kanten.append(surface.mapToScene(QPointF(surface.width(), 0)).x())
+        assert menu.property("opened") is True and kanten
+        assert max(kanten) - min(kanten) < 1.5, kanten  # weder nach rechts noch nach links gewandert
+        assert abs(kanten[-1] - rechts) < 1.5
+    finally:
+        menu.close()
+        pump(0.3)
+        app.settings.setProfile("full")
+    assert not app.messages()
+
+
+def _press(app, item, hold: float = 0.15) -> None:
+    """Klick wie mit der Maus: drücken, kurz halten, loslassen."""
+    point = item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint()
+    QTest.mousePress(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    pump(hold)
+    QTest.mouseRelease(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    pump(0.5)
+
+
+def test_second_click_on_help_closes_the_menu(app) -> None:
+    """Der Druck auf »?« schloss das offene Menü, das Loslassen öffnete es wieder (bis 4.0 Beta 7)."""
+    button, menu = app.item("appHelpButton"), app.item("helpMenu")
+    _press(app, button)
+    assert menu.property("opened") is True and button.property("checked")
+    _press(app, button)
+    assert menu.property("visible") is False and not button.property("checked")
+
+
+def test_leaving_the_settings_with_ctrl_w_or_the_gear(app) -> None:
+    """Die Einstellungen haben seit Beta 7 keinen Tab: Strg+W und ein Klick auf das markierte Zahnrad führen zurück."""
+    a = app.app
+    a.openTool(REPAIR.key)
+    pump(0.3)
+    app.navigate("settings", 0.3)
+    QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+    pump(0.3)
+    assert a.currentPage == "repair" and a.openTabs == ["repair"]
+    app.navigate("settings", 0.3)
+    _press(app, app.item("appSettingsButton"))
+    assert a.currentPage == "repair"
+    # Seite davor gibt es nicht mehr: zum Start
+    app.navigate("settings", 0.3)
+    a.closeTab(REPAIR.key)
+    QTest.keyClick(app.window, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+    pump(0.3)
+    assert a.currentPage == "home"
+
+
+def test_key_names_follow_the_language(ui_app, monkeypatch) -> None:
+    """Auf Englisch stand im Hilfe-Menü und in Kurzinfos »Strg+F1« statt »Ctrl+F1«."""
+    import i18n
+
+    monkeypatch.delenv(i18n.FORCE_VARIABLE, raising=False)
+    shortcuts = ui_app.runtime.shortcuts
+    assert shortcuts.labels["app.shortcuts"] == "Strg+F1"
+    try:
+        ui_app.runtime.language.setChoice("en")
+        pump(0.3)
+        assert shortcuts.labels["app.shortcuts"] == "Ctrl+F1" and ui_app.item("menuShortcuts").property("hint") == "Ctrl+F1"
+    finally:
+        ui_app.runtime.language.setChoice("de")
+        pump(0.3)
+    assert shortcuts.labels["app.shortcuts"] == "Strg+F1"
+
+
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)

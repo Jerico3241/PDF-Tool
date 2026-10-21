@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.7
+Version 4.0.0-beta.8
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.7.exe
+PDF-Tool-Setup-4.0.0-beta.8.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -48,6 +48,21 @@ qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
+
+Neu in Version 4.0 Beta 8 – Fehler behoben
+-------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Das Hilfe-Menü „?“ springt beim Öffnen nicht mehr hin und her und
+  schließt sich beim zweiten Klick.
+- Strg+W und das Zahnrad schließen die Einstellungen wieder.
+- Digitale Signatur: manche gültige Signaturen galten als beschädigt.
+- PDF in Excel: Nummern mit führender Null oder „+“ bleiben Text,
+  Tausenderpunkte nur, wo das PDF welche hatte, Text mit „=“ am Anfang
+  wird keine Formel.
+- Englische Oberfläche: „Ctrl“ statt „Strg“, Meldungen vollständig
+  übersetzt, eigene Fragen an den KI-Assistenten bleiben unverändert.
+- Automatische Updates warten, bis PDF Tool fertig gestartet ist und alle
+  PDFs offen sind.
 
 Neu in Version 4.0 Beta 7 – Updates von selbst, aufgeräumte Leiste
 -------------------------------------------------------------------
@@ -541,6 +556,9 @@ Installation. Ihre Daten bleiben erhalten.
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
 einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.7 auf 4.0.0-beta.8 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent – oder von selbst beim Start.
 
 Update von PDF Tool 4.0.0-beta.6 auf 4.0.0-beta.7 (Kanal „Beta“): mit einem
 Klick, ohne Setup-Assistent.
