@@ -465,8 +465,15 @@ Item {
         parent: helpButton
         x: helpButton.width - width
         y: helpButton.height + 4
-        transformOrigin: Item.TopRight
         closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        // Nur einblenden und leicht herabgleiten: Das Wachsen von 95 auf 100 % zog die linke Kante sichtbar nach links,
+        // das Menü wirkte, als springe es erst nach rechts und dann nach links (bis 4.0 Beta 8).
+        enter: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.menu; easing.type: Motion.decelerate }
+                NumberAnimation { property: "y"; from: helpButton.height + (Motion.moves ? 0 : 4); to: helpButton.height + 4; duration: Motion.menu; easing.type: Motion.decelerate }
+            }
+        }
         PMenuItem { objectName: "menuHelp"; text: I18n.tr("Kurzanleitung", I18n.revision); hint: I18n.tr(bar.keyText("app.help"), I18n.revision); iconName: "question_circle"; onTriggered: helpMenu.afterClose = function() { App.showHelp() } }
         PMenuItem { objectName: "menuShortcuts"; text: I18n.tr("Tastenkürzel", I18n.revision); hint: I18n.tr(bar.keyText("app.shortcuts"), I18n.revision); iconName: "keyboard"; onTriggered: helpMenu.afterClose = function() { Shortcuts.showOverview() } }
         T.MenuSeparator {
