@@ -142,8 +142,7 @@ class SettingsController(Observable):
             return
         self.theme.setMode(mode)
         self.app.persist()
-        labels = {"system": "wie Windows", "light": "hell", "dark": "dunkel"}
-        self.app.set_status(f"App-Design: {labels.get(mode, mode)}", "success")
+        self.app.set_status(f"App-Design: {THEME_LABELS[mode]}", "success")
 
     @Slot(str)
     def setAccent(self, value: str) -> None:  # noqa: N802

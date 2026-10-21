@@ -556,7 +556,12 @@ class ReaderController(Observable):
                 self.splitKey = existing.ident
             return
         self._split_pending = self._current is not None
-        self.open_paths([str(path)])
+
+        def opened(controller: DocumentController | None) -> None:
+            if controller is None:
+                self._split_pending = False  # nicht geöffnet (beschädigt, Passwort abgebrochen): kein späterer Tab rückt daneben
+
+        self.open_paths([str(path)], then=opened)
 
     # Vergleichen ----------------------------------------------------------------------------------------------
     def compare_with(self, newer: DocumentController) -> None:
@@ -577,7 +582,13 @@ class ReaderController(Observable):
             self.start_compare(existing, newer)
             return
         self._compare_pending = newer.ident
-        self.open_paths([str(path)])
+        ident = newer.ident
+
+        def opened(controller: DocumentController | None) -> None:
+            if controller is None and self._compare_pending == ident:
+                self._compare_pending = ""  # nicht geöffnet: sonst startet ein späterer Tabwechsel den Vergleich
+
+        self.open_paths([str(path)], then=opened)
 
     def start_compare(self, older: DocumentController, newer: DocumentController) -> None:
         self.end_compare()
@@ -1834,6 +1845,9 @@ class ReaderTool:
 
     def release(self) -> bool:
         return self.controller.release_documents()
+
+    def holds_documents(self) -> bool:
+        return bool(self.controller._docs)  # noqa: SLF001
 
     def shown(self) -> None:
         self.controller.window_shown()

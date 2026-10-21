@@ -106,13 +106,14 @@ _ENGLISH_NAMES = {
 }
 
 
-def display(sequence: str) -> str:
-    """»Ctrl+Shift+S« → »Strg+Umschalt+S« (englische Oberfläche: »Ctrl+Shift+S«), »Ctrl++« → »Strg++«."""
+def display(sequence: str, german: bool = False) -> str:
+    """»Ctrl+Shift+S« → »Strg+Umschalt+S« (englische Oberfläche: »Ctrl+Shift+S«), »Ctrl++« → »Strg++«.
+    ``german``: immer die deutschen Namen (Texte, die erst danach übersetzt werden)."""
     if not sequence:
         return ""
     if sequence == "+":
         return "+"
-    names = _ENGLISH_NAMES if i18n.language() == "en" else _NAMES
+    names = _ENGLISH_NAMES if i18n.language() == "en" and not german else _NAMES
     parts = sequence[:-2].split("+") + ["+"] if sequence.endswith("++") else sequence.split("+")
     return "+".join(names.get(part, part) for part in parts)
 
@@ -281,10 +282,13 @@ class ShortcutsController(Observable):
     def localize(self, text: str) -> str:
         """Statuszeile (»Strg+O Öffnen   ·   Strg+F Suchen«): Standardkürzel durch die eigenen ersetzen; Abschnitte
         eines Befehls ohne Kürzel entfallen."""
+        # Die Hinweise sind deutsch geschrieben (»Strg+5«) und werden erst danach übersetzt: beide Seiten deutsch, sonst
+        # fand die englische Oberfläche kein Kürzel und zeigte die alten Standardkürzel.
         changed = {}
         for command in COMMANDS:
-            default = display(command.defaults[0]) if command.defaults else ""
-            current = self.labels.get(command.key, "")
+            default = display(command.defaults[0], german=True) if command.defaults else ""
+            sequences = self.keys.get(command.key) or []
+            current = display(sequences[0], german=True) if sequences else ""
             if default and current != default:
                 changed[default] = current
         if not changed:

@@ -523,7 +523,7 @@ def test_help_menu_replaces_the_app_menu(app) -> None:
 
 def test_help_menu_opens_in_place_under_the_button(app) -> None:
     """Das Hilfe-Menü liegt rechtsbündig unter »?« und bleibt beim Einblenden dort – es schob sich in Beta 7 erst nach
-    rechts und dann zurück nach links."""
+    rechts und dann zurück nach links; in Beta 8 wuchs es noch von 95 % nach links (die linke Kante wanderte)."""
     import time
 
     app.settings.setProfile("full")  # mit Animationen
@@ -538,10 +538,12 @@ def test_help_menu_opens_in_place_under_the_button(app) -> None:
         while time.monotonic() < ende:
             pump(0.01)
             if menu.property("visible"):
-                kanten.append(surface.mapToScene(QPointF(surface.width(), 0)).x())
+                kanten.append((surface.mapToScene(QPointF(0, 0)).x(), surface.mapToScene(QPointF(surface.width(), 0)).x()))
         assert menu.property("opened") is True and kanten
-        assert max(kanten) - min(kanten) < 1.5, kanten  # weder nach rechts noch nach links gewandert
-        assert abs(kanten[-1] - rechts) < 1.5
+        for seite in (0, 1):  # weder die linke noch die rechte Kante wandert
+            werte = [k[seite] for k in kanten]
+            assert max(werte) - min(werte) < 1.0, kanten
+        assert abs(kanten[-1][1] - rechts) < 1.5
     finally:
         menu.close()
         pump(0.3)

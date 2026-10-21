@@ -43,6 +43,7 @@ SCAN_CHECK_PAGES = 10  # nach dem Öffnen: so viele Seiten auf Scans ohne Text p
 ANNOTATION_ROLES = ("key", "page", "label", "contents", "author", "modified", "color", "subtype", "replyTo", "depth", "ours", "width", "fill", "opacity", "fontSize", "resizable")
 SEARCH_LIMIT = 5000
 LISTED_HITS = 500
+STALE = -1  # Suche: das Dokument wurde während der Suche geändert
 _ids = itertools.count(1)
 
 
@@ -247,7 +248,11 @@ class DocumentController(Observable):
                 self.objectSelection = []
             if self.tool == "objects":
                 self._load_visible_objects()
-            if self.searchCount:
+            if self.searchRunning:
+                # Seiten geändert, während die Suche lief: Reihenfolge und Treffer gelten nicht mehr – neu suchen
+                self.search(self.searchText, self.searchCase, self.searchWords)
+            elif self.searchCount or self._search_hits:
+                self._search_hits = []  # sonst springt F3 zu Treffern der alten Fassung
                 self.hitRects = {}
                 self.currentHit = {}
                 self.hits.clear()
@@ -721,17 +726,23 @@ class DocumentController(Observable):
         self.searchProgress = 0.0
         self.searchSummary = "Suche läuft …"
         total = self.pageCount
-        start_page = self.currentPage
+        start_page = min(max(0, self.currentPage), max(0, total - 1))
         order = list(range(start_page, total)) + list(range(0, start_page))
         engine = self.engine
         state = {"cancelled": False}
         self._search_state = state
 
         def work(session, first: int, found: int):
+            if first == 0:
+                state["revision"] = session.document.revision
             for done in range(first, len(order)):
                 if state["cancelled"] or session.closed:
                     return found, None
+                if session.document.revision != state["revision"]:
+                    return found, STALE  # in der Pause bearbeitet: die Seitenliste stimmt nicht mehr
                 page = order[done]
+                if page >= session.document.page_count:
+                    return found, STALE
                 hits = session.search_page(page, text, match_case, whole_word)
                 excerpts = []
                 if hits:
@@ -746,7 +757,10 @@ class DocumentController(Observable):
 
         def step(result) -> None:
             found, resume = result
-            if resume is None:
+            if resume == STALE:
+                if not state["cancelled"] and serial == self._search_serial:
+                    self.search(text, match_case, whole_word)  # dieselbe Suche in der neuen Fassung
+            elif resume is None:
                 self._search_finished(serial, found)
             elif not state["cancelled"] and serial == self._search_serial:
                 self._search_task = self.run(lambda session: work(session, resume, found), step, refresh=False, priority=BACKGROUND)
@@ -2275,8 +2289,8 @@ class DocumentController(Observable):
                 if result.get("comments"):
                     parts.append(f"{result['comments']} Kommentare")
                 note = f" {result['skipped']} ohne eigenes Erscheinungsbild blieben unverändert." if result.get("skipped") else ""
-                self.edited("Reduziert")
-                self.app.notify("reader", "success", ("Fest übernommen: " + " und ".join(parts) + "." if parts else "Es wurde nichts übernommen.") + note, title="Reduziert", auto_hide=10000)
+                self.edited("Reduzieren")
+                self.app.notify("reader", "success", ("Fest übernommen: " + " und ".join(parts) + "." if parts else "Es wurde nichts übernommen.") + note, title="Reduzieren", auto_hide=10000)
                 self.loadAnnotations()
                 self.loadFields()
 

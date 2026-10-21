@@ -1,5 +1,10 @@
 {
  "exact": {
+  "Beta 4.0 – neunter Teil: Fehler behoben. Das Hilfe-Menü öffnet ruhig, die Kundenakte stürzt beim Sortieren nicht mehr ab, bearbeitete Outlook-Anhänge bleiben erhalten, Seitenzahlen im Stapel lassen Kopf- und Fußzeilen stehen, verbundene Zellen und Datumszahlen in Excel werden richtig gelesen, die Suche läuft nach dem Löschen von Seiten weiter.": "Beta 4.0 – part nine: bug fixes. The help menu opens smoothly, the customer records no longer crash when sorting, edited Outlook attachments are kept, page numbers in batch keep headers and footers, merged cells and date numbers in Excel are read correctly, search continues after pages are deleted.",
+  "Aus Beta 8: Das Hilfe-Menü springt nicht mehr und schließt sich beim zweiten Klick auf »?«, Strg+W und das Zahnrad schließen die Einstellungen, Signaturen und PDF in Excel arbeiten genauer, die englische Oberfläche übersetzt vollständiger, automatische Updates warten, bis alle PDFs offen sind.": "From Beta 8: The help menu no longer jumps and closes on a second click on “?”, Ctrl+W and the gear close the settings, signatures and PDF to Excel are more accurate, the English interface is translated more completely, automatic updates wait until all PDFs are open.",
+  "App-Design": "App theme",
+  "oder": "or",
+  "Strg+Mausrad": "Ctrl+mouse wheel",
   "\n    aber alle allem allen aller alles als also am an ander andere anderem anderen anderer anderes auch auf aus bei bin\n    bis bist da damit dann das dass dein deine dem den der des dessen deshalb die dies diese diesem diesen dieser dieses\n    doch dort du durch ein eine einem einen einer eines er es etwas euch euer eure für gegen gewesen hab habe haben hat\n    hatte hätte hier hin hinter ich ihm ihn ihnen ihr ihre ihrem ihren ihrer im in ins ist ja jede jedem jeden jeder\n    jedes jetzt kann kein keine keinem keinen keiner können könnte machen man manche mein meine mich mir mit muss musste\n    nach nicht nichts noch nun nur ob oder ohne sehr sein seine seinem seinen seiner sich sie sind so solche soll sollte\n    sondern sonst über um und uns unser unsere unter viel vom von vor war waren warum was weg weil weiter welche welchem\n    welchen welcher welches wenn wer werde werden wie wieder will wir wird wirst wo wollen wollte würde würden zu zum\n    zur zwar zwischen\n    a an and are as at be by for from has have in is it its of on or that the this to was were will with\n    bitte gibt gilt steht stehen dokument pdf seite seiten\n    ": "\n    aber alle allem allen aller alles als also am an ander andere anderem anderen anderer anderes auch auf aus bei bin\n    bis bist da damit dann das dass dein deine dem den der des dessen deshalb die dies diese diesem diesen dieser dieses\n    doch dort du durch ein eine einem einen einer eines er es etwas euch euer eure für gegen gewesen hab habe haben hat\n    hatte hätte hier hin hinter ich ihm ihn ihnen ihr ihre ihrem ihren ihrer im in ins ist ja jede jedem jeden jeder\n    jedes jetzt kann kein keine keinem keinen keiner können könnte machen man manche mein meine mich mir mit muss musste\n    nach nicht nichts noch nun nur ob oder ohne sehr sein seine seinem seinen seiner sich sie sind so solche soll sollte\n    sondern sonst über um und uns unser unsere unter viel vom von vor war waren warum was weg weil weiter welche welchem\n    welchen welcher welches wenn wer werde werden wie wieder will wir wird wirst wo wollen wollte würde würden zu zum\n    zur zwar zwischen\n    a an and are as at be by for from has have in is it its of on or that the this to was were will with\n    bitte gibt gilt steht stehen dokument pdf seite seiten\n    ",
   "  ·  gültig bis ": "  ·  valid until ",
   " (Auswahl: Dreieck oder Rechtsklick)": " (selection: triangle or right-click)",
@@ -2254,6 +2259,7 @@
   "PTC": "PTC",
   "Page": "Page",
   "PageOrder": "PageOrder",
+  "PageNumbers": "PageNumbers",
   "Pages": "Pages",
   "Papierstau im Scanner. Bitte das Papier entfernen und erneut scannen.": "Paper jam in the scanner. Please remove the paper and scan again.",
   "Passende Stellen werden gesucht …": "Searching for matching places …",
@@ -2366,7 +2372,7 @@
   "RedactResult": "RedactResult",
   "Reduzieren": "Flatten",
   "Reduzieren (Formulare und Kommentare fest übernehmen) …": "Flatten (make forms and comments permanent) …",
-  "Reduziert": "Flattened",
+  "Reduziert": "Reduced",
   "Regel ": "Rule ",
   "Regel ausschalten": "Turn off rule",
   "Regel duplizieren": "Duplicate rule",
@@ -2572,6 +2578,7 @@
   "Seitenzahl – unten rechts": "Page number – bottom right",
   "Seitenzahlen": "Page numbers",
   "Seitenzahlen hinzufügen": "Add page numbers",
+  "Seitenzahlen entfernen": "Remove page numbers",
   "Seitenzahlen, Kopf- und Fußzeilen einfügen": "Insert page numbers, headers, and footers",
   "Senden nicht möglich": "Can't send",
   "Senden per E-Mail abgebrochen.": "Sending by email canceled.",
@@ -2982,7 +2989,7 @@
   "Vieleck": "Polygon",
   "Violett": "Purple",
   "Vollbild": "Full screen",
-  "Vollständig": "Complete",
+  "Vollständig": "Full",
   "Vom Scanner direkt in eine PDF – auf Wunsch durchsuchbar": "From the scanner straight into a PDF – searchable if desired",
   "Vor dem PDF-Anfang stehen fremde Daten (z. B. ein E-Mail- oder Webseiten-Kopf).": "There is foreign data before the start of the PDF (e.g. an email or web page header).",
   "Vor dem Senden speichern unter": "Save as before sending",
@@ -3444,6 +3451,8 @@
   "Page Up": "Page Up"
  },
  "patterns": {
+  "App-Design: {0}": "App theme: {0}",
+  "{0} war »{1}« zugeordnet – dort entfernt.": "{0} was assigned to “{1}” – removed there.",
   "  Gespeichert als {0}": "  Saved as {0}",
   "  Speichern fehlgeschlagen: {0}": "  Saving failed: {0}",
   " (Teil {0} von {1})": " (part {0} of {1})",

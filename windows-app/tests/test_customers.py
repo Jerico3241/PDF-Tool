@@ -154,6 +154,18 @@ def test_search_and_order(tmp_path: Path) -> None:
     assert store.ordered(ORDER_RECENT)[0].id == zeta.id
 
 
+def test_order_with_mixed_customer_numbers(tmp_path: Path) -> None:
+    """»10042« neben »K-77« ließ das Sortieren mit einem TypeError abbrechen – und weil die Sortierung gespeichert
+    wird, stürzte die App danach bei jedem Start ab (bis 4.0 Beta 8)."""
+    store = store_with(tmp_path)
+    zahl = store.create("Beispiel GmbH", "10042")
+    text = store.create("Beispiel GmbH", "K-77")
+    ohne = store.create("Ohne Nummer AG", "")
+    zwei = store.create("Zwei KG", "K-8")
+    assert [c.id for c in store.ordered(ORDER_NUMBER)] == [zahl.id, zwei.id, text.id, ohne.id]
+    assert [c.id for c in store.ordered(ORDER_COMPANY)] == [zahl.id, text.id, ohne.id, zwei.id]
+
+
 def test_merge_combines_without_losing_data(tmp_path: Path) -> None:
     store = store_with(tmp_path)
     a = store.create("Beispiel GmbH", "123456", ["rechnung@kunde.de"])

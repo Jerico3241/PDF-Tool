@@ -87,7 +87,7 @@ ColumnLayout {
                             elide: Text.ElideRight
                             textStyle: entry.waiting ? "body" : "bodyStrong"
                             tone: entry.waiting ? "accent" : (entry.modelData.keys.length ? "primary" : "tertiary")
-                            text: I18n.tr(entry.waiting ? "Tasten drücken … (Esc: abbrechen)" : (entry.modelData.keys.length ? entry.modelData.keys.join("  oder  ") : "ohne Kürzel"), I18n.revision)
+                            text: I18n.tr(entry.waiting ? "Tasten drücken … (Esc: abbrechen)" : (entry.modelData.keys.length ? entry.modelData.keys.join("  " + I18n.tr("oder", I18n.revision) + "  ") : "ohne Kürzel"), I18n.revision)
                         }
                         PIconButton {
                             objectName: "shortcutChange_" + entry.modelData.key

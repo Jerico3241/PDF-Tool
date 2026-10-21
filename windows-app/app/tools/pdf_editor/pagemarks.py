@@ -31,6 +31,7 @@ from .fonts import standard_font, standard_width
 HEADER = "Header"
 WATERMARK = "Watermark"
 KINDS = (HEADER, WATERMARK)
+PAGE_NUMBERS = "PageNumbers"  # /PDFToolRole einer Kopfzeile, die nur Seitenzahlen trägt (Stapel »Seitenzahlen«)
 FONTS = ("Helvetica", "Helvetica-Bold", "Times-Roman", "Times-Bold", "Courier")
 POSITIONS = ("tl", "tc", "tr", "bl", "bc", "br")
 FONT_PREFIX = "/PTMarkF"
@@ -57,6 +58,7 @@ class HeaderFooter:
     bates_digits: int = 6
     bates_start: int = 1
     bates_suffix: str = ""
+    role: str = ""  # z. B. PAGE_NUMBERS: später gezielt ersetzbar, ohne andere Kopfzeilen anzufassen
 
 
 @dataclass
@@ -122,7 +124,7 @@ def add_header_footer(document: EditorDocument, history: History, spec: HeaderFo
                 u = spec.margin if align == "l" else (geo.width - width) / 2 if align == "c" else geo.width - spec.margin - width
                 parts.append(_text_ops(geo, font, spec.size, spec.color, text, u, v, 0.0))
             body = b"/Artifact <</Type /Pagination /Subtype /Header>> BDC\n" + b"\n".join(parts) + b"\nEMC"
-            _attach(document.pdf, page, body, HEADER, behind=False)
+            _attach(document.pdf, page, body, HEADER, behind=False, role=spec.role)
             result.pages += 1
     return result
 
@@ -165,16 +167,56 @@ def add_watermark(document: EditorDocument, history: History, spec: Watermark) -
 
 def remove_marks(document: EditorDocument, history: History, kinds: tuple[str, ...] = KINDS) -> int:
     """Markierungen von PDF Tool (gewählte Arten) entfernen; liefert die Zahl der Seiten."""
-    document.ensure_editable()
     wanted = {"/" + kind for kind in kinds}
-    affected = [index for index, page in enumerate(document.pdf.pages) if any(str(s.get("/PDFToolMark", "")) in wanted for s in _streams(page.obj))]
+    title = "Wasserzeichen entfernen" if kinds == (WATERMARK,) else "Kopf- und Fußzeile entfernen" if kinds == (HEADER,) else "Markierungen entfernen"
+    return _remove(document, history, lambda s: str(s.get("/PDFToolMark", "")) in wanted, title)
+
+
+def remove_page_numbers(document: EditorDocument, history: History, formats: tuple[str, ...] = ()) -> int:
+    """Nur früher hinzugefügte Seitenzahlen entfernen – andere Kopf-/Fußzeilen und Bates-Nummern bleiben.
+
+    Erkannt werden Ströme mit ``/PDFToolRole /PageNumbers`` und (ältere Versionen ohne Kennung) Kopfzeilen-Ströme,
+    deren einziger Text eine ausgefüllte Vorlage aus ``formats`` ist. Im Zweifel bleibt eine Markierung stehen."""
+    patterns = [re.compile(re.sub(r"\\\{seiten?\\\}", r"\\d+", re.escape(text)) + r"\Z", re.IGNORECASE) for text in formats]
+
+    def match(stream: pikepdf.Stream) -> bool:
+        if str(stream.get("/PDFToolMark", "")) != "/" + HEADER:
+            return False
+        role = str(stream.get("/PDFToolRole", ""))
+        if role:
+            return role == "/" + PAGE_NUMBERS
+        texts = _texts(stream)
+        return texts is not None and len(texts) == 1 and any(p.match(texts[0]) for p in patterns)
+
+    return _remove(document, history, match, "Seitenzahlen entfernen")
+
+
+def _texts(stream: pikepdf.Stream) -> list[str] | None:
+    """Texte der ``Tj``-Operatoren eines Stroms; ``None`` bei anderen Textoperatoren oder Lesefehlern."""
+    texts = []
+    try:
+        for ins in pikepdf.parse_content_stream(stream):
+            if isinstance(ins, pikepdf.ContentStreamInlineImage):
+                continue
+            op = str(ins.operator)
+            if op == "Tj" and ins.operands:
+                texts.append(bytes(ins.operands[0]).decode("cp1252", "replace").strip())
+            elif op in ("TJ", "'", '"'):
+                return None
+    except (pikepdf.PdfError, ValueError, TypeError):
+        return None
+    return texts
+
+
+def _remove(document: EditorDocument, history: History, match, title: str) -> int:
+    document.ensure_editable()
+    affected = [index for index, page in enumerate(document.pdf.pages) if any(match(s) for s in _streams(page.obj))]
     if not affected:
         return 0
-    title = "Wasserzeichen entfernen" if kinds == (WATERMARK,) else "Kopf- und Fußzeile entfernen" if kinds == (HEADER,) else "Markierungen entfernen"
     with record(document, history, title, pages=tuple(affected)) as rec:
         for index in affected:
             page = rec.page(index)
-            remaining = [s for s in _streams(page) if str(s.get("/PDFToolMark", "")) not in wanted]
+            remaining = [s for s in _streams(page) if not match(s)]
             others = [s for s in page.get("/Contents") if not isinstance(s, pikepdf.Stream)] if isinstance(page.get("/Contents"), pikepdf.Array) else []
             page.Contents = pikepdf.Array(remaining + others)
             _prune(document.pdf, page)
@@ -271,12 +313,14 @@ def _streams(page: pikepdf.Object) -> list[pikepdf.Stream]:
     return []
 
 
-def _attach(pdf: pikepdf.Pdf, page: pikepdf.Object, body: bytes, kind: str, *, behind: bool) -> None:
+def _attach(pdf: pikepdf.Pdf, page: pikepdf.Object, body: bytes, kind: str, *, behind: bool, role: str = "") -> None:
     """Markierung als eigenen Strom anhängen (darüber) bzw. voranstellen (darunter) – beides im
     Ausgangszustand der Seite; ändert der bisherige Inhalt den Zustand dauerhaft, wird er einmal in
     ``q … Q`` gefasst (wie ``content.append_content``)."""
     stream = pdf.make_stream(b"q\n" + body + b"\nQ\n")
     stream["/PDFToolMark"] = Name("/" + kind)
+    if role:
+        stream["/PDFToolRole"] = Name("/" + role)
     existing = _streams(page)
     if behind or not existing:
         page.Contents = pikepdf.Array([stream, *existing])

@@ -2,7 +2,7 @@ PDF Tool für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0-beta.8
+Version 4.0.0-beta.9
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -34,7 +34,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0-beta.8.exe
+PDF-Tool-Setup-4.0.0-beta.9.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -48,6 +48,28 @@ qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
 Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
 nur, wenn Sie den Assistenten einrichten.
 
+
+Neu in Version 4.0 Beta 9 – Fehler behoben
+-------------------------------------------
+Beta-Version zum Testen (Kanal „Beta“).
+- Das Hilfe-Menü „?“ öffnet ruhig, ohne kurz zu springen.
+- Kundenakte: Sortieren nach Kundennummer mit Nummern wie „10042“ und
+  „K-77“ ließ PDF Tool abstürzen, danach bei jedem Start.
+- Bearbeitete und gespeicherte Outlook-Anhänge werden nicht mehr nach
+  7 Tagen gelöscht.
+- Stapel-Aktionen: „Seitenzahlen“ entfernt nur alte Seitenzahlen, nicht
+  mehr Kopf- und Fußzeilen oder Bates-Nummern.
+- Vertragsübersichten: verbundene Zellen (z. B. ein Status für mehrere
+  Verträge) gelten für jede Zeile, Datumswerte ohne Datumsformat werden
+  richtig gelesen, ein Dateiname-Muster mit unbekannten Klammern lässt
+  die PDF nicht mehr scheitern.
+- PDF Reader: Suchen nach dem Löschen von Seiten läuft zu Ende; ein
+  fehlgeschlagenes Öffnen zum Vergleichen oder Nebeneinander wirkt nicht
+  mehr später auf ein anderes Dokument; „Beenden“ im Infobereich fragt
+  nach ungespeicherten Änderungen im sichtbaren Fenster.
+- Englische Oberfläche: weitere Texte übersetzt, eigene Tastenkürzel in
+  der Statuszeile.
+- Aktualisierte Pakete (numpy, pikepdf, pypdf, pypdfium2 und weitere).
 
 Neu in Version 4.0 Beta 8 – Fehler behoben
 -------------------------------------------
@@ -556,6 +578,9 @@ Installation. Ihre Daten bleiben erhalten.
 Update von PDF Tool 4.0.0-beta.2 auf 4.0.0-beta.3 (Kanal „Beta“): mit einem
 Klick. Meldet PDF Tool dabei „ließ sich nicht im Hintergrund installieren“,
 einfach im angezeigten Setup die Installation abschließen – ab Beta 3 nicht mehr.
+
+Update von PDF Tool 4.0.0-beta.8 auf 4.0.0-beta.9 (Kanal „Beta“): mit einem
+Klick, ohne Setup-Assistent – oder von selbst beim Start.
 
 Update von PDF Tool 4.0.0-beta.7 auf 4.0.0-beta.8 (Kanal „Beta“): mit einem
 Klick, ohne Setup-Assistent – oder von selbst beim Start.

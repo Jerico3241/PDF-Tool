@@ -168,6 +168,41 @@ def test_unsaved_question_cancelled_keeps_the_window(resident, tmp_path: Path, m
     assert h.window.isVisible() and reader(h).tabs.count == 1 and reasons == ["Das Fenster wird geschlossen."]
 
 
+def test_quit_from_tray_asks_in_the_window_when_documents_stayed_open(resident, tmp_path: Path, monkeypatch) -> None:
+    """Fenster geschlossen, während gespeichert wurde: das Dokument bleibt offen. »Beenden« im Infobereich zeigt das
+    Fenster, bevor es nach den ungespeicherten Änderungen fragt."""
+    import time
+
+    from qtapp.reader.session import Session
+
+    h = resident
+    h.navigate("reader", 0.3)
+    doc = open_pdf(h, samples.standard_text(tmp_path / "Brief.pdf"))
+    doc.addNote(0, 100, 100, "Prüfen")
+    settle(h)
+    insert_blank = Session.insert_blank
+    monkeypatch.setattr(Session, "insert_blank", lambda self, index: (time.sleep(1.5), insert_blank(self, index))[1])
+    doc.insertBlankPage(1)
+    pump(0.1)
+    assert doc.busy
+    h.window.close()
+    pump(0.2)
+    assert not h.window.isVisible() and reader(h).tabs.count == 1  # laufende Arbeit: nichts wird abgebrochen
+    assert wait_until(lambda: not doc.busy, 10)
+    settle(h)
+    assert doc.dirty
+    asked: list[bool] = []
+
+    def ask(*args, **kwargs):
+        asked.append(h.window.isVisible())
+        return "secondary", {}  # nicht speichern
+
+    monkeypatch.setattr(h.app.dialogs, "ask", ask)
+    h.app.quit_app()
+    pump(0.2)
+    assert asked == [True] and h.app.closing and h.quits == [1]
+
+
 def test_quit_from_tray_ends_the_app(resident) -> None:
     h = resident
     h.window.close()
@@ -228,3 +263,28 @@ def test_outlook_attachments_are_copied_before_outlook_deletes_them(tmp_path, mo
     log = (tmp_path / "daten" / handoff.HANDOFF_LOG).read_text(encoding="utf-8")
     assert "Start mit Datei über Befehlszeile: Outlook" in log and log.count("Anhang gesichert") == 2
     assert "Rechnung" not in log and "Vertrag" not in log
+
+
+def test_old_attachment_copies_are_pruned_but_edited_ones_survive(tmp_path, monkeypatch):
+    # Nach Strg+S in der Kopie darf das Aufräumen nach 7 Tagen sie nicht löschen
+    import os
+    import time
+
+    import handoff
+
+    monkeypatch.setenv("UE_DATA_DIR", str(tmp_path / "daten"))
+    target = tmp_path / "Anhaenge"
+    copied = time.time() - 10 * 86400
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(copied))
+    untouched, edited = target / f"{stamp}-aaaaaa", target / f"{stamp}-bbbbbb"
+    for folder, changed in ((untouched, copied), (edited, copied + 86400)):
+        folder.mkdir(parents=True)
+        (folder / "Rechnung.pdf").write_bytes(b"%PDF-1.7\n%%EOF\n")
+        os.utime(folder / "Rechnung.pdf", (changed, changed))
+        os.utime(folder, (changed, changed))
+    unknown = target / "irgendwas"
+    unknown.mkdir()
+    os.utime(unknown, (copied, copied))
+    handoff._prune(target)  # noqa: SLF001
+    assert not untouched.exists()
+    assert (edited / "Rechnung.pdf").is_file() and unknown.is_dir()

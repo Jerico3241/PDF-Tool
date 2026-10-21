@@ -140,16 +140,39 @@ def secure_transient(argv: list[str], target: Path | None = None) -> list[str]:
 
 
 def _prune(base: Path) -> None:
-    """Gesicherte Anhänge nach ``ATTACHMENT_DAYS`` Tagen entfernen."""
+    """Gesicherte Anhänge nach ``ATTACHMENT_DAYS`` Tagen entfernen – aber nie einen Ordner, in dem eine Datei nach
+    dem Kopieren geändert wurde: Dort hat der Benutzer die Kopie bearbeitet und gespeichert."""
     import shutil
 
     limit = time.time() - ATTACHMENT_DAYS * 86400
     try:
         for folder in base.iterdir():
-            if folder.is_dir() and folder.stat().st_mtime < limit:
-                shutil.rmtree(folder, ignore_errors=True)
+            if not folder.is_dir() or folder.stat().st_mtime >= limit:
+                continue
+            copied = _copy_time(folder.name)
+            if copied is None or copied >= limit or _edited_since(folder, copied):
+                continue  # Zeitpunkt unbekannt oder bearbeitet: lieber behalten
+            shutil.rmtree(folder, ignore_errors=True)
     except OSError:
         pass
+
+
+COPY_GRACE = 300  # Sekunden: so lange nach dem Zeitstempel im Ordnernamen gilt eine Datei noch als unveränderte Kopie
+
+
+def _copy_time(name: str) -> float | None:
+    """Zeitpunkt der Kopie aus dem Ordnernamen (``JJJJMMTT-HHMMSS-…``, siehe ``secure_transient``)."""
+    try:
+        return time.mktime(time.strptime(name[:15], "%Y%m%d-%H%M%S"))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _edited_since(folder: Path, copied: float) -> bool:
+    try:
+        return any(item.stat().st_mtime > copied + COPY_GRACE for item in folder.rglob("*"))
+    except OSError:
+        return True  # nicht lesbar: nicht löschen
 
 
 def signal_started() -> None:

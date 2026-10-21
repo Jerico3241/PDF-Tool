@@ -644,8 +644,9 @@ class AppController(Observable):
                 self.quit_wanted = False
             return
         if not window.isVisible():
-            if not self.running_work():
-                # Versteckt sind alle Dokumente schon geschlossen – es gibt nichts zu fragen
+            # Versteckt sind die Dokumente meist schon geschlossen – außer das Fenster schloss, während gespeichert wurde
+            held = any(getattr(hooks, "holds_documents", lambda: False)() for hooks in self._tools.values())
+            if not self.running_work() and not held:
                 if not self.requestClose():
                     self.quit_wanted = False
                 return

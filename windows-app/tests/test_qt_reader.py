@@ -1174,6 +1174,27 @@ def test_j_save_while_search_runs(reader_app, tmp_path: Path, monkeypatch, no_lx
     assert save_error(h) is None and digest(path) != before
 
 
+def test_j_delete_pages_while_search_runs_searches_again(reader_app, tmp_path: Path, monkeypatch) -> None:
+    """Seiten gelöscht, während die Suche pausiert: sie sucht in der neuen Fassung neu (kein IndexError, keine
+    Treffer der alten Fassung, »Suche läuft« endet)."""
+    from qtapp.reader.session import Session
+
+    h = reader_app
+    doc = open_pdf(h, samples.big(tmp_path / "Suche.pdf", pages=400))
+    searched: list[int] = []
+    search_page = Session.search_page
+    monkeypatch.setattr(Session, "search_page", lambda self, page, *args: searched.append(page) or search_page(self, page, *args))
+    monkeypatch.setattr(h.app.dialogs, "confirm", lambda *args, **kwargs: True)
+    doc.search("SuchwortTreffer", False, False)
+    assert wait_until(lambda: len(searched) >= 3, 30) and doc.searchRunning
+    doc.deletePages(list(range(300, 400)))
+    assert wait_until(lambda: not doc.searchRunning, 120), doc.searchSummary
+    settle(h)
+    assert doc.pageCount == 300 and save_error(h) is None
+    assert doc.searchCount == 6 and doc.searchSummary == "6 Treffer"  # Seiten 8, 58 … 258
+    assert all(hit["page"] < 300 for hit in doc._search_hits)  # noqa: SLF001
+
+
 def test_k_repeated_ctrl_s_saves_once_without_races(reader_app, tmp_path: Path, monkeypatch, no_lxml) -> None:
     from qtapp import dialogs
     from tools.pdf_editor import save as save_engine
