@@ -1,5 +1,7 @@
 {
  "exact": {
+  "Beta 4.0 – neunter Teil: Fehler behoben. Das Hilfe-Menü öffnet ruhig, die Kundenakte stürzt beim Sortieren nicht mehr ab, bearbeitete Outlook-Anhänge bleiben erhalten, Seitenzahlen im Stapel lassen Kopf- und Fußzeilen stehen, verbundene Zellen und Datumszahlen in Excel werden richtig gelesen, die Suche läuft nach dem Löschen von Seiten weiter.": "Beta 4.0 – part nine: bug fixes. The help menu opens smoothly, the customer records no longer crash when sorting, edited Outlook attachments are kept, page numbers in batch keep headers and footers, merged cells and date numbers in Excel are read correctly, search continues after pages are deleted.",
+  "Aus Beta 8: Das Hilfe-Menü springt nicht mehr und schließt sich beim zweiten Klick auf »?«, Strg+W und das Zahnrad schließen die Einstellungen, Signaturen und PDF in Excel arbeiten genauer, die englische Oberfläche übersetzt vollständiger, automatische Updates warten, bis alle PDFs offen sind.": "From Beta 8: The help menu no longer jumps and closes on a second click on “?”, Ctrl+W and the gear close the settings, signatures and PDF to Excel are more accurate, the English interface is translated more completely, automatic updates wait until all PDFs are open.",
   "App-Design": "App theme",
   "oder": "or",
   "Strg+Mausrad": "Ctrl+mouse wheel",

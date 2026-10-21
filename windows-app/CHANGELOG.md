@@ -2,6 +2,23 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0-beta.9
+
+Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.9.md).
+
+- Hilfe-Menü: eigene `enter`-Transition (Deckkraft und `y`) statt Skalierung – die linke Kante wanderte.
+- Kundenakte: `_natural` mit typsicheren Schlüsseln (Zahl und Text verglichen sich, TypeError bei jedem Start).
+- Übergabe: `_prune` löscht keine Anhang-Ordner, deren Dateien nach dem Kopieren geändert wurden.
+- Stapel »Seitenzahlen«: eigene Rolle `PAGE_NUMBERS`, `remove_page_numbers` statt aller Kopf-/Fußzeilen.
+- Excel: verbundene Zellen werden aufgefüllt (`_fuelle_verbundene`), Seriennummern als Datum (`als_datum`),
+  Dateiname-Muster ersetzt nur bekannte Platzhalter (`_PLATZHALTER`).
+- Reader: Suche beginnt nach einer Änderung neu (Revision), `_compare_pending`/`_split_pending` werden bei
+  fehlgeschlagenem Öffnen zurückgesetzt, `quit_app` zeigt das Fenster, solange Dokumente offen sind.
+- i18n: »App-Design: {0}«, »oder«, Tastenhinweise der Statuszeile auch auf Englisch mit eigenen Kürzeln
+  (`localize` mit deutschen Namen), Reduzieren/Reduziert getrennt.
+- Laufzeitpakete (Dependabot #57): charset-normalizer 3.5.2, fonttools 4.67.0, numpy 2.5.4, pikepdf 10.17.0,
+  pypdf 6.21.1, pypdfium2 5.14.0, pytz 2026.5, tzdata 2026.5; Actions-Versionen aktualisiert (#35).
+
 # PDF Tool 4.0.0-beta.8
 
 Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.8.md).
