@@ -751,3 +751,47 @@ def test_mouse_wheel_moves_the_same_distance_for_every_notch(app) -> None:
         pump(0.01)
     pump(0.5)
     assert abs(flick.property("contentY") - end) < 1
+
+
+
+def _klicke(h, item) -> None:
+    QTest.mouseClick(h.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
+    pump(0.2)
+
+
+def test_start_page_kind_cards_and_recent_filter(ui_app, tmp_path: Path, monkeypatch) -> None:
+    """Novadesk-Startseite: je Dateiart eine Karte (Dateiauswahl nur dieser Art); »Zuletzt verwendet« zeigt das Symbol
+    der Dateiart und lässt sich nach Dateiart filtern (Tabellen mit CSV)."""
+    from qtapp import files
+
+    h = ui_app
+    h.window.resize(1280, 2000)  # alles ohne Scrollen sichtbar
+    pump(0.4)
+    gefragt = []
+    monkeypatch.setattr(files, "open_files", lambda title, directory, filters: gefragt.append((title, filters)) or [])
+    for art, titel in (("tabelle", "Tabelle öffnen"), ("text", "Text öffnen"), ("praesentation", "Präsentation öffnen"), ("pdf", "PDF öffnen")):
+        karte = h.item("kindCard_" + art)
+        _klicke(h, karte)
+        assert gefragt[-1] == (titel, files.OPEN_FILTERS[art])
+        assert karte.findChild(QObject, "kindIcon").property("source").toString().endswith("images/" + art + "-48.png")
+    assert h.app.currentPage == "home" and len(gefragt) == 4
+
+    namen = ("Vertrag.pdf", "Liste.xlsx", "Daten.csv", "Angebot.docx", "Bericht.pptx")
+    for name in reversed(namen):
+        (tmp_path / name).write_bytes(b"x")
+        h.runtime.reader.controller.remember_recent(str(tmp_path / name))
+    pump(0.4)
+    karte = h.item("homeRecent")
+
+    def zeilen() -> list[str]:
+        sichtbar = [k for k in _alle(karte) if k.objectName().startswith("homeRecent_") and k.isVisible() and k.height() > 0]
+        sichtbar.sort(key=lambda z: _szene(z)[1])
+        return [z.property("modelData")["name"] for z in sichtbar]
+
+    assert zeilen() == list(namen)
+    symbole = sorted(k.property("source").toString().rsplit("/", 1)[1] for k in _alle(karte) if k.objectName() == "homeRecentIcon")
+    assert symbole == sorted(["pdf-24.png", "tabelle-24.png", "csv-24.png", "text-24.png", "praesentation-24.png"])
+    for knopf, erwartet in (("tabelle", ["Liste.xlsx", "Daten.csv"]), ("text", ["Angebot.docx"]), ("praesentation", ["Bericht.pptx"]), ("pdf", ["Vertrag.pdf"]), ("alle", list(namen))):
+        _klicke(h, h.item("homeRecentKind_" + knopf))
+        assert zeilen() == erwartet, knopf
+    assert not h.messages()

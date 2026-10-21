@@ -161,7 +161,7 @@ def profile_dir() -> Path:
     """Eigenes LibreOffice-Profil von Novadesk (nicht das eines installierten LibreOffice)."""
     configured = os.environ.get(PROFILE_VARIABLE, "").strip()
     if configured:
-        return Path(configured)
+        return Path(configured).resolve()  # als URI muss der Pfad absolut sein
     base = os.environ.get("LOCALAPPDATA")
     root = Path(base) if base else Path.home() / ".cache"
     return root / PROFILE_FOLDER / "profil"
@@ -198,8 +198,9 @@ def _csv_filter(source: Path) -> list[str]:
     try:
         text, charset = sample.decode("utf-8"), 76  # RTL_TEXTENCODING_UTF8
     except UnicodeDecodeError as exc:
-        # abgeschnittenes Zeichen am Ende der Stichprobe zählt nicht
-        text, charset = (sample[:exc.start].decode("utf-8"), 76) if exc.start >= len(sample) - 3 else (sample.decode("cp1252", "replace"), 1)
+        # abgeschnittenes Zeichen am Ende der Stichprobe zählt nicht – nur wenn die Datei länger ist als die Stichprobe
+        cut = len(sample) == 64 * 1024 and exc.start >= len(sample) - 3
+        text, charset = (sample[:exc.start].decode("utf-8"), 76) if cut else (sample.decode("cp1252", "replace"), 1)
     line = next((row for row in text.splitlines() if row.strip()), "")
     separator = max((";", ",", "\t"), key=line.count) if line else ","
     return [f"--infilter=Text - txt - csv (StarCalc):{ord(separator)},34,{charset},1"]

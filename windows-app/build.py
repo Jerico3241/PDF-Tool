@@ -52,6 +52,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -139,6 +140,7 @@ AI = PAYLOAD / "ai"  # passt zu assistant/runtime.py (BUNDLED_DIR)
 LIBREOFFICE_VERSION = "26.2.6"
 LIBREOFFICE_MSI = f"LibreOffice_{LIBREOFFICE_VERSION}_Win_x86-64.msi"
 LIBREOFFICE_URL = f"https://download.documentfoundation.org/libreoffice/stable/{LIBREOFFICE_VERSION}/win/x86_64/{LIBREOFFICE_MSI}"
+LIBREOFFICE_ARCHIVE = "https://downloadarchive.documentfoundation.org/libreoffice/old/"  # ältere Versionen
 LIBREOFFICE_SHA256 = "f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660"
 OFFICE = PAYLOAD / "office"  # passt zu tools/pdf_editor/office.py (BUNDLED_DIR)
 # Das MSI enthält die Oberfläche in allen Sprachen. Ins Setup kommen nur Deutsch und Englisch (wie bei einer Installation
@@ -581,7 +583,7 @@ def prepare_office(target: Path, search: list[Path]) -> None:
     (``msiexec /a`` – nur auspacken, nichts installieren) und den Programmordner unverändert übernehmen. Die Laufzeit
     von Microsoft Visual C++ installiert das MSI sonst systemweit: Fehlt sie im Paket, kommt sie aus ``search`` (dieselben
     Dateien wie die von Python und PySide6) nach ``office\\program``. Danach eine Probe: eine Tabelle in PDF umwandeln."""
-    msi = download(LIBREOFFICE_URL, CACHE / LIBREOFFICE_MSI, LIBREOFFICE_SHA256)
+    msi = download_libreoffice()
     if sys.platform != "win32":
         fail("LibreOffice lässt sich nur unter Windows entpacken (msiexec /a).")
     unpacked = BUILD / "libreoffice"
@@ -613,6 +615,26 @@ def prepare_office(target: Path, search: list[Path]) -> None:
     log(f"LibreOffice {LIBREOFFICE_VERSION}: {count} Dateien ({size / 1e6:.0f} MB), Laufzeit ergänzt: {', '.join(path.name for path in added) or '-'}")
     annotate("notice", "LibreOffice im Setup", f"{LIBREOFFICE_VERSION}, {count} Dateien, {size / 1e6:.0f} MB")
     remove(unpacked)
+
+
+def download_libreoffice() -> Path:
+    """Das MSI von LibreOffice laden (Prüfsumme wie eingetragen). Unter ``/stable/`` liegen nur die aktuellen Versionen –
+    ist die eingetragene dort schon ersetzt, kommt dieselbe Datei aus dem Archiv (Ordner und Name dort mit vierteiliger
+    Versionsnummer, z. B. ``26.2.6.2``)."""
+    dest = CACHE / LIBREOFFICE_MSI
+    try:
+        return download(LIBREOFFICE_URL, dest, LIBREOFFICE_SHA256)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+    log(f"LibreOffice {LIBREOFFICE_VERSION} nicht mehr unter /stable/ – suche im Archiv")
+    with urllib.request.urlopen(LIBREOFFICE_ARCHIVE) as response:
+        index = response.read().decode("utf-8", "replace")
+    builds = sorted(set(re.findall(rf'href="({re.escape(LIBREOFFICE_VERSION)}\.\d+)/"', index)), key=lambda name: int(name.rsplit(".", 1)[1]))
+    if not builds:
+        fail(f"LibreOffice {LIBREOFFICE_VERSION} weder unter /stable/ noch im Archiv ({LIBREOFFICE_ARCHIVE}) gefunden")
+    build = builds[-1]
+    return download(f"{LIBREOFFICE_ARCHIVE}{build}/win/x86_64/LibreOffice_{build}_Win_x86-64.msi", dest, LIBREOFFICE_SHA256)
 
 
 def _office_language(name: str) -> str:
@@ -673,7 +695,11 @@ def probe_office(program: Path) -> None:
     command = [str(program / "soffice.com"), "--headless", "--invisible", "--nologo", "--norestore", "--nodefault", "--nolockcheck",
                f"-env:UserInstallation={(work / 'profil').as_uri()}", "--infilter=Text - txt - csv (StarCalc):59,34,76,1",
                "--convert-to", "pdf", "--outdir", str(work), str(source)]
-    result = subprocess.run(command, capture_output=True, timeout=600, check=False)
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=600, check=False)
+    except subprocess.TimeoutExpired:
+        subprocess.run(["taskkill", "/F", "/T", "/IM", "soffice.bin"], capture_output=True, check=False)
+        fail("Probe fehlgeschlagen: LibreOffice hat die Tabelle nicht innerhalb von 10 Minuten umgewandelt.")
     pdf = work / "probe.pdf"
     if result.returncode != 0 or not pdf.is_file() or not pdf.read_bytes().startswith(b"%PDF"):
         fail("Probe fehlgeschlagen: LibreOffice hat keine PDF erstellt "

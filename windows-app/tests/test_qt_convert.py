@@ -77,9 +77,14 @@ def test_office_file_becomes_pdf(ui_app, tmp_path: Path, monkeypatch) -> None:
     slides.write_bytes(b"PK")
     assert hooks.accepts([str(slides)], "") and not hooks.accepts([str(tmp_path / "Liste.xlsx")], "")
     assert hooks.accepts([str(tmp_path / "Liste.xlsx")], "reader")
-    monkeypatch.setattr(files, "RESPONSES", [str(tmp_path / "Folien.pdf")])
+    # Gezogene Office-Dateien öffnen sich seit Novadesk 5.0 als Ansicht im eigenen Tab: ohne Dateiauswahl, ohne PDF
+    # neben der Datei; der Tab zeigt den Originalnamen
+    monkeypatch.setattr(files, "RESPONSES", [])
     hooks.drop([str(slides)], "reader")
-    assert wait_until(lambda: (tmp_path / "Folien.pdf").is_file() and Path(reader(h).current.path or "").name == "Folien.pdf", 30)
+    assert wait_until(lambda: reader(h).current is not None and reader(h).current.sourcePath == str(slides), 30)
+    settle(h)
+    assert reader(h).current.path == "" and reader(h).current.pageCount == 2 and not (tmp_path / "Folien.pdf").exists()
+    assert calls[-1] == ("powerpoint", "Folien.pptx")
     # Ohne Excel: klare Meldung, keine Dateiauswahl
     sheet = tmp_path / "Liste.xlsx"
     sheet.write_bytes(b"PK")
@@ -87,3 +92,62 @@ def test_office_file_becomes_pdf(ui_app, tmp_path: Path, monkeypatch) -> None:
     reader(h).office_to_pdf(str(sheet))
     notice = h.app.notices.get("reader")
     assert notice.title == "Office in PDF" and "Microsoft Excel" in notice.message and not (tmp_path / "Liste.pdf").exists()
+
+
+def test_office_view_tab_restore_and_failures(ui_app, tmp_path: Path, monkeypatch) -> None:
+    """Ansicht einer Office-Datei (seit 5.0): eigener Tab mit Originalname und Dateiart, umgewandelt außerhalb der
+    PDF-Engine; ein Fehler meldet sich als Office-Fehler (kein »PDF reparieren«); »Im Standardprogramm öffnen« zeigt
+    »Öffnen mit«, wenn Novadesk selbst das Standardprogramm ist."""
+    import winsys
+    from tools.pdf_editor import office
+
+    h = ui_app
+    h.app.dialogs.shutdown()
+    threads = []
+
+    def fake(kind, source, target):
+        import threading
+
+        threads.append(threading.current_thread().name)
+        if source.name.startswith("Kaputt"):
+            raise office.OfficeError("LibreOffice konnte die Datei nicht umwandeln (Code 1). Ist sie beschädigt oder mit einem Kennwort geschützt?")
+        samples.standard_text(target, pages=1)
+
+    monkeypatch.setattr(office, "TEST_BACKEND", fake)
+    monkeypatch.setattr(office, "TEST_INSTALLED", {"libreoffice"})
+    letter, sheet = tmp_path / "Brief.docx", tmp_path / "Liste.ods"
+    for path in (letter, sheet):
+        path.write_bytes(b"PK")
+    controller = reader(h)
+    controller.open_paths([str(letter), str(sheet)])
+    assert wait_until(lambda: len(controller.tabs.items()) == 2, 30)
+    settle(h)
+    assert [(t["name"], t["kind"], t["path"]) for t in controller.tabs.items()] == [("Brief.docx", "text", ""), ("Liste.ods", "tabelle", "")]
+    assert threads and all(name == "pdftool-arbeit" for name in threads)  # nicht im Thread der PDF-Engine
+    assert controller.current.sourcePath == str(sheet)
+
+    # Zuletzt verwendet und Sitzung merken den Originalpfad; der aktive Tab ist die Tabelle
+    assert [item["path"] for item in controller.recent[:2]] == [str(sheet), str(letter)]
+    snapshot = controller._session_snapshot()
+    assert snapshot["aktiv"] == str(sheet) and [d["pfad"] for d in snapshot["dokumente"]] == [str(letter), str(sheet)]
+
+    # Novadesk ist Standardprogramm für .ods: »Öffnen mit« statt wieder dieser Tab
+    geoeffnet = []
+    monkeypatch.setattr(winsys, "default_program", lambda path: r"C:\Users\x\AppData\Local\PDF-Tool\PDF-Tool.exe")
+    monkeypatch.setattr(winsys, "open_with", lambda path: geoeffnet.append(("mit", str(path))))
+    monkeypatch.setattr(controller, "openExternal", lambda path: geoeffnet.append(("standard", str(path))))
+    controller.officeAction("external")
+    monkeypatch.setattr(winsys, "default_program", lambda path: r"C:\Program Files\LibreOffice\program\scalc.exe")
+    controller.officeAction("external")
+    assert geoeffnet == [("mit", str(sheet)), ("standard", str(sheet))]
+
+    # Umwandeln scheitert: klare Meldung, kein Tab, keine Frage nach »PDF reparieren«
+    broken = tmp_path / "Kaputt.docx"
+    broken.write_bytes(b"PK")
+    asked = []
+    monkeypatch.setattr(controller, "_offer_repair", lambda path: asked.append(path))
+    controller.open_paths([str(broken)])
+    assert wait_until(lambda: controller.opening == 0 and h.app.notices.get("reader") is not None, 30)
+    notice = h.app.notices.get("reader")
+    assert notice.title == "Office-Datei ansehen" and "beschädigt" in notice.message
+    assert len(controller.tabs.items()) == 2 and asked == []

@@ -22,10 +22,12 @@ import stat
 import tempfile
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
+
+import winsys
 
 from tools.pdf_editor import compare as comparing
 from tools.pdf_editor import imagepdf, office, recovery, scan
@@ -337,13 +339,15 @@ class ReaderController(Observable):
             self.images_to_pdf(images)
             if not pdfs and not documents:
                 return
-        if documents and not office.installed(office.kind_of(documents[0]) or "word"):
-            self.app.notify("reader", "warning", office.missing_text(office.kind_of(documents[0]) or "word"), title="Office-Datei ansehen")
-            documents = []
+        missing = [p for p in documents if not office.installed(office.kind_of(p) or "word")]
+        if missing:
+            # Ohne LibreOffice nur mit Microsoft Office – je Art (Word, Excel, PowerPoint) einzeln geprüft
+            self.app.notify("reader", "warning", office.missing_text(office.kind_of(missing[0]) or "word"), title="Office-Datei ansehen")
+            documents = [p for p in documents if p not in missing]
         # Word, Excel, PowerPoint (seit 5.0): eine Ansicht als PDF in einem eigenen Tab – in der Reihenfolge der Auswahl
         pdfs = [p for p in paths if p in pdfs or p in documents]
         if not pdfs:
-            if not documents and not images:
+            if not documents and not images and not missing:
                 self.app.notify("reader", "warning", "Bitte eine PDF- oder Office-Datei wählen.", title="Nicht geöffnet")
             if then is not None:
                 then(None)
@@ -366,26 +370,58 @@ class ReaderController(Observable):
             self._open(path, None, then=then)
 
     def _open(self, path: str, password: str | None, recovered: recovery.SessionInfo | None = None, *,
-              then: Callable[[DocumentController | None], None] | None = None, background: bool = False) -> None:
+              then: Callable[[DocumentController | None], None] | None = None, background: bool = False,
+              converted: bytes | None = None) -> None:
         """Dokument im Arbeitsthread öffnen. ``then`` wie bei ``open_paths``. ``background`` (letzte Sitzung): als Tab
         dazu, ohne den aktiven Tab oder die Seite zu wechseln und ohne Rückfragen (Passwort, beschädigt) – was sich
         so nicht öffnen lässt, entfällt."""
+        viewing = recovered is None and office.kind_of(path) is not None
+        if viewing and converted is None:
+            # Office-Datei: erst in einem eigenen Thread umwandeln (LibreOffice braucht Sekunden) – die PDF-Engine
+            # rendert derweil die offenen Dokumente weiter; danach öffnet sie nur noch die fertige PDF
+            from .session import office_pdf
+
+            self.opening = self.opening + 1
+            self._opening_paths.append(path)
+            self.app.set_status(f"Wird zum Ansehen vorbereitet: {Path(path).name} …", "busy")
+
+            def converted_ok(data: bytes) -> None:
+                self.opening = max(0, self.opening - 1)
+                self._forget_opening(path)
+                self._open(path, None, then=then, background=background, converted=data)
+
+            def converted_failed(exc: BaseException, details: str) -> None:
+                self.opening = max(0, self.opening - 1)
+                self._forget_opening(path)
+                if then is not None:
+                    then(None)
+                if background:
+                    _log().info("Letzte Sitzung: eine Office-Datei ließ sich nicht umwandeln (%s)", type(exc).__name__)
+                else:
+                    if not isinstance(exc, (EditorError, OSError)):
+                        self.app.report_exception(details)
+                    message = str(exc) if isinstance(exc, EditorError) else f"»{Path(path).name}« ließ sich nicht zum Ansehen umwandeln."
+                    self.app.notify("reader", "error", message, title="Office-Datei ansehen")
+                    self.app.set_status("Nicht geöffnet.", "neutral")
+                self._leave_if_empty()
+
+            self.app.worker.run(lambda: office_pdf(path), converted_ok, converted_failed)
+            return
         self._ids += 1
         ident = f"d{self._ids}"
         controller = DocumentController(self, self.engine, ident, self)
         self.opening = self.opening + 1
         self._opening_paths.append(path)
         name = recovered.name if recovered is not None else Path(path).name
-        viewing = recovered is None and office.kind_of(path) is not None
-        self.app.set_status(f"Wird zum Ansehen vorbereitet: {name} …" if viewing else f"Wird geöffnet: {name} …", "busy")
+        self.app.set_status(f"Wird geöffnet: {name} …", "busy")
 
         def work():
             from .session import Session  # PDF-Engine (pikepdf, PDFium) erst beim ersten Öffnen – im Arbeitsthread
 
             if recovered is not None:
                 session = Session.from_recovery(ident, recovered, password)
-            elif office.kind_of(path) is not None:
-                session = Session.from_office(ident, path)  # Ansicht einer Office-Datei (über LibreOffice)
+            elif viewing:
+                session = Session.from_office(ident, path, converted)  # Ansicht einer Office-Datei (schon umgewandelt)
             else:
                 session = Session.open(ident, path, password)
             controller.session = session
@@ -459,6 +495,12 @@ class ReaderController(Observable):
                     return
                 if then is not None:
                     then(None)
+                if viewing:
+                    # Die umgewandelte PDF ließ sich nicht öffnen: kein »PDF reparieren« für eine Office-Datei
+                    if not isinstance(exc, (EditorError, OSError)):
+                        self.app.report_exception(_details)
+                    self.app.notify("reader", "error", f"»{name}« ließ sich nicht zum Ansehen öffnen.", title="Office-Datei ansehen")
+                    return
                 if isinstance(exc, DamagedDocument):
                     self._offer_repair(path)
                     return
@@ -1226,6 +1268,14 @@ class ReaderController(Observable):
         if action == "overview":
             self.app.open_with_tool(CONTRACTS.key, [current.sourcePath])
         elif action == "external":
+            # Ist Novadesk selbst das Standardprogramm, öffnete sich nur wieder dieser Tab: dann »Öffnen mit«
+            program = PureWindowsPath(winsys.default_program(current.sourcePath)).name.lower()
+            if program in ("pdf-tool.exe", "pythonw.exe", "python.exe"):
+                try:
+                    winsys.open_with(current.sourcePath)
+                except OSError as exc:
+                    self.app.notify("reader", "error", str(exc) or "Kein Programm zum Öffnen gefunden.", title="Nicht geöffnet")
+                return
             self.openExternal(current.sourcePath)
 
     @Slot(str)
@@ -1484,7 +1534,7 @@ class ReaderController(Observable):
         # Das zuletzt aktive zeigen – nicht, wenn inzwischen ein anderes Dokument geöffnet wurde (»Öffnen mit«, von Hand)
         if opened and (self._current is None or self._current.ident in state["idents"]):
             remembered = _key(state["active"]) if state["active"] else ""
-            self.activate(next((doc for doc in opened if remembered and _key(doc.path) == remembered), opened[0]).ident)
+            self.activate(next((doc for doc in opened if remembered and _key(doc.path or doc.sourcePath) == remembered), opened[0]).ident)
             if self.app.currentPage == "home":
                 self.app.navigate(READER.key)
         count, skipped = len(opened), state["missing"] + state["failed"]

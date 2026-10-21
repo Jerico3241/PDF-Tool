@@ -55,7 +55,8 @@ AI_DIR = "ai"  # KI-Assistent: llama.cpp (assistant/runtime.py)
 MAX_SETUP_SIZE = 480 * 1024 * 1024
 OFFICE_DIR = "office"  # LibreOffice (seit 5.0, tools/pdf_editor/office.py)
 OFFICE_FILES = ("program/soffice.exe", "program/soffice.com", "program/soffice.bin", "program/mergedlo.dll")
-OFFICE_LICENSES = ("LICENSE.html", "license.txt", "LICENSE")  # mindestens einer der Lizenztexte von LibreOffice
+OFFICE_LICENSES = ("LICENSE.html", "license.txt", "LICENSE")
+VC_RUNTIME_PREFIXES = ("msvcp1", "vcruntime", "vcomp1", "concrt1")  # Visual-C++-Laufzeit (seit 2015: …140*.dll)  # mindestens einer der Lizenztexte von LibreOffice
 AI_SERVER = "llama-server.exe"
 AI_BACKENDS = "ggml-cpu-*.dll"  # Rechenwerke, die llama-server zur Laufzeit lädt
 
@@ -226,6 +227,23 @@ def check_office(payload: Path) -> list[str]:
         problems.append(f"Lizenztext von LibreOffice fehlt in {OFFICE_DIR}/ ({' oder '.join(OFFICE_LICENSES)})")
     if folder.is_dir() and any(folder.rglob("*.msi")):
         problems.append(f"Im Ordner {OFFICE_DIR}/ liegt ein MSI (gehört nicht ins Setup)")
+    program = folder / "program"
+    if program.is_dir():
+        # Visual-C++-Laufzeit: Das MSI installiert sie sonst systemweit – im Paket muss jede DLL davon, die ein Programm
+        # oder eine Bibliothek von LibreOffice lädt, neben ihr liegen (auf dem Build-PC fiele ihr Fehlen nicht auf)
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
+        from qtruntime import pe_imports
+
+        present = {path.name.lower() for path in program.iterdir() if path.is_file()}
+        missing: set[str] = set()
+        for binary in program.iterdir():
+            if binary.suffix.lower() in (".exe", ".dll", ".bin") and binary.is_file():
+                for name in pe_imports(binary):
+                    if name.lower().startswith(VC_RUNTIME_PREFIXES) and name.lower() not in present:
+                        missing.add(name)
+        if missing:
+            problems.append(f"Für LibreOffice fehlt die Visual-C++-Laufzeit in {OFFICE_DIR}/program/: " + ", ".join(sorted(missing, key=str.lower)))
     return problems
 
 

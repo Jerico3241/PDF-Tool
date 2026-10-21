@@ -644,3 +644,24 @@ def test_libreoffice_in_the_payload_is_checked(tmp_path) -> None:
     (payload / "office" / "LICENSE.html").write_text("MPL", encoding="utf-8")
     (payload / "office" / "LibreOffice.msi").write_bytes(b"x")
     assert any("MSI" in problem for problem in release_check.check_office(payload))
+
+
+def test_libreoffice_needs_the_vc_runtime_next_to_it(tmp_path, monkeypatch) -> None:
+    """Die Visual-C++-Laufzeit installiert das MSI sonst systemweit: Fehlt sie neben LibreOffice, meldet die Prüfung es
+    (auf dem Build-PC fiele es nicht auf, weil sie dort installiert ist)."""
+    import qtruntime
+
+    program = tmp_path / "payload" / "office" / "program"
+    program.mkdir(parents=True)
+    for name in ("soffice.exe", "soffice.com", "soffice.bin", "mergedlo.dll"):
+        (program / name).write_bytes(b"MZ")
+    (tmp_path / "payload" / "office" / "LICENSE.html").write_text("MPL", encoding="utf-8")
+    imports = {"mergedlo.dll": ["MSVCP140.dll", "VCRUNTIME140.dll", "KERNEL32.dll", "sal3.dll"]}
+    monkeypatch.setattr(qtruntime, "pe_imports", lambda path: imports.get(Path(path).name, []))
+    monkeypatch.setattr(release_check, "pe_machine", lambda path: release_check.PE_MACHINE_X64)
+    assert release_check.check_office(tmp_path / "payload") == [
+        "Für LibreOffice fehlt die Visual-C++-Laufzeit in office/program/: MSVCP140.dll, VCRUNTIME140.dll"
+    ]
+    for name in ("msvcp140.dll", "vcruntime140.dll"):
+        (program / name).write_bytes(b"MZ")
+    assert release_check.check_office(tmp_path / "payload") == []

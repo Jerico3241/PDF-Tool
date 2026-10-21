@@ -304,8 +304,8 @@ PPage {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 kind: modelData.kind
-                title: modelData.title
-                description: modelData.description
+                title: I18n.tr(modelData.title, I18n.revision)
+                description: I18n.tr(modelData.description, I18n.revision)
                 onClicked: Reader.openKind(modelData.kind)
             }
         }

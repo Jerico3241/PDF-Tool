@@ -546,7 +546,7 @@ def test_99_no_code_execution_and_no_remote_content():
 def test_release_notes_of_2_7_1_render_cleanly():
     text = (Path(__file__).resolve().parents[1] / "release-notes" / "2.7.1.md").read_text(encoding="utf-8")
     blocks = notes.render(text)
-    assert blocks[0] == {"kind": "heading", "level": 2, "marker": "", "html": "Novadesk 2.7.1 – PDF Repair Batch"}
+    assert blocks[0] == {"kind": "heading", "level": 2, "marker": "", "html": "PDF Tool 2.7.1 – PDF Repair Batch"}
     assert sum(block["kind"] == "bullet" for block in blocks) >= 10
     assert tags("".join(block["html"] for block in blocks)) <= ERLAUBT
     assert notes.plain(text, 40).endswith("…")

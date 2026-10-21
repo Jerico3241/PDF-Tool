@@ -3490,7 +3490,8 @@
   "Vertragsübersicht erstellen": "Create contract overview",
   "Word, OpenDocument und RTF (.docx, .odt, .rtf)": "Word, OpenDocument and RTF (.docx, .odt, .rtf)",
   "Word-, Excel- und PowerPoint-Dateien (auch OpenDocument und CSV) öffnen sich direkt in einem eigenen Tab zum Ansehen – mit dem eingebauten LibreOffice, Microsoft Office ist nicht nötig. »Speichern« legt eine PDF an, die Datei selbst bleibt unverändert.": "Word, Excel and PowerPoint files (also OpenDocument and CSV) open directly in their own tab for viewing – with the built-in LibreOffice, Microsoft Office is not needed. “Save” creates a PDF, the file itself stays unchanged.",
-  "oder eine Datei auswählen. Jede Datei öffnet sich in einem eigenen Tab, Bilder werden zu einer PDF.": "or choose a file. Each file opens in its own tab, images become one PDF."
+  "oder eine Datei auswählen. Jede Datei öffnet sich in einem eigenen Tab, Bilder werden zu einer PDF.": "or choose a file. Each file opens in its own tab, images become one PDF.",
+  "Nicht geöffnet.": "Not opened."
  },
  "patterns": {
   "App-Design: {0}": "App theme: {0}",
@@ -4276,6 +4277,8 @@
   "Code {0}": "Code {0}",
   "LibreOffice konnte die Datei nicht umwandeln ({0}). Ist sie beschädigt oder mit einem Kennwort geschützt?": "LibreOffice could not convert the file ({0}). Is it damaged or password protected?",
   "Wird zum Ansehen vorbereitet: {0} …": "Preparing for viewing: {0} …",
-  "Zum Umwandeln fehlt LibreOffice, und Microsoft {0} ist auf diesem PC nicht installiert. Bitte Novadesk neu installieren.": "LibreOffice is missing for the conversion, and Microsoft {0} is not installed on this PC. Please reinstall Novadesk."
+  "Zum Umwandeln fehlt LibreOffice, und Microsoft {0} ist auf diesem PC nicht installiert. Bitte Novadesk neu installieren.": "LibreOffice is missing for the conversion, and Microsoft {0} is not installed on this PC. Please reinstall Novadesk.",
+  "»{0}« ließ sich nicht zum Ansehen umwandeln.": "“{0}” could not be converted for viewing.",
+  "»{0}« ließ sich nicht zum Ansehen öffnen.": "“{0}” could not be opened for viewing."
  }
 }

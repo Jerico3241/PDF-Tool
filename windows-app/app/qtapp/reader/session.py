@@ -36,6 +36,18 @@ class PageText:
     spaces: list[bool]  # Leerzeichen/Zeilenwechsel (für Wortgrenzen)
 
 
+
+def office_pdf(source: str) -> bytes:
+    """Office-Datei mit LibreOffice (sonst Microsoft Office) in PDF umwandeln; nur die Bytes – der Arbeitsordner wird
+    sofort gelöscht. Läuft in einem eigenen Thread, nicht in dem der PDF-Engine (die rendert derweil weiter)."""
+    from tools.pdf_editor import office
+
+    work = Path(tempfile.mkdtemp(prefix="novadesk-ansicht-"))
+    try:
+        return office.to_pdf(source, work / "ansicht.pdf").read_bytes()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
 class Session:
     def __init__(self, ident: str, document: EditorDocument) -> None:
         self.ident = ident
@@ -55,17 +67,13 @@ class Session:
         return cls(ident, EditorDocument.open(path, password=password))
 
     @classmethod
-    def from_office(cls, ident: str, source: str) -> "Session":
-        """Word-, Excel- oder PowerPoint-Datei ansehen (seit 5.0): mit LibreOffice in PDF umwandeln und als neues,
-        noch nicht gespeichertes PDF öffnen. Die umgewandelte Datei bleibt nur im Speicher – auf der Festplatte liegt
-        keine Kopie; die Office-Datei selbst ändert sich nie (»Speichern« fragt nach einem Namen für die PDF)."""
-        from tools.pdf_editor import office
-
-        work = Path(tempfile.mkdtemp(prefix="novadesk-ansicht-"))
-        try:
-            data = office.to_pdf(source, work / "ansicht.pdf").read_bytes()
-        finally:
-            shutil.rmtree(work, ignore_errors=True)
+    def from_office(cls, ident: str, source: str, data: bytes | None = None) -> "Session":
+        """Word-, Excel- oder PowerPoint-Datei ansehen (seit 5.0): mit LibreOffice in PDF umwandeln (``office_pdf``,
+        oder ``data`` schon umgewandelt) und als neues, noch nicht gespeichertes PDF öffnen. Die umgewandelte Datei
+        bleibt nur im Speicher – auf der Festplatte liegt keine Kopie; die Office-Datei selbst ändert sich nie
+        (»Speichern« fragt nach einem Namen für die PDF)."""
+        if data is None:
+            data = office_pdf(source)
         document = EditorDocument.from_bytes(data, name=f"{Path(source).stem}.pdf", path=None, stamp=None)
         session = cls(ident, document)
         session.source = str(source)

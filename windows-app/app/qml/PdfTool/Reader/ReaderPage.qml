@@ -234,7 +234,7 @@ FocusScope {
                             // Ansicht einer Office-Datei (seit 5.0): was sie ist, und – bei Tabellen – »Vertragsübersicht erstellen«
                             PInfoBar {
                                 objectName: "readerOfficeNotice"
-                                readonly property bool sheet: page.doc !== null && FileKinds.of(page.doc.sourcePath) === "tabelle"
+                                readonly property bool sheet: page.doc !== null && /\.(xlsx|xlsm|xls)$/i.test(page.doc.sourcePath)  // nur Excel – wie die Vertragsübersichten
                                 Layout.fillWidth: true
                                 shown: page.doc !== null && page.doc.sourcePath !== "" && page.doc.officeNote !== "" && !page.dismissedOffice[page.doc.docId]
                                 severity: "info"

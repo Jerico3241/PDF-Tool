@@ -147,3 +147,22 @@ def test_office_to_pdf_with_fake_office(tmp_path: Path, monkeypatch) -> None:
     with pytest.raises(office.OfficeError, match="bereits"):
         office.to_pdf(source, tmp_path / "Brief.pdf")
     assert office.kind_of("a.PPTX") == "powerpoint" and office.kind_of("a.pdf") is None
+
+
+def test_csv_separator_and_charset_are_detected(tmp_path: Path) -> None:
+    """CSV in LibreOffice: Semikolon aus deutschem Excel, Komma oder Tabulator; UTF-8 oder Windows-1252 – auch wenn das
+    einzige Umlaut-Zeichen am Ende einer kurzen Datei steht."""
+    from tools.pdf_editor import office
+
+    def flt(name: str, data: bytes) -> str:
+        path = tmp_path / name
+        path.write_bytes(data)
+        return office._csv_filter(path)[0].rsplit(":", 1)[1]
+
+    assert flt("a.csv", "Name;Betrag\nMüller;1\n".encode("utf-8")) == "59,34,76,1"
+    assert flt("b.csv", b"Name,Betrag\nA,1\n") == "44,34,76,1"
+    assert flt("c.csv", b"Name\tBetrag\n") == "9,34,76,1"
+    assert flt("d.csv", "Name;Ort\nA;Köln".encode("cp1252")[:-2] + "ö".encode("cp1252")) == "59,34,1,1"
+    long = ("x;" * 40000).encode("utf-8")[: 64 * 1024 - 1] + "ä".encode("utf-8")  # Stichprobe schneidet das »ä« ab
+    assert flt("e.csv", long + b"\n") == "59,34,76,1"
+    assert office._csv_filter(tmp_path / "f.xlsx") == []
