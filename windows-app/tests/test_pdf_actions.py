@@ -84,6 +84,28 @@ def test_watermark_and_numbers_land_on_every_page(tmp_path):
     assert result.before == len(original) and result.after == result.target.stat().st_size
 
 
+def test_numbers_replace_only_old_page_numbers(tmp_path):
+    # Kopfzeile und Bates-Nummer aus dem Editor bleiben; alte Seitenzahlen (auch ohne Kennung) werden ersetzt
+    from tools.pdf_editor import commands, pagemarks
+    from tools.pdf_editor.document import EditorDocument
+
+    plain = samples.standard_text(tmp_path / "roh.pdf", pages=2)
+    document = EditorDocument.open(str(plain))
+    history = commands.History()
+    pagemarks.add_header_footer(document, history, pagemarks.HeaderFooter([pagemarks.TextMark("ACME vertraulich", "tc"), pagemarks.TextMark("Bates {bates}", "br")]))
+    pagemarks.add_header_footer(document, history, pagemarks.HeaderFooter([pagemarks.TextMark("Seite {seite}", "bl")]))  # wie ältere Versionen
+    source = tmp_path / "akte.pdf"
+    source.write_bytes(document.serialize(keep_encryption=True))
+    document.close()
+    first = runner.process(source, tmp_path / "eins.pdf", Plan(steps=[actions.NUMBERS], number_format="zahl_von"))
+    second = runner.process(first.target, tmp_path / "zwei.pdf", Plan(steps=[actions.NUMBERS]))
+    base = text_of(plain)
+    for number, (text, raw) in enumerate(zip(text_of(second.target), base), start=1):
+        assert "ACME vertraulich" in text and f"Bates {number:06d}" in text
+        assert text.count(f"Seite {number} von 2") == raw.count(f"Seite {number} von 2") + 1
+        assert f"{number} / 2" not in text and text.count("Seite") == raw.count("Seite") + 1
+
+
 def test_full_chain_ends_as_valid_pdfa(tmp_path):
     source = samples.structured(tmp_path / "akte.pdf")
     steps = [actions.CLEAN, actions.FLATTEN, actions.WATERMARK, actions.NUMBERS, actions.OPTIMIZE, actions.PDFA]

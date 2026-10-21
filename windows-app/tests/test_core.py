@@ -353,3 +353,46 @@ def test_german_date_text_is_read_day_first():
     gelesen = [None if pd.isna(stamp) else stamp.strftime("%Y-%m-%d") for stamp in engine.datum_spalte(werte)]
     assert gelesen == ["2021-02-01", "2022-03-05", "2021-02-13", "2020-04-05", None, None, "2021-07-08"]
     assert engine.fmt_date("01.02.2021") == "01.02.2021"
+
+
+def test_merged_cells_apply_to_every_contract_row(tmp_path: Path) -> None:
+    # Anwenderstatus, Kundennummer, Firma und E-Mail einmal verbunden für drei Verträge: alle drei sind aktiv
+    from datetime import datetime
+
+    from openpyxl import load_workbook
+
+    from conftest import write_excel
+
+    rows = [[f"V-{n}", datetime(2021, n, 1), "monatlich", 10.0, "Lastschr", f"Pflege {n}", None, None, None, None] for n in (1, 2, 3)]
+    rows[0][6:] = ["rechnung@muster.de", 10042, "Muster GmbH", "Aktiv"]
+    path = write_excel(tmp_path / "verbunden.xlsx", rows)
+    book = load_workbook(path)
+    for column in "GHIJ":
+        book.active.merge_cells(f"{column}2:{column}4")
+    book.save(path)
+    result = engine.pruefe_excel(path)
+    assert result["text"].startswith("3 aktive Verträge") and "ausgeblendet" not in result["text"]
+    assert result["kunden"] == ["10042"] and result["firmen"] == ["Muster GmbH"] and result["mails"] == ["rechnung@muster.de"]
+
+
+def test_unformatted_excel_serial_date_is_a_date() -> None:
+    # »Beginnt am« ohne Datumsformat: Excel liefert 44197 statt 01.01.2021 – nicht 01.01.1970
+    engine._lade_pandas()
+    assert engine.fmt_date(engine.als_datum(44197)) == "01.01.2021"
+    assert engine.fmt_date(engine.als_datum(45292.0)) == "01.01.2024"
+    assert engine.fmt_date(engine.als_datum(float("nan"))) == "–"
+
+
+@pytest.mark.parametrize(
+    ("muster", "erwartet"),
+    [
+        ("Vertrag_{Kd}.pdf", "Vertrag_10042.pdf"),
+        ("Vertrag {2026}.pdf", "Vertrag {2026}.pdf"),
+        ("Vertrag_{kd.pdf", "Vertrag_{kd.pdf"),
+        ("Vertrag_{kd}_{unbekannt}", "Vertrag_10042_{unbekannt}.pdf"),
+        ("Uebersicht_{kunde}_Kd{kd}.pdf", "Uebersicht_Muster_GmbH_Kd10042.pdf"),
+    ],
+)
+def test_file_name_pattern_replaces_only_known_placeholders(muster: str, erwartet: str) -> None:
+    # unbekannte oder kaputte Klammern bleiben als Text stehen, statt jede PDF scheitern zu lassen
+    assert engine.dateiname_fuer(muster, "10042", "Muster GmbH") == erwartet

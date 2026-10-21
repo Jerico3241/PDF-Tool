@@ -97,6 +97,32 @@ def test_compare_marks_differences_in_both_versions_and_lists_them(reader_app, t
     assert not r.compareActive and older.compareRects == {} and newer.compareRects == {} and r.rightPanel == ""
 
 
+def _open_damaged_and_add_tab(h, tmp_path: Path, start) -> tuple:
+    r = reader(h)
+    first = open_pdf(h, samples.standard_text(tmp_path / "A.pdf"))
+    start(r, first, str(samples.damaged(tmp_path / "kaputt.pdf")))
+    assert wait_until(lambda: r.opening == 0 and r.engine.idle(), 20)
+    pump(0.3)
+    h.app.dialogs.shutdown()  # Angebot »PDF reparieren« schließen
+    second = open_pdf(h, samples.standard_text(tmp_path / "B.pdf", pages=2))
+    pump(0.3)
+    return r, first, second
+
+
+def test_failed_open_of_the_older_version_does_not_compare_a_later_tab(reader_app, tmp_path: Path) -> None:
+    """Die ältere Fassung lässt sich nicht öffnen: ein danach geöffnetes PDF startet keinen Vergleich."""
+    r, first, second = _open_damaged_and_add_tab(reader_app, tmp_path, lambda r, doc, path: r.compare_paths(doc, path))
+    assert not r._compare_pending  # noqa: SLF001
+    assert r.current is second and r.splitKey == "" and not r.compareActive and first.ident in r.tabs.keys()
+
+
+def test_failed_open_beside_does_not_split_a_later_tab(reader_app, tmp_path: Path) -> None:
+    """Das PDF für die geteilte Ansicht lässt sich nicht öffnen: ein danach geöffnetes PDF erscheint allein."""
+    r, _first, second = _open_damaged_and_add_tab(reader_app, tmp_path, lambda r, _doc, path: r.open_beside(path))
+    assert not r._split_pending  # noqa: SLF001
+    assert r.current is second and r.splitKey == ""
+
+
 # --- Hinweise zum Dokument gehen von selbst --------------------------------------------------------------------------
 def test_document_notice_hides_itself_after_five_seconds(reader_app, tmp_path: Path) -> None:
     h = reader_app

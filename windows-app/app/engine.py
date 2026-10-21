@@ -8,6 +8,7 @@ liefert die Schicht ``excelstyle``, formatierte Kopf- und Fußzeilen das Modell
 from __future__ import annotations
 
 import errno
+import numbers
 import os
 import re
 import tempfile
@@ -198,6 +199,9 @@ def clean_bemerkung(text: str) -> str:
     return text.strip()
 
 
+EXCEL_SERIAL_MIN, EXCEL_SERIAL_MAX = 10000, 100000  # plausible Excel-Seriennummern: 1927 bis 2173
+
+
 def als_datum(value):
     """Ein Zellwert als Datum. Text wird deutsch gelesen (»01.02.2021« = 1. Februar), auch wenn pandas aus
     dem ersten Wert sonst Monat-zuerst raten würde; echte Excel-Datumswerte bleiben, wie sie sind."""
@@ -210,6 +214,9 @@ def als_datum(value):
             if not pd.isna(stamp):
                 return stamp
         return pd.to_datetime(text, errors="coerce", dayfirst=True)
+    if isinstance(value, numbers.Real) and not isinstance(value, bool) and EXCEL_SERIAL_MIN <= value <= EXCEL_SERIAL_MAX:
+        # Zelle ohne Datumsformat: Excel liefert die Seriennummer (44197 = 01.01.2021), pandas läse sie als Nanosekunden ab 1970
+        return pd.to_datetime(float(value), unit="D", origin="1899-12-30", errors="coerce")
     return pd.to_datetime(value, errors="coerce")
 
 
@@ -516,6 +523,9 @@ def platzhalter(kundennummer: str, firmenname: str = "", jetzt: datetime | None 
     }
 
 
+_PLATZHALTER = re.compile(r"\{(kd|kundennummer|kunde|firma|datum|datumkurz)\}", re.IGNORECASE)
+
+
 def dateiname_fuer(muster: str, kundennummer: str, firmenname: str = "", jetzt: datetime | None = None) -> str:
     """Dateiname der PDF aus dem Muster – dieselbe Regel für Einzel- und Stapelerstellung.
 
@@ -526,8 +536,10 @@ def dateiname_fuer(muster: str, kundennummer: str, firmenname: str = "", jetzt: 
     if not muster.lower().endswith(".pdf"):
         muster += ".pdf"
     kundennummer = str(kundennummer or "").strip()
-    name = muster.format(**platzhalter(kundennummer, firmenname, jetzt))
-    if "{kd}" not in muster and "{kundennummer}" not in muster:
+    werte = platzhalter(kundennummer, firmenname, jetzt)
+    # nur bekannte Platzhalter ersetzen: »{Kd}«, »{2026}« oder eine offene Klammer ließen ``str.format`` sonst jede PDF scheitern
+    name = _PLATZHALTER.sub(lambda treffer: werte[treffer.group(1).lower()], muster)
+    if not re.search(r"(?i)\{(kd|kundennummer)\}", muster):
         # Muster mit fest eingetragener Nummer (z. B. »…_Kd10042.pdf«): aktuelle Kundennummer einsetzen
         name = re.sub(r"(?i)(?<=Kd)\d+", lambda _treffer: kundennummer, name)
     return _UNGUELTIG_IM_NAMEN.sub("_", name)
@@ -634,8 +646,43 @@ def lies_tabelle(pfad: Path) -> ExcelTabelle:
         if gefunden is not None and gefunden > 0:
             df = pd.read_excel(pfad, header=gefunden, dtype=object)
             kopf = gefunden + 1
+    _fuelle_verbundene(pfad, df, kopf)
     df[SOURCE_ROW] = range(kopf + 1, kopf + 1 + len(df))
     return ExcelTabelle(pfad, df, kopf)
+
+
+def _fuelle_verbundene(pfad: Path, df: "pd.DataFrame", kopf: int) -> None:
+    """Verbundene Zellen (z. B. ein Anwenderstatus oder eine Kundennummer für mehrere Vertragszeilen) in jede Zeile
+    des Bereichs übernehmen – pandas liest den Wert nur in der ersten Zeile, die übrigen wären leer und ihre
+    Verträge fielen als »nicht aktiv« heraus. Nur .xlsx/.xlsm (openpyxl); .xls und .csv bleiben, wie sie sind."""
+    if pfad.suffix.lower() not in (".xlsx", ".xlsm") or df.empty:
+        return
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(pfad) as archiv:
+            # schnelle Vorprüfung: ohne <mergeCell> nicht die ganze Mappe ein zweites Mal laden
+            if not any(name.startswith("xl/worksheets/") and b"<mergeCell " in archiv.read(name) for name in archiv.namelist()):
+                return
+        from openpyxl import load_workbook
+
+        book = load_workbook(pfad, data_only=True, keep_links=False)
+        try:
+            bereiche = [r.bounds for r in book.worksheets[0].merged_cells.ranges]
+        finally:
+            book.close()
+    except Exception:  # noqa: BLE001 - dann wie bisher ohne Auffüllen
+        return
+    for min_col, min_row, max_col, max_row in bereiche:
+        oben = min_row - kopf - 1  # DataFrame-Zeile der Excel-Zeile min_row
+        if oben < 0 or min_col > len(df.columns):
+            continue  # Überschrift oder darüber
+        unten = min(max_row - kopf - 1, len(df) - 1)
+        wert = df.iat[oben, min_col - 1]  # Wert der linken oberen Zelle
+        for spalte in range(min_col - 1, min(max_col, len(df.columns))):
+            for zeile in range(oben, unten + 1):
+                if pd.isna(df.iat[zeile, spalte]):
+                    df.iat[zeile, spalte] = wert
 
 
 def excel_stile(tabelle: ExcelTabelle, daten: "pd.DataFrame", spalten: list[str], col_vertrag: str) -> ExcelStyles:

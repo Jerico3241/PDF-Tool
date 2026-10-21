@@ -90,8 +90,9 @@ def _apply(step: str, document: EditorDocument, plan: Plan, notes: list[str], ca
     elif step == actions.NUMBERS:
         text = actions.NUMBER_FORMATS.get(plan.number_format, actions.NUMBER_FORMATS["seite_von"])
         position = plan.number_position if plan.number_position in actions.NUMBER_POSITIONS else "bc"
-        pagemarks.remove_marks(document, history, (pagemarks.HEADER,))
-        pagemarks.add_header_footer(document, history, pagemarks.HeaderFooter([pagemarks.TextMark(text, position)]))
+        # nur alte Seitenzahlen ersetzen – Kopf-/Fußzeilen und Bates-Nummern bleiben
+        pagemarks.remove_page_numbers(document, history, tuple(actions.NUMBER_FORMATS.values()))
+        pagemarks.add_header_footer(document, history, pagemarks.HeaderFooter([pagemarks.TextMark(text, position)], role=pagemarks.PAGE_NUMBERS))
     elif step == actions.OPTIMIZE:
         data, before, images, _skipped = optimize.optimize_bytes(document, plan.optimize_level)
         if len(data) < before:

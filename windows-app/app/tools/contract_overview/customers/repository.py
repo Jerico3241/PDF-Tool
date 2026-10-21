@@ -49,7 +49,8 @@ def _key(text: str) -> str:
 
 
 def _natural(text: str) -> tuple:
-    return tuple(int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", text or "") if part)
+    # (0, Zahl) und (1, Text): Zahlen und Text dürfen sich nie direkt vergleichen (»10042« neben »K-77« war ein TypeError)
+    return tuple((0, int(part), "") if part.isdigit() else (1, 0, part.casefold()) for part in re.split(r"(\d+)", text or "") if part)
 
 
 def _moment(customer: Customer) -> datetime:
@@ -194,7 +195,7 @@ class CustomerStore:
         if order == ORDER_COMPANY:
             return sorted(items, key=lambda c: (_key(c.company) or "￿", _natural(c.number)))
         if order == ORDER_NUMBER:
-            return sorted(items, key=lambda c: (_natural(c.number) or ("￿",), _key(c.company)))
+            return sorted(items, key=lambda c: (_natural(c.number) or ((2, 0, ""),), _key(c.company)))
         # Zuletzt verwendet; ohne Zeitstempel (Altdaten) bleibt die gespeicherte Reihenfolge.
         return sorted(items, key=_moment, reverse=True)
 

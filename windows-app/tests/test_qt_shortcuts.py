@@ -104,6 +104,19 @@ def test_status_line_follows_custom_shortcuts(controller) -> None:
     assert c.app.hints >= 2  # die Statuszeile wird neu aufgebaut
 
 
+def test_status_line_follows_custom_shortcuts_in_english(controller, monkeypatch) -> None:
+    """Auf Englisch zeigte die Statuszeile die alten Standardkürzel und auch gelöschte (bis 4.0 Beta 8)."""
+    import i18n
+
+    monkeypatch.setattr(i18n, "language", lambda: "en")
+    c = controller
+    hint = "Strg+O Öffnen   ·   Strg+F Suchen   ·   Strg+P Drucken"
+    c.assign("app.open", "Ctrl+K")
+    c.clear("reader.print")
+    assert c.localize(hint) == "Strg+K Öffnen   ·   Strg+F Suchen"  # deutsch, die Übersetzung folgt danach
+    assert c.labels["app.open"] == "Ctrl+K"
+
+
 def test_overview_changes_a_shortcut_that_works_at_once(ui_app, tmp_path: Path, monkeypatch) -> None:
     from qtapp import dialogs
     from qtapp.reader.document import DocumentController
