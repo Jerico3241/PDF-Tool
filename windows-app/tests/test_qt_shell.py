@@ -521,6 +521,34 @@ def test_help_menu_replaces_the_app_menu(app) -> None:
     assert not app.messages()
 
 
+def test_help_menu_opens_in_place_under_the_button(app) -> None:
+    """Das Hilfe-Menü liegt rechtsbündig unter »?« und bleibt beim Einblenden dort – es schob sich in Beta 7 erst nach
+    rechts und dann zurück nach links."""
+    import time
+
+    app.settings.setProfile("full")  # mit Animationen
+    button = app.item("appHelpButton")
+    menu = app.item("helpMenu")
+    surface = menu.property("contentItem").parentItem()  # Fläche des Menüs (mit Skalierung beim Einblenden)
+    rechts = button.mapToScene(QPointF(button.width(), 0)).x()
+    try:
+        QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, button.mapToScene(QPointF(button.width() / 2, button.height() / 2)).toPoint())
+        kanten = []
+        ende = time.monotonic() + 0.5
+        while time.monotonic() < ende:
+            pump(0.01)
+            if menu.property("visible"):
+                kanten.append(surface.mapToScene(QPointF(surface.width(), 0)).x())
+        assert menu.property("opened") is True and kanten
+        assert max(kanten) - min(kanten) < 1.5, kanten  # weder nach rechts noch nach links gewandert
+        assert abs(kanten[-1] - rechts) < 1.5
+    finally:
+        menu.close()
+        pump(0.3)
+        app.settings.setProfile("full")
+    assert not app.messages()
+
+
 @pytest.mark.parametrize("size", [(760, 560), (1024, 700), (1920, 1080), (3000, 1800)])
 def test_scaling_and_sizes_do_not_break(app, size) -> None:
     app.window.resize(*size)
