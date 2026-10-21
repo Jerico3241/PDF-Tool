@@ -2,6 +2,16 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# PDF Tool 4.0.0
+
+Freigegebene Version – getestet als Betas 4.0.0-beta.1 bis 4.0.0-beta.9, Funktionsumfang wie 4.0.0-beta.9.
+Für Anwender von 3.2 neu: Stapel-Aktionen, neue Reader-Werkzeugleiste, Vergleichen, geteilte Ansicht, Präsentation,
+Scannen, Vorlesen, digitale Signatur, Umwandeln, englische Oberfläche, eigene Tastenkürzel und automatische
+Updates – im Einzelnen in den Abschnitten der Betas unten und in den [Release Notes](release-notes/4.0.0.md).
+
+- Version 4.0.0; README.txt, Neuerungen und Release Notes beschreiben 4.0 als freigegebene Version für Anwender
+  von 3.2. Der Programmcode ist gegenüber 4.0.0-beta.9 unverändert.
+
 # PDF Tool 4.0.0-beta.9
 
 Beta zum Testen. Details in den [Release Notes](release-notes/4.0.0-beta.9.md).
