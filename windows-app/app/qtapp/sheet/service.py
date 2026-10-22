@@ -79,7 +79,7 @@ class CalcService(QObject):
             except calc.EngineGone as exc:
                 was = self.generation
                 if was and not self._closed:
-                    _log().warning("Rechenkern nicht erreichbar (%s): %s", command, exc)
+                    _log().warning("Rechenkern nicht erreichbar (%s): %s %s", command, exc, getattr(exc, "detail", ""))
                     self.app.worker.post(self._lost, was)
                 if failed is not None:
                     self.app.worker.post(failed, exc)

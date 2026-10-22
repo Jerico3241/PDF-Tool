@@ -29,6 +29,7 @@ SERVER_SOURCE = Path(__file__).with_name("server.py")
 START_TIMEOUT = 90.0  # erster Start mit neuem Profil unter Windows: LibreOffice richtet sich ein
 CALL_TIMEOUT = 180.0  # große Dateien laden oder speichern
 RESTART_CODE = 81  # LibreOffice: »bitte neu starten« (nach dem Einrichten eines neuen Profils)
+READY_MARKER = ".novadesk-bereit"  # Profil fertig eingerichtet (LibreOffice einmal ohne Kern gestartet)
 
 # Profil: deutsche Oberfläche (Funktionsnamen wie SUMME), deutsche Zahlen und Daten, keine Sperrdateien
 # (».~lock.<Name>#« neben der Datei des Nutzers), keine Sicherungskopien, kein automatisches Wiederherstellen
@@ -58,10 +59,12 @@ class CalcError(Exception):
 
 
 class EngineGone(CalcError):
-    """Der Rechenkern läuft nicht (mehr) – LibreOffice fehlt, startet nicht oder ist abgestürzt."""
+    """Der Rechenkern läuft nicht (mehr) – LibreOffice fehlt, startet nicht oder ist abgestürzt. ``detail``: Exit-Code
+    und Fehlerbericht des Kerns (für Protokoll und Build-Probe, nicht für die Oberfläche)."""
 
-    def __init__(self, message: str = "Der Rechenkern für Tabellen läuft nicht mehr.") -> None:
+    def __init__(self, message: str = "Der Rechenkern für Tabellen läuft nicht mehr.", detail: str = "") -> None:
         super().__init__(message, "kern")
+        self.detail = detail
 
 
 def profile_dir() -> Path:
@@ -98,6 +101,8 @@ class Engine:
         self._next = 1
         self._work: Path | None = None
         self.closed = False
+        self.last_exit: int | None = None
+        self.last_error = ""
 
     @property
     def running(self) -> bool:
@@ -114,12 +119,14 @@ class Engine:
             executable = soffice()
             if executable is None:
                 raise EngineGone(office.missing_text("excel"))
+            self._warm_up(executable)
             for attempt in range(2):
                 code = self._launch(executable)
                 if code is None:
                     return
                 if code != RESTART_CODE or attempt:
-                    raise EngineGone(f"Der Rechenkern für Tabellen ließ sich nicht starten (LibreOffice endete mit Code {code}).")
+                    raise EngineGone(f"Der Rechenkern für Tabellen ließ sich nicht starten (LibreOffice endete mit Code {code}).",
+                                     self.detail())
 
     def _prepare_profile(self) -> Path:
         profile = profile_dir()
@@ -137,22 +144,51 @@ class Engine:
             settings.write_text(PROFILE_SETTINGS, encoding="utf-8")
         return profile
 
+    def _command(self, executable: Path, profile: Path) -> list[str]:
+        return [str(executable), "--headless", "--invisible", "--norestore", "--nologo", "--nodefault", "--nolockcheck",
+                "--nofirststartwizard", f"-env:UserInstallation={profile.as_uri()}"]
+
+    def _environment(self) -> dict:
+        environment = dict(os.environ)
+        if os.name != "nt":
+            environment["SAL_USE_VCLPLUGIN"] = "svp"
+        return environment
+
+    def _warm_up(self, executable: Path) -> None:
+        """Neues Profil: LibreOffice einmal ohne Kern starten und gleich beenden lassen. Unter Windows endet der erste
+        Start mit einem neuen Profil oft mit »bitte neu starten« (Code 81) – auch nachdem der Kern schon lief."""
+        profile = self._prepare_profile()
+        marker = profile / "user" / READY_MARKER
+        if marker.is_file():
+            return
+        flags = office.CREATE_NO_WINDOW if os.name == "nt" else 0
+        for _attempt in range(3):
+            try:
+                code = subprocess.run([*self._command(executable, profile), "--terminate_after_init"], env=self._environment(),
+                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      creationflags=flags, timeout=START_TIMEOUT, check=False).returncode
+            except (OSError, subprocess.TimeoutExpired):
+                return  # dann richtet sich das Profil beim eigentlichen Start ein
+            if code != RESTART_CODE:
+                break
+        try:
+            marker.write_text("1", encoding="utf-8")
+        except OSError:
+            pass
+
     def _launch(self, executable: Path) -> int | None:
         """Ein Startversuch: ``None`` = läuft und ist verbunden, sonst der Exit-Code von LibreOffice."""
         profile = self._prepare_profile()
         self._work = Path(tempfile.mkdtemp(prefix="novadesk-tabelle-"))
         port_file = self._work / "port"
         token = secrets.token_hex(24)
-        environment = {**os.environ, "NOVADESK_TABELLE_PORT": str(port_file), "NOVADESK_TABELLE_SCHLUESSEL": token}
-        if os.name != "nt":
-            environment["SAL_USE_VCLPLUGIN"] = "svp"
-        command = [
-            str(executable), "--headless", "--invisible", "--norestore", "--nologo", "--nodefault", "--nolockcheck",
-            "--nofirststartwizard", f"-env:UserInstallation={profile.as_uri()}", SCRIPT_URL,
-        ]
+        environment = {**self._environment(), "NOVADESK_TABELLE_PORT": str(port_file), "NOVADESK_TABELLE_SCHLUESSEL": token}
+        command = [*self._command(executable, profile), SCRIPT_URL]
+        log = (self._work / "soffice.log").open("wb")
         flags = office.CREATE_NO_WINDOW if os.name == "nt" else 0
         self._process = subprocess.Popen(command, cwd=str(self._work), env=environment, stdin=subprocess.DEVNULL,
-                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+                                         stdout=subprocess.DEVNULL, stderr=log, creationflags=flags)
+        log.close()
         if os.name == "nt":
             from assistant import runtime
 
@@ -161,12 +197,12 @@ class Engine:
         while not port_file.is_file():
             code = self._process.poll()
             if code is not None:
-                self._cleanup()
+                self._shutdown_process()
                 return code
             failure = Path(str(port_file) + ".fehler")
             if failure.is_file():
                 self._shutdown_process()
-                raise EngineGone("Der Rechenkern für Tabellen ließ sich nicht starten.")
+                raise EngineGone("Der Rechenkern für Tabellen ließ sich nicht starten.", self.detail())
             if time.monotonic() > deadline:
                 self._shutdown_process()
                 raise EngineGone("Der Rechenkern für Tabellen hat nicht rechtzeitig geantwortet.")
@@ -189,7 +225,8 @@ class Engine:
         """Befehl an den Kern; gibt das Ergebnis zurück oder wirft ``CalcError`` (``EngineGone``, wenn er nicht mehr
         läuft – dann ist auch jedes geöffnete Dokument fort)."""
         if not self.running:
-            raise EngineGone()
+            self._shutdown_process()
+            raise EngineGone(detail=self.detail())
         with self._lock:
             ident = self._next
             self._next += 1
@@ -199,11 +236,11 @@ class Engine:
                 self._writer.flush()
                 line = self._reader.readline()
             except (OSError, ValueError) as exc:
-                self._shutdown_process()
-                raise EngineGone() from exc
+                self._shutdown_process(wait=2.0)
+                raise EngineGone(detail=self.detail()) from exc
             if not line:
-                self._shutdown_process()
-                raise EngineGone()
+                self._shutdown_process(wait=2.0)
+                raise EngineGone(detail=self.detail())
             answer = json.loads(line)
         if answer.get("ok"):
             return answer.get("result")
@@ -231,6 +268,7 @@ class Engine:
         self._reader = self._writer = self._socket = None
         process, self._process = self._process, None
         if process is not None:
+            self.last_exit = None
             try:
                 process.wait(timeout=wait) if wait else None
             except subprocess.TimeoutExpired:
@@ -244,6 +282,7 @@ class Engine:
                     process.wait(timeout=5)
                 except (OSError, subprocess.TimeoutExpired):
                     pass
+            self.last_exit = process.poll()
         job, self._job = self._job, None
         if job is not None:
             from assistant import runtime
@@ -251,9 +290,25 @@ class Engine:
             runtime._close_handle(job)  # noqa: SLF001
         self._cleanup()
 
+    def detail(self) -> str:
+        """Exit-Code von LibreOffice und Fehlerbericht des Kerns (nach dem Ende des Prozesses)."""
+        parts = [f"LibreOffice-Exit-Code {self.last_exit}"] if self.last_exit is not None else []
+        if self.last_error:
+            parts.append(self.last_error)
+        return "\n".join(parts)
+
     def _cleanup(self) -> None:
         work, self._work = self._work, None
         if work is not None:
+            texts = []
+            for name in ("port.fehler", "soffice.log"):
+                try:
+                    text = (work / name).read_text(encoding="utf-8", errors="replace").strip() if (work / name).is_file() else ""
+                except OSError:
+                    text = ""
+                if text:
+                    texts.append(f"{name}: {text[-3000:]}")
+            self.last_error = "\n".join(texts)
             shutil.rmtree(work, ignore_errors=True)
 
 

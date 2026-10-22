@@ -98,6 +98,7 @@ FocusScope {
     Connections {
         target: view.sheet
         function onEditRequested(text) { view.beginEdit(text, text !== "") }
+        function onEditEmptyRequested() { view.beginEdit("", true) }
         function onFindRequested() { findBar.show() }
         function onFilterMenuChanged() {
             if (view.sheet && view.sheet.filterMenu.col !== undefined) filterPopup.openFor(view.sheet.filterMenu)

@@ -75,6 +75,7 @@ class SheetController(Observable):
 
     contentChanged = Signal()
     editRequested = Signal(str)  # Bearbeiten beginnen (mit diesem Text, »« = bisheriger Inhalt)
+    editEmptyRequested = Signal()  # Rücktaste: leer bearbeiten (wie Excel)
     cursorMoved = Signal()  # aktive Zelle sichtbar machen
     findRequested = Signal()  # Strg+F: Suchleiste zeigen
 
@@ -103,6 +104,8 @@ class SheetController(Observable):
         self._closing = False
         self._closed = False
         self._copied_text = ""
+        self._input_cell: tuple | None = None  # (Zeile, Spalte, Blatt), zu der ``cellInput`` gehört
+        self._images: dict = {}
         self._save_then: list[Callable[[bool], None]] = []
         self._object_revision = 0
         self.password: str | None = None
@@ -152,8 +155,8 @@ class SheetController(Observable):
                 return
             self.doc = int(result["doc"])
             self.generation = self.service.generation
-            self._apply_state(result)
-            self._load_layout(then=lambda: self._first_view(done))
+            self._apply_state(result, adopt_active=True)
+            self._load_layout(then=lambda: self._first_view(done), failed=failed)
 
         self.service.submit("open" if path else "new", args, opened, failed)
 
@@ -181,7 +184,11 @@ class SheetController(Observable):
             message = str(exc) if isinstance(exc, calc.CalcError) else "Das hat nicht geklappt."
             self.app.notify("reader", "warning", message, title=self.name, auto_hide=8000)
 
-        self.service.submit(command, payload, done, error, generation=self.generation)
+        def finished(result) -> None:
+            if not self._closed and done is not None:
+                done(result)
+
+        self.service.submit(command, payload, finished, error, generation=self.generation)
 
     def _change(self, command: str, args: dict | None = None, *, layout: bool = False, then: Callable[[dict], None] | None = None,
                 status: str = "") -> None:
@@ -204,7 +211,9 @@ class SheetController(Observable):
 
         self._call(command, args, done, failed)
 
-    def _apply_state(self, state: dict) -> None:
+    def _apply_state(self, state: dict, *, adopt_active: bool = False) -> None:
+        """Zustand aus einer Antwort übernehmen. Das aktive Blatt nur beim Öffnen: Danach bestimmt es die Oberfläche
+        (eine Antwort, die vor einem Blattwechsel abgeschickt wurde, setzte sonst das alte Blatt zurück)."""
         if "sheets" in state:
             sheets = list(state["sheets"])
             if [s.get("name") for s in sheets] != [s.get("name") for s in self.sheets]:
@@ -213,7 +222,9 @@ class SheetController(Observable):
                 self.cells = {}
                 self._row_chunks = {}
             self.sheets = sheets
-        if "active" in state and int(state["active"]) != self.activeSheet and 0 <= int(state["active"]) < max(1, len(self.sheets)):
+            if sheets and not adopt_active and self.activeSheet >= len(sheets):
+                adopt_active = True  # das gezeigte Blatt gibt es nicht mehr (z. B. »Rückgängig« nach »Blatt einfügen«)
+        if adopt_active and "active" in state and int(state["active"]) != self.activeSheet and 0 <= int(state["active"]) < max(1, len(self.sheets)):
             self.activeSheet = int(state["active"])
         if "modified" in state:
             was = self.dirty
@@ -224,7 +235,7 @@ class SheetController(Observable):
         self.redoText = str(state.get("redo") or "") if "redo" in state else self.redoText
 
     # Laden ---------------------------------------------------------------------------------------------------------
-    def _load_layout(self, then: Callable[[], None] | None = None) -> None:
+    def _load_layout(self, then: Callable[[], None] | None = None, failed: Callable[[BaseException], None] | None = None) -> None:
         sheet = self.activeSheet
 
         def done(data: dict) -> None:
@@ -240,7 +251,7 @@ class SheetController(Observable):
             if then is not None:
                 then()
 
-        self._call("sheet", {"sheet": sheet}, done, quiet=then is None)
+        self._call("sheet", {"sheet": sheet}, done, failed, quiet=then is None or failed is not None)
 
     def _ensure_rows(self) -> None:
         r0, _c0, r1, _c1 = self._viewport
@@ -394,14 +405,18 @@ class SheetController(Observable):
     def _load_cell(self) -> None:
         row, col = self.cursorRow, self.cursorCol
         cached = self.sheet_cells().get(row, col)
+        sheet = self.activeSheet
         if cached is not None and cached[1] in ("t",) and not cached[0].startswith("="):
             self.cellInput = cached[0]
-        sheet = self.activeSheet
+            self._input_cell = (row, col, sheet)
+        else:
+            self._input_cell = None  # Inhalt noch unbekannt: »Eingabe übernehmen« gilt dann immer als Änderung
 
         def done(data: dict) -> None:
             if (row, col, sheet) != (self.cursorRow, self.cursorCol, self.activeSheet):
                 return
             self.cellInput = str(data.get("input") or "")
+            self._input_cell = (row, col, sheet)
             style = dict(data.get("style") or {})
             self.cellStyle = style
             self.formatKind = str(data.get("formatKind") or "standard")
@@ -467,7 +482,9 @@ class SheetController(Observable):
         if found is None:
             self.app.set_status(f"»{text}« ist keine Zelle (z. B. B12 oder A1:C5).", "warning")
             return False
-        r0, c0, r1, c1 = found
+        layout = self.layout()
+        r0, r1 = (min(value, layout.max_rows - 1) for value in found[0::2])
+        c0, c1 = (min(value, layout.max_cols - 1) for value in found[1::2])
         self._anchor, self._end = (r0, c0), (r1, c1)
         self._update_selection()
         self.cursorMoved.emit()
@@ -479,12 +496,15 @@ class SheetController(Observable):
         """Eingabe in die aktive Zelle übernehmen und weiter (Eingabe: nach unten, Tab: nach rechts)."""
         row, col = self.cursorRow, self.cursorCol
         old = self.sheet_cells().get(row, col)
-        unchanged = text == self.cellInput and (old is not None or text == "")
+        known = self._input_cell == (row, col, self.activeSheet)
+        unchanged = known and text == self.cellInput and (old is not None or text == "")
         if not unchanged:
             self.sheet_cells().put_text(row, col, text)
             self.cellInput = text
+            self._input_cell = (row, col, self.activeSheet)
             self.revision += 1
             self.contentChanged.emit()
+            self._mark_dirty()
             self._change("input", {"row": row, "col": col, "text": text})
         if dr or dc:
             r0, c0, r1, c1 = self.selection
@@ -493,10 +513,16 @@ class SheetController(Observable):
                 nr, nc = row + dr, col + dc
                 if nr > r1:
                     nr, nc = r0, nc + 1
+                elif nr < r0:
+                    nr, nc = r1, nc - 1
                 if nc > c1:
                     nc, nr = c0, (nr + 1 if dc else nr)
+                elif nc < c0:
+                    nc, nr = c1, (nr - 1 if dc else nr)
                 if nr > r1:
                     nr = r0
+                elif nr < r0:
+                    nr = r1
                 self._anchor = (nr, nc)
                 self.cellName = calc.cell_name(nr, nc)
                 self.cursorRow, self.cursorCol = nr, nc
@@ -506,6 +532,13 @@ class SheetController(Observable):
                 return
             self.move(dr, dc, False)
 
+    def _mark_dirty(self) -> None:
+        """Sofort »ungespeichert« – nicht erst mit der Antwort des Kerns (Schließen direkt nach der Eingabe fragt sonst
+        nicht nach)."""
+        if not self.dirty:
+            self.dirty = True
+            self.reader.tab_changed(self)
+
     @Slot()
     def startEdit(self) -> None:  # noqa: N802
         self.editRequested.emit("")
@@ -513,6 +546,12 @@ class SheetController(Observable):
     @Slot(str)
     def typeText(self, text: str) -> None:  # noqa: N802
         self.editRequested.emit(text)
+
+    @Slot()
+    def clearAndEdit(self) -> None:  # noqa: N802
+        """Rücktaste: Inhalt löschen und die Zelle leer bearbeiten."""
+        self.clearContents()
+        self.editEmptyRequested.emit()
 
     @Slot()
     def clearContents(self) -> None:  # noqa: N802
@@ -524,6 +563,7 @@ class SheetController(Observable):
                 cells.values[(row, col)] = ("", " ", value[2])
         self.revision += 1
         self.contentChanged.emit()
+        self._mark_dirty()
         self._change("clear", {"range": self.selection, "what": "contents"})
 
     @Slot(str)
@@ -840,6 +880,7 @@ class SheetController(Observable):
         """Objekte für QML: Lage in Pixeln bei 100 %, Bild als data-URL (nachgeladen)."""
         self._object_revision += 1
         revision = self._object_revision
+        self._images = {}  # Bilder gehören zu einem Stand der Objekte (Schlüssel mit ``revision``)
         shown = []
         for item in items:
             shown.append({**item, "px": model.px(item["x"]), "py": model.px(item["y"]), "pw": model.px(item["w"]),
@@ -859,8 +900,6 @@ class SheetController(Observable):
                 self.objects = [{**entry, "image": self._image_for(entry)} for entry in self.objects]
 
             self._call("object_image", {"index": item["index"], "width": width, "height": height}, done, quiet=True)
-
-    _images: dict = {}
 
     def _image_key(self, item: dict) -> tuple:
         return (self.ident, self.activeSheet, item.get("index"), item.get("name"), item.get("w"), item.get("h"), self._object_revision)
@@ -994,6 +1033,12 @@ class SheetController(Observable):
                 if then is not None:
                     then(False)
                 return
+        if not self.doc:
+            self.app.notify("reader", "error", "Der Rechenkern für Tabellen läuft nicht – die Tabelle wird neu geladen.",
+                            title="Nicht gespeichert")
+            if then is not None:
+                then(False)
+            return
         if then is not None:
             self._save_then.append(then)
         self.saving = True

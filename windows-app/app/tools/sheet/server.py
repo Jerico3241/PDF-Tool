@@ -322,12 +322,18 @@ class Kernel:
         if suffix == ".csv":
             options = args.get("csv") or (doc.filter_options if doc.filter == CSV_FILTER else "") or "59,34,76,1"
             props.append(_prop("FilterOptions", options))
+            if "sheet" in args:
+                try:
+                    doc.controller.setActiveSheet(doc.sheet(args["sheet"]))  # CSV: das Blatt, das Novadesk zeigt
+                except Exception:  # noqa: BLE001
+                    pass
         elif doc.password and suffix in (".xlsx", ".xlsm", ".ods"):
             props.append(_prop("Password", doc.password))
         folder = os.path.dirname(os.path.abspath(path))
-        handle, temp = tempfile.mkstemp(prefix=".novadesk-", suffix=suffix, dir=folder)
-        os.close(handle)
+        temp = ""
         try:
+            handle, temp = tempfile.mkstemp(prefix=".novadesk-", suffix=suffix, dir=folder)
+            os.close(handle)
             doc.model.storeToURL(_url(temp), tuple(props))
             os.replace(temp, path)
         except PermissionError as exc:
@@ -337,7 +343,7 @@ class Kernel:
         except Exception as exc:  # noqa: BLE001 - IOException von LibreOffice
             raise CalcError("Die Datei ließ sich nicht speichern.", "speichern") from exc
         finally:
-            if os.path.exists(temp):
+            if temp and os.path.exists(temp):
                 try:
                     os.remove(temp)
                 except OSError:

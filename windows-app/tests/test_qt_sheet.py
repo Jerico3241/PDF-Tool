@@ -128,7 +128,11 @@ def test_edit_save_and_reopen(ui_app, tmp_path: Path) -> None:
     assert wait_until(lambda: sheet.cellInput == '=SVERWEIS("Weber";A2:D5;4;0)', 10)
     sheet.select(8, 0, False)
     sheet.commit("Neu", 1, 0)
-    assert wait_until(lambda: sheet.dirty, 10)
+    assert sheet.dirty  # sofort, nicht erst mit der Antwort des Kerns
+    # Umschalt+Eingabe in einer Auswahl: von der ersten Zelle zur letzten (wie Excel, nicht in Zeile -1)
+    sheet.selectRange(1, 1, 2, 2)
+    sheet.commit(sheet.cellInput, -1, 0)
+    assert (sheet.cursorRow, sheet.cursorCol) == (2, 2)
     sheet.selectRange(0, 3, 4, 3)
     sheet.addChart("column")
     assert wait_until(lambda: len(sheet.objects) == 1, 20)

@@ -1190,8 +1190,7 @@ class SheetGrid(QQuickPaintedItem):
         elif key == Key.Key_Delete:
             controller.clearContents()
         elif key == Key.Key_Backspace:
-            controller.typeText("")
-            controller.clearContents()
+            controller.clearAndEdit()
         elif key == Key.Key_Space and ctrl:
             controller.selectColumn(controller.cursorCol, False)
         elif key == Key.Key_Space and shift:

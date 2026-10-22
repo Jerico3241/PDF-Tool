@@ -3675,7 +3675,8 @@
   "Drucken, Druckbereich und »Als PDF speichern« direkt aus der Tabelle; »Übersicht erstellen« macht aus der Tabelle eine Vertragsübersicht.": "Print, print area and “Save as PDF” right from the spreadsheet; “Create overview” turns the spreadsheet into a contract overview.",
   "Neue Startseite mit Navigation links: »Neu« legt eine Tabelle, einen Text oder eine Präsentation an (Strg+N: neue Tabelle). Dazu ein neuer Startbildschirm.": "New start page with navigation on the left: “New” creates a spreadsheet, a document or a presentation (Ctrl+N: new spreadsheet). Plus a new splash screen.",
   "Texte und Präsentationen öffnen sich weiter zum Ansehen; neue Texte und Präsentationen öffnen sich in ihrem Standardprogramm.": "Documents and presentations still open for viewing; new documents and presentations open in their default program.",
-  "Alle Werkzeuge von PDF Tool 4.0 sind weiter da (Startseite → »Alle Werkzeuge«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads.": "All tools from PDF Tool 4.0 are still there (start page → “All tools”). Everything stays local on this PC: no cloud, no uploads."
+  "Alle Werkzeuge von PDF Tool 4.0 sind weiter da (Startseite → »Alle Werkzeuge«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads.": "All tools from PDF Tool 4.0 are still there (start page → “All tools”). Everything stays local on this PC: no cloud, no uploads.",
+  "Der Rechenkern für Tabellen läuft nicht – die Tabelle wird neu geladen.": "The spreadsheet engine is not running – the spreadsheet is being reloaded."
  },
  "patterns": {
   "App-Design: {0}": "App theme: {0}",

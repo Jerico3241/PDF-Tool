@@ -736,7 +736,8 @@ def probe_calc(program: Path) -> None:
         probe.call("save", doc=doc, path=str(target))
         probe.call("close", doc=doc)
     except calc.CalcError as exc:
-        fail(f"Probe des Rechenkerns fehlgeschlagen: {exc}")
+        detail = getattr(exc, "detail", "")
+        fail(f"Probe des Rechenkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
     finally:
         probe.stop()
     import openpyxl
