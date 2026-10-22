@@ -16,9 +16,10 @@ Importe aus Novadesk, Syntax bis Python 3.8.
 import base64
 import json
 import os
+import select
 import socket
 import tempfile
-import threading
+import time
 import traceback
 
 import uno
@@ -1414,9 +1415,64 @@ def _commands(kernel):
     return {name[4:]: getattr(kernel, name) for name in dir(kernel) if name.startswith("cmd_")}
 
 
+def _trace(text):
+    """Ablauf des Kerns in »<Port-Datei>.log« (Novadesk zeigt ihn, wenn der Kern unerwartet endet)."""
+    if not os.environ.get(PORT_VARIABLE):
+        return
+    try:
+        with open(os.environ[PORT_VARIABLE] + ".log", "a", encoding="utf-8") as handle:
+            handle.write("%.3f %s\n" % (time.time(), text))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+class _Lines:
+    """Zeilen über den Socket – mit Wartezeit, damit LibreOffice zwischen den Befehlen seine Ereignisse abarbeitet."""
+
+    def __init__(self, connection):
+        self.connection = connection
+        self.buffer = b""
+
+    def read(self, pump):
+        while b"\n" not in self.buffer:
+            readable, _w, _x = select.select([self.connection], [], [], 0.05)
+            if not readable:
+                pump()
+                continue
+            chunk = self.connection.recv(65536)
+            if not chunk:
+                return None
+            self.buffer += chunk
+        line, self.buffer = self.buffer.split(b"\n", 1)
+        return line.decode("utf-8")
+
+    def write(self, data):
+        self.connection.sendall((json.dumps(data) + "\n").encode("utf-8"))
+
+
+def _pump_events(ctx):
+    """Ereignisse von LibreOffice abarbeiten (der Kern läuft im Hauptthread – sonst stünde LibreOffice still)."""
+    try:
+        toolkit = ctx.ServiceManager.createInstanceWithContext("com.sun.star.awt.Toolkit", ctx)
+        process = toolkit.processEventsToIdle
+    except Exception:  # noqa: BLE001
+        return lambda: None
+
+    def pump():
+        try:
+            process()
+        except Exception:  # noqa: BLE001
+            pass
+
+    return pump
+
+
 def _serve(ctx, state):
+    """Der Kern: im Hauptthread von LibreOffice, bis Novadesk die Verbindung beendet. Das Skript kehrt so erst am Ende
+    zurück – unter Windows beendete sich LibreOffice sonst nach dem Aufruf des Skripts (ohne geöffnetes Dokument)."""
     log = []
     try:
+        _trace("Kern startet")
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.bind(("127.0.0.1", 0))
         server.listen(1)
@@ -1428,25 +1484,30 @@ def _serve(ctx, state):
         connection, _address_info = server.accept()
         server.close()
         connection.settimeout(None)
-        reader = connection.makefile("r", encoding="utf-8", newline="\n")
-        writer = connection.makefile("w", encoding="utf-8", newline="\n")
-        hello = json.loads(reader.readline() or "{}")
+        lines = _Lines(connection)
+        pump = _pump_events(ctx)
+        hello = json.loads(lines.read(pump) or "{}")
         if hello.get("token") != os.environ.get(TOKEN_VARIABLE):
+            _trace("falscher Schlüssel")
             connection.close()
             return
-        writer.write(json.dumps({"ok": True, "hello": "novadesk-tabelle"}) + "\n")
-        writer.flush()
+        lines.write({"ok": True, "hello": "novadesk-tabelle"})
+        _trace("verbunden")
         kernel = Kernel(ctx)
         commands = _commands(kernel)
-        for line in reader:
+        while True:
+            line = lines.read(pump)
+            if line is None:
+                _trace("Verbindung beendet")
+                break
             if not line.strip():
                 continue
             request = json.loads(line)
             ident = request.get("id")
             command = request.get("cmd")
             if command == "quit":
-                writer.write(json.dumps({"id": ident, "ok": True, "result": True}) + "\n")
-                writer.flush()
+                lines.write({"id": ident, "ok": True, "result": True})
+                _trace("beenden")
                 break
             handler = commands.get(command)
             try:
@@ -1458,8 +1519,7 @@ def _serve(ctx, state):
             except Exception as exc:  # noqa: BLE001 - jeder Fehler wird gemeldet, der Kern läuft weiter
                 answer = {"id": ident, "ok": False, "error": "%s: %s" % (type(exc).__name__, str(exc)[:300]), "code": "intern",
                           "trace": traceback.format_exc()[-2000:]}
-            writer.write(json.dumps(answer) + "\n")
-            writer.flush()
+            lines.write(answer)
         for doc in list(kernel.docs.values()):
             try:
                 doc.model.close(True)
@@ -1471,9 +1531,9 @@ def _serve(ctx, state):
         state["quit"] = True
         if log and os.environ.get(PORT_VARIABLE):
             try:
-                with open(os.environ[PORT_VARIABLE] + ".fehler", "w") as handle:
+                with open(os.environ[PORT_VARIABLE] + ".fehler", "w", encoding="utf-8") as handle:
                     handle.write("\n".join(log))
-            except OSError:
+            except Exception:  # noqa: BLE001
                 pass
         try:
             desktop = ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
@@ -1482,13 +1542,26 @@ def _serve(ctx, state):
             os._exit(0)
 
 
+class _TerminateTrace(unohelper.Base, XTerminateListener):
+    def queryTermination(self, event):  # noqa: N802 - UNO
+        _trace("LibreOffice soll enden")
+
+    def notifyTermination(self, event):  # noqa: N802 - UNO
+        _trace("LibreOffice endet")
+
+    def disposing(self, event):
+        pass
+
+
 def start(*_args):
-    """Einstieg (»vnd.sun.star.script:novadesk_tabelle.py$start?language=Python&location=user«)."""
+    """Einstieg (»vnd.sun.star.script:novadesk_tabelle.py$start?language=Python&location=user«): bedient Novadesk und
+    kehrt erst zurück, wenn die Verbindung endet."""
     ctx = uno.getComponentContext()
     state = {"quit": False}
     desktop = ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+    desktop.addTerminateListener(_TerminateTrace())
     desktop.addTerminateListener(_Veto(state))
-    threading.Thread(target=_serve, args=(ctx, state), name="novadesk-tabelle", daemon=True).start()
+    _serve(ctx, state)
 
 
 g_exportedScripts = (start,)

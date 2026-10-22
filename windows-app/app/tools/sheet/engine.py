@@ -149,7 +149,8 @@ class Engine:
                 "--nofirststartwizard", f"-env:UserInstallation={profile.as_uri()}"]
 
     def _environment(self) -> dict:
-        environment = dict(os.environ)
+        # PYTHONHOME/PYTHONPATH von Novadesk oder des Builds gelten nicht für das Python in LibreOffice
+        environment = {key: value for key, value in os.environ.items() if not key.upper().startswith("PYTHON")}
         if os.name != "nt":
             environment["SAL_USE_VCLPLUGIN"] = "svp"
         return environment
@@ -301,7 +302,7 @@ class Engine:
         work, self._work = self._work, None
         if work is not None:
             texts = []
-            for name in ("port.fehler", "soffice.log"):
+            for name in ("port.fehler", "port.log", "soffice.log"):
                 try:
                     text = (work / name).read_text(encoding="utf-8", errors="replace").strip() if (work / name).is_file() else ""
                 except OSError:
