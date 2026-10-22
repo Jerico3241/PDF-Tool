@@ -1,7 +1,7 @@
 """Wasserzeichen, Kopf- und Fußzeile, Seitenzahlen und Bates-Nummern.
 
 Geprüft mit PDFium wie in der Anzeige: Der Text steht auf jeder gewählten Seite, aufrecht und an der
-gewählten Stelle – auch auf gedrehten Seiten. Entfernen nimmt nur die Markierungen von PDF Tool
+gewählten Stelle – auch auf gedrehten Seiten. Entfernen nimmt nur die Markierungen von Novadesk
 heraus; alles ist ein Schritt für Rückgängig und übersteht das Speichern.
 """
 

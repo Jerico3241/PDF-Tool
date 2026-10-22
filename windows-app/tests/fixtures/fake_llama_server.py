@@ -1,12 +1,12 @@
 """Attrappe von llama-server (llama.cpp) für Tests des KI-Assistenten – nur die Standardbibliothek, kein Modell.
 
-Versteht dieselben Aufrufparameter und dieselbe Schnittstelle wie das Original, soweit PDF Tool sie nutzt:
+Versteht dieselben Aufrufparameter und dieselbe Schnittstelle wie das Original, soweit Novadesk sie nutzt:
 ``GET /health`` (503, solange das »Modell lädt«, danach 200) und ``POST /v1/chat/completions`` mit gestreamter
 Antwort (Server-Sent Events, »data: {…}« je Stück, zuletzt »data: [DONE]«). Der Schlüssel kommt wie beim Original aus
 ``LLAMA_API_KEY``; ohne passenden »Authorization: Bearer …« antwortet die Attrappe mit 401.
 
 Die Antworten sind fest und nennen die Seiten der Auszüge, die sie bekommen hat (»[Seite N]«, bei mehreren PDFs
-»[Datei N »Name«, Seite M]«) – so lässt sich prüfen, welche Abschnitte PDF Tool schickt und wie es Seitenangaben
+»[Datei N »Name«, Seite M]«) – so lässt sich prüfen, welche Abschnitte Novadesk schickt und wie es Seitenangaben
 verlinkt. Übersetzungen kommen als »[EN] « vor jedem Absatz zurück. Steuerung über die Umgebung:
 
 * ``FAKE_LLAMA_LOAD`` – Sekunden »Modell laden« (Standard 0,3)

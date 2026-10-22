@@ -38,9 +38,9 @@ def test_settings_show_backup_and_diagnose(app) -> None:
     from qtapp import diagnose
 
     model = app.diagnose.fact_model
-    assert model.rowCount() == len(info.FACTS) and model.get(0)["label"] == "PDF Tool"
+    assert model.rowCount() == len(info.FACTS) and model.get(0)["label"] == "Novadesk"
     assert wait_until(lambda: all(model.get(row)["value"] != diagnose.PENDING for row in range(model.rowCount())), 10)
-    assert {fact["label"]: fact["value"] for fact in app.diagnose.facts}["PDF Tool"] == model.get(0)["value"]
+    assert {fact["label"]: fact["value"] for fact in app.diagnose.facts}["Novadesk"] == model.get(0)["value"]
 
 
 def test_102_manual_and_automatic_backup(ui_app, tmp_path: Path, monkeypatch) -> None:
@@ -185,4 +185,4 @@ def test_105_diagnose_checks_and_support_package(ui_app, tmp_path: Path, monkeyp
         assert {"LIESMICH.txt", "bericht.txt", "diagnose.json", "einstellungen.json"} <= set(zf.namelist())
     assert "Support-Paket" in hinweis(h, "diagnose_info").message
     facts = {fact["label"]: fact["value"] for fact in h.diagnose.facts}
-    assert facts["PDF Tool"] and facts["Update-Kanal"] in ("Stable", "Beta")
+    assert facts["Novadesk"] and facts["Update-Kanal"] in ("Stable", "Beta")

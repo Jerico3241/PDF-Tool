@@ -21,7 +21,7 @@ PART_TOKENS = 320
 TEMPERATURE = 0.2
 
 SYSTEM = (
-    "Du bist der Assistent im Programm PDF Tool. Du hilfst beim Verstehen des PDF-Dokuments, das der Benutzer "
+    "Du bist der Assistent im Programm Novadesk. Du hilfst beim Verstehen des PDF-Dokuments, das der Benutzer "
     "geöffnet hat. Du kennst vom Dokument nur die Auszüge in der Nachricht; jeder Auszug beginnt mit seiner Seite, "
     "etwa [Seite 3]. Antworte ausschließlich anhand dieser Auszüge – erfinde nichts und ergänze kein Wissen von "
     "außen. Steht die Antwort nicht in den Auszügen, sage das ausdrücklich. Nenne nach jeder Aussage die Seite in "
@@ -31,7 +31,7 @@ SYSTEM = (
 
 
 LIBRARY_SYSTEM = (
-    "Du bist der Assistent im Programm PDF Tool. Du hilfst beim Durchsuchen mehrerer PDF-Dateien, die der Benutzer "
+    "Du bist der Assistent im Programm Novadesk. Du hilfst beim Durchsuchen mehrerer PDF-Dateien, die der Benutzer "
     "gewählt hat. Du kennst von den Dateien nur die Auszüge in der Nachricht; jeder Auszug beginnt mit Datei und "
     "Seite, etwa [Datei 2 »Vertrag.pdf«, Seite 3]. Antworte ausschließlich anhand dieser Auszüge – erfinde nichts und "
     "ergänze kein Wissen von außen. Steht die Antwort nicht in den Auszügen, sage das ausdrücklich. Nenne nach jeder "

@@ -31,7 +31,7 @@ def standard_text(path: Path, pages: int = 1, lines: tuple[str, ...] | None = No
     lines = lines or ("Rechnung Nr. 4711 vom 01.10.2026", "Gesamtbetrag: 1.234,56 EUR", "Zahlbar innerhalb von 14 Tagen.")
     c = canvas.Canvas(str(path), pagesize=A4)
     c.setTitle("Testdokument")
-    c.setAuthor("PDF Tool Tests")
+    c.setAuthor("Novadesk Tests")
     for number in range(pages):
         c.setFont("Helvetica", 14)
         c.drawString(72, 760, lines[0])
@@ -55,7 +55,7 @@ XMP_PACKET = """<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
   <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
    <dc:format>application/pdf</dc:format>
    <dc:title><rdf:Alt><rdf:li xml:lang="x-default">Testdokument</rdf:li></rdf:Alt></dc:title>
-   <dc:creator><rdf:Seq><rdf:li>PDF Tool Tests</rdf:li></rdf:Seq></dc:creator>
+   <dc:creator><rdf:Seq><rdf:li>Novadesk Tests</rdf:li></rdf:Seq></dc:creator>
   </rdf:Description>
  </rdf:RDF>
 </x:xmpmeta>

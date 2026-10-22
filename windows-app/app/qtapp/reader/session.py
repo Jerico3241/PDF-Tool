@@ -9,6 +9,8 @@ berücksichtigt); umgerechnet wird hier mit der Seitengeometrie.
 from __future__ import annotations
 
 import math
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +36,18 @@ class PageText:
     spaces: list[bool]  # Leerzeichen/Zeilenwechsel (für Wortgrenzen)
 
 
+
+def office_pdf(source: str) -> bytes:
+    """Office-Datei mit LibreOffice (sonst Microsoft Office) in PDF umwandeln; nur die Bytes – der Arbeitsordner wird
+    sofort gelöscht. Läuft in einem eigenen Thread, nicht in dem der PDF-Engine (die rendert derweil weiter)."""
+    from tools.pdf_editor import office
+
+    work = Path(tempfile.mkdtemp(prefix="novadesk-ansicht-"))
+    try:
+        return office.to_pdf(source, work / "ansicht.pdf").read_bytes()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
 class Session:
     def __init__(self, ident: str, document: EditorDocument) -> None:
         self.ident = ident
@@ -45,11 +59,25 @@ class Session:
         self._blocks: dict[int, tuple[int, list]] = {}
         self._objects: dict[int, object_edit.PageObjects] = {}  # Objektmodell je Seite (Stand des Dokuments)
         self.closed = False
+        self.source = ""  # Office-Datei, deren Ansicht dieses Dokument ist (seit 5.0) – sonst leer
 
     # Öffnen, Zustand --------------------------------------------------------------------------------------
     @classmethod
     def open(cls, ident: str, path: str, password: str | None = None) -> "Session":
         return cls(ident, EditorDocument.open(path, password=password))
+
+    @classmethod
+    def from_office(cls, ident: str, source: str, data: bytes | None = None) -> "Session":
+        """Word-, Excel- oder PowerPoint-Datei ansehen (seit 5.0): mit LibreOffice in PDF umwandeln (``office_pdf``,
+        oder ``data`` schon umgewandelt) und als neues, noch nicht gespeichertes PDF öffnen. Die umgewandelte Datei
+        bleibt nur im Speicher – auf der Festplatte liegt keine Kopie; die Office-Datei selbst ändert sich nie
+        (»Speichern« fragt nach einem Namen für die PDF)."""
+        if data is None:
+            data = office_pdf(source)
+        document = EditorDocument.from_bytes(data, name=f"{Path(source).stem}.pdf", path=None, stamp=None)
+        session = cls(ident, document)
+        session.source = str(source)
+        return session
 
     @classmethod
     def from_recovery(cls, ident: str, info: recovery.SessionInfo, password: str | None = None) -> "Session":
@@ -72,6 +100,8 @@ class Session:
         return {
             "name": doc.name,
             "path": str(doc.path or ""),
+            # Ansicht einer Office-Datei – bis sie als PDF gespeichert ist (danach ist sie ein gewöhnliches PDF)
+            "source": self.source if doc.path is None else "",
             "pages": doc.page_count,
             "sizes": sizes,
             "revision": doc.revision,
@@ -878,7 +908,7 @@ class Session:
         return {"pages": result.pages, "replaced": result.replaced}
 
     def page_marks(self, kind: str, spec: dict, replace: bool) -> dict:
-        """Kopf-/Fußzeile (``Header``) bzw. Wasserzeichen hinzufügen – ``replace``: die bisherigen von PDF Tool
+        """Kopf-/Fußzeile (``Header``) bzw. Wasserzeichen hinzufügen – ``replace``: die bisherigen von Novadesk
         ersetzen (ein Schritt für Rückgängig)."""
         add = self.add_header_footer if kind == pagemarks.HEADER else self.add_watermark
         if not replace:

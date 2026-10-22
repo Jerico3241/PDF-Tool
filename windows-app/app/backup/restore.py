@@ -8,7 +8,7 @@ Arbeitsspeicher und speichert sie beim Beenden. Würden die Dateien im laufenden
    Ordner ``.wiederherstellung`` im Datenordner entpacken – jede Datei gegen ihre SHA-256 geprüft
    (die vollständige Prüfung aller Dateien lief schon vor der Zusammenfassung). Erst wenn alles da
    ist, wird der Ordner in einem Schritt sichtbar (Umbenennen).
-2. PDF Tool startet neu. ``apply_pending`` läuft vor dem Laden der Einstellungen: Je Bereich
+2. Novadesk startet neu. ``apply_pending`` läuft vor dem Laden der Einstellungen: Je Bereich
    wandern die aktuellen Dateien nach ``.wiederherstellung-alt`` und die gesicherten an ihren Platz
    (Umbenennen – auf demselben Datenträger atomar). Jeder Schritt steht im Journal.
 3. Scheitert ein Schritt, werden alle bisherigen Schritte rückwärts zurückgenommen – der bisherige

@@ -53,7 +53,7 @@ class AnnotationInfo:
     contents: str
     author: str
     modified: str
-    ours: bool  # von PDF Tool angelegt (Erscheinungsbild wird neu erzeugt)
+    ours: bool  # von Novadesk angelegt (Erscheinungsbild wird neu erzeugt)
     reply_to: str = ""  # Antwort auf diesen Kommentar (Schlüssel), sonst leer
     width: float | None = None  # Linienstärke (Freihand, Formen, Linien, Textfeld)
     fill: tuple[int, int, int] | None = None  # Füllung (Rechteck, Ellipse, Textfeld)
@@ -292,7 +292,7 @@ RESIZABLE = ("/Square", "/Circle", "/FreeText", "/Ink", "/Line", "/Stamp")  # St
 
 
 def restyle(document: EditorDocument, history: History, key: str, *, width: float | None = None, fill=KEEP, opacity: float | None = None, font_size: float | None = None) -> None:
-    """Eigenschaften eines Kommentars aus PDF Tool nachträglich ändern: Linienstärke, Füllung (``None`` =
+    """Eigenschaften eines Kommentars aus Novadesk nachträglich ändern: Linienstärke, Füllung (``None`` =
     keine), Deckkraft und Schriftgröße (Textfeld). Das Erscheinungsbild wird neu erzeugt. Kommentare anderer
     Programme behalten ihr Erscheinungsbild – dort lassen sich nur Text und Farbe ändern."""
     document.ensure_editable("annotate")
@@ -336,12 +336,12 @@ def restyle(document: EditorDocument, history: History, key: str, *, width: floa
 
 
 def resize(document: EditorDocument, history: History, key: str, rect: Rect) -> None:
-    """Größe eines Kommentars aus PDF Tool ändern (Rechteck, Ellipse, Textfeld, Freihand, Linie): Geometrie
+    """Größe eines Kommentars aus Novadesk ändern (Rechteck, Ellipse, Textfeld, Freihand, Linie): Geometrie
     wird vom alten auf den neuen Rahmen abgebildet, das Erscheinungsbild neu erzeugt."""
     document.ensure_editable("annotate")
     page, _position, annot = find(document, key)
     if not _ours(annot):
-        raise UnsupportedEdit("Die Größe lässt sich nur bei Kommentaren aus PDF Tool ändern.")
+        raise UnsupportedEdit("Die Größe lässt sich nur bei Kommentaren aus Novadesk ändern.")
     if str(annot.get("/Subtype")) not in RESIZABLE:
         raise UnsupportedEdit("Die Größe dieser Art Kommentar lässt sich nicht ändern.")
     old = _rect(annot)

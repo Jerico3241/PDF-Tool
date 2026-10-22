@@ -11,7 +11,7 @@ Fixtures (``tests/fixtures``) – so, wie die jeweilige Version ihre Daten gesch
 
 * ``config_v22.json`` – Übersichten-Ersteller 2.2.0: formatierte Kopf-/Fußzeile, Textbausteine
   (mit und ohne Formatierung), Vorlagen, Regeln, Kundenverlauf (``kunden``)
-* ``config_v23.json`` – PDF Tool 2.3.0: dazu Einstellungen von »PDF reparieren«
+* ``config_v23.json`` – Novadesk 2.3.0: dazu Einstellungen von »PDF reparieren«
 * ``config_v24.json`` – 2.4.0: Kundenakte 2.0 (``kundenakten_v24.json``), Fußzeile nie bewusst
   gespeichert (fehlende Metadaten → Standard-Fußzeile)
 * ``config_v25.json`` – 2.5.0: dazu Stapel-Einstellungen und eine aktive Kundenakte

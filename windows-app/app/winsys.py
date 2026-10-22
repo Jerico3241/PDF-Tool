@@ -308,7 +308,7 @@ def register_app_identity() -> None:
 
 
 @_safe(False)
-def set_window_identity(hwnd: int, exe: str | Path | None, name: str = "PDF Tool") -> bool:
+def set_window_identity(hwnd: int, exe: str | Path | None, name: str = "Novadesk") -> bool:
     """Taskleiste: Name, Symbol und Neustart-Befehl des Fensters festlegen. Ohne diese Angaben nimmt Windows sie vom
     Prozess – ``pythonw.exe`` – und zeigt beim Rechtsklick auf das Symbol »Python« mit dem Python-Logo (findet es
     keine Startmenü-Verknüpfung mit derselben App-Kennung, etwa nach einem Start über »Öffnen mit«).
@@ -430,6 +430,33 @@ def open_path(path: str | Path) -> None:
     import subprocess
 
     subprocess.Popen(["xdg-open", str(path)])
+
+
+@_safe("")
+def default_program(path: str | Path) -> str:
+    """Programm, das Windows für diese Datei startet (»AssocQueryString«, z. B. ``…\\WINWORD.EXE``) – leer, wenn
+    keines eingetragen ist."""
+    import ctypes
+    from ctypes import wintypes
+
+    suffix = Path(path).suffix
+    if not suffix:
+        return ""
+    size = wintypes.DWORD(1024)
+    buffer = ctypes.create_unicode_buffer(size.value)
+    ASSOCF_NOTRUNCATE, ASSOCSTR_EXECUTABLE = 0x20, 2
+    result = ctypes.windll.shlwapi.AssocQueryStringW(ASSOCF_NOTRUNCATE, ASSOCSTR_EXECUTABLE, suffix, "open", buffer, ctypes.byref(size))
+    return buffer.value if result == 0 else ""
+
+
+def open_with(path: str | Path) -> None:
+    """Windows-Dialog »Öffnen mit« für die Datei (anderes Programm wählen). Löst OSError aus."""
+    import os
+
+    if hasattr(os, "startfile"):
+        os.startfile(str(path), "openas")  # type: ignore[attr-defined]
+        return
+    open_path(path)
 
 
 # --- Dateien ---------------------------------------------------------------

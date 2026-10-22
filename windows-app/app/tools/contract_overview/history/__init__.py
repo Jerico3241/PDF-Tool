@@ -5,6 +5,6 @@
 * ``repository`` – Ablage je Kunde als JSON (atomar, versioniert, ohne doppelte Stände)
 * ``report`` – Texte für Anzeige und »Änderungen kopieren«
 
-Verglichen werden ausschließlich strukturierte Daten, die PDF Tool beim Erstellen
+Verglichen werden ausschließlich strukturierte Daten, die Novadesk beim Erstellen
 einer Übersicht gespeichert hat – nie Inhalte erzeugter PDF-Dateien.
 """

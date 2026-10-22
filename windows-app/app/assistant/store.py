@@ -1,6 +1,6 @@
 """Sprachmodelle auf diesem PC: ``%LOCALAPPDATA%\\PDF-Tool-KI\\modelle`` (Tests: ``PDFTOOL_AI_DIR``).
 
-Bewusst nicht im Datenordner von PDF Tool: Modelle sind groß, gehören nicht in Sicherungen oder Support-Pakete und
+Bewusst nicht im Datenordner von Novadesk: Modelle sind groß, gehören nicht in Sicherungen oder Support-Pakete und
 lassen sich jederzeit löschen (``remove`` – auch die Deinstallation entfernt den Ordner). Ein Modell gilt erst als
 eingerichtet, wenn Größe und SHA-256 stimmen: Nach dem Download schreibt ``mark_verified`` die geprüfte Prüfsumme
 neben die Datei; ``installed`` vergleicht danach nur Größe und Vermerk (eine 2,7-GB-Datei bei jedem Start zu prüfen

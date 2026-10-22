@@ -59,11 +59,14 @@ $oldTarget = Join-Path $env:LOCALAPPDATA "Uebersichten-Ersteller"
 $oldData = Join-Path $env:APPDATA "Uebersichten-Ersteller"
 $updates = Join-Path $env:LOCALAPPDATA "PDF-Tool-Updates"
 $temp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
-$appName = "PDF Tool"
+$appName = "Novadesk"
+# Bis 4.0 hiess die App »PDF Tool«: Vorversionen tragen diesen Namen (Verknuepfungen, Installierte Apps)
+$pdfToolName = "PDF Tool"
 $oldAppName = "$([char]0x00DC)bersichten-Ersteller"
 $programs = [Environment]::GetFolderPath("Programs")
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shortcut = Join-Path $programs "$appName.lnk"
+$pdfToolShortcut = Join-Path $programs "$pdfToolName.lnk"
 $oldShortcut = Join-Path $programs "$oldAppName.lnk"
 $uninstallRoot = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
 $appKey = Join-Path $uninstallRoot "{59C40061-D5E5-446D-ACB4-E077D3C71E1A}_is1"
@@ -108,7 +111,7 @@ function Install([string]$file, [string]$name) {
 function AppEntries() {
     # Eintraege unter "Installierte Apps", die zu dieser App gehoeren (alter und neuer Name)
     return @(Get-ChildItem $uninstallRoot | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } |
-        Where-Object { $_.DisplayName -eq $appName -or $_.DisplayName -eq $oldAppName -or $_.PSChildName -eq "Uebersichten-Ersteller" })
+        Where-Object { $_.DisplayName -eq $appName -or $_.DisplayName -eq $pdfToolName -or $_.DisplayName -eq $oldAppName -or $_.PSChildName -eq "Uebersichten-Ersteller" })
 }
 
 if ($Previous) {
@@ -136,7 +139,7 @@ if ($Previous) {
         Get-ChildItem $oldData -Recurse -File | ForEach-Object { $oldHashes[$_.FullName.Substring($oldData.Length)] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
     } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $previousVersion -ge [version]"2.5") {
         $previousKind = if ($previousVersion -ge [version]"2.6") { "2.6" } else { "2.5" }
-        if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
+        if (-not (Test-Path $pdfToolShortcut)) { throw "Verknuepfung der Vorversion fehlt: $pdfToolShortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
         # Benutzerdaten wie von PDF Tool 2.5: wie 2.4, dazu Stapel-Einstellungen; ausserdem ein
         # gespeicherter Vertragsstand (Benutzerdaten von 2.6 – ein Update darf ihn nie loeschen).
@@ -160,7 +163,7 @@ if ($Previous) {
         $historyHash = (Get-FileHash $historyFile -Algorithm SHA256).Hash
     } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $previousVersion -ge [version]"2.4") {
         $previousKind = "2.4"
-        if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
+        if (-not (Test-Path $pdfToolShortcut)) { throw "Verknuepfung der Vorversion fehlt: $pdfToolShortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
         # Benutzerdaten wie von PDF Tool 2.4: Kundenakte mit formatierter eigener Fusszeile und Vorlage,
         # formatierte Kopfzeile, Vorlagen, Textbausteine, Regeln, Einstellungen von "PDF reparieren"
@@ -175,7 +178,7 @@ if ($Previous) {
         $storeHash = (Get-FileHash $storeFile -Algorithm SHA256).Hash
     } elseif (Test-Path (Join-Path $target "app\start.py")) {
         $previousKind = "2.3"
-        if (-not (Test-Path $shortcut)) { throw "Verknuepfung der Vorversion fehlt: $shortcut" }
+        if (-not (Test-Path $pdfToolShortcut)) { throw "Verknuepfung der Vorversion fehlt: $pdfToolShortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
         # Benutzerdaten wie von PDF Tool 2.3: Kundenverlauf (ein Eintrag mit formatierter eigener
         # Fusszeile, einer mit leerer Fusszeile aus aelteren Versionen), Vorlagen, Textbausteine, Regeln
@@ -248,11 +251,22 @@ if ($info.FileDescription -ne $appName -or $info.ProductName -ne $appName) { thr
 if ($info.ProductVersion -ne $version) { throw "Version von PDF-Tool.exe: $($info.ProductVersion) statt $version" }
 $command = (Get-Item -LiteralPath (Join-Path $progIdKey "shell\open\command")).GetValue("")
 if ($command -ne "`"$launcher`" `"%1`"") { throw "Befehl fuer 'Oeffnen mit': $command" }
-if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",-2") { throw "Symbol der PDF-Dateien von PDF Tool: nicht das von PDF-Tool.exe" }
+if ((Get-Item -LiteralPath (Join-Path $progIdKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",-10") { throw "Symbol der PDF-Dateien von Novadesk: nicht das von PDF-Tool.exe (-10)" }
+if ((Get-Item -LiteralPath (Join-Path $appExeKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",-3") { throw "Symbol von Novadesk in 'Oeffnen mit': nicht das App-Symbol (-3)" }
+# Office-Dateien (seit 5.0): je Dateiart eine ProgID mit eigenem Symbol, nur »Oeffnen mit« – keine Standard-App
+foreach ($kind in @(@{ProgId = "Novadesk.Text"; Icon = "-11"; Ext = ".docx"}, @{ProgId = "Novadesk.Tabelle"; Icon = "-12"; Ext = ".xlsx"}, @{ProgId = "Novadesk.Praesentation"; Icon = "-13"; Ext = ".pptx"}, @{ProgId = "Novadesk.Csv"; Icon = "-14"; Ext = ".csv"})) {
+    $kindKey = "HKCU:\Software\Classes\$($kind.ProgId)"
+    if ((Get-Item -LiteralPath (Join-Path $kindKey "DefaultIcon")).GetValue("") -ne "`"$launcher`",$($kind.Icon)") { throw "Symbol von $($kind.ProgId) fehlt oder stimmt nicht" }
+    if ((Get-Item -LiteralPath (Join-Path $kindKey "shell\open\command")).GetValue("") -ne "`"$launcher`" `"%1`"") { throw "Befehl fuer $($kind.ProgId) fehlt" }
+    if ($null -eq (Get-Item -LiteralPath "HKCU:\Software\Classes\$($kind.Ext)\OpenWithProgids").GetValue($kind.ProgId)) { throw "$($kind.ProgId) fehlt unter $($kind.Ext)\OpenWithProgids" }
+    if ((Get-Item -LiteralPath (Join-Path $capabilitiesKey "FileAssociations")).GetValue($kind.Ext) -ne $kind.ProgId) { throw "Standard-Apps: $($kind.Ext) ist nicht Novadesk zugeordnet" }
+}
+# LibreOffice (seit 5.0, unveraendert eingebunden): Office-Dateien ansehen und in PDF umwandeln
+if (-not (Test-Path (Join-Path $target "office\program\soffice.exe"))) { throw "Nach der Installation fehlt: office\program\soffice.exe" }
 if ((Get-Item -LiteralPath $appExeKey).GetValue("FriendlyAppName") -ne $appName) { throw "Name von PDF-Tool.exe in 'Oeffnen mit' fehlt" }
 if ((Get-Item -LiteralPath $capabilitiesKey).GetValue("ApplicationName") -ne $appName) { throw "Anmeldung fuer die Standard-Apps fehlt (Capabilities)" }
 if ((Get-Item -LiteralPath (Join-Path $capabilitiesKey "FileAssociations")).GetValue(".pdf") -ne "PDFTool.Dokument") { throw "Standard-Apps: .pdf ist nicht PDF Tool zugeordnet" }
-if ((Get-Item -LiteralPath $registeredKey).GetValue($appName) -ne "Software\PDF-Tool\Capabilities") { throw "PDF Tool fehlt unter RegisteredApplications" }
+if ((Get-Item -LiteralPath $registeredKey).GetValue($appName) -ne "Software\PDF-Tool\Capabilities") { throw "Novadesk fehlt unter RegisteredApplications" }
 $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
 if ($link.TargetPath -ne $launcher) { throw "Startmenue-Verknuepfung zeigt auf $($link.TargetPath) statt auf PDF-Tool.exe" }
 if ((Get-Item -LiteralPath (Join-Path $progIdKey "shell\open")).GetValue("FriendlyAppName") -ne $appName) { throw "Name in 'Oeffnen mit' fehlt" }
@@ -260,9 +274,18 @@ if ($null -eq (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))
 if ((PdfDefault) -ne $pdfDefaultBefore) { throw "Das Setup hat die Standard-App fuer PDF-Dateien veraendert: $(PdfDefault) statt $pdfDefaultBefore" }
 Write-Host "   'Oeffnen mit' fuer PDF-Dateien eingetragen, Standard-App unveraendert ($pdfDefaultBefore)"
 
+if ($Previous -and $previousKind -ne "2.2") {
+    # Umbenennung »PDF Tool« → »Novadesk« (5.0): alte Verknuepfungen und Anmeldungen sind weg
+    if (Test-Path $pdfToolShortcut) { throw "Alte Startmenue-Verknuepfung 'PDF Tool' besteht noch" }
+    if (Test-Path (Join-Path $desktop "$pdfToolName.lnk")) { throw "Alte Desktop-Verknuepfung 'PDF Tool' besteht noch" }
+    if (Test-Path (Join-Path ([Environment]::GetFolderPath("SendTo")) "$pdfToolName (Bilder zu PDF).lnk")) { throw "Alte Verknuepfung 'Senden an' besteht noch" }
+    if ($null -ne (Get-Item -LiteralPath $registeredKey).GetValue($pdfToolName)) { throw "RegisteredApplications enthaelt noch 'PDF Tool'" }
+    Write-Host "   alte Verknuepfungen und Anmeldungen von PDF Tool entfernt"
+}
+
 if ($Previous -and $previousKind -eq "2.3") {
     Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
-    if ($oldEntry.DisplayName -ne $appName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
+    if ($oldEntry.DisplayName -ne $pdfToolName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
     # Die Uebernahme der Kundenakten erledigt die App beim Start – das Setup veraendert keine Benutzerdaten.
     if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Benutzerdaten veraendert" }
     if (Test-Path (Join-Path $data "kundenakten.json")) { throw "kundenakten.json vor dem ersten Start vorhanden" }
@@ -271,7 +294,7 @@ if ($Previous -and $previousKind -eq "2.3") {
 
 if ($Previous -and ($previousKind -eq "2.5" -or $previousKind -eq "2.6")) {
     Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
-    if ($oldEntry.DisplayName -ne $appName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
+    if ($oldEntry.DisplayName -ne $pdfToolName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
     if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Einstellungen veraendert" }
     if ((Get-FileHash $storeFile -Algorithm SHA256).Hash -ne $storeHash) { throw "Das Setup hat die Kundenakten veraendert" }
     if (-not (Test-Path $historyFile) -or (Get-FileHash $historyFile -Algorithm SHA256).Hash -ne $historyHash) { throw "Das Setup hat den Vertragsstand veraendert oder geloescht" }
@@ -280,7 +303,7 @@ if ($Previous -and ($previousKind -eq "2.5" -or $previousKind -eq "2.6")) {
 
 if ($Previous -and $previousKind -eq "2.4") {
     Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
-    if ($oldEntry.DisplayName -ne $appName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
+    if ($oldEntry.DisplayName -ne $pdfToolName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
     if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Einstellungen veraendert" }
     if ((Get-FileHash $storeFile -Algorithm SHA256).Hash -ne $storeHash) { throw "Das Setup hat die Kundenakten veraendert" }
     Write-Host "   Programmdateien ersetzt, Einstellungen und Kundenakten unveraendert"
@@ -291,7 +314,7 @@ if ($Previous -and $previousKind -eq "2.2") {
     if (Test-Path $oldTarget) { throw "Alter Programmordner besteht noch: $oldTarget ($((Get-ChildItem $oldTarget -Recurse | Select-Object -First 5 | ForEach-Object { $_.FullName }) -join ', '))" }
     if (Test-Path $oldShortcut) { throw "Alte Startmenue-Verknuepfung besteht noch: $oldShortcut" }
     if (Test-Path (Join-Path $desktop "$oldAppName.lnk")) { throw "Alte Desktop-Verknuepfung besteht noch" }
-    if (-not (Test-Path (Join-Path $desktop "$appName.lnk"))) { throw "Desktop-Verknuepfung 'PDF Tool' fehlt (Auswahl der Vorversion uebernommen)" }
+    if (-not (Test-Path (Join-Path $desktop "$appName.lnk"))) { throw "Desktop-Verknuepfung 'Novadesk' fehlt (Auswahl der Vorversion uebernommen)" }
     # Benutzerdaten: die App uebernimmt sie beim ersten Start (wie beim Doppelklick auf die Verknuepfung)
     $dataDir = & (Join-Path $target "runtime\python.exe") -s -c "import sys; sys.path.insert(0, sys.argv[1]); import appstate; print(appstate.DATA_DIR)" (Join-Path $target "app")
     if ($LASTEXITCODE -ne 0) { throw "Datenuebernahme fehlgeschlagen" }
@@ -565,7 +588,11 @@ if ((AppEntries).Count -ne 0) { throw "Eintrag unter 'Installierte Apps' ist nac
 if (Test-Path $progIdKey) { throw "Eintrag fuer 'Oeffnen mit' ist nach der Deinstallation noch vorhanden" }
 if (Test-Path $appExeKey) { throw "Eintrag fuer PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
 if (Test-Path $capabilitiesKey) { throw "Anmeldung fuer die Standard-Apps ist nach der Deinstallation noch vorhanden" }
-if ((Test-Path $registeredKey) -and ($null -ne (Get-Item -LiteralPath $registeredKey).GetValue($appName))) { throw "RegisteredApplications enthaelt nach der Deinstallation noch PDF Tool" }
+if ((Test-Path $registeredKey) -and ($null -ne (Get-Item -LiteralPath $registeredKey).GetValue($appName))) { throw "RegisteredApplications enthaelt nach der Deinstallation noch Novadesk" }
+foreach ($progId in "Novadesk.Text", "Novadesk.Tabelle", "Novadesk.Praesentation", "Novadesk.Csv") {
+    if (Test-Path "HKCU:\Software\Classes\$progId") { throw "$progId ist nach der Deinstallation noch vorhanden" }
+}
+if (Test-Path (Join-Path $target "office")) { throw "LibreOffice (office) ist nach der Deinstallation noch vorhanden" }
 if (Test-Path (Join-Path $target "PDF-Tool.exe")) { throw "PDF-Tool.exe ist nach der Deinstallation noch vorhanden" }
 if ($null -ne (Get-Item -LiteralPath $runKey -ErrorAction SilentlyContinue).GetValue($appName)) { throw "Start mit Windows ist nach der Deinstallation noch eingetragen" }
 if ((Test-Path $openWithKey) -and ($null -ne (Get-Item -LiteralPath $openWithKey).GetValue("PDFTool.Dokument"))) { throw ".pdf\OpenWithProgids enthaelt nach der Deinstallation noch PDF Tool" }

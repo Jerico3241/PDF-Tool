@@ -1,6 +1,6 @@
 """Per E-Mail senden: Das E-Mail-Programm des Benutzers öffnet eine neue Nachricht mit der Datei als Anhang.
 
-Gesendet wird nie von PDF Tool – das E-Mail-Programm zeigt die Nachricht, der Benutzer sendet sie selbst.
+Gesendet wird nie von Novadesk – das E-Mail-Programm zeigt die Nachricht, der Benutzer sendet sie selbst.
 
 * Windows: Simple MAPI (``MAPISendMailW`` aus ``mapi32.dll``, sonst ``MAPISendMail``) mit ``MAPI_DIALOG`` und
   ``MAPI_LOGON_UI`` – nur, wenn ein E-Mail-Programm dafür eingetragen ist (sonst zeigte Windows selbst eine
@@ -32,7 +32,7 @@ CANCELLED = "cancelled"  # im E-Mail-Programm abgebrochen
 MANUAL = "manual"  # neue Nachricht ohne Anhang geöffnet, Datei im Explorer markiert – bitte selbst anhängen
 NO_CLIENT = "noclient"  # kein E-Mail-Programm gefunden: nur die Datei im Explorer markiert
 MISSING = "missing"  # die Datei gibt es nicht
-BUSY = "busy"  # eine Nachricht von PDF Tool ist im E-Mail-Programm noch offen
+BUSY = "busy"  # eine Nachricht von Novadesk ist im E-Mail-Programm noch offen
 
 # Simple MAPI (MAPI.h)
 MAPI_LOGON_UI = 0x00000001
@@ -358,7 +358,7 @@ def report(app, outcome: str, path: str, area: str) -> None:
         app.notify(area, "warning", f"Es ist kein E-Mail-Programm eingerichtet. »{name}« ist im Explorer markiert – Sie können die Datei in Ihrem E-Mail-Programm oder Webmail anhängen.",
                    title="Kein E-Mail-Programm gefunden", actions=copy)
     elif outcome == BUSY:
-        app.notify(area, "info", "Im E-Mail-Programm ist noch eine Nachricht von PDF Tool geöffnet – bitte zuerst senden oder schließen.", title="E-Mail-Programm ist beschäftigt", auto_hide=8000)
+        app.notify(area, "info", "Im E-Mail-Programm ist noch eine Nachricht von Novadesk geöffnet – bitte zuerst senden oder schließen.", title="E-Mail-Programm ist beschäftigt", auto_hide=8000)
     else:
         app.notify(area, "error", f"Die Datei »{name}« gibt es nicht mehr.", title="Senden nicht möglich")
 

@@ -68,7 +68,7 @@ CHANGE_LABELS = {
 SORT_LABELS = {ORDER_RECENT: "Zuletzt verwendet", ORDER_COMPANY: "Firma A–Z", ORDER_NUMBER: "Kundennummer"}
 PRIVACY = "Kundendaten und E-Mail-Zuordnungen werden ausschließlich lokal auf diesem PC gespeichert."
 EMPTY_TITLE = "Noch keine Kunden gespeichert"
-EMPTY_TEXT = "PDF Tool kann bekannte Rechnungsempfänger später automatisch wiedererkennen. Kundenakten entstehen, wenn Sie Kundendaten bewusst speichern – nach dem Erstellen einer Übersicht oder mit »Als Kundenakte speichern«."
+EMPTY_TEXT = "Novadesk kann bekannte Rechnungsempfänger später automatisch wiedererkennen. Kundenakten entstehen, wenn Sie Kundendaten bewusst speichern – nach dem Erstellen einer Übersicht oder mit »Als Kundenakte speichern«."
 NO_TEMPLATE = "Keine Vorlage"
 
 
@@ -598,7 +598,7 @@ class CustomerController(Observable):
         if question:
             message = f"Kein bekannter Kunde in der Excel. Gehört {listed} zur aktiven Kundenakte „{customer.label}“?"
         else:
-            message = f"{listed} → „{customer.label}“. PDF Tool erkennt den Kunden dann in der nächsten Excel-Liste wieder."
+            message = f"{listed} → „{customer.label}“. Novadesk erkennt den Kunden dann in der nächsten Excel-Liste wieder."
         self.app.notify(
             area,
             "info",
@@ -655,7 +655,7 @@ class CustomerController(Observable):
         if not len(self.customers):
             has_values = bool(self.c.firma.strip() or self.c.kd.strip())
             actions = (("Als Kundenakte speichern", self.save_as_customer),) if has_values else ()
-            self.app.notify("kunde_info", "info", "Noch keine Kundenakten gespeichert. Eingetragene Kundendaten lassen sich als Kundenakte speichern – danach erkennt PDF Tool den Kunden wieder.", actions=actions, auto_hide=10000)
+            self.app.notify("kunde_info", "info", "Noch keine Kundenakten gespeichert. Eingetragene Kundendaten lassen sich als Kundenakte speichern – danach erkennt Novadesk den Kunden wieder.", actions=actions, auto_hide=10000)
             return
         message = None
         if candidates:
@@ -1153,7 +1153,7 @@ class CustomerController(Observable):
             self.app.notify(
                 "kunde_info",
                 "info",
-                f"„{company or number}“ ist noch keine Kundenakte. Gespeichert erkennt PDF Tool den Kunden künftig an der Rechnungsempfänger-E-Mail wieder.",
+                f"„{company or number}“ ist noch keine Kundenakte. Gespeichert erkennt Novadesk den Kunden künftig an der Rechnungsempfänger-E-Mail wieder.",
                 title="Als Kundenakte speichern?",
                 actions=(("Als Kundenakte speichern", self.save_as_customer), ("Nicht jetzt", lambda: self._decline_save(key))),
                 status=False,

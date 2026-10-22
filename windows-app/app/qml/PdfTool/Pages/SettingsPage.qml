@@ -241,7 +241,7 @@ PPage {
             Layout.topMargin: 4
             iconName: "history"
             title: I18n.tr("PDFs der letzten Sitzung beim Start wieder öffnen", I18n.revision)
-            description: I18n.tr("Beim Beenden merkt sich PDF Tool die geöffneten PDFs (nur Pfade, lokal auf diesem PC) und öffnet sie beim nächsten Start wieder – ungespeicherte Änderungen nicht.", I18n.revision)
+            description: I18n.tr("Beim Beenden merkt sich Novadesk die geöffneten PDFs (nur Pfade, lokal auf diesem PC) und öffnet sie beim nächsten Start wieder – ungespeicherte Änderungen nicht.", I18n.revision)
             PToggle {
                 objectName: "readerSessionToggle"
                 label: I18n.tr("PDFs der letzten Sitzung beim Start wieder öffnen", I18n.revision)
@@ -569,7 +569,7 @@ PPage {
                         spacing: 1
                         RowLayout {
                             spacing: 8
-                            PText { objectName: "updateCurrentVersion"; text: I18n.tr("PDF Tool " + Updates.currentVersion, I18n.revision) }
+                            PText { objectName: "updateCurrentVersion"; text: I18n.tr("Novadesk " + Updates.currentVersion, I18n.revision) }
                             PBadge { objectName: "updateCurrentBeta"; text: I18n.tr(Updates.currentBeta ? "Beta" : "", I18n.revision); tone: "accent" }
                         }
                         PText {
@@ -592,7 +592,7 @@ PPage {
                     }
                 }
 
-                // Zustand: »PDF Tool ist aktuell.«, gefundenes Update, Download mit Fortschritt, Fehler …
+                // Zustand: »Novadesk ist aktuell.«, gefundenes Update, Download mit Fortschritt, Fehler …
                 RowLayout {
                     objectName: "updateStatus"
                     Layout.fillWidth: true
@@ -715,7 +715,7 @@ PPage {
             iconName: "arrow_download"
             enabled: Updates.automatic
             title: I18n.tr("Updates automatisch installieren", I18n.revision)
-            description: I18n.tr("Ein gefundenes Update wird geladen und installiert, danach startet PDF Tool neu und öffnet die PDFs wieder. Mit ungespeicherten Änderungen wartet es. Aus: nur »Jetzt installieren«.", I18n.revision)
+            description: I18n.tr("Ein gefundenes Update wird geladen und installiert, danach startet Novadesk neu und öffnet die PDFs wieder. Mit ungespeicherten Änderungen wartet es. Aus: nur »Jetzt installieren«.", I18n.revision)
             PToggle {
                 objectName: "updateAutoInstallToggle"
                 label: I18n.tr("Updates automatisch installieren", I18n.revision)
@@ -737,7 +737,7 @@ PPage {
             Layout.fillWidth: true
             title: I18n.tr("Diagnose", I18n.revision)
             iconName: "status"
-            subtitle: I18n.tr("Prüft Einstellungen und Daten von PDF Tool – lokal und ohne etwas zu verändern.", I18n.revision)
+            subtitle: I18n.tr("Prüft Einstellungen und Daten von Novadesk – lokal und ohne etwas zu verändern.", I18n.revision)
             Flow {
                 Layout.fillWidth: true
                 spacing: 8
@@ -826,7 +826,7 @@ PPage {
             Layout.topMargin: 4
             iconName: "question_circle"
             title: I18n.tr("Kurzanleitung", I18n.revision)
-            description: I18n.tr("So arbeiten Sie mit den Werkzeugen von PDF Tool" + Shortcuts.hints["app.help"], I18n.revision)
+            description: I18n.tr("So arbeiten Sie mit den Werkzeugen von Novadesk" + Shortcuts.hints["app.help"], I18n.revision)
             PButton { text: I18n.tr("Öffnen", I18n.revision); onClicked: App.showHelp() }
         }
         PSettingsCard {

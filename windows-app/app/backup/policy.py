@@ -105,7 +105,7 @@ class BackupEntry:
 
 
 def list_backups(folder: str | os.PathLike) -> list[BackupEntry]:
-    """Sicherungen von PDF Tool in einem Ordner (neueste zuerst) – nur mit gültigem Manifest."""
+    """Sicherungen von Novadesk in einem Ordner (neueste zuerst) – nur mit gültigem Manifest."""
     folder = Path(folder)
     entries: list[BackupEntry] = []
     try:

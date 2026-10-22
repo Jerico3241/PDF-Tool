@@ -26,7 +26,7 @@ from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR
 
 def test_start_and_version(app) -> None:
     assert app.app.version == appstate.VERSION
-    assert app.window.title() == window_title(appstate.VERSION) == app.app.windowTitle  # »PDF Tool« (Beta: mit Version)
+    assert app.window.title() == window_title(appstate.VERSION) == app.app.windowTitle  # »Novadesk« (Beta: mit Version)
     assert app.app.currentPage == "home"
     assert app.item("homePage") is not None
     assert app.item("toolCard_contracts") is not None and app.item("toolCard_repair") is not None
@@ -121,11 +121,11 @@ WERKZEUGE = ("toolCard_reader", "toolCard_actions", "toolCard_contracts", "toolC
 
 
 def _pruefe_startseite(h) -> tuple[bool, int]:
-    """Aufbau der Startseite (Adobe-Prinzip); liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
+    """Aufbau der Startseite; liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
 
     Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
-    breit, Ränder mindestens 36 px; Titel, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis an derselben
-    linken Kante. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
+    breit, Ränder mindestens 36 px; Willkommenskopf, Dateiarten, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis
+    an derselben linken Kante und gleich breit. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
     untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte, kein Wort mitten im Wort
     umbrochen; nebeneinander gleich hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
     oben, karte, ablage, zuletzt, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homeRecent", "homePrivacy"))
@@ -137,10 +137,10 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
     assert gbreite <= 1080 and min(links, rechts) >= 36
-    for teil in (zuletzt, hinweis):
+    for teil in (zuletzt, hinweis, h.item("homeHero"), h.item("homeKinds")):
         assert _szene(teil)[0] == gx and _szene(teil)[2] == gbreite, teil.objectName()
-    titel = next(k for k in _alle(h.item("homePage")) if k.objectName() == "pageHeader")
-    assert _szene(titel)[0] == gx
+    arten = [_szene(h.item("kindCard_" + art)) for art in ("tabelle", "text", "praesentation", "pdf")]
+    assert len({lage[2] for lage in arten}) == 1 and arten[0][0] == gx  # Dateiarten gleich breit, an der linken Kante
     k, a = _szene(karte), _szene(ablage)
     nebeneinander = a[1] == k[1]
     if nebeneinander:
@@ -276,17 +276,17 @@ def test_start_page_tools_open_their_tool(app) -> None:
 
 
 def test_window_title_marks_beta_versions() -> None:
-    """Fenstertitel aus der Versionsnummer: Stable »PDF Tool«, Beta »PDF Tool X.Y.Z Beta«."""
-    assert window_title("2.8.0") == "PDF Tool"
-    assert window_title("2.8.0-beta.1") == "PDF Tool 2.8.0 Beta"
-    assert window_title("10.20.30-beta.12") == "PDF Tool 10.20.30 Beta"
-    assert window_title("kaputt") == "PDF Tool"
+    """Fenstertitel aus der Versionsnummer: Stable »Novadesk«, Beta »Novadesk X.Y.Z Beta«."""
+    assert window_title("2.8.0") == "Novadesk"
+    assert window_title("2.8.0-beta.1") == "Novadesk 2.8.0 Beta"
+    assert window_title("10.20.30-beta.12") == "Novadesk 10.20.30 Beta"
+    assert window_title("kaputt") == "Novadesk"
 
 
-@pytest.mark.parametrize("version,titel", [("4.2.0-beta.3", "PDF Tool 4.2.0 Beta"), ("4.2.0", "PDF Tool")])
+@pytest.mark.parametrize("version,titel", [("4.2.0-beta.3", "Novadesk 4.2.0 Beta"), ("4.2.0", "Novadesk")])
 def test_beta_is_marked_in_window_title_and_settings(qt_application, config_file: Path, monkeypatch, version: str, titel: str) -> None:
     """Beta: Fenstertitel mit Version und das Etikett »Beta« in der Info-Karte der Einstellungen –
-    dasselbe wie in der Karte »Updates«; Stable: »PDF Tool«, kein Etikett."""
+    dasselbe wie in der Karte »Updates«; Stable: »Novadesk«, kein Etikett."""
     from qtutil import Harness
 
     from qtapp import app as appmodule
@@ -364,7 +364,7 @@ def test_status_hint_follows_the_tool(app) -> None:
 def test_help_follows_the_open_view(app) -> None:
     from qtapp import dialogs
 
-    for page, title in (("home", "Kurzanleitung – PDF Tool"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
+    for page, title in (("home", "Kurzanleitung – Novadesk"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
         app.navigate(page, 0.15)
         app.app.showHelp()
         assert app.app.dialogs.history[-1]["title"] == title
@@ -511,7 +511,7 @@ def test_help_menu_replaces_the_app_menu(app) -> None:
     pump(0.4)
     assert app.item("helpMenu").property("opened") is True
     names = ("menuHelp", "menuShortcuts", "menuNews", "menuAbout")
-    assert [app.item(name).property("text") for name in names] == ["Kurzanleitung", "Tastenkürzel", "Neu in dieser Version", "Über PDF Tool"]
+    assert [app.item(name).property("text") for name in names] == ["Kurzanleitung", "Tastenkürzel", "Neu in dieser Version", "Über Novadesk"]
     assert app.item("menuHelp").property("hint") == "F1" and app.item("menuShortcuts").property("hint") == "Strg+F1"
     entry = app.item("menuAbout")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, entry.mapToScene(QPointF(entry.width() / 2, entry.height() / 2)).toPoint())
@@ -751,3 +751,47 @@ def test_mouse_wheel_moves_the_same_distance_for_every_notch(app) -> None:
         pump(0.01)
     pump(0.5)
     assert abs(flick.property("contentY") - end) < 1
+
+
+
+def _klicke(h, item) -> None:
+    QTest.mouseClick(h.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
+    pump(0.2)
+
+
+def test_start_page_kind_cards_and_recent_filter(ui_app, tmp_path: Path, monkeypatch) -> None:
+    """Novadesk-Startseite: je Dateiart eine Karte (Dateiauswahl nur dieser Art); »Zuletzt verwendet« zeigt das Symbol
+    der Dateiart und lässt sich nach Dateiart filtern (Tabellen mit CSV)."""
+    from qtapp import files
+
+    h = ui_app
+    h.window.resize(1280, 2000)  # alles ohne Scrollen sichtbar
+    pump(0.4)
+    gefragt = []
+    monkeypatch.setattr(files, "open_files", lambda title, directory, filters: gefragt.append((title, filters)) or [])
+    for art, titel in (("tabelle", "Tabelle öffnen"), ("text", "Text öffnen"), ("praesentation", "Präsentation öffnen"), ("pdf", "PDF öffnen")):
+        karte = h.item("kindCard_" + art)
+        _klicke(h, karte)
+        assert gefragt[-1] == (titel, files.OPEN_FILTERS[art])
+        assert karte.findChild(QObject, "kindIcon").property("source").toString().endswith("images/" + art + "-48.png")
+    assert h.app.currentPage == "home" and len(gefragt) == 4
+
+    namen = ("Vertrag.pdf", "Liste.xlsx", "Daten.csv", "Angebot.docx", "Bericht.pptx")
+    for name in reversed(namen):
+        (tmp_path / name).write_bytes(b"x")
+        h.runtime.reader.controller.remember_recent(str(tmp_path / name))
+    pump(0.4)
+    karte = h.item("homeRecent")
+
+    def zeilen() -> list[str]:
+        sichtbar = [k for k in _alle(karte) if k.objectName().startswith("homeRecent_") and k.isVisible() and k.height() > 0]
+        sichtbar.sort(key=lambda z: _szene(z)[1])
+        return [z.property("modelData")["name"] for z in sichtbar]
+
+    assert zeilen() == list(namen)
+    symbole = sorted(k.property("source").toString().rsplit("/", 1)[1] for k in _alle(karte) if k.objectName() == "homeRecentIcon")
+    assert symbole == sorted(["pdf-24.png", "tabelle-24.png", "csv-24.png", "text-24.png", "praesentation-24.png"])
+    for knopf, erwartet in (("tabelle", ["Liste.xlsx", "Daten.csv"]), ("text", ["Angebot.docx"]), ("praesentation", ["Bericht.pptx"]), ("pdf", ["Vertrag.pdf"]), ("alle", list(namen))):
+        _klicke(h, h.item("homeRecentKind_" + knopf))
+        assert zeilen() == erwartet, knopf
+    assert not h.messages()

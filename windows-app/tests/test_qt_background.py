@@ -1,9 +1,9 @@
 """Im Hintergrund bereithalten (ab 3.2.0-beta.4): Symbol im Infobereich, Start mit Windows, Schließen-Kreuz.
 
 Der Infobereich ist eine Attrappe (unter »offscreen« gibt es keinen), der Autostart-Eintrag ein Wörterbuch statt der
-Registry. Geprüft wird das Verhalten wie von Hand: Kreuz → Fenster versteckt, Dokumente geschlossen, PDF Tool läuft
+Registry. Geprüft wird das Verhalten wie von Hand: Kreuz → Fenster versteckt, Dokumente geschlossen, Novadesk läuft
 weiter; Infobereich »Öffnen« bzw. ein weiterer Start → Fenster wieder da; »Beenden«, Update und ausgeschaltete
-Einstellung → PDF Tool endet wie bisher.
+Einstellung → Novadesk endet wie bisher.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def test_defaults_and_autostart_entry(tmp_path: Path) -> None:
 
     assert background.enabled_in({}) is True and background.enabled_in({"hintergrund": False}) is False
     assert background.launcher_path(APP_DIR) is None  # Quellbaum: kein PDF-Tool.exe, kein Autostart
-    app_dir = tmp_path / "PDF Tool" / "app"
+    app_dir = tmp_path / "Novadesk" / "app"
     app_dir.mkdir(parents=True)
     exe = app_dir.parent / "PDF-Tool.exe"
     exe.write_bytes(b"MZ")
@@ -83,11 +83,15 @@ def test_defaults_and_autostart_entry(tmp_path: Path) -> None:
         return True
 
     assert background.sync_autostart(True, exe, registry.get, write) is True
-    assert registry == {"PDF Tool": f'"{exe}" --hintergrund'}
+    assert registry == {"Novadesk": f'"{exe}" --hintergrund'}
     assert background.sync_autostart(True, exe, registry.get, write) is True and len(writes) == 1  # unverändert: kein Schreiben
     assert background.sync_autostart(False, exe, registry.get, write) is True and registry == {}
     assert background.sync_autostart(False, exe, registry.get, write) is True and len(writes) == 2
     assert background.sync_autostart(True, None, registry.get, write) is False  # Quellbaum: nichts zu tun
+    # Update von 4.0 (»PDF Tool«): der alte Eintrag verschwindet, sonst startete die App zweimal mit Windows
+    registry["PDF Tool"] = f'"{exe}" --hintergrund'
+    assert background.sync_autostart(True, exe, registry.get, write) is True
+    assert registry == {"Novadesk": f'"{exe}" --hintergrund'}
 
 
 def test_message_of_a_second_start() -> None:
@@ -101,7 +105,7 @@ def test_message_of_a_second_start() -> None:
 
 def test_second_start_without_files_shows_the_running_app(qt_application, tmp_path: Path) -> None:
     """Weiterer Start (Startmenü): die laufende App zeigt ihr Fenster. Start mit Windows (``show=False``): nur prüfen,
-    ob PDF Tool läuft – nichts wird gezeigt. Beide Prozesse enden mit 0."""
+    ob Novadesk läuft – nichts wird gezeigt. Beide Prozesse enden mit 0."""
     from qtapp import instance
 
     calls: list = []
@@ -126,7 +130,7 @@ def test_second_start_without_files_shows_the_running_app(qt_application, tmp_pa
 
 
 def test_close_button_hides_the_window_and_keeps_running(resident, tmp_path: Path) -> None:
-    """Kreuz: Dokumente schließen, Fenster versteckt, PDF Tool läuft weiter (Hinweis einmal). Infobereich »Öffnen«: das
+    """Kreuz: Dokumente schließen, Fenster versteckt, Novadesk läuft weiter (Hinweis einmal). Infobereich »Öffnen«: das
     Fenster ist wieder da – auf der Startseite, ohne die geschlossenen Dokumente."""
     h = resident
     assert h.runtime.background.active and not h.qt.quitOnLastWindowClosed()
@@ -138,7 +142,7 @@ def test_close_button_hides_the_window_and_keeps_running(resident, tmp_path: Pat
     pump(0.2)
     assert not h.window.isVisible() and not h.app.closing
     assert reader(h).tabs.count == 0 and h.app.currentPage == "home"
-    assert h.trays[0].messages and h.trays[0].messages[0][0] == "PDF Tool läuft im Hintergrund weiter"
+    assert h.trays[0].messages and h.trays[0].messages[0][0] == "Novadesk läuft im Hintergrund weiter"
     assert h.quits == []
     h.app.present_window()
     assert wait_until(lambda: h.window.isVisible(), 5)
@@ -158,7 +162,7 @@ def test_unsaved_question_cancelled_keeps_the_window(resident, tmp_path: Path, m
     settle(h)
     reasons: list[str] = []
 
-    def cancel(reason="PDF Tool wird beendet."):
+    def cancel(reason="Novadesk wird beendet."):
         reasons.append(reason)
         return False
 
@@ -214,7 +218,7 @@ def test_quit_from_tray_ends_the_app(resident) -> None:
 
 
 def test_update_quits_completely(resident) -> None:
-    """Vor der Installation eines Updates endet PDF Tool ganz – das Kreuz-Verhalten gilt dabei nicht."""
+    """Vor der Installation eines Updates endet Novadesk ganz – das Kreuz-Verhalten gilt dabei nicht."""
     h = resident
     assert h.updates._quit_app() is True  # noqa: SLF001
     assert h.app.closing and h.quits == [1]

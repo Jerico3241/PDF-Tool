@@ -1,4 +1,4 @@
-"""Baut die Windows-Setup-Datei von PDF Tool mit Inno Setup.
+"""Baut die Windows-Setup-Datei von Novadesk mit Inno Setup.
 
     python windows-app/build.py
 
@@ -52,6 +52,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -132,7 +133,22 @@ LLAMA_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_REL
 LLAMA_SHA256 = "a23e548c6b3525c38bcfeceaff919786ae06741857043cb670279b70100e5483"  # Datei des Releases, über HTTPS von github.com
 LLAMA_BACKENDS = "ggml-cpu-*.dll"  # lädt llama-server zur Laufzeit (nicht in den Importtabellen)
 AI = PAYLOAD / "ai"  # passt zu assistant/runtime.py (BUNDLED_DIR)
-# Startprogramm PDF-Tool.exe (Symbol und Name von PDF Tool in »Öffnen mit«, bei den Standard-Apps und im Startmenü)
+# LibreOffice (seit 5.0, MPL-2.0): Office-Dateien ansehen und in PDF umwandeln. Das offizielle MSI der Document
+# Foundation (Zweig »still«, gut abgehangen) wird nur entpackt (Administrator-Installation ``msiexec /a``, nichts wird
+# auf dem Build-Rechner installiert) und unverändert nach office\ übernommen. Prüfsumme wie im Paket
+# »libreoffice-still« von Chocolatey (chocolateyInstall.ps1, checksum64), das dieselbe Datei von TDF lädt.
+LIBREOFFICE_VERSION = "26.2.6"
+LIBREOFFICE_MSI = f"LibreOffice_{LIBREOFFICE_VERSION}_Win_x86-64.msi"
+LIBREOFFICE_URL = f"https://download.documentfoundation.org/libreoffice/stable/{LIBREOFFICE_VERSION}/win/x86_64/{LIBREOFFICE_MSI}"
+LIBREOFFICE_ARCHIVE = "https://downloadarchive.documentfoundation.org/libreoffice/old/"  # ältere Versionen
+LIBREOFFICE_SHA256 = "f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660"
+OFFICE = PAYLOAD / "office"  # passt zu tools/pdf_editor/office.py (BUNDLED_DIR)
+# Das MSI enthält die Oberfläche in allen Sprachen. Ins Setup kommen nur Deutsch und Englisch (wie bei einer Installation
+# ohne weitere Sprachpakete): Übersetzungen, Autokorrektur, Textbausteine, Vorlagen, Wörterbücher und Liesmich anderer
+# Sprachen bleiben weg, ebenso die Java-Erweiterungen (Wiki-Publisher, Solver). Keine Datei wird verändert.
+OFFICE_LANGUAGES = ("de", "en")
+OFFICE_REMOVE_EXTENSIONS = ("wiki-publisher", "nlpsolver")
+# Startprogramm PDF-Tool.exe (Symbol und Name von Novadesk in »Öffnen mit«, bei den Standard-Apps und im Startmenü)
 LAUNCHER_SOURCE = ROOT / "installer" / "launcher"
 LAUNCHER = PAYLOAD / "PDF-Tool.exe"
 
@@ -304,7 +320,11 @@ REQUIRED_NATIVE = [
 
 
 def log(text: str) -> None:
-    print(text, flush=True)
+    try:
+        print(text, flush=True)
+    except UnicodeEncodeError:  # Konsole von Windows (cp1252): Zeichen außerhalb ersetzen, statt den Build abzubrechen
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(encoding, "replace").decode(encoding), flush=True)
 
 
 def annotate(kind: str, title: str, text: str) -> None:
@@ -562,6 +582,136 @@ def prepare_ai(target: Path, search: list[Path]) -> None:
     remove(unpacked)
 
 
+def prepare_office(target: Path, search: list[Path]) -> None:
+    """LibreOffice nach ``target`` (``office\\``): das offizielle MSI per Administrator-Installation entpacken
+    (``msiexec /a`` – nur auspacken, nichts installieren) und den Programmordner unverändert übernehmen. Die Laufzeit
+    von Microsoft Visual C++ installiert das MSI sonst systemweit: Fehlt sie im Paket, kommt sie aus ``search`` (dieselben
+    Dateien wie die von Python und PySide6) nach ``office\\program``. Danach eine Probe: eine Tabelle in PDF umwandeln."""
+    msi = download_libreoffice()
+    if sys.platform != "win32":
+        fail("LibreOffice lässt sich nur unter Windows entpacken (msiexec /a).")
+    unpacked = BUILD / "libreoffice"
+    remove(unpacked)
+    unpacked.mkdir(parents=True)
+    log(f"Entpacke LibreOffice {LIBREOFFICE_VERSION} (msiexec /a) …")
+    result = subprocess.run(["msiexec", "/a", str(msi), "/qn", f"TARGETDIR={unpacked}", "/l*v", str(BUILD / "libreoffice-msiexec.log")], check=False)
+    if result.returncode != 0:
+        fail(f"msiexec /a endete mit Code {result.returncode} (Protokoll: {BUILD / 'libreoffice-msiexec.log'})")
+    soffice = [path for path in unpacked.rglob("soffice.exe") if path.parent.name == "program"]
+    if len(soffice) != 1:
+        fail(f"Im entpackten LibreOffice {'fehlt' if not soffice else 'gibt es mehrfach'}: program\\soffice.exe")
+    root = soffice[0].parent.parent
+    shutil.copytree(root, target, ignore=shutil.ignore_patterns("*.msi"))
+    saved = prune_office(target)
+    log(f"  andere Sprachen und Java-Erweiterungen weggelassen: {saved / 1e6:.0f} MB")
+    program = target / "program"
+    binaries = [path for path in program.iterdir() if path.suffix.lower() in (".exe", ".dll", ".bin")]
+    needed = qtruntime.dependency_closure(binaries, [program, *search])
+    added = sorted(path for path in needed if path.parent != program)
+    for path in added:
+        shutil.copy2(path, program / path.name)
+    problems = release_check.check_office(PAYLOAD)
+    if problems:
+        fail("LibreOffice im Paket unvollständig: " + "; ".join(problems))
+    probe_office(program)
+    count = sum(1 for path in target.rglob("*") if path.is_file())
+    size = sum(path.stat().st_size for path in target.rglob("*") if path.is_file())
+    log(f"LibreOffice {LIBREOFFICE_VERSION}: {count} Dateien ({size / 1e6:.0f} MB), Laufzeit ergänzt: {', '.join(path.name for path in added) or '-'}")
+    annotate("notice", "LibreOffice im Setup", f"{LIBREOFFICE_VERSION}, {count} Dateien, {size / 1e6:.0f} MB")
+    remove(unpacked)
+
+
+def download_libreoffice() -> Path:
+    """Das MSI von LibreOffice laden (Prüfsumme wie eingetragen). Unter ``/stable/`` liegen nur die aktuellen Versionen –
+    ist die eingetragene dort schon ersetzt, kommt dieselbe Datei aus dem Archiv (Ordner und Name dort mit vierteiliger
+    Versionsnummer, z. B. ``26.2.6.2``)."""
+    dest = CACHE / LIBREOFFICE_MSI
+    try:
+        return download(LIBREOFFICE_URL, dest, LIBREOFFICE_SHA256)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+    log(f"LibreOffice {LIBREOFFICE_VERSION} nicht mehr unter /stable/ – suche im Archiv")
+    with urllib.request.urlopen(LIBREOFFICE_ARCHIVE) as response:
+        index = response.read().decode("utf-8", "replace")
+    builds = sorted(set(re.findall(rf'href="({re.escape(LIBREOFFICE_VERSION)}\.\d+)/"', index)), key=lambda name: int(name.rsplit(".", 1)[1]))
+    if not builds:
+        fail(f"LibreOffice {LIBREOFFICE_VERSION} weder unter /stable/ noch im Archiv ({LIBREOFFICE_ARCHIVE}) gefunden")
+    build = builds[-1]
+    return download(f"{LIBREOFFICE_ARCHIVE}{build}/win/x86_64/LibreOffice_{build}_Win_x86-64.msi", dest, LIBREOFFICE_SHA256)
+
+
+def _office_language(name: str) -> str:
+    """Sprachkennung aus einem Datei- oder Ordnernamen (»registry_pt-BR.xcd« → »pt-br«, »acor_de-DE.dat« → »de-de«)."""
+    stem = name.split(".")[0]
+    for prefix in ("registry_", "fcfg_langpack_", "acor_", "readme_", "dict-", "license_"):
+        if stem.startswith(prefix):
+            stem = stem[len(prefix):]
+    return stem.replace("_", "-").lower()
+
+
+def _keep_language(code: str) -> bool:
+    return any(code == language or code.startswith(language + "-") for language in OFFICE_LANGUAGES)
+
+
+def prune_office(target: Path) -> int:
+    """Andere Sprachen und Java-Erweiterungen aus dem entpackten LibreOffice entfernen; gibt die gesparten Bytes zurück."""
+    removed: list[Path] = []
+    resource = target / "program" / "resource"
+    if resource.is_dir():
+        removed += [path for path in resource.iterdir() if path.is_dir() and not _keep_language(_office_language(path.name))]
+    share = target / "share"
+    for folder, pattern in (("registry/res", "registry_*.xcd"), ("registry/res", "fcfg_langpack_*.xcd"), ("autocorr", "acor_*.dat")):
+        if (share / folder).is_dir():
+            removed += [path for path in (share / folder).glob(pattern) if not _keep_language(_office_language(path.name))]
+    for folder in ("autotext", "template", "wordbook"):
+        if (share / folder).is_dir():
+            removed += [path for path in (share / folder).iterdir()
+                        if path.is_dir() and re.fullmatch(r"[a-z]{2,3}(?:[-_][A-Za-z0-9]+)*", path.name) and not _keep_language(_office_language(path.name))]
+    extensions = share / "extensions"
+    if extensions.is_dir():
+        for path in extensions.iterdir():
+            if path.name.startswith("dict-") and not _keep_language(_office_language(path.name)):
+                removed.append(path)
+            elif path.name in OFFICE_REMOVE_EXTENSIONS:
+                removed.append(path)
+    readmes = target / "readmes"
+    if readmes.is_dir():
+        removed += [path for path in readmes.glob("readme_*") if not _keep_language(_office_language(path.name))]
+    saved = 0
+    for path in removed:
+        if path.is_dir():
+            saved += sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+            shutil.rmtree(path)
+        elif path.is_file():
+            saved += path.stat().st_size
+            path.unlink()
+    return saved
+
+
+def probe_office(program: Path) -> None:
+    """Das entpackte LibreOffice wandelt eine kleine Tabelle (CSV) in PDF um – sonst bricht der Build ab."""
+    work = BUILD / "libreoffice-probe"
+    remove(work)
+    work.mkdir(parents=True)
+    source = work / "probe.csv"
+    source.write_text("Vertrag;Betrag\nWartung;250,00\n", encoding="utf-8")
+    command = [str(program / "soffice.com"), "--headless", "--invisible", "--nologo", "--norestore", "--nodefault", "--nolockcheck",
+               f"-env:UserInstallation={(work / 'profil').as_uri()}", "--infilter=Text - txt - csv (StarCalc):59,34,76,1",
+               "--convert-to", "pdf", "--outdir", str(work), str(source)]
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=600, check=False)
+    except subprocess.TimeoutExpired:
+        subprocess.run(["taskkill", "/F", "/T", "/IM", "soffice.bin"], capture_output=True, check=False)
+        fail("Probe fehlgeschlagen: LibreOffice hat die Tabelle nicht innerhalb von 10 Minuten umgewandelt.")
+    pdf = work / "probe.pdf"
+    if result.returncode != 0 or not pdf.is_file() or not pdf.read_bytes().startswith(b"%PDF"):
+        fail("Probe fehlgeschlagen: LibreOffice hat keine PDF erstellt "
+             f"(Code {result.returncode}): {(result.stdout + result.stderr).decode('utf-8', 'replace')[-1500:]}")
+    log(f"  Probe: CSV -> PDF ({pdf.stat().st_size // 1024} KB)")
+    remove(work)
+
+
 def _vcvars() -> Path | None:
     """vcvars64.bat von Visual Studio (Build Tools) über vswhere – unter Windows."""
     vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
@@ -576,12 +726,14 @@ def _vcvars() -> Path | None:
 
 def build_launcher(target: Path, version: str) -> None:
     """``PDF-Tool.exe`` aus ``installer/launcher`` bauen: startet ``runtime\\pythonw.exe -s -OO app\\start.py`` mit den
-    übergebenen Argumenten und trägt Symbol, Name und Version von PDF Tool. Windows: Visual C++ (vswhere), sonst
+    übergebenen Argumenten und trägt Symbol, Name und Version von Novadesk. Windows: Visual C++ (vswhere), sonst
     MinGW-w64 (``x86_64-w64-mingw32-gcc``/``windres``)."""
     work = BUILD / "launcher"
     remove(work)
     shutil.copytree(LAUNCHER_SOURCE, work)
     shutil.copy2(ASSETS / "icon.ico", work / "icon.ico")
+    for icon in sorted(ASSETS.glob("datei-*.ico")):  # Symbole der Dateiarten (launcher.rc, Nummern 10–14)
+        shutil.copy2(icon, work / icon.name)
     numbers = [int(part) for part in re.findall(r"\d+", version.split("-")[0])[:3]] + [0, 0, 0]
     number = ",".join(str(value) for value in numbers[:3] + [0])
     # Version für die Ressourcen (launcher.rc bindet version.h ein) – keine Anführungszeichen auf der Befehlszeile
@@ -644,11 +796,12 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copytree(ASSETS, PAYLOAD / "assets")
     shutil.copy2(ROOT / "README.txt", PAYLOAD / "README.txt")
     shutil.copy2(ROOT.parent / "THIRD_PARTY_LICENSES.md", PAYLOAD / "THIRD_PARTY_LICENSES.md")
-    shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von PDF Tool, ohne Zustimmungsseite im Setup
+    shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von Novadesk, ohne Zustimmungsseite im Setup
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
     build_launcher(LAUNCHER, version)
     prepare_ocr(OCR)
     prepare_ai(AI, [runtime, site / "PySide6"])
+    prepare_office(OFFICE, [runtime, site / "PySide6"])
 
     if compile_pyc:
         python = python_for_runtime()
@@ -672,6 +825,9 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     problems = release_check.check_ai(PAYLOAD)
     if problems:
         fail("KI-Laufzeit im Paket unvollständig: " + "; ".join(problems))
+    problems = release_check.check_office(PAYLOAD)
+    if problems:
+        fail("LibreOffice im Paket unvollständig: " + "; ".join(problems))
 
 
 # --- Assistentenbilder -------------------------------------------------------------
@@ -789,7 +945,7 @@ def main() -> None:
     args = parser.parse_args()
 
     version = read_version()
-    log(f"PDF Tool {version}")
+    log(f"Novadesk {version}")
     iscc = find_iscc()
     remove(DIST)
     if not (args.reuse_payload and PAYLOAD.is_dir()):

@@ -2,6 +2,27 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.1
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.1.md).
+
+- Name Novadesk (Anzeige, Setup, Startmenü, Launcher-Ressourcen); technische Kennungen bleiben gleich (AppId,
+  Ordner `PDF-Tool*`, `PDF-Tool.exe`, `Jerico.PDFTool`, ProgID `PDFTool.Dokument`, Setup-Name). Das Setup entfernt
+  die alten Verknüpfungen und die Einträge »PDF Tool« unter `Run` und `RegisteredApplications`.
+- Neues App-Symbol und Dateisymbole je Dateiart (SVG unter `assets/symbole/`, `scripts/make_icons.py` mit
+  `render_svg.mjs`); Launcher-Symbole 10–14, ProgIDs `Novadesk.Text`, `.Tabelle`, `.Praesentation`, `.Csv`
+  (nur »Öffnen mit«). Die Flaticon-Vorlage entfällt in der App.
+- LibreOffice 26.2.6 im Setup (`office\`, `build.py prepare_office`: MSI mit Prüfsumme, `msiexec /a`, nur
+  Deutsch/Englisch, VC-Laufzeit ergänzt, Probe CSV → PDF; `release_check.check_office`). Setup höchstens 480 MiB,
+  damit der Updater von 4.0 (bis 512 MiB) es annimmt; der neue Updater nimmt bis 1536 MiB.
+- `office.to_pdf`: LibreOffice zuerst, Microsoft Office (COM) als Rückfall; CSV mit erkanntem Trennzeichen und
+  Zeichensatz, Zeitlimit, verschlüsselte Dateien mit klarer Meldung.
+- Reader: Office-Dateien als Tab (`Session.from_office`, temporäre Umwandlung ohne Zwischenspeicher), Tab mit
+  Originalname und Farbe der Dateiart, Sitzung und »Zuletzt verwendet« mit Originalpfad, Hinweisleiste mit
+  »Vertragsübersicht erstellen« und »Im Standardprogramm öffnen«.
+- Startseite: Willkommenskopf, Karten je Dateiart (`Reader.openKind`), »Zuletzt verwendet« mit Symbolen und
+  Filter nach Dateiart.
+
 # PDF Tool 4.0.0
 
 Freigegebene Version – getestet als Betas 4.0.0-beta.1 bis 4.0.0-beta.9, Funktionsumfang wie 4.0.0-beta.9.

@@ -75,11 +75,11 @@ def test_output_intent_and_xmp_identification(tmp_path):
         assert intent.S == "/GTS_PDFA1"
         assert "/DestOutputProfile" in intent
         packet = pdf.Root.Metadata.read_bytes().decode("utf-8")
-        assert pdf.docinfo.Producer == "PDF Tool"
+        assert pdf.docinfo.Producer == "Novadesk"
         assert pdf.pdf_version >= "1.7"
     assert "<pdfaid:part>2</pdfaid:part>" in packet
     assert "<pdfaid:conformance>B</pdfaid:conformance>" in packet
-    assert "PDF Tool" in packet
+    assert "Novadesk" in packet
 
 
 def test_signature_and_attachments_are_removed_with_a_note(tmp_path):

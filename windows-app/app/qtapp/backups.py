@@ -5,7 +5,7 @@
 * »Jetzt sichern …«: Ordner wählen, Sicherung im Hintergrund erstellen und prüfen.
 * »Wiederherstellen …«: Sicherung wählen → vollständig prüfen → Zusammenfassung mit Auswahl der
   Bereiche → Sicherung des aktuellen Stands → Wiederherstellung vorbereiten → Neustart.
-  Eine Sicherung einer neueren PDF-Tool-Version wird nie eingespielt.
+  Eine Sicherung einer neueren Novadesk-Version wird nie eingespielt.
 * Vor jedem Update: Sicherung des aktuellen Stands (``backup_before_update``).
 
 Alles bleibt lokal. Während einer Sicherung oder Wiederherstellung startet kein Update.
@@ -31,7 +31,7 @@ from .models import KeyedListModel
 
 AREA = "sicherung_info"
 AUTO_DELAY = 15_000  # ms nach dem Start
-FILTER = "Sicherung von PDF Tool (*.pdtbackup);;Alle Dateien (*.*)"
+FILTER = "Sicherung von Novadesk (*.pdtbackup);;Alle Dateien (*.*)"
 RECENT = 8
 
 
@@ -329,7 +329,7 @@ class BackupController(Observable):
         answer, result = self.app.dialogs.ask(
             "restore_summary",
             "Sicherung wiederherstellen?",
-            "Die gewählten Bereiche werden durch den Stand der Sicherung ersetzt. Vorher sichert PDF Tool den aktuellen Stand automatisch. Danach startet PDF Tool neu.",
+            "Die gewählten Bereiche werden durch den Stand der Sicherung ersetzt. Vorher sichert Novadesk den aktuellen Stand automatisch. Danach startet Novadesk neu.",
             primary="Wiederherstellen",
             close="Abbrechen",
             danger=True,
@@ -361,7 +361,7 @@ class BackupController(Observable):
             self._log("info", "Wiederherstellung vorbereitet aus %s (%s), Sicherung vorher: %s", plan.backup, ", ".join(plan.areas), plan.pre_backup)
             if self.app.dialogs.confirm(
                 "Neu starten",
-                f"Die Wiederherstellung ({restore.area_labels(plan.areas)}) ist vorbereitet. PDF Tool startet jetzt neu und spielt sie ein. Der bisherige Stand ist gesichert in „{plan.pre_backup}“.",
+                f"Die Wiederherstellung ({restore.area_labels(plan.areas)}) ist vorbereitet. Novadesk startet jetzt neu und spielt sie ein. Der bisherige Stand ist gesichert in „{plan.pre_backup}“.",
                 "Jetzt neu starten",
                 danger=False,
             ):

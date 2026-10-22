@@ -57,13 +57,4 @@ ColumnLayout {
             PText { text: I18n.tr(root.data_.author || "", I18n.revision); textStyle: "caption"; tone: "tertiary" }
         }
     }
-    // Namensnennung des App-Symbols, von der Flaticon-Lizenz verlangt (siehe THIRD_PARTY_LICENSES.md)
-    PText {
-        objectName: "aboutIconCredit"
-        text: I18n.tr("App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)", I18n.revision)
-        textStyle: "caption"
-        tone: "tertiary"
-        wrap: true
-        Layout.fillWidth: true
-    }
 }

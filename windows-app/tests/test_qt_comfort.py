@@ -333,7 +333,7 @@ def test_session_restore_off_by_default_and_on_after_enabling(ui_app, tmp_path: 
 
 def test_session_restore_keeps_a_document_opened_with_the_app_active(ui_app, tmp_path: Path, monkeypatch) -> None:
     """»Öffnen mit« beim Start: die PDFs der letzten Sitzung kommen als weitere Tabs dazu – aktiv bleibt die PDF, mit
-    der PDF Tool gestartet wurde. Schon offene Dateien öffnen sich nicht zweimal."""
+    der Novadesk gestartet wurde. Schon offene Dateien öffnen sich nicht zweimal."""
     from qtapp.reader import controller as reader_module
     from qtutil import Harness
 

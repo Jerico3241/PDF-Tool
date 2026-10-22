@@ -8,7 +8,7 @@ manche Office-Programme Logos ein). Bilder in Formularen mit weiterem Inhalt ble
 Geändert wird nur die Platzierung im Inhaltsstrom (eine Matrix um den ``Do``-Aufruf) bzw. der
 Aufruf selbst – die Bilddaten bleiben unverändert (beim Ersetzen kommt ein neues Bild hinzu).
 Wie beim Text gilt: neue Inhaltsströme statt Änderungen in place, alles über ``commands.record``.
-Die Ebene (Vorder-/Hintergrund) lässt sich nur für Bilder ändern, die PDF Tool eingefügt hat.
+Die Ebene (Vorder-/Hintergrund) lässt sich nur für Bilder ändern, die Novadesk eingefügt hat.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from .document import EditorDocument
 from .errors import UnsupportedEdit
 from .geometry import Rect, normalize
 
-IMAGE_PREFIX = "/PTI"  # Ressourcennamen der von PDF Tool eingefügten Bilder
+IMAGE_PREFIX = "/PTI"  # Ressourcennamen der von Novadesk eingefügten Bilder
 MAX_PIXELS = 60_000_000  # größere Bilder werden abgelehnt (Speicher)
 FORMATS = ("PNG", "JPEG")
 
@@ -45,7 +45,7 @@ class ImageItem:
     quad: tuple[tuple[float, float], ...]  # Ecken (unten links, unten rechts, oben rechts, oben links)
     pixels: tuple[int, int]
     kind: str  # image, inline, form
-    ours: bool  # von PDF Tool eingefügt (Ebene änderbar)
+    ours: bool  # von Novadesk eingefügt (Ebene änderbar)
     editable: bool
     reason: str = ""
 
@@ -362,7 +362,7 @@ def insert(document: EditorDocument, history: History, page: int, path: str | os
 
 
 def arrange(document: EditorDocument, history: History, page: int, index: int, front: bool) -> None:
-    """Ein von PDF Tool eingefügtes Bild ganz nach vorn oder ganz nach hinten legen."""
+    """Ein von Novadesk eingefügtes Bild ganz nach vorn oder ganz nach hinten legen."""
     document.ensure_editable()
     content, op = _op(document, page, index)
     if not op.name.startswith(IMAGE_PREFIX):

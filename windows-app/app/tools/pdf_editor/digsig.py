@@ -2,7 +2,7 @@
 
 Signiert wird nach PAdES (``ETSI.CAdES.detached``, Stufe B-B): ein CMS-Paket mit SHA-256 über alle Bytes der Datei
 außer dem Platz für die Signatur selbst. Die Signatur kommt als inkrementelle Aktualisierung hinter das unveränderte
-Original – frühere Signaturen bleiben gültig. Ein PDF ohne Signatur schreibt PDF Tool vorher einmal neu (gleicher
+Original – frühere Signaturen bleiben gültig. Ein PDF ohne Signatur schreibt Novadesk vorher einmal neu (gleicher
 Inhalt, einfache Querverweistabelle), damit die Aktualisierung in jedem Programm sauber lesbar ist.
 
 Das Zertifikat kommt aus dem Zertifikatspeicher von Windows (``winsign``, privater Schlüssel bleibt dort, auch auf
@@ -31,7 +31,7 @@ VERIFIABLE = ("/ETSI.CAdES.detached", "/adbe.pkcs7.detached")
 VALID = "valid"  # unverändert, Signatur korrekt
 CHANGED = "changed"  # Signatur korrekt, danach weitere Änderungen am Dokument
 INVALID = "invalid"  # Inhalt passt nicht mehr zur Signatur
-UNKNOWN = "unknown"  # Format, das PDF Tool nicht prüft
+UNKNOWN = "unknown"  # Format, das Novadesk nicht prüft
 
 
 TEST_SIGNER: Callable | None = None  # Tests: ersetzt den Zertifikatspeicher von Windows (Fingerabdruck → Signierer)
@@ -588,7 +588,7 @@ def _verify_one(data: bytes, item, pages: dict, trust) -> SignatureReport:
         except (TypeError, ValueError):
             pass
     if report.subfilter not in VERIFIABLE:
-        report.detail = "Dieses Signaturformat prüft PDF Tool nicht."
+        report.detail = "Dieses Signaturformat prüft Novadesk nicht."
         return report
     try:
         ranges = [int(number) for number in value.ByteRange]
@@ -654,7 +654,7 @@ def _check_cms(contents: bytes, signed: bytes):
     hashers = {"sha256": hashlib.sha256, "sha384": hashlib.sha384, "sha512": hashlib.sha512, "sha1": hashlib.sha1}
     crypto_hashes = {"sha256": hashes.SHA256(), "sha384": hashes.SHA384(), "sha512": hashes.SHA512(), "sha1": hashes.SHA1()}
     if algorithm not in hashers:
-        return UNKNOWN, "Dieses Prüfverfahren kennt PDF Tool nicht.", cert_der, certificates, None
+        return UNKNOWN, "Dieses Prüfverfahren kennt Novadesk nicht.", cert_der, certificates, None
     digest = hashers[algorithm](signed).digest()
     attrs = signer_info["signed_attrs"]
     signing_time = None
@@ -706,7 +706,7 @@ def default_trust():
             return winsign.trust
         except (ImportError, OSError):
             pass
-    return lambda cert, extra, when: ("unchecked", "Ob das Zertifikat vertrauenswürdig ist, prüft PDF Tool nur unter Windows.")
+    return lambda cert, extra, when: ("unchecked", "Ob das Zertifikat vertrauenswürdig ist, prüft Novadesk nur unter Windows.")
 
 
 def store_certificates() -> list[dict]:

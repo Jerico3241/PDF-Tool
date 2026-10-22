@@ -2,7 +2,7 @@
 
 Ein Link ist eine Anmerkung ``/Link`` mit einem Bereich und einem Ziel: eine Seite dieses Dokuments
 (``/Dest`` bzw. ``/A /GoTo``, auch benannte Ziele) oder eine Webadresse (``/A /URI``). Andere
-Aktionen (Skripte, Programme starten, andere Dateien öffnen) führt PDF Tool nie aus – solche Links
+Aktionen (Skripte, Programme starten, andere Dateien öffnen) führt Novadesk nie aus – solche Links
 erscheinen ohne Ziel.
 
 Neue Links sind unsichtbar umrandet (``/Border [0 0 0]``) und tragen ``/NM`` mit »pdftool-link-…«.

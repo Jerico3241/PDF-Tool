@@ -1,4 +1,4 @@
-"""Qt-Anwendungsschicht von PDF Tool: Controller, Modelle und Dienste zwischen Python-Kern und QML.
+"""Qt-Anwendungsschicht von Novadesk: Controller, Modelle und Dienste zwischen Python-Kern und QML.
 
 Aufbau (siehe README, Abschnitt »Architektur«):
 

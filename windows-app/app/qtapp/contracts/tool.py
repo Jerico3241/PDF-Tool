@@ -26,7 +26,7 @@ from .templates import TemplatesController
 
 HELP_STEPS = (
     "Die Excel-Datei wählen (Strg+O) oder in das Fenster ziehen – sie wird sofort geprüft.",
-    "Ist der Rechnungsempfänger als Kunde bekannt, bietet PDF Tool die Kundenakte an: »Übernehmen«.",
+    "Ist der Rechnungsempfänger als Kunde bekannt, bietet Novadesk die Kundenakte an: »Übernehmen«.",
     "Sonst Firmenname und Kundennummer eintragen oder »Bekannten Kunden auswählen« (Strg+F).",
     "Optional Logo, Zielordner sowie Kopf- und Fußzeile in der Ansicht »Darstellung« setzen; die »Vorschau« zeigt das Ergebnis.",
     "Auf »PDF erstellen« klicken oder Strg+Enter drücken.",

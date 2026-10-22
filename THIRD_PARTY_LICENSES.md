@@ -1,6 +1,6 @@
 # Lizenzen von Drittanbietern
 
-PDF Tool (Windows-App) wird mit einer eingebetteten Python-Laufzeit, den folgenden Paketen, der
+Novadesk (Windows-App, bis 4.0 »PDF Tool«) wird mit einer eingebetteten Python-Laufzeit, den folgenden Paketen, der
 Texterkennung Tesseract ([eigener Abschnitt](#texterkennung-ocr-tesseract-und-seine-bibliotheken)) und der
 Laufzeit des optionalen KI-Assistenten ([eigener Abschnitt](#ki-assistent-optional-llamacpp-und-sprachmodelle))
 ausgeliefert. Die Versionen und SHA-256-Prüfsummen stehen in
@@ -65,6 +65,20 @@ Laufzeit; Schriften selbst werden nie mitgeliefert, aus PDFs extrahiert oder wei
 Plugins und QML-Module, die die App lädt (`windows-app/qtruntime.py`): keine Entwicklerwerkzeuge
 (Designer, Linguist, qmlls …), keine weiteren Stile, kein Software-OpenGL (`opengl32sw.dll`), keine
 Übersetzungen – die Dateien selbst bleiben unverändert (Original-Wheel).
+
+## Office-Dateien (seit Novadesk 5.0.0-beta.1): LibreOffice
+
+- **LibreOffice 26.2.6** (The Document Foundation, https://www.libreoffice.org/): wandelt Texte, Tabellen und
+  Präsentationen (Word, Excel, PowerPoint, OpenDocument, RTF, CSV) zum Ansehen in PDF um. Mitgeliefert im
+  Ordner `office\` des Setups: das offizielle Windows-Paket (`LibreOffice_26.2.6_Win_x86-64.msi`, Prüfsumme in
+  `windows-app/build.py`), unverändert entpackt; entfernt sind nur Sprachen außer Deutsch und Englisch und die
+  Erweiterungen Wiki Publisher und NLPSolver. Novadesk startet `soffice` als eigenes Programm im Hintergrund
+  (`--headless --convert-to pdf`) mit einem eigenen Profil unter `%LOCALAPPDATA%\PDF-Tool-Office`.
+  Lizenz: Mozilla Public License 2.0; einzelne Teile stehen unter weiteren freien Lizenzen. Die vollständigen
+  Lizenztexte liegen dem Ordner `office\` bei (`LICENSE.html`, `license.txt`). Der Quellcode von LibreOffice
+  ist unter https://www.libreoffice.org/download/source-code/ erhältlich.
+- **Microsoft Visual C++ Runtime** für LibreOffice: dieselben weiterverteilbaren Laufzeitdateien wie für Python
+  und PySide6 (siehe oben), in `office\program\` kopiert.
 
 ## Texterkennung (OCR): Tesseract und seine Bibliotheken
 
@@ -196,14 +210,16 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
 
 ## Grafiken und Schriften
 
-- **App-Symbol von PDF Tool** (seit 4.0.0-beta.1): Symbol »Pdf« (Blatt mit Smiley und Abzeichen »PDF«,
-  Stil »lineal color«) von **Magnific** auf **Flaticon**
-  (https://www.flaticon.es/icono-gratis/pdf_10389560, Ersteller: https://www.flaticon.es/autores/magnific),
-  Vorlage `windows-app/assets/icon-source.png`. Daraus erzeugt `windows-app/scripts/make_icons.py` das
-  Windows-Symbol (`icon.ico`, 16–256 px; App, Taskleiste, Setup, Deinstallation) und die Favicons.
-  Lizenz: Flaticon-Lizenz für kostenlose Nutzung mit Namensnennung. Die Namensnennung steht hier und im
-  Fenster »Über« der App: »App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)«. Bis 3.2.0 war das
-  Symbol eine eigene Grafik aus einfachen Formen.
+- **App-Symbol und Dateisymbole von Novadesk** (seit 5.0.0-beta.1): eigene Grafiken (ein »N« vor drei
+  Seiten; je Dateiart ein Blatt in ihrer Farbe), Vorlagen als SVG unter `windows-app/assets/symbole/`. Daraus
+  erzeugt `windows-app/scripts/make_icons.py` `icon.ico`, `datei-*.ico` und die Bilder der Oberfläche. Die
+  Aufschrift der großen Dateisymbole (»XLSX«, »DOCX« …) ist in der Schrift **Inter** gesetzt und als Bild
+  gespeichert (Lizenz: SIL Open Font License 1.1); die Schrift selbst wird nicht mitgeliefert.
+- **Symbol der Website und App-Symbol von PDF Tool 4.0** (4.0.0-beta.1 bis 4.0.0): Symbol »Pdf« (Blatt mit
+  Smiley und Abzeichen »PDF«, Stil »lineal color«) von **Magnific** auf **Flaticon**
+  (https://www.flaticon.es/icono-gratis/pdf_10389560, Ersteller: https://www.flaticon.es/autores/magnific).
+  Die Website (`public/`) verwendet es bis zur stabilen Version 5.0 weiter. Lizenz: Flaticon-Lizenz für
+  kostenlose Nutzung mit Namensnennung: »App-Symbol: »Pdf« von Magnific – Flaticon (flaticon.com)«.
 - **Logo in den erzeugten Vertragsübersichten** (`windows-app/assets/hott_logo_final.png`):
   Dokument-Branding der Vertragsübersichten, unverändert aus den bisherigen Versionen übernommen;
   kein Bestandteil des App-Brandings.

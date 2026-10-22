@@ -80,7 +80,7 @@ class UpdateServer:
         """Release ``v<version>`` mit Setup (Standard: Testinhalt) und Prüfsummendatei anlegen."""
         tag = "v" + version
         name = f"PDF-Tool-Setup-{version}.exe"
-        data = setup if setup is not None else b"MZ" + (f"PDF Tool {version} Setup ".encode() * 20000)
+        data = setup if setup is not None else b"MZ" + (f"Novadesk {version} Setup ".encode() * 20000)
         actual = hashlib.sha256(data).hexdigest()
         assets = [self._asset(tag, name, data, actual if digest == "auto" else digest)]
         if checksum is not None:
@@ -90,7 +90,7 @@ class UpdateServer:
             0,
             {
                 "tag_name": tag,
-                "name": f"PDF Tool {version}",
+                "name": f"Novadesk {version}",
                 "body": notes,
                 "draft": draft,
                 "prerelease": ("-" in version) if prerelease is None else prerelease,

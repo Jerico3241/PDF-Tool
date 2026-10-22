@@ -1,4 +1,4 @@
-"""Startet PDF Tool und zeigt Fehler beim Start in einem Windows-Dialog.
+"""Startet Novadesk und zeigt Fehler beim Start in einem Windows-Dialog.
 
 Aufruf durch die Verknüpfungen: runtime\\pythonw.exe -s -OO app\\start.py
 (pythonw.exe öffnet kein Konsolenfenster).
@@ -18,7 +18,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 INSTALL_DIR = APP_DIR.parent
 RUNTIME = INSTALL_DIR / "runtime"
-APP_NAME = "PDF Tool"
+APP_NAME = "Novadesk"
 # Qt-Einstellungen von außen (z. B. einer anderen Qt-Installation) dürfen die App nicht stören.
 FOREIGN_QT_VARIABLES = ("QT_PLUGIN_PATH", "QML2_IMPORT_PATH", "QML_IMPORT_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH", "QT_QUICK_CONTROLS_STYLE", "QT_QUICK_CONTROLS_CONF")
 
@@ -61,7 +61,7 @@ def prepare_env() -> None:
 
 def main() -> None:
     prepare_env()
-    # Läuft PDF Tool schon (z. B. im Hintergrund): nur Bescheid geben und enden – ohne Qt zu laden
+    # Läuft Novadesk schon (z. B. im Hintergrund): nur Bescheid geben und enden – ohne Qt zu laden
     try:
         from handoff import early_forward, secure_transient, signal_started
 

@@ -1,4 +1,4 @@
-"""Datenprüfung: liest alle Daten von PDF Tool und meldet, was nicht stimmt – ändert nie etwas.
+"""Datenprüfung: liest alle Daten von Novadesk und meldet, was nicht stimmt – ändert nie etwas.
 
 Nur zwei Proben schreiben: je eine kurze Testdatei im Daten- und im Sicherungsordner (mit
 eigenem Präfix, sofort wieder entfernt), um die Schreibrechte zu prüfen.
@@ -57,7 +57,7 @@ def _customers(root: Path) -> Check:
         return Check("customers", "Kundenakten", ERROR, "kundenakten.json hat ein unbekanntes Format.")
     version = data.get("schema_version")
     if isinstance(version, int) and not isinstance(version, bool) and version > SCHEMA_VERSION:
-        return Check("customers", "Kundenakten", ERROR, "Mit einer neueren Version von PDF Tool gespeichert.")
+        return Check("customers", "Kundenakten", ERROR, "Mit einer neueren Version von Novadesk gespeichert.")
     return Check("customers", "Kundenakten", OK, _plural(len(data["customers"]), "Kundenakte", "Kundenakten") + ".")
 
 
@@ -116,9 +116,9 @@ def _writable(key: str, label: str, folder: Path) -> Check:
 def _temp() -> Check:
     try:
         with tempfile.TemporaryFile(prefix="pdf-tool-diagnose-") as handle:
-            handle.write(b"PDF Tool")
+            handle.write(b"Novadesk")
             handle.seek(0)
-            if handle.read() != b"PDF Tool":
+            if handle.read() != b"Novadesk":
                 raise OSError("Inhalt weicht ab")
     except OSError as exc:
         return Check("temp", "Temporärer Ordner", ERROR, f"Nicht nutzbar ({exc.strerror or exc}).")
@@ -189,5 +189,5 @@ def summary(checks: list[Check]) -> tuple[str, str]:
     if errors:
         return ERROR, f"{_plural(errors, 'Fehler', 'Fehler')}" + (f", {_plural(warnings, 'Hinweis', 'Hinweise')}" if warnings else "") + " gefunden."
     if warnings:
-        return WARNING, f"{_plural(warnings, 'Hinweis', 'Hinweise')} – PDF Tool arbeitet weiter, betroffene Dateien werden übersprungen."
+        return WARNING, f"{_plural(warnings, 'Hinweis', 'Hinweise')} – Novadesk arbeitet weiter, betroffene Dateien werden übersprungen."
     return OK, "Alles in Ordnung."

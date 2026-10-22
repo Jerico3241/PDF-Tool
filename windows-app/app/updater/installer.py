@@ -3,7 +3,7 @@
 Die App startet den Hilfsprozess ``launch.py`` (mit einer Kopie der eingebetteten Laufzeit neben dem Setup, ohne
 Konsolenfenster, vom App-Prozess gelöst) und beendet sich dann wie über das Schließen-Kreuz.
 Der Hilfsprozess wartet auf ihr Ende, prüft das Setup erneut und startet es – seit 4.0 still (nur
-ein Fortschrittsfenster, keine Fragen des Assistenten) und startet PDF Tool danach neu. Das Inno-Setup
+ein Fortschrittsfenster, keine Fragen des Assistenten) und startet Novadesk danach neu. Das Inno-Setup
 aktualisiert die vorhandene Installation (gleiche AppId) mit den bisherigen Einstellungen des Setups. Benutzerdaten liegen außerhalb des Programmordners und bleiben unberührt.
 
 Protokoll (Kategorie ``installer``): Start des Hilfsprozesses mit dem Namen des Setups – ohne

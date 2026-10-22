@@ -1,7 +1,7 @@
 """Sicherung und Wiederherstellung – Kern (Tests 102–104 der Vorgabe).
 
 * Format: ZIP ``.pdtbackup`` mit Manifest (Format, Version, Zeitpunkt, Art, Bereiche, SHA-256 je Datei).
-* Nur Daten von PDF Tool – nie Protokolle, andere Sicherungen, Excel-/PDF-Dateien oder Logos.
+* Nur Daten von Novadesk – nie Protokolle, andere Sicherungen, Excel-/PDF-Dateien oder Logos.
 * Erstellen atomar und nachgeprüft; Prüfen erkennt Beschädigung, fremde Pfade, neuere Versionen.
 * Wiederherstellen: vollständig oder je Bereich, atomar, mit Rückabwicklung bei Fehlern und nach
   einem Abbruch.
@@ -140,7 +140,7 @@ def test_inspect_summarizes_areas(tmp_path: Path) -> None:
     }
     assert info.kind_label == "Manuell" and info.app_version == VERSION and not info.notes
     older = archive.inspect_backup(result.path, app_version="2.7.2")  # mit 2.8 erstellt, in 2.7 gelesen …
-    assert any("Erstellt mit PDF Tool" in note for note in older.notes)
+    assert any("Erstellt mit Novadesk" in note for note in older.notes)
 
 
 def _rewrite(path: Path, change) -> None:
@@ -162,7 +162,7 @@ def _manifest(items: dict) -> dict:
     [
         ("inhalt", "Prüfsumme"),
         ("groesse", "Dateigröße"),
-        ("manifest_fehlt", "keine Sicherung von PDF Tool"),
+        ("manifest_fehlt", "keine Sicherung von Novadesk"),
         ("fremde_datei", "fremde Dateien"),
         ("pfad_ausserhalb", "ungültigen Dateipfad"),
         ("absoluter_pfad", "ungültigen Dateipfad"),

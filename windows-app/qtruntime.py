@@ -2,7 +2,7 @@
 
 Die Wheels von PySide6-Essentials bringen neben Qt Quick viele Werkzeuge und Module mit
 (Designer, Linguist, Material-/Fusion-Stile, Dialoge, SQL, Tests …). Im Setup bleibt nur,
-was PDF Tool zur Laufzeit lädt:
+was Novadesk zur Laufzeit lädt:
 
 * Python-Module (``.pyd``): ``PYTHON_MODULES`` – genau die, die ``import PySide6.…`` der App
   (auch indirekt, z. B. QtQml → QtNetwork) lädt. QtPrintSupport (seit 3.0.0) druckt aus dem PDF

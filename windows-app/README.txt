@@ -1,8 +1,14 @@
-PDF Tool für Windows
+Novadesk für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 4.0.0
+Version 5.0.0-beta.1
+
+Novadesk (bis Version 4.0 „PDF Tool“) ist ein Office für Windows: Texte,
+Tabellen, Präsentationen und PDFs an einem Ort, alles lokal auf diesem PC.
+Word-, Excel- und PowerPoint-Dateien (auch OpenDocument, RTF und CSV)
+öffnen sich in eigenen Tabs zum Ansehen; Bearbeiten kommt mit den nächsten
+Betas.
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -29,12 +35,13 @@ Werkzeuge für PDF-Dateien:
   Bedarf baut es die Dokumentstruktur aus den noch vorhandenen Objekten neu
   auf.
 
-Bis Version 2.2 hieß die App „Übersichten-Ersteller“.
+Bis Version 2.2 hieß die App „Übersichten-Ersteller“, bis Version 4.0
+„PDF Tool“.
 
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-4.0.0.exe
+PDF-Tool-Setup-5.0.0-beta.1.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -43,10 +50,30 @@ asn1crypto) und die
 Texterkennung Tesseract mit Sprachdaten für Deutsch, Englisch, Französisch,
 Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch und
 Russisch sowie die Laufzeit des
-optionalen KI-Assistenten (llama.cpp). Eine eigene Python-Installation,
-qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme sind nicht nötig.
-Das Sprachmodell des KI-Assistenten ist nicht enthalten – PDF Tool lädt es
-nur, wenn Sie den Assistenten einrichten.
+optionalen KI-Assistenten (llama.cpp) und LibreOffice 26.2 zum Ansehen von
+Texten, Tabellen und Präsentationen. Eine eigene Python-Installation,
+Microsoft Office, qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme
+sind nicht nötig. Das Sprachmodell des KI-Assistenten ist nicht enthalten –
+Novadesk lädt es nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 5.0 Beta 1 – Aus PDF Tool wird Novadesk
+-------------------------------------------------------
+Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
+Version bleibt 4.0.0.
+- Neuer Name und neues Symbol: Novadesk. Das Update von PDF Tool 4.0
+  übernimmt alle Einstellungen, Kundenakten, Vorlagen und Verknüpfungen.
+- Texte, Tabellen und Präsentationen öffnen sich direkt in einem eigenen
+  Tab zum Ansehen – mit dem eingebauten LibreOffice. „Speichern“ legt eine
+  PDF an, die Datei selbst bleibt unverändert.
+- Jede Dateiart hat ihr eigenes Symbol und ihre Farbe: Texte blau,
+  Tabellen grün, Präsentationen orange, PDFs rot – in den Tabs, unter
+  „Zuletzt verwendet“ und im Explorer („Öffnen mit“ → Novadesk).
+- Neue Startseite: oben je Dateiart „… öffnen“, die Liste „Zuletzt
+  verwendet“ lässt sich nach Dateiart filtern.
+- Aus einer geöffneten Excel-Tabelle direkt eine Vertragsübersicht
+  erstellen.
+- Alle Werkzeuge von PDF Tool 4.0 sind weiter da.
 
 
 Neu in Version 4.0 – Stapel-Aktionen, Vergleichen, Scannen, Englisch
@@ -403,7 +430,7 @@ Installation
    „Weitere Informationen“ → „Trotzdem ausführen“.
 3. Dem Assistenten folgen: Zielordner bestätigen, optional
    „Verknüpfung auf dem Desktop erstellen“ an- oder abwählen.
-4. Am Ende „PDF Tool starten“ angehakt lassen und „Fertigstellen“ wählen.
+4. Am Ende „Novadesk starten“ angehakt lassen und „Fertigstellen“ wählen.
 
 Programmdateien:  %LOCALAPPDATA%\PDF-Tool
 Ihre Daten:       %APPDATA%\PDF-Tool
@@ -418,12 +445,15 @@ PDF Editor:       %LOCALAPPDATA%\PDF-Tool-Editor
                   (ungespeicherte Änderungen für den Fall eines Absturzes,
                   Sicherungskopien vor dem Überschreiben einer PDF – je
                   Datei höchstens 3, nach 7 Tagen entfernt)
+Office-Ansicht:   %LOCALAPPDATA%\PDF-Tool-Office
+                  (Profil des eingebauten LibreOffice; umgewandelte
+                  Dateien werden nicht aufbewahrt)
 KI-Assistent:     %LOCALAPPDATA%\PDF-Tool-KI
                   (nur, wenn Sie ein Sprachmodell laden – nicht in
                   Sicherungen oder Support-Paketen; „Modell entfernen …“
                   und die Deinstallation löschen es)
 
-Die App erscheint im Startmenü unter „PDF Tool“ und unter
+Die App erscheint im Startmenü unter „Novadesk“ und unter
 Einstellungen → Apps → Installierte Apps.
 
 
@@ -447,6 +477,12 @@ erscheint.
 Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
+
+Update von PDF Tool 4.0.0 auf Novadesk 5.0.0-beta.1 (Kanal „Beta“): von
+selbst beim Start oder mit einem Klick, ohne Setup-Assistent. Die Ordner
+bleiben dieselben; Startmenü und Desktop zeigen danach „Novadesk“ statt
+„PDF Tool“. Alle Daten und Einstellungen bleiben erhalten. Das Setup ist
+wegen LibreOffice deutlich größer, der Download dauert entsprechend.
 
 Update von PDF Tool 3.2.0 (oder älter) auf 4.0.0: Das Setup ersetzt die
 Programmdateien – dieses eine Mal noch mit dem Setup-Assistenten, ab dem

@@ -98,8 +98,8 @@ class SettingsController(Observable):
         self.background = enabled
         self.app.persist()
         self.app.set_status(
-            "PDF Tool startet mit Windows und bleibt nach dem Schließen im Infobereich bereit." if enabled
-            else "PDF Tool startet nicht mehr mit Windows; das Schließen-Kreuz beendet es wieder.",
+            "Novadesk startet mit Windows und bleibt nach dem Schließen im Infobereich bereit." if enabled
+            else "Novadesk startet nicht mehr mit Windows; das Schließen-Kreuz beendet es wieder.",
             "success",
         )
 

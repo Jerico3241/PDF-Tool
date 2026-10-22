@@ -1,10 +1,10 @@
 """»Öffnen mit«: PDFs aus dem Explorer in der bereits laufenden App öffnen.
 
-Startet Windows PDF Tool mit einer PDF (``start.py "C:\\…\\datei.pdf"``) und läuft die App schon,
+Startet Windows Novadesk mit einer PDF (``start.py "C:\\…\\datei.pdf"``) und läuft die App schon,
 reicht der neue Prozess die Pfade über eine lokale Verbindung (Named Pipe, nur für diesen
 Benutzer) an die laufende App weiter und endet – die PDF öffnet sich dort als neuer Tab. Läuft
-keine App, startet PDF Tool normal und öffnet die PDF selbst. Ein weiterer Start ohne Pfade (z. B. über das
-Startmenü, während PDF Tool im Hintergrund bereitsteht) zeigt das Fenster der laufenden App.
+keine App, startet Novadesk normal und öffnet die PDF selbst. Ein weiterer Start ohne Pfade (z. B. über das
+Startmenü, während Novadesk im Hintergrund bereitsteht) zeigt das Fenster der laufenden App.
 
 Übertragen werden nur Dateipfade (keine Inhalte); die laufende App prüft jeden Pfad (vorhandene
 Datei, höchstens ``MAX_PATHS``) und öffnet PDFs nur zum Lesen – geändert wird nichts ohne den
@@ -29,7 +29,7 @@ def forward(paths: list[str], name: str | None = None, show: bool = True) -> boo
     """Pfade an eine laufende App senden. ``True``: angenommen – dieser Prozess kann enden.
 
     Ohne Pfade: ``show=True`` – die laufende App zeigt ihr Fenster (weiterer Start über das Startmenü);
-    ``show=False`` – nur prüfen, ob PDF Tool schon läuft (Start mit Windows)."""
+    ``show=False`` – nur prüfen, ob Novadesk schon läuft (Start mit Windows)."""
     from PySide6.QtNetwork import QLocalSocket
 
     socket = QLocalSocket()

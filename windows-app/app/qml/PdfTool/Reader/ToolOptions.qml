@@ -151,7 +151,7 @@ Item {
                 currentIndex: root.doc ? Math.max(0, indexOfValue(root.doc.fontSize)) : 2
                 onActivated: (index) => root.doc.fontSize = model[index].value
             }
-            // Kommentar ausgewählt: Eigenschaften (nur bei Kommentaren aus PDF Tool – ihr Bild wird neu erzeugt)
+            // Kommentar ausgewählt: Eigenschaften (nur bei Kommentaren aus Novadesk – ihr Bild wird neu erzeugt)
             PComboBox {
                 objectName: "readerAnnotationWidth"
                 visible: root.ownAnnotation && root.annotation.width >= 0

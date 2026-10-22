@@ -19,7 +19,7 @@ Geprüft wird:
   (``check_ocr`` – auch ``build.py`` ruft es auf)
 
 Mit ``--github-output`` schreibt das Skript die Angaben für den Release-Schritt: ``version``,
-``tag`` (``v<Version>``), ``title`` (``PDF Tool <Version>``), ``prerelease`` (``true`` für Beta),
+``tag`` (``v<Version>``), ``title`` (``Novadesk <Version>``), ``prerelease`` (``true`` für Beta),
 ``setup``, ``checksum`` und ``notes``. Ein Beta-Release wird damit immer als GitHub-Vorabversion
 veröffentlicht, ein stabiles nie – eine Beta wird nie automatisch zu Stable.
 """
@@ -51,6 +51,12 @@ WINDOWS_DLLS = frozenset({
 })
 PE_MACHINE_X64 = 0x8664
 AI_DIR = "ai"  # KI-Assistent: llama.cpp (assistant/runtime.py)
+# Der Updater von PDF Tool 4.0 lädt höchstens 512 MiB (updater/github.py, MAX_INSTALLER_SIZE) – mit Abstand darunter
+MAX_SETUP_SIZE = 480 * 1024 * 1024
+OFFICE_DIR = "office"  # LibreOffice (seit 5.0, tools/pdf_editor/office.py)
+OFFICE_FILES = ("program/soffice.exe", "program/soffice.com", "program/soffice.bin", "program/mergedlo.dll")
+OFFICE_LICENSES = ("LICENSE.html", "license.txt", "LICENSE")
+VC_RUNTIME_PREFIXES = ("msvcp1", "vcruntime", "vcomp1", "concrt1")  # Visual-C++-Laufzeit (seit 2015: …140*.dll)  # mindestens einer der Lizenztexte von LibreOffice
 AI_SERVER = "llama-server.exe"
 AI_BACKENDS = "ggml-cpu-*.dll"  # Rechenwerke, die llama-server zur Laufzeit lädt
 
@@ -129,6 +135,8 @@ def check(dist: Path, version: str, notes_dir: Path | None = None, min_size: int
         return problems + [f"Prüfsummendatei fehlt: {checksum.name}"]
     if setup.stat().st_size < min_size:
         problems.append(f"Setup ist verdächtig klein ({setup.stat().st_size} Bytes)")
+    if setup.stat().st_size > MAX_SETUP_SIZE:
+        problems.append(f"Setup ist zu groß für das Update aus PDF Tool 4.0 ({setup.stat().st_size} Bytes, höchstens {MAX_SETUP_SIZE})")
     file_version = pe_file_version(setup)
     if file_version != numeric_version(version):
         problems.append(f"Dateiversion des Setups ist {file_version}, erwartet {numeric_version(version)}")
@@ -207,6 +215,38 @@ def check_ocr(payload: Path) -> list[str]:
     return problems
 
 
+def check_office(payload: Path) -> list[str]:
+    """Probleme von LibreOffice im Paket (leer = in Ordnung): ``office\\program`` mit soffice (64 Bit) und der
+    Hauptbibliothek, dazu die Lizenztexte; kein MSI (nur der entpackte Programmordner gehört ins Setup)."""
+    folder = Path(payload) / OFFICE_DIR
+    problems = [f"Im Paket fehlt: {OFFICE_DIR}/{rel}" for rel in OFFICE_FILES if not (folder / rel).is_file()]
+    executable = folder / "program" / "soffice.exe"
+    if executable.is_file() and pe_machine(executable) != PE_MACHINE_X64:
+        problems.append(f"{OFFICE_DIR}/program/soffice.exe ist keine Windows-Programmdatei für 64 Bit")
+    if folder.is_dir() and not any((folder / name).is_file() for name in OFFICE_LICENSES):
+        problems.append(f"Lizenztext von LibreOffice fehlt in {OFFICE_DIR}/ ({' oder '.join(OFFICE_LICENSES)})")
+    if folder.is_dir() and any(folder.rglob("*.msi")):
+        problems.append(f"Im Ordner {OFFICE_DIR}/ liegt ein MSI (gehört nicht ins Setup)")
+    program = folder / "program"
+    if program.is_dir():
+        # Visual-C++-Laufzeit: Das MSI installiert sie sonst systemweit – im Paket muss jede DLL davon, die ein Programm
+        # oder eine Bibliothek von LibreOffice lädt, neben ihr liegen (auf dem Build-PC fiele ihr Fehlen nicht auf)
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
+        from qtruntime import pe_imports
+
+        present = {path.name.lower() for path in program.iterdir() if path.is_file()}
+        missing: set[str] = set()
+        for binary in program.iterdir():
+            if binary.suffix.lower() in (".exe", ".dll", ".bin") and binary.is_file():
+                for name in pe_imports(binary):
+                    if name.lower().startswith(VC_RUNTIME_PREFIXES) and name.lower() not in present:
+                        missing.add(name)
+        if missing:
+            problems.append(f"Für LibreOffice fehlt die Visual-C++-Laufzeit in {OFFICE_DIR}/program/: " + ", ".join(sorted(missing, key=str.lower)))
+    return problems
+
+
 def check_ai(payload: Path) -> list[str]:
     """Probleme der KI-Laufzeit im Paket (leer = in Ordnung): ``ai\\llama-server.exe`` für 64 Bit, mindestens ein
     Rechenwerk ``ggml-cpu-*.dll``, jede DLL, die beide direkt oder indirekt laden, liegt daneben oder gehört zu
@@ -259,7 +299,7 @@ def outputs(version: str) -> dict[str, str]:
     return {
         "version": version,
         "tag": f"v{version}",
-        "title": f"PDF Tool {version}",
+        "title": f"Novadesk {version}",
         "prerelease": "true" if is_beta(version) else "false",
         "setup": name,
         "checksum": name + ".sha256",

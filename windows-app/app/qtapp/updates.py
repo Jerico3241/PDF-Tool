@@ -11,11 +11,11 @@ sichtbaren Aktionen und die Verbindung zur App:
 * Automatische Prüfung: bei jedem Start im Hintergrund (danach höchstens alle 24 Stunden, solange die
   App offen bleibt) – der Programmstart wartet nie auf das Netzwerk; offline passiert still nichts.
 * Automatische Installation (Standard, seit 4.0 Beta 7): ein gefundenes Update wird im Hintergrund
-  geladen und installiert, PDF Tool startet danach neu und öffnet die PDFs wieder. Gewartet wird, solange
+  geladen und installiert, Novadesk startet danach neu und öffnet die PDFs wieder. Gewartet wird, solange
   eine Verarbeitung läuft oder ein Dokument ungespeicherte Änderungen hat – nie geht etwas verloren.
 * »Jetzt installieren«: nicht während einer Verarbeitung (Hinweis statt Abbruch). Sonst: Setup
   erneut prüfen, Hilfsprozess starten, App beenden wie über das Schließen-Kreuz (Einstellungen
-  werden gespeichert) – das Setup läuft danach still (nur ein Fortschrittsfenster) und PDF Tool
+  werden gespeichert) – das Setup läuft danach still (nur ein Fortschrittsfenster) und Novadesk
   startet neu.
 """
 
@@ -56,10 +56,10 @@ BETA_CONFIRM = "Beta verwenden"
 BETA_NEWER = "Sie verwenden derzeit eine neuere Beta-Version. Ein Wechsel auf den Stable-Kanal wirkt sich erst aus, sobald eine neuere Stable-Version verfügbar ist."
 WORK_RUNNING = "Es läuft noch eine Verarbeitung. Bitte warten Sie, bis diese abgeschlossen ist, oder brechen Sie sie ab."
 CHECKING = "Nach Updates wird gesucht …"
-UP_TO_DATE = "PDF Tool ist aktuell."
+UP_TO_DATE = "Novadesk ist aktuell."
 VERIFYING = "Update wird überprüft …"
 READY = "Update ist bereit zur Installation."
-INSTALLING = "PDF Tool wird aktualisiert und startet danach neu …"
+INSTALLING = "Novadesk wird aktualisiert und startet danach neu …"
 CANCELLED = "Download abgebrochen."
 WAITING_UNSAVED = "Das Update wird installiert, sobald alle Dokumente gespeichert sind."
 ERRORS = {
@@ -67,7 +67,7 @@ ERRORS = {
     ErrorKind.RATE_LIMITED: ("Updates konnten derzeit nicht geprüft werden.", "GitHub hat gerade zu viele Anfragen aus diesem Netzwerk erhalten. Bitte später erneut versuchen."),
     ErrorKind.DOWNLOAD_FAILED: ("Das Update konnte nicht vollständig heruntergeladen werden.", "Es wurde nichts installiert."),
     ErrorKind.VERIFY_FAILED: ("Das heruntergeladene Update konnte nicht verifiziert werden und wurde daher nicht installiert.", "Die Datei wurde gelöscht."),
-    ErrorKind.INSTALL_FAILED: ("Das Setup konnte nicht gestartet werden.", "PDF Tool bleibt geöffnet."),
+    ErrorKind.INSTALL_FAILED: ("Das Setup konnte nicht gestartet werden.", "Novadesk bleibt geöffnet."),
 }
 OFFER_ERRORS = (ErrorKind.DOWNLOAD_FAILED, ErrorKind.VERIFY_FAILED, ErrorKind.INSTALL_FAILED)
 
@@ -134,7 +134,7 @@ class UpdatesController(Observable):
     statusTextChanged, statusText = prop(str, "statusText", "")
     statusKindChanged, statusKind = prop(str, "statusKind", "neutral")  # neutral, busy, success, info, warning, error
     hasOfferChanged, hasOffer = prop(bool, "hasOffer", False)
-    offerTitleChanged, offerTitle = prop(str, "offerTitle", "")  # »PDF Tool 1.2.3-beta.2«
+    offerTitleChanged, offerTitle = prop(str, "offerTitle", "")  # »Novadesk 1.2.3-beta.2«
     offerLabelChanged, offerLabel = prop(str, "offerLabel", "")  # »1.2.3 Beta 2«
     offerBetaChanged, offerBeta = prop(bool, "offerBeta", False)
     offerDateChanged, offerDate = prop(str, "offerDate", "")
@@ -330,7 +330,7 @@ class UpdatesController(Observable):
             "blocks": notes.render(offer.notes),
             "page": offer.page if notes.safe_link(offer.page) else "",
         }
-        answer, _result = self.app.dialogs.ask("update_details", f"PDF Tool {offer.version}", primary=primary, close="Später", data=data, width=600)
+        answer, _result = self.app.dialogs.ask("update_details", f"Novadesk {offer.version}", primary=primary, close="Später", data=data, width=600)
         if answer != "primary":
             return
         if primary == "Jetzt installieren":
@@ -434,7 +434,7 @@ class UpdatesController(Observable):
             get_log(INSTALLER).warning("Setup %s nicht gestartet: Hilfsprozess %s", path.name, type(exc).__name__)
             self.service.install_failed(str(exc))
             return
-        get_log(INSTALLER).info("Installation von %s: PDF Tool wird beendet, danach startet das Setup", path.name)
+        get_log(INSTALLER).info("Installation von %s: Novadesk wird beendet, danach startet das Setup", path.name)
         if self.reader is not None and self._auto_installing:
             # erst jetzt, unmittelbar vor dem Beenden: Scheitert die Installation vorher, bleibt die Einstellung maßgeblich
             self.reader.restore_after_update = True
@@ -444,18 +444,18 @@ class UpdatesController(Observable):
         if self.reader is not None:
             self.reader.restore_after_update = False
         # Beenden wurde abgelehnt (z. B. Rückfrage eines Werkzeugs): kein Setup, das Update bleibt bereit
-        get_log(INSTALLER).info("Installation abgebrochen: PDF Tool wurde nicht beendet – Hilfsprozess beendet, das Update bleibt bereit")
+        get_log(INSTALLER).info("Installation abgebrochen: Novadesk wurde nicht beendet – Hilfsprozess beendet, das Update bleibt bereit")
         helper, self._helper = self._helper, None
         try:
             helper.terminate()
         except (OSError, AttributeError):
             pass
         self.service.install_aborted()
-        self.app.set_status("Installation abgebrochen – PDF Tool bleibt geöffnet. Das Update bleibt bereit.", "info")
+        self.app.set_status("Installation abgebrochen – Novadesk bleibt geöffnet. Das Update bleibt bereit.", "info")
 
     def _quit_app(self) -> bool:
         """Wie über das Schließen-Kreuz: Werkzeuge räumen auf, Einstellungen werden gespeichert."""
-        # Ganz beenden – auch wenn das Schließen-Kreuz PDF Tool sonst im Hintergrund hält
+        # Ganz beenden – auch wenn das Schließen-Kreuz Novadesk sonst im Hintergrund hält
         self.app.quit_wanted = True
         window = self.app.window
         if window is not None:
@@ -495,7 +495,7 @@ class UpdatesController(Observable):
         self.lastCheck = when_text(service.last_check)
         self.hasOffer = offer is not None
         if offer is not None:
-            self.offerTitle = f"PDF Tool {offer.version}"
+            self.offerTitle = f"Novadesk {offer.version}"
             self.offerLabel = offer.version.label()
             self.offerBeta = offer.is_beta
             self.offerDate = date_text(offer.published)
@@ -544,13 +544,13 @@ class UpdatesController(Observable):
         if state is S.UP_TO_DATE:
             return UP_TO_DATE, f"Installierte Version: {self.installed}", "success"
         if state is S.AVAILABLE:
-            return f"PDF Tool {self.offerLabel} ist verfügbar.", self._offer_line(), "info"
+            return f"Novadesk {self.offerLabel} ist verfügbar.", self._offer_line(), "info"
         if state is S.DOWNLOADING:
-            return f"PDF Tool {self.offerLabel} wird heruntergeladen", self.progressText, "busy"
+            return f"Novadesk {self.offerLabel} wird heruntergeladen", self.progressText, "busy"
         if state is S.VERIFYING:
             return VERIFYING, "SHA-256-Prüfsumme wird mit dem Release verglichen.", "busy"
         if state is S.READY:
-            return READY, f"PDF Tool {self.offerLabel} · Prüfsumme bestätigt (SHA-256)", "success"
+            return READY, f"Novadesk {self.offerLabel} · Prüfsumme bestätigt (SHA-256)", "success"
         if state is S.INSTALLING:
             return INSTALLING, "", "busy"
         if state is S.CANCELLED:

@@ -390,7 +390,7 @@ def _stroke_ops(color) -> str:
 
 def _refresh(pdf: pikepdf.Pdf, form, holder, annots: list, kind: str, *, buttons: bool = True) -> None:
     """Erscheinungsbilder aller Widgets eines Feldes neu erzeugen (nach Größe oder Eigenschaften).
-    ``buttons=False``: fremde Kästchen behalten ihr Aussehen (nur die aus PDF Tool werden neu gezeichnet)."""
+    ``buttons=False``: fremde Kästchen behalten ihr Aussehen (nur die aus Novadesk werden neu gezeichnet)."""
     view = _FieldView(form, holder)
     if kind in (TEXT, COMBO):
         value = holder.get("/V")
@@ -530,7 +530,7 @@ def move(document: EditorDocument, history: History, keys, dx: float, dy: float)
 
 
 def resize(document: EditorDocument, history: History, key: str, rect: Rect) -> None:
-    """Widget auf ``rect`` (PDF-Koordinaten) setzen. Text, Auswahl und Kästchen aus PDF Tool erhalten ein
+    """Widget auf ``rect`` (PDF-Koordinaten) setzen. Text, Auswahl und Kästchen aus Novadesk erhalten ein
     passendes Erscheinungsbild; fremde Kästchen, Schaltflächen und Signaturfelder werden mitskaliert."""
     _check(document)
     item, annot, _annots, kind, page = _locate(document, key)

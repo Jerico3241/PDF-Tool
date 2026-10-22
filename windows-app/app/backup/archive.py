@@ -6,7 +6,7 @@ und erst dann unter ihrem endgültigen Namen sichtbar. Eine halbe Sicherung gibt
 
 Prüfen liest das Manifest und jede Datei: Größe und SHA-256 müssen stimmen, Pfade müssen in
 einem bekannten Bereich liegen (nie außerhalb des Datenordners), Schema-Versionen dürfen nicht
-neuer sein als die dieser PDF-Tool-Version. Eine Sicherung einer neueren Version wird nie
+neuer sein als die dieser Novadesk-Version. Eine Sicherung einer neueren Version wird nie
 eingespielt.
 """
 
@@ -45,7 +45,7 @@ KINDS = {
     KIND_PRE_UPDATE: "Vor einem Update",
     KIND_PRE_RESTORE: "Vor einer Wiederherstellung",
 }
-NEWER = "Dieses Backup wurde mit einer neueren Version von PDF Tool erstellt."
+NEWER = "Dieses Backup wurde mit einer neueren Version von Novadesk erstellt."
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -74,7 +74,7 @@ AREA = {area.key: area for area in AREAS}
 
 
 def current_schemas() -> dict[str, int]:
-    """Schema-Versionen, die diese PDF-Tool-Version lesen kann."""
+    """Schema-Versionen, die diese Novadesk-Version lesen kann."""
     from tools.contract_overview.customers.models import SCHEMA_VERSION as CUSTOMERS
     from tools.contract_overview.history.models import SCHEMA_VERSION as HISTORY
     from tools.contract_overview.rules.models import SCHEMA_VERSION as RULES
@@ -245,7 +245,7 @@ def create_backup(
                 manifest = {
                     "format": FORMAT,
                     "format_version": FORMAT_VERSION,
-                    "app": "PDF Tool",
+                    "app": "Novadesk",
                     "app_version": app_version,
                     "created_at": when.isoformat(timespec="seconds"),
                     "kind": kind,
@@ -404,7 +404,7 @@ def inspect_backup(path: str | os.PathLike, app_version: str = "", verify: bool 
     if not path.is_file():
         raise BackupError("Die Sicherungsdatei wurde nicht gefunden.")
     if not zipfile.is_zipfile(path):
-        raise BackupError("Die Datei ist keine Sicherung von PDF Tool (kein gültiges Archiv).")
+        raise BackupError("Die Datei ist keine Sicherung von Novadesk (kein gültiges Archiv).")
     try:
         archive = zipfile.ZipFile(path)
     except (OSError, zipfile.BadZipFile) as exc:
@@ -412,7 +412,7 @@ def inspect_backup(path: str | os.PathLike, app_version: str = "", verify: bool 
     with archive:
         manifest = read_manifest(path)
         if manifest is None:
-            raise BackupError("Die Datei ist keine Sicherung von PDF Tool (Manifest fehlt oder ist beschädigt).")
+            raise BackupError("Die Datei ist keine Sicherung von Novadesk (Manifest fehlt oder ist beschädigt).")
         version = manifest.get("format_version")
         if isinstance(version, bool) or not isinstance(version, int) or version < 1:
             raise BackupError("Die Sicherung hat ein unbekanntes Format.")
@@ -478,7 +478,7 @@ def inspect_backup(path: str | os.PathLike, app_version: str = "", verify: bool 
 
         mine, theirs = Version.coerce(app_version), Version.coerce(backup_version)
         if theirs > mine:
-            notes.append(f"Erstellt mit PDF Tool {backup_version} – die Daten sind mit dieser Version lesbar.")
+            notes.append(f"Erstellt mit Novadesk {backup_version} – die Daten sind mit dieser Version lesbar.")
     infos = []
     for area in AREAS:
         area_entries = [entry for entry in entries if entry["area"] == area.key]

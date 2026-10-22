@@ -6,7 +6,7 @@
   zum Wiederherstellen ist das Passwort erneut nötig (es wird nie gespeichert).
 * Jede Sitzung hält eine Sperrdatei offen. Endet der Prozess (auch durch einen Absturz), gibt das
   Betriebssystem die Sperre frei – so erkennt ein späterer Start verwaiste Sitzungen sicher, auch
-  wenn PDF Tool mehrmals läuft.
+  wenn Novadesk mehrmals läuft.
 * Nach dem Speichern oder Schließen (auch »Nicht speichern«) wird die Sitzung gelöscht.
 
 Wurzel unter Windows: ``%LOCALAPPDATA%\\PDF-Tool-Editor`` (nicht im servergespeicherten Profil).
@@ -168,7 +168,7 @@ def orphaned_sessions(root: Path | None = None, now: float | None = None) -> lis
     for folder in folders:
         lock = _Lock(folder / LOCK)
         if not lock.acquire():
-            continue  # gehört zu einem laufenden PDF Tool
+            continue  # gehört zu einem laufenden Novadesk
         lock.release()
         try:
             meta = json.loads((folder / META).read_text(encoding="utf-8"))

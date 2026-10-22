@@ -615,7 +615,7 @@ def _metadata(pdf: pikepdf.Pdf) -> None:
         value = info[key]
         if key not in INFO_KEYS or not isinstance(value, pikepdf.String) or not str(value).strip():
             del info[key]  # leere, fremde oder nicht abbildbare Einträge (z. B. /Trapped)
-    info[Name.Producer] = pikepdf.String("PDF Tool")
+    info[Name.Producer] = pikepdf.String("Novadesk")
     for key in ("/CreationDate", "/ModDate"):
         if key in info and _iso_date(str(info[key])) is None:
             del info[key]

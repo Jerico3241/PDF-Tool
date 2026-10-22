@@ -63,8 +63,8 @@ def is_beta(version: str) -> bool:
 
 
 def window_title(version: str) -> str:
-    """Fenstertitel: »PDF Tool«; bei einer Beta mit Versionsnummer ohne Kennung, z. B.
-    ``2.8.0-beta.1`` → »PDF Tool 2.8.0 Beta«."""
+    """Fenstertitel: »Novadesk«; bei einer Beta mit Versionsnummer ohne Kennung, z. B.
+    ``2.8.0-beta.1`` → »Novadesk 2.8.0 Beta«."""
     if not is_beta(version):
         return APP_NAME
     core = ".".join(str(part) for part in Version.coerce(version).core)
@@ -108,7 +108,7 @@ class AppController(Observable):
     dragAcceptedChanged, dragAccepted = prop(bool, "dragAccepted", False)
     readyChanged, ready = prop(bool, "ready", False)
     pagesLoadedChanged, pagesLoaded = prop(bool, "pagesLoaded", False)  # alle Seiten im Hintergrund geladen
-    closingChanged, closing = prop(bool, "closing", False)  # PDF Tool wird beendet (QML: keine Übergänge mehr)
+    closingChanged, closing = prop(bool, "closing", False)  # Novadesk wird beendet (QML: keine Übergänge mehr)
 
     closeAccepted = Signal()  # QML schließt danach das Fenster
     focusRequested = Signal(str)  # Name eines Eingabefelds (z. B. »kd«), das den Fokus erhalten soll
@@ -165,7 +165,7 @@ class AppController(Observable):
     _constant = Signal()
     appName = Property(str, _app_name, notify=_constant)
     version = Property(str, _version, notify=_constant)
-    windowTitle = Property(str, _window_title, notify=_constant)  # »PDF Tool« bzw. »PDF Tool 2.8.0 Beta«
+    windowTitle = Property(str, _window_title, notify=_constant)  # »Novadesk« bzw. »Novadesk 2.8.0 Beta«
     beta = Property(bool, _beta, notify=_constant)
     developer = Property(str, _developer, notify=_constant)
     tools = Property(list, _tools_list, notify=_constant)
@@ -402,6 +402,15 @@ class AppController(Observable):
         for hooks in self._tools.values():
             hooks.drag_leave()
 
+    def open_with_tool(self, key: str, paths: list[str]) -> None:
+        """Dateien an ein Werkzeug übergeben wie beim Ablegen auf seiner Seite (z. B. eine Tabelle an »Vertragsübersichten«)."""
+        hooks = self._tools.get(key)
+        if hooks is None:
+            return
+        if key != READER.key:
+            self.navigate(key)
+        hooks.drop(paths, self.currentPage)
+
     @Slot("QVariantList")
     def drop(self, urls: list) -> None:
         paths = files.local_paths(urls)
@@ -560,7 +569,7 @@ class AppController(Observable):
         self.__dict__.setdefault("_work_sources", []).append(source)
 
     def restart(self) -> bool:
-        """PDF Tool neu starten: wie Beenden (alles wird gespeichert), danach startet ``main`` die App
+        """Novadesk neu starten: wie Beenden (alles wird gespeichert), danach startet ``main`` die App
         neu. ``False``, wenn das Beenden abgelehnt wurde (z. B. Rückfrage eines laufenden Stapels)."""
         self.restart_requested = True
         window = self.window
@@ -578,7 +587,7 @@ class AppController(Observable):
         """Fenster soll schließen: Werkzeuge dürfen nachfragen (z. B. laufender Stapel).
 
         Mit »Im Hintergrund bereithalten« schließt das Kreuz nur das Fenster (``False``: das Fenster bleibt
-        bestehen und wird versteckt) – außer PDF Tool soll ganz enden (Infobereich »Beenden«, Update, Neustart)."""
+        bestehen und wird versteckt) – außer Novadesk soll ganz enden (Infobereich »Beenden«, Update, Neustart)."""
         if self.closing:
             return True
         if self.background is not None and self.background.active and not self.quit_wanted and not self.restart_requested:
@@ -593,7 +602,7 @@ class AppController(Observable):
         return True
 
     def hide_window(self) -> bool:
-        """Fenster verstecken, PDF Tool bleibt im Infobereich. Dokumente schließen wie beim Beenden (Rückfrage bei
+        """Fenster verstecken, Novadesk bleibt im Infobereich. Dokumente schließen wie beim Beenden (Rückfrage bei
         ungespeicherten Änderungen); laufende Arbeit (Stapel, Reparatur) geht im Hintergrund weiter."""
         for hooks in self._tools.values():
             release = getattr(hooks, "release", None)
@@ -607,7 +616,7 @@ class AppController(Observable):
             self.background.hidden()
         from diagnostics.applog import get as get_log
 
-        get_log("app").info("Fenster geschlossen – PDF Tool bleibt im Hintergrund")
+        get_log("app").info("Fenster geschlossen – Novadesk bleibt im Hintergrund")
         return True
 
     @Slot()
@@ -634,7 +643,7 @@ class AppController(Observable):
 
     @Slot()
     def quit_app(self) -> None:
-        """PDF Tool ganz beenden (Infobereich »Beenden«). Rückfragen der Werkzeuge erscheinen im Fenster."""
+        """Novadesk ganz beenden (Infobereich »Beenden«). Rückfragen der Werkzeuge erscheinen im Fenster."""
         if self.closing:
             return
         self.quit_wanted = True

@@ -38,7 +38,7 @@ ColumnLayout {
         facts: [
             { "label": "Sicherung", "value": root.data_.name || "" },
             { "label": "Erstellt", "value": root.data_.created || "" },
-            { "label": "Version", "value": "PDF Tool " + (root.data_.version || "") },
+            { "label": "Version", "value": "Novadesk " + (root.data_.version || "") },
             { "label": "Art", "value": (root.data_.kind || "") + " · " + (root.data_.size || "") }
         ]
     }

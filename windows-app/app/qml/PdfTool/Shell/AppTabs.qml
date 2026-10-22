@@ -285,6 +285,7 @@ Item {
                     required property bool dirty
                     required property string tip
                     required property string path
+                    required property string kind
                     required property int index
                     readonly property real shift: docTab.x  // Versatz des Tabs beim Ziehen – die Markierung folgt ihm
                     width: docTab.width
@@ -303,9 +304,12 @@ Item {
                         anchors.bottomMargin: 1
                         width: bar.docsOverflow ? Metrics.appDocTabMinWidth : Math.min(implicitWidth, bar.docTabCap)
                         elideMode: Text.ElideMiddle
+                        // Symbol und Farbe der Dateiart (PDF rot, Text blau, Tabelle grün, Präsentation orange)
                         iconName: "document_pdf"
-                        // ohne ».pdf« (das Symbol zeigt es) – der vollständige Pfad steht im Tooltip
-                        title: I18n.tr(docSlot.name.replace(/\.pdf$/i, "") || docSlot.name, I18n.revision)
+                        imageSource: FileKinds.image(docSlot.kind || "pdf", 16)
+                        kindColor: docSlot.kind ? FileKinds.color(docSlot.kind) : "transparent"
+                        // ohne Endung (das Symbol zeigt sie) – der vollständige Pfad steht im Tooltip
+                        title: I18n.tr(FileKinds.stem(docSlot.name), I18n.revision)
                         tooltip: I18n.tr(docSlot.tip, I18n.revision)
                         unsaved: docSlot.dirty
                         showDirty: true
@@ -482,7 +486,7 @@ Item {
             contentItem: Rectangle { implicitWidth: 200; implicitHeight: 1; color: Theme.divider }
         }
         PMenuItem { objectName: "menuNews"; text: I18n.tr("Neu in dieser Version", I18n.revision); iconName: "megaphone"; onTriggered: helpMenu.afterClose = function() { App.showChangelog() } }
-        PMenuItem { objectName: "menuAbout"; text: I18n.tr("Über PDF Tool", I18n.revision); iconName: "info"; onTriggered: helpMenu.afterClose = function() { App.showAbout() } }
+        PMenuItem { objectName: "menuAbout"; text: I18n.tr("Über Novadesk", I18n.revision); iconName: "info"; onTriggered: helpMenu.afterClose = function() { App.showAbout() } }
     }
 
     // Kontextmenü eines Dokument-Tabs. Die Aktion läuft erst nach dem Ausblenden (Rückfragen beim Schließen).

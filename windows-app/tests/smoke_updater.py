@@ -87,7 +87,7 @@ def main() -> int:
         return bool(condition())
 
     # 1. TLS
-    print(f"PDF Tool {VERSION} · Python {sys.version.split()[0]} · {sys.executable}")
+    print(f"Novadesk {VERSION} · Python {sys.version.split()[0]} · {sys.executable}")
     backends = list(QSslSocket.availableBackends())
     print(f"TLS: {QSslSocket.activeBackend()} (verfügbar: {', '.join(backends)}) · SSL unterstützt: {QSslSocket.supportsSsl()}")
     if sys.platform == "win32":

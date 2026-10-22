@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs>
+<linearGradient id="ast" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4FA8FF"/><stop offset="1" stop-color="#1257E0"/></linearGradient>
+<linearGradient id="adi" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7FE0FF"/><stop offset="1" stop-color="#2F86FF"/></linearGradient>
+<linearGradient id="ag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8BE04E"/><stop offset="1" stop-color="#16A34A"/></linearGradient>
+<linearGradient id="ao" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC24A"/><stop offset="1" stop-color="#F07A12"/></linearGradient>
+<linearGradient id="ar" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF7A6B"/><stop offset="1" stop-color="#D7263D"/></linearGradient>
+<filter id="ash" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0B1430" flood-opacity=".30"/></filter>
+</defs>
+<g transform="translate(12 26) scale(0.8)">
+<g filter="url(#ash)">
+<rect x="132" y="34" width="84" height="132" rx="14" fill="url(#ar)" transform="rotate(26 140 176)"/>
+<rect x="132" y="34" width="84" height="132" rx="14" fill="url(#ao)" transform="rotate(15 140 176)"/>
+<rect x="132" y="34" width="84" height="132" rx="14" fill="url(#ag)" transform="rotate(4 140 176)"/>
+</g>
+<g filter="url(#ash)">
+<rect x="30" y="52" width="58" height="168" rx="18" fill="url(#ast)"/>
+<rect x="140" y="52" width="58" height="168" rx="18" fill="url(#ast)"/>
+<path d="M48 52 H70 Q80 52 86 60 L196 206 Q202 214 196 218 Q192 220 180 220 H158 Q148 220 142 212 L32 66 Q28 60 32 56 Q36 52 48 52 Z" fill="url(#adi)"/>
+</g>
+</g>
+</svg>

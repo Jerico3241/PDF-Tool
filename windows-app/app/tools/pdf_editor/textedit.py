@@ -56,7 +56,7 @@ CHECK_SCALE = 1.5  # Pixel je Punkt für die Prüfung der Darstellung
 DIFF_THRESHOLD = 40  # Grauwert-Unterschied, ab dem ein Pixel als geändert gilt
 MIN_FONT_SIZE = 4.0
 PAGE_MARGIN = 6.0  # Mindestabstand zum Seitenrand, wenn eine Zeile länger wird (Punkte)
-FONT_PREFIX = "/PTF"  # Ressourcennamen der von PDF Tool hinzugefügten Schriften
+FONT_PREFIX = "/PTF"  # Ressourcennamen der von Novadesk hinzugefügten Schriften
 INVISIBLE = 3  # Textdarstellungsmodus »unsichtbar« (z. B. Texterkennung über einem Scan)
 
 
@@ -648,7 +648,7 @@ def _line_step(block: Block) -> float:
 
 
 def _remove_original(content: PageContent, block: Block) -> None:
-    """Originaltext entfernen: eigene Textobjekte von PDF Tool (nur Text dieses Blocks) ganz, sonst
+    """Originaltext entfernen: eigene Textobjekte von Novadesk (nur Text dieses Blocks) ganz, sonst
     nur den Text der Operatoren (Position, Zustand und alles andere bleiben)."""
     targets = {run.show for run in block.runs}
     handled: set[int] = set()

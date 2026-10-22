@@ -149,7 +149,7 @@ def qt_versions() -> str:
 
 # Angaben der Systeminformationen in ihrer Reihenfolge: (Schlüssel, Beschriftung)
 FACTS = (
-    ("version", "PDF Tool"),
+    ("version", "Novadesk"),
     ("channel", "Update-Kanal"),
     ("python", "Python"),
     ("qt", "Oberfläche"),

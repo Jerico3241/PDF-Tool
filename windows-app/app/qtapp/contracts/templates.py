@@ -110,7 +110,7 @@ class TemplatesController(Observable):
             newer = sum(1 for problem in problems if problem.newer)
             text = f"{len(problems)} {'Vorlage konnte' if len(problems) == 1 else 'Vorlagen konnten'} nicht gelesen werden und {'wird' if len(problems) == 1 else 'werden'} nicht angezeigt (Einstellungen → Diagnose)."
             if newer:
-                text += " Sie stammen aus einer neueren Version von PDF Tool." if newer == len(problems) else ""
+                text += " Sie stammen aus einer neueren Version von Novadesk." if newer == len(problems) else ""
             self.problemsText = text
         else:
             self.problemsText = ""

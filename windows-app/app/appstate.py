@@ -18,7 +18,7 @@ INSTALL_DIR = APP_DIR.parent
 ASSETS_DIR = INSTALL_DIR / "assets"
 DEFAULT_LOGO = ASSETS_DIR / "hott_logo_final.png"
 ICON_FILE = ASSETS_DIR / "icon.ico"
-APP_NAME = "PDF Tool"
+APP_NAME = "Novadesk"
 DEVELOPER = "Jerico"
 DATA_FOLDER = "PDF-Tool"
 # Datenordner bis Version 2.2 (»Übersichten-Ersteller«) – wird beim ersten Start übernommen
@@ -141,15 +141,11 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Stapel-Aktionen (Strg+6): viele PDFs auf einmal verkleinern, mit Seitenzahlen oder Wasserzeichen versehen, Text erkennen, bereinigen, reduzieren, mit Kennwort schützen oder als PDF/A speichern – jede als neue Datei, die Originale bleiben.",
-    "Neue Werkzeugleiste im Reader: oben die Datei-Befehle, links neben dem Dokument die Schnellwerkzeuge, »Alle Werkzeuge« mit Namen und in Gruppen. Hinweise zum Dokument blenden sich von selbst aus.",
-    "Mit anderer Fassung vergleichen: zwei Fassungen nebeneinander, Unterschiede im Text farbig markiert und als Liste. Dazu die geteilte Ansicht (zwei PDFs nebeneinander) und die Präsentation im Vollbild (F5).",
-    "Scannen direkt in eine PDF (Startseite → »Scannen«), Texterkennung in zehn Sprachen, Vorlesen mit den Stimmen von Windows (Strg+Umschalt+Y) und Text über Seitengrenzen markieren.",
-    "Digitale Signatur mit Zertifikat (Windows-Zertifikatspeicher oder .pfx) und Prüfen vorhandener Signaturen. PDF in Word, Excel oder Text umwandeln, Office-Dateien in PDF, PDF aus Bildern und Als PDF/A speichern.",
-    "KI-Assistent (optional): übersetzt Dokumente und beantwortet Fragen zu mehreren PDFs oder einem ganzen Ordner – mit Datei und Seite, vollständig auf diesem PC.",
-    "Englische Oberfläche (Einstellungen → Sprache) und eigene Tastenkürzel (Einstellungen → Tastenkürzel, Strg+F1).",
-    "Updates suchen und installieren sich beim Start von selbst; offene PDFs öffnen sich danach wieder. Mit ungespeicherten Änderungen wartet PDF Tool. Abschaltbar unter Einstellungen → Updates.",
-    "Aufgeräumt: oben »?« für die Hilfe und das Zahnrad für die Einstellungen, die Einstellungen mit einer Leiste für ihre Bereiche. PDF-Anhänge aus Outlook öffnen sich zuverlässig, auch mit strengen Defender-Regeln.",
+    "Novadesk 5.0 Beta 1: Aus PDF Tool wird Novadesk – ein Office für Windows. Neuer Name, neues Symbol und eine neue, aufgeräumte Startseite mit allen Dateiarten.",
+    "Word-, Excel- und PowerPoint-Dateien (auch OpenDocument und CSV) öffnen sich direkt in einem eigenen Tab zum Ansehen – mit dem eingebauten LibreOffice, Microsoft Office ist nicht nötig. »Speichern« legt eine PDF an, die Datei selbst bleibt unverändert.",
+    "Jede Dateiart hat ihr eigenes Symbol und ihre Farbe: Texte blau, Tabellen grün, Präsentationen orange, PDFs rot – in den Tabs, unter »Zuletzt verwendet« und im Explorer (»Öffnen mit« → Novadesk).",
+    "Aus einer geöffneten Excel-Tabelle direkt eine Vertragsübersicht erstellen. Bearbeiten von Tabellen, Texten und Präsentationen kommt mit den nächsten Betas.",
+    "Alle Werkzeuge von PDF Tool 4.0 sind weiter da: PDF Reader & Editor, Stapel-Aktionen, Vergleichen, Scannen, Signieren, Vertragsübersichten, Kundenakten, PDF reparieren und der KI-Assistent.",
     "Alle bisherigen Funktionen bleiben erhalten. Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads; PDF-JavaScript wird nie ausgeführt.",
 )
 

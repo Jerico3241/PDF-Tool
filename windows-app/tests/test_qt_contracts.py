@@ -257,7 +257,7 @@ def test_start_and_version(ui_app) -> None:
     from qtapp.app import window_title
 
     h = ui_app
-    assert appstate.APP_NAME == "PDF Tool" and h.window.title() == window_title(appstate.VERSION)  # Beta: »PDF Tool X.Y.Z Beta«
+    assert appstate.APP_NAME == "Novadesk" and h.window.title() == window_title(appstate.VERSION)  # Beta: »Novadesk X.Y.Z Beta«
     assert h.app.version == appstate.VERSION  # die Versionsnummer selbst prüft test_core
     assert h.app.currentPage == "home"  # nach dem Start: Startseite mit allen Werkzeugen
     assert h.item("createPdf").property("text") == "PDF erstellen"

@@ -110,7 +110,7 @@ def store_certificates():
     made = {}
     for key, provider in (("cng", "Microsoft Software Key Storage Provider"), ("capi", "Microsoft Enhanced RSA and AES Cryptographic Provider")):
         made[key] = _powershell(
-            f"(New-SelfSignedCertificate -Subject 'CN=PDF Tool Test {key}' -CertStoreLocation Cert:\\CurrentUser\\My "
+            f"(New-SelfSignedCertificate -Subject 'CN=Novadesk Test {key}' -CertStoreLocation Cert:\\CurrentUser\\My "
             f"-Provider '{provider}' -KeyUsage DigitalSignature -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddDays(2)).Thumbprint"
         )
     yield made
@@ -126,7 +126,7 @@ def test_windows_store_signs_with_cng_and_cryptoapi_keys(tmp_path: Path, store_c
     source = samples.standard_text(tmp_path / "d.pdf").read_bytes()
     for key, thumbprint in store_certificates.items():
         assert thumbprint in listed, f"{key}: Zertifikat wird nicht angeboten"
-        assert listed[thumbprint].subject == f"PDF Tool Test {key}" and listed[thumbprint].self_signed
+        assert listed[thumbprint].subject == f"Novadesk Test {key}" and listed[thumbprint].self_signed
         store_signer = winsign.StoreSigner(thumbprint)
         try:
             signed = digsig.sign_pdf(source, store_signer)
@@ -134,7 +134,7 @@ def test_windows_store_signs_with_cng_and_cryptoapi_keys(tmp_path: Path, store_c
             store_signer.close()
         [report] = digsig.verify_pdf(signed)
         assert report.status == digsig.VALID, (key, report.detail)
-        assert report.signer == f"PDF Tool Test {key}"
+        assert report.signer == f"Novadesk Test {key}"
         assert report.trust == "untrusted" and "selbst ausgestellt" in report.trust_detail  # Windows kennt den Aussteller nicht
 
 

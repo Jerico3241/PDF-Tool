@@ -1,4 +1,4 @@
-// PDF Tool – Symbol, Versionsangaben und Manifest des Startprogramms PDF-Tool.exe.
+// Novadesk – Symbol, Versionsangaben und Manifest des Startprogramms PDF-Tool.exe.
 // build.py schreibt version.h mit PDFTOOL_VERSION_NUM (z. B. 3,2,0,0) und PDFTOOL_VERSION_STR (z. B. "3.2.0-beta.3").
 #include <winver.h>
 #include "version.h"
@@ -11,9 +11,16 @@
 #endif
 
 1 ICON "icon.ico"
-// Symbol der PDF-Dateien (DefaultIcon »PDF-Tool.exe,-2«): eigene Nummer je App-Symbol, damit Windows kein altes
-// Symbol aus seinem Zwischenspeicher zeigt (seit 4.0.0-beta.4: neues Symbol) – siehe DocIcon in PDF-Tool.iss
+// Symbole für die Dateizuordnung (DefaultIcon »PDF-Tool.exe,-<Nummer>«): eigene Nummer je Symbol, damit Windows kein
+// altes Symbol aus seinem Zwischenspeicher zeigt – bei einem neuen Symbol eine neue Nummer (siehe PDF-Tool.iss).
+// 2: Symbol von PDF Tool 4.0 (nicht mehr verwendet, Nummer bleibt belegt); seit 5.0: 3 App (Novadesk), 10–14 je Dateiart
 2 ICON "icon.ico"
+3 ICON "icon.ico"
+10 ICON "datei-pdf.ico"
+11 ICON "datei-text.ico"
+12 ICON "datei-tabelle.ico"
+13 ICON "datei-praesentation.ico"
+14 ICON "datei-csv.ico"
 1 24 "launcher.manifest"
 
 VS_VERSION_INFO VERSIONINFO
@@ -30,12 +37,12 @@ BEGIN
         BLOCK "040704b0"
         BEGIN
             VALUE "CompanyName", "Jerico"
-            VALUE "FileDescription", "PDF Tool"
+            VALUE "FileDescription", "Novadesk"
             VALUE "FileVersion", PDFTOOL_VERSION_STR
             VALUE "InternalName", "PDF-Tool"
             VALUE "LegalCopyright", "Jerico"
             VALUE "OriginalFilename", "PDF-Tool.exe"
-            VALUE "ProductName", "PDF Tool"
+            VALUE "ProductName", "Novadesk"
             VALUE "ProductVersion", PDFTOOL_VERSION_STR
         END
     END

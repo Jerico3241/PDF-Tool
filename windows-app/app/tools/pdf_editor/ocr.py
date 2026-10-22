@@ -55,7 +55,7 @@ from .geometry import Rect, contains, normalize
 INSTALL_DIR = Path(__file__).resolve().parents[3]  # wie appstate.INSTALL_DIR (…\app\tools\pdf_editor\ocr.py)
 BUNDLED_DIR = INSTALL_DIR / "ocr"  # build.py: tesseract.exe, seine DLLs und tessdata
 ENGINE_VARIABLE = "PDFTOOL_TESSERACT"
-LAYER_PREFIX = "/PTOCR"  # Ressourcennamen der Textebenen von PDF Tool
+LAYER_PREFIX = "/PTOCR"  # Ressourcennamen der Textebenen von Novadesk
 TEMP_PREFIX = "pdf-tool-ocr-"
 DEFAULT_DPI = 300
 MAX_PIXELS = 16_000_000  # Seitenbild für die Erkennung – A4 bei 300 dpi hat 8,7 Mio., A3 wird leicht verkleinert
@@ -251,12 +251,12 @@ class PageScan:
     page: int
     chars: int  # PDFium-Textzeichen ohne Leerraum (auch unsichtbarer Text)
     image_cover: float  # Anteil der sichtbaren Seitenfläche unter Bildern (0..1)
-    ocr_layer: bool  # eine Textebene von PDF Tool ist schon vorhanden
+    ocr_layer: bool  # eine Textebene von Novadesk ist schon vorhanden
 
     @property
     def needs_ocr(self) -> bool:
         """Praktisch kein Text und überwiegend Bild – typisch für einen Scan. Eine Seite mit einer Textebene
-        von PDF Tool gilt als erkannt (auch wenn wenig Text darauf stand); erneut erkennen geht trotzdem."""
+        von Novadesk gilt als erkannt (auch wenn wenig Text darauf stand); erneut erkennen geht trotzdem."""
         return not self.ocr_layer and self.chars < TEXT_LIMIT and self.image_cover >= IMAGE_LIMIT
 
 
@@ -272,7 +272,7 @@ def scan_pages(document: EditorDocument, pages=None) -> list[PageScan]:
 
 
 def has_text_layer(document: EditorDocument, page: int) -> bool:
-    """Hat die Seite eine Textebene von PDF Tool (``/PTOCR…``)?"""
+    """Hat die Seite eine Textebene von Novadesk (``/PTOCR…``)?"""
     _check_page(document, page)
     return bool(_layer_names(document.pdf.pages[page].obj))
 
@@ -544,7 +544,7 @@ class _Layer:
 
 def apply_text_layers(document: EditorDocument, history: History, results: list[RecognizedPage], *, title: str = "Text erkennen (OCR)") -> int:
     """Erkannten Text als unsichtbare Textebene übernehmen – ein Schritt für Rückgängig. Seiten ohne
-    erkannte Wörter bleiben unverändert; eine vorhandene Textebene von PDF Tool wird ersetzt.
+    erkannte Wörter bleiben unverändert; eine vorhandene Textebene von Novadesk wird ersetzt.
 
     Die Seite muss noch so aussehen wie beim Rendern (gleiche Größe und Drehung) – die Oberfläche
     verwirft Ergebnisse, wenn sich das Dokument inzwischen geändert hat (``document.revision``).
@@ -581,7 +581,7 @@ def apply_text_layers(document: EditorDocument, history: History, results: list[
 
 
 def remove_text_layers(document: EditorDocument, history: History, pages) -> int:
-    """Textebenen von PDF Tool entfernen (ein Schritt für Rückgängig). Rückgabe: Anzahl geänderter Seiten."""
+    """Textebenen von Novadesk entfernen (ein Schritt für Rückgängig). Rückgabe: Anzahl geänderter Seiten."""
     document.ensure_editable()
     chosen = sorted({int(page) for page in pages})
     for page in chosen:
@@ -657,7 +657,7 @@ def _only_layer(stream) -> bool:
 
 
 def _remove_layer(pdf: pikepdf.Pdf, obj: pikepdf.Object) -> bool:
-    """Textebene von PDF Tool aus dem Inhalt und den Ressourcen der Seite nehmen – neue Objekte, die
+    """Textebene von Novadesk aus dem Inhalt und den Ressourcen der Seite nehmen – neue Objekte, die
     bisherigen Streams bleiben unverändert. Rückgabe: ob es eine Ebene gab."""
     names = _layer_names(obj)
     if not names:
