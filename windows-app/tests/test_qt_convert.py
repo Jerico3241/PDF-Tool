@@ -115,29 +115,30 @@ def test_office_view_tab_restore_and_failures(ui_app, tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(office, "TEST_BACKEND", fake)
     monkeypatch.setattr(office, "TEST_INSTALLED", {"libreoffice"})
-    letter, sheet = tmp_path / "Brief.docx", tmp_path / "Liste.ods"
+    # Tabellen öffnen sich seit 5.0 Beta 2 zum Bearbeiten (test_qt_sheet.py) – angesehen werden Texte und Präsentationen
+    letter, sheet = tmp_path / "Brief.docx", tmp_path / "Folien.odp"
     for path in (letter, sheet):
         path.write_bytes(b"PK")
     controller = reader(h)
     controller.open_paths([str(letter), str(sheet)])
     assert wait_until(lambda: len(controller.tabs.items()) == 2, 30)
     settle(h)
-    assert [(t["name"], t["kind"], t["path"]) for t in controller.tabs.items()] == [("Brief.docx", "text", ""), ("Liste.ods", "tabelle", "")]
+    assert [(t["name"], t["kind"], t["path"]) for t in controller.tabs.items()] == [("Brief.docx", "text", ""), ("Folien.odp", "praesentation", "")]
     assert threads and all(name == "pdftool-arbeit" for name in threads)  # nicht im Thread der PDF-Engine
     assert controller.current.sourcePath == str(sheet)
 
-    # Zuletzt verwendet und Sitzung merken den Originalpfad; der aktive Tab ist die Tabelle
+    # Zuletzt verwendet und Sitzung merken den Originalpfad; der aktive Tab ist die Präsentation
     assert [item["path"] for item in controller.recent[:2]] == [str(sheet), str(letter)]
     snapshot = controller._session_snapshot()
     assert snapshot["aktiv"] == str(sheet) and [d["pfad"] for d in snapshot["dokumente"]] == [str(letter), str(sheet)]
 
-    # Novadesk ist Standardprogramm für .ods: »Öffnen mit« statt wieder dieser Tab
+    # Novadesk ist Standardprogramm für .odp: »Öffnen mit« statt wieder dieser Tab
     geoeffnet = []
     monkeypatch.setattr(winsys, "default_program", lambda path: r"C:\Users\x\AppData\Local\PDF-Tool\PDF-Tool.exe")
     monkeypatch.setattr(winsys, "open_with", lambda path: geoeffnet.append(("mit", str(path))))
     monkeypatch.setattr(controller, "openExternal", lambda path: geoeffnet.append(("standard", str(path))))
     controller.officeAction("external")
-    monkeypatch.setattr(winsys, "default_program", lambda path: r"C:\Program Files\LibreOffice\program\scalc.exe")
+    monkeypatch.setattr(winsys, "default_program", lambda path: r"C:\Program Files\LibreOffice\program\simpress.exe")
     controller.officeAction("external")
     assert geoeffnet == [("mit", str(sheet)), ("standard", str(sheet))]
 
