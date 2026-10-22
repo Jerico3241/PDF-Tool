@@ -185,16 +185,17 @@ def _stop(process: subprocess.Popen) -> None:
         pass
 
 
-def _csv_filter(source: Path) -> list[str]:
+def csv_options(source: Path) -> str:
     """CSV: Trennzeichen (Semikolon wie aus deutschem Excel, Komma, Tabulator) und Zeichensatz (UTF-8, sonst
-    Windows-1252) selbst erkennen – LibreOffice nähme sonst immer das Komma."""
+    Windows-1252) selbst erkennen – als Filteroptionen von LibreOffice (»59,34,76,1«); LibreOffice nähme sonst immer das
+    Komma. Keine CSV-Datei: ""."""
     if source.suffix.lower() != ".csv":
-        return []
+        return ""
     try:
         with source.open("rb") as handle:
             sample = handle.read(64 * 1024)
     except OSError:
-        return []
+        return ""
     try:
         text, charset = sample.decode("utf-8"), 76  # RTL_TEXTENCODING_UTF8
     except UnicodeDecodeError as exc:
@@ -203,7 +204,12 @@ def _csv_filter(source: Path) -> list[str]:
         text, charset = (sample[:exc.start].decode("utf-8"), 76) if cut else (sample.decode("cp1252", "replace"), 1)
     line = next((row for row in text.splitlines() if row.strip()), "")
     separator = max((";", ",", "\t"), key=line.count) if line else ","
-    return [f"--infilter=Text - txt - csv (StarCalc):{ord(separator)},34,{charset},1"]
+    return f"{ord(separator)},34,{charset},1"
+
+
+def _csv_filter(source: Path) -> list[str]:
+    options = csv_options(source)
+    return [f"--infilter=Text - txt - csv (StarCalc):{options}"] if options else []
 
 
 def _libreoffice_export(executable: Path | None, source: Path, target: Path) -> None:

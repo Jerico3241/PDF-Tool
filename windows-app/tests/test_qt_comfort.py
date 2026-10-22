@@ -482,6 +482,8 @@ def test_quick_tools_open_a_pdf_and_start_the_tool(ui_app, tmp_path: Path, monke
     assert [entry["title"] for entry in r.quickTools] == ["PDF verkleinern", "Als PDF/A speichern", "PDF aus Bildern", "Scannen", "Office in PDF", "Schwärzen", "Kennwortschutz", "Wasserzeichen", "Seitenzahlen", "Dokument bereinigen", "Unterschreiben", "Zusammenführen"]
     assert list(tiles) == ["optimize", "pdfa", "images", "scan", "office", "redact", "protect", "watermark", "headerFooter", "clean", "sign", "merge"]
     h.navigate("home", 0.3)
+    h.app.showHomeSection("tools")  # seit 5.0 unter »Alle Werkzeuge«
+    pump(0.3)
     for action in tiles:
         tile = h.item(f"quickTool_{action}")
         assert tile is not None and tile.isVisible() and tile.property("title") == tiles[action]["title"]

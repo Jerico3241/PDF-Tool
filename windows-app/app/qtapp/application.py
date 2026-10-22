@@ -207,6 +207,16 @@ def register_backend(singletons: dict[str, QObject]) -> None:
             raise TypeError(f"QML-Singleton {name}: {type(instance).__name__} statt {registered.__name__}")
 
 
+def _register_types() -> None:
+    """Eigene QML-Elemente (einmal je Prozess): das Tabellenraster."""
+    if _REGISTERED.get("SheetGrid") is None:
+        from .sheet.grid import SheetGrid
+        from PySide6.QtQml import qmlRegisterType
+
+        qmlRegisterType(SheetGrid, BACKEND_URI, 1, 0, "SheetGrid")
+        _REGISTERED["SheetGrid"] = SheetGrid
+
+
 def release_engine(engine: QQmlEngine) -> None:
     """Engine endet: ihre Singleton-Zuordnung entfernen (geschieht auch beim Löschen der Engine)."""
     _ENGINES.pop(engine.property(_ENGINE_KEY) or 0, None)
@@ -219,6 +229,7 @@ def _engine_warnings(errors) -> None:
 
 def create_engine(runtime: Runtime) -> QQmlApplicationEngine:
     register_backend(runtime.singletons)
+    _register_types()
     # Speicherbereinigung der QML-Engine in einem Zug statt in Zeitscheiben (Qt liest die Variable
     # beim Anlegen der Engine). Mit der schrittweisen Bereinigung von Qt 6.11 können Objekte, die
     # beim Laden der Seiten im Hintergrund entstehen, ihre QML-Funktionen verlieren – ein
@@ -399,7 +410,12 @@ def main(argv: list[str] | None = None) -> int:
         winsys.allow_foreground()
         if instance.forward(paths, show=True):
             return 0
+    from .splash import Splash
+
+    splash = None if hidden else Splash.show(cfg)
     runtime = Runtime(cfg)
+    if splash is not None:
+        splash.step(0.45)
     if any(path.lower().endswith(".pdf") for path in paths):
         # PDF per Doppelklick bzw. »Öffnen mit«: gleich im Reader beginnen (Bilder über »Senden an«: Startseite und
         # »PDF aus Bildern«) – er ist im ersten Bild fertig,
@@ -412,7 +428,11 @@ def main(argv: list[str] | None = None) -> int:
 
     sys.excepthook = report
     engine = create_engine(runtime)
+    if splash is not None:
+        splash.step(0.85)
     window = show_window(runtime, engine, visible=False) if hidden else show_window(runtime, engine)
+    if splash is not None:
+        splash.finish(window)
     reader = runtime.reader.controller
     runtime.background.attach(qt_app)
     # Abmelden oder Herunterfahren von Windows: Einstellungen sichern, bevor Windows den Prozess beendet

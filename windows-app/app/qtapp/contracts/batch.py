@@ -277,6 +277,7 @@ class BatchController(Observable):
         super().__init__(parent)
         self.app = app
         self.tool = tool
+        self._submits = 0  # Zähler für die Schlüssel der verzögerten Prüfung (``_insert``)
         self.c = None
         default_target = cfg.get("zielordner") if isinstance(cfg.get("zielordner"), str) and cfg.get("zielordner") else str(desktop_dir())
         self.settings = BatchSettings.from_config(cfg, default_target=default_target)
@@ -450,7 +451,10 @@ class BatchController(Observable):
         self._save_soon()
         if waiting and self.analyzer is not None:
             # Erst die neuen Zeilen zeigen, dann prüfen: So konkurriert die Prüfung nicht mit dem Aufbau der Liste.
-            self.app.timers.later(f"batch:submit:{id(items)}", 0, lambda: self._submit(waiting))
+            # eigener Schlüssel je Aufruf: ``id()`` einer schon freigegebenen Liste kann sich wiederholen und ersetzte dann
+            # die noch ausstehende Prüfung des vorigen Aufrufs (die Datei bliebe bei »Wird geprüft …«)
+            self._submits += 1
+            self.app.timers.later(f"batch:submit:{self._submits}", 0, lambda: self._submit(waiting))
 
     def _submit(self, entries: list[tuple[str, str]]) -> None:
         entries = [(item_id, path) for item_id, path in entries if item_id in self.by_id]

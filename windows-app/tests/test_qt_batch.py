@@ -298,7 +298,8 @@ def test_several_recipients_show_a_count_and_the_choice(ui_app, tmp_path: Path) 
     h = ui_app
     h.overview.mail = ""
     einzeln_pruefen(h, excel(tmp_path / "drei.xlsx", aktiv=6, mails=("a@x.de", "b@x.de", "c@x.de")))
-    assert h.overview.mailValue == "3 erkannt" and ist_sichtbar(h, "3 erkannt", "PText", "createPage")
+    assert h.overview.mailValue == "3 erkannt"
+    assert wait_until(lambda: ist_sichtbar(h, "3 erkannt", "PText", "createPage"), 5)  # Windows-Runner: Karte erscheint verzögert
     assert h.overview.mailChoices == ["a@x.de", "b@x.de", "c@x.de"]
     combo = [item for item in elemente(seite(h, "createPage")) if qml_typ(item) == "PComboBox" and item.property("label") == "Rechnungsempfänger wählen"]
     assert len(combo) == 1 and sichtbar(combo[0])

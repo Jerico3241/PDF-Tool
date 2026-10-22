@@ -36,7 +36,7 @@ Item {
     // (sonst werden sie gleichmäßig schmaler, der Name gekürzt); die Dokument-Tabs teilen sich den Rest und werden wie in
     // Edge schmaler – reicht auch das nicht, zeigt die Leiste nur ganze, gleich breite Tabs und ‹ › zum Blättern.
     // Alle Breiten folgen aus der Breite der Leiste, nie aus der Liste selbst (das gäbe eine Schleife).
-    readonly property real fixedWidth: homeTab.width + addButton.width + helpButton.width + settingsButton.width + 5 * row.spacing
+    readonly property real fixedWidth: menuButton.width + homeTab.width + addButton.width + helpButton.width + settingsButton.width + 6 * row.spacing
     readonly property real toolTabCap: {
         var count = toolTabs.count
         if (count === 0) return 0
@@ -163,11 +163,26 @@ Item {
         anchors.rightMargin: 6
         spacing: 2
 
+        // ≡ blendet die Navigation der Startseite ein und aus (von anderen Seiten aus: zur Startseite mit Navigation)
+        PIconButton {
+            id: menuButton
+            objectName: "appNavButton"
+            Layout.alignment: Qt.AlignBottom
+            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
+            Layout.rightMargin: 2
+            iconName: "navigation"
+            tip: I18n.tr(App.currentPage === "home" && App.navOpen ? "Navigation ausblenden" : "Navigation einblenden", I18n.revision)
+            onClicked: App.toggleNav()
+        }
+        // Start: aktiv mit App-Symbol und Namen (wie im Design), sonst nur ⌂
         AppTab {
             id: homeTab
             objectName: "tabHome"
             Layout.alignment: Qt.AlignBottom
+            Layout.preferredWidth: active ? 178 : Metrics.appTabIconOnly
             iconName: "home"
+            imageSource: active ? Qt.resolvedUrl("../../images/app-16.png") : ""
+            title: active ? I18n.tr("Start", I18n.revision) : ""
             tooltip: I18n.tr("Start" + Shortcuts.hints["app.home"], I18n.revision)
             active: bar.activeKey === "home"
             onClicked: App.navigate("home")
@@ -379,7 +394,7 @@ Item {
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
             iconName: "add"
-            tip: I18n.tr("PDF öffnen" + Shortcuts.hints["app.open"], I18n.revision)
+            tip: I18n.tr("Datei öffnen" + Shortcuts.hints["app.open"], I18n.revision)
             onClicked: Reader.openDialog()
         }
         Item { Layout.fillWidth: true }
@@ -450,13 +465,19 @@ Item {
         }
         Component.onCompleted: shown = target
         readonly property var goal: target ? frame(target) : { x: 0, width: 0 }
-        visible: target !== null && goal.width > 0
+        visible: target !== null && goal.width > 0 && bar.activeKey !== "home"  // Start: ohne Linie (wie im Design)
         x: progress < 1 ? fromX + (goal.x - fromX) * progress : goal.x
         width: progress < 1 ? fromWidth + (goal.width - fromWidth) * progress : goal.width
         y: bar.height - Metrics.appTabHeight
         height: 2
         radius: 1
-        color: Theme.accent
+        // Dokument: Farbe seiner Dateiart (Tabelle grün …); Start und Werkzeuge: Akzent
+        color: {
+            if (bar.activeKey.indexOf("doc:") !== 0) return Theme.accent
+            var index = Reader.tabs.indexOf(bar.activeKey.substring(4))
+            var kind = index >= 0 ? Reader.tabs.get(index).kind : ""
+            return kind ? FileKinds.color(kind) : Theme.accent
+        }
         NumberAnimation { id: glide; target: indicator; property: "progress"; to: 1; duration: Motion.indicator; easing.type: Motion.decelerate }
     }
 

@@ -47,6 +47,7 @@ TAB_LIMIT = 24
 CLOSED_LIMIT = 10  # »Geschlossenen Tab wieder öffnen«: so viele zuletzt geschlossene Dokumente
 NIGHT_KEY = "reader_nachtmodus"  # Nachtmodus (gui-config.json)
 CONTRACT_LISTS = (".xlsx", ".xlsm", ".xls")  # Startseite: Excel-Listen gehören den »Vertragsübersichten« (wie dort)
+SHEET_SUFFIXES = (".xlsx", ".xlsm", ".xls", ".ods", ".csv")  # Tabellen zum Bearbeiten (seit 5.0 Beta 2)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
 UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
@@ -64,6 +65,15 @@ QUICK_TOOLS = (
     ("clean", "Dokument bereinigen", "Vor dem Weitergeben: Daten entfernen, die man auf den Seiten nicht sieht", "eraser"),
     ("sign", "Unterschreiben", "Unterschrift einfügen", "signature"),
     ("merge", "Zusammenführen", "Weitere PDFs an ein Dokument anhängen", "merge"),
+)
+# Schnellwerkzeuge der Startseite (seit 5.0 Beta 2, wie im Design): Aktion, Titel, Beschreibung, Symbol
+START_TOOLS = (
+    ("office", "In PDF umwandeln", "Word-, Excel- oder PowerPoint-Datei in eine PDF umwandeln", "arrow_export"),
+    ("merge", "Zusammenfügen", "Mehrere PDFs zu einer zusammenfügen", "merge"),
+    ("split", "Teilen", "Eine PDF in mehrere Dateien teilen", "cut"),
+    ("images", "Bilder zu PDF", "Fotos und Scans (JPG, PNG, TIFF …) zu einer PDF zusammenfügen", "image"),
+    ("compare", "Vergleichen", "Zwei Fassungen einer PDF vergleichen – Unterschiede farbig markiert", "branch_compare"),
+    ("overview", "Vertragsübersicht", "Aus einer Excel-Liste eine Vertragsübersicht erstellen", "document"),
 )
 LEFT_PANELS = ("thumbs", "outline", "search", "attachments", "")
 RIGHT_PANELS = ("comments", "properties", "assistant", "compare", "")
@@ -131,6 +141,8 @@ class ReaderController(Observable):
         self._docs: dict[str, DocumentController] = {}
         self._current: DocumentController | None = None
         self._ids = 0
+        self._calc = None  # Rechenkern der Tabellen (``CalcService``) – erst mit der ersten Tabelle
+        self._sheets_made = 0  # neue Tabellen: »Mappe1«, »Mappe2« …
         recent = cfg.get("reader_zuletzt")
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
         # Wann zuletzt geöffnet (Startseite »Zuletzt verwendet«); Einträge aus älteren Versionen haben keine Zeit
@@ -263,13 +275,17 @@ class ReaderController(Observable):
     def _quick_tools(self) -> list:
         return [{"action": action, "title": title, "description": description, "icon": icon} for action, title, description, icon in QUICK_TOOLS]
 
+    def _start_tools(self) -> list:
+        return [{"action": action, "title": title, "description": description, "icon": icon} for action, title, description, icon in START_TOOLS]
+
     _constant = Signal()
     tabs = Property(QObject, _tabs_model, notify=_constant)  # geöffnete Dokumente (Tabs)
     maxPagePixels = Property(int, _max_pixels, notify=_constant)
     thumbWidth = Property(int, _thumb_width, notify=_constant)
     toolColors = Property(list, _tool_colors, notify=_constant)
     fontFamilies = Property(list, _font_families, notify=_constant)
-    quickTools = Property(list, _quick_tools, notify=_constant)  # Schnellwerkzeuge der Startseite
+    quickTools = Property(list, _quick_tools, notify=_constant)  # Schnellwerkzeuge (Reader, »Alle Werkzeuge«)
+    startTools = Property(list, _start_tools, notify=_constant)  # Schnellwerkzeuge oben auf der Startseite
 
     # Öffnen -----------------------------------------------------------------------------------------------
     @Slot()
@@ -340,13 +356,16 @@ class ReaderController(Observable):
             self.images_to_pdf(images)
             if not pdfs and not documents:
                 return
+        # Tabellen (seit 5.0 Beta 2): zum Bearbeiten im eigenen Tab, sobald LibreOffice da ist
+        sheets = [p for p in documents if self.edits_sheet(p)]
+        documents = [p for p in documents if p not in sheets]
         missing = [p for p in documents if not office.installed(office.kind_of(p) or "word")]
         if missing:
             # Ohne LibreOffice nur mit Microsoft Office – je Art (Word, Excel, PowerPoint) einzeln geprüft
             self.app.notify("reader", "warning", office.missing_text(office.kind_of(missing[0]) or "word"), title="Office-Datei ansehen")
             documents = [p for p in documents if p not in missing]
         # Word, Excel, PowerPoint (seit 5.0): eine Ansicht als PDF in einem eigenen Tab – in der Reihenfolge der Auswahl
-        pdfs = [p for p in paths if p in pdfs or p in documents]
+        pdfs = [p for p in paths if p in pdfs or p in documents or p in sheets]
         if not pdfs:
             if not documents and not images and not missing:
                 self.app.notify("reader", "warning", "Bitte eine PDF- oder Office-Datei wählen.", title="Nicht geöffnet")
@@ -368,7 +387,152 @@ class ReaderController(Observable):
             if len(self._docs) >= TAB_LIMIT:
                 self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
                 return
-            self._open(path, None, then=then)
+            if path in sheets:
+                self._open_sheet(path, then=then)
+            else:
+                self._open(path, None, then=then)
+
+    # Tabellen bearbeiten (seit 5.0 Beta 2) ----------------------------------------------------------------------
+    def edits_sheet(self, path: str) -> bool:
+        """Excel-, OpenDocument- und CSV-Dateien öffnen sich zum Bearbeiten (mit dem mitgelieferten LibreOffice)."""
+        return Path(path).suffix.lower() in SHEET_SUFFIXES and office.libreoffice() is not None
+
+    def calc(self):
+        """Rechenkern der Tabellen (startet beim ersten Befehl)."""
+        if self._calc is None:
+            from ..sheet.service import CalcService
+
+            self._calc = CalcService(self.app, self)
+            self._calc.startingChanged.connect(self._calc_starting)
+        return self._calc
+
+    def _calc_starting(self, starting: bool) -> None:
+        if starting:
+            self.app.set_status("Tabellen werden vorbereitet …", "busy")
+
+    @Slot()
+    def newSheet(self) -> None:  # noqa: N802
+        """Neue, leere Tabelle (Startseite »Neue Tabelle«, Strg+N)."""
+        if office.libreoffice() is None:
+            self.app.notify("reader", "warning", "Für Tabellen fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title="Neue Tabelle")
+            return
+        if len(self._docs) >= TAB_LIMIT:
+            self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
+            return
+        self._sheets_made += 1
+        self._open_sheet("", name=f"Mappe{self._sheets_made}.xlsx")
+
+    @Slot(str)
+    def newOffice(self, kind: str) -> None:  # noqa: N802
+        """»Neuer Text« bzw. »Neue Präsentation«: Name und Ort wählen, leere Datei anlegen und im Standardprogramm
+        öffnen (Texte und Präsentationen bearbeitet Novadesk erst mit einer späteren Beta)."""
+        if kind not in ("text", "praesentation"):
+            return
+        if office.libreoffice() is None:
+            self.app.notify("reader", "warning", "Für neue Dateien fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title="Neue Datei")
+            return
+        name, pattern = (("Dokument1.docx", "Word-Dokument (*.docx);;OpenDocument-Text (*.odt)") if kind == "text"
+                         else ("Präsentation1.pptx", "PowerPoint-Präsentation (*.pptx);;OpenDocument-Präsentation (*.odp)"))
+        folder = self.app.initial_dir("reader", self.source_dir)
+        target = files.save_file("Neuer Text" if kind == "text" else "Neue Präsentation", str(Path(folder) / name), pattern)
+        if not target:
+            return
+        if Path(target).suffix.lower() not in ((".docx", ".odt") if kind == "text" else (".pptx", ".odp")):
+            target += Path(name).suffix
+        self.source_dir = str(Path(target).parent)
+        self.app.schedule_save()
+        self.app.set_status(f"Wird angelegt: {Path(target).name} …", "busy")
+
+        def done(_result) -> None:
+            self.remember_recent(target)
+            self.app.set_status(f"Angelegt: {Path(target).name} – öffnet sich im Standardprogramm.", "success")
+            self.open_in_program(target)
+
+        def failed(exc: BaseException) -> None:
+            from tools.sheet.engine import CalcError
+
+            message = str(exc) if isinstance(exc, CalcError) else "Die Datei ließ sich nicht anlegen."
+            self.app.notify("reader", "error", message, title="Nicht angelegt")
+
+        self.calc().submit("blank", {"kind": kind, "path": str(Path(target).resolve())}, done, failed)
+
+    def open_in_program(self, path: str) -> None:
+        """Datei im Standardprogramm öffnen – ist das Novadesk selbst, »Öffnen mit« (sonst öffnete sie sich hier)."""
+        program = PureWindowsPath(winsys.default_program(path)).name.lower()
+        if program in ("pdf-tool.exe", "pythonw.exe", "python.exe"):
+            try:
+                winsys.open_with(path)
+            except OSError as exc:
+                self.app.notify("reader", "error", str(exc) or "Kein Programm zum Öffnen gefunden.", title="Nicht geöffnet")
+            return
+        self.openExternal(path)
+
+    def _open_sheet(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
+                    password: str | None = None) -> None:
+        from ..sheet.document import SheetController
+
+        if path and password is None and office.encrypted(Path(path)):
+            if background:
+                if then is not None:
+                    then(None)
+                return
+            password = self.ask_password(Path(path).name, False)
+            if password is None:
+                self.app.set_status("Öffnen abgebrochen.", "neutral")
+                if then is not None:
+                    then(None)
+                return
+        self._ids += 1
+        ident = f"d{self._ids}"
+        controller = SheetController(self, self.calc(), ident, self)
+        controller.name = name or Path(path).name
+        self.opening = self.opening + 1
+        if path:
+            self._opening_paths.append(path)
+        self.app.set_status(f"Wird geöffnet: {controller.name} …", "busy")
+
+        def done() -> None:
+            self.opening = max(0, self.opening - 1)
+            self._forget_opening(path)
+            self._docs[ident] = controller
+            controller.panels = {"left": "", "right": "", "organize": False}
+            self.tabs.set_items([*self.tabs.items(), self._tab_item(controller)])
+            if not background or self._current is None:
+                self.activate(ident)
+            if not background and self.app.currentPage != "reader":
+                self.app.navigate(READER.key)
+            if path:
+                self.remember_recent(path)
+            count = len(controller.sheets)
+            self.app.set_status(f"Geöffnet: {controller.name} – {count} {'Blatt' if count == 1 else 'Blätter'}", "success")
+            if then is not None:
+                then(controller)
+
+        def failed(exc: BaseException) -> None:
+            from tools.sheet.engine import CalcError
+
+            self.opening = max(0, self.opening - 1)
+            self._forget_opening(path)
+            controller.shutdown()
+            controller.deleteLater()
+            try:
+                if then is not None:
+                    then(None)
+                if background:
+                    _log().info("Letzte Sitzung: eine Tabelle ließ sich nicht öffnen (%s)", type(exc).__name__)
+                    return
+                if isinstance(exc, CalcError) and exc.code == "kennwort" and path:
+                    secret = self.ask_password(Path(path).name, True)
+                    if secret is not None:
+                        self._open_sheet(path, then=None, password=secret)
+                    return
+                message = str(exc) if isinstance(exc, CalcError) else f"»{controller.name}« konnte nicht geöffnet werden."
+                self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
+                self.app.set_status("Nicht geöffnet.", "neutral")
+            finally:
+                self._leave_if_empty()
+
+        controller.open(path, done, failed, password)
 
     def _open(self, path: str, password: str | None, recovered: recovery.SessionInfo | None = None, *,
               then: Callable[[DocumentController | None], None] | None = None, background: bool = False,
@@ -558,6 +722,10 @@ class ReaderController(Observable):
 
     # Tabs ---------------------------------------------------------------------------------------------------
     def _tab_item(self, controller: DocumentController) -> dict:
+        if getattr(controller, "isSheet", False):
+            kind = office.symbol(Path(controller.path)) if controller.path else "tabelle"
+            return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path,
+                    "tip": controller.path or controller.name, "kind": kind or "tabelle"}
         if controller.sourcePath:
             # Ansicht einer Office-Datei: Name, Symbol und Farbe der Office-Datei
             source = Path(controller.sourcePath)
@@ -586,7 +754,11 @@ class ReaderController(Observable):
         self.currentChanged.emit()
         # Geteilte Ansicht: das Dokument rechts wird angeklickt → die beiden tauschen; ein eben für die geteilte
         # Ansicht geöffnetes PDF kommt neben das bisherige
-        if previous is not None and previous.ident in self._docs:
+        if getattr(controller, "isSheet", False) or getattr(previous, "isSheet", False):
+            # Tabellen stehen nie in der geteilten Ansicht
+            if self.splitKey and (getattr(controller, "isSheet", False) or key == self.splitKey):
+                self.splitKey = ""
+        elif previous is not None and previous.ident in self._docs:
             if key == self.splitKey or self._split_pending:
                 self.splitKey = previous.ident
         self._split_pending = False
@@ -608,7 +780,9 @@ class ReaderController(Observable):
             return
         if not self.hasDocument:
             return
-        others = [key for key in self.tabs.keys() if key != self.currentKey]
+        if self._current is not None and getattr(self._current, "isSheet", False):
+            return
+        others = [key for key in self.tabs.keys() if key != self.currentKey and not getattr(self._docs.get(key), "isSheet", False)]
         if others:
             self.splitKey = others[-1]
             return
@@ -776,7 +950,7 @@ class ReaderController(Observable):
 
     @Slot(str)
     def setSplit(self, key: str) -> None:  # noqa: N802
-        if key in self._docs and key != self.currentKey:
+        if key in self._docs and key != self.currentKey and not getattr(self._docs[key], "isSheet", False):
             self.splitKey = key
 
     @Slot()
@@ -946,7 +1120,7 @@ class ReaderController(Observable):
             exists, size = self._recent_stat[path]
             p = Path(path)
             items.append({
-                "path": path, "name": p.name, "folder": str(p.parent), "missing": not exists, "kind": office.symbol(p),
+                "path": path, "name": p.name, "folder": str(p.parent), "place": place_text(str(p.parent)), "missing": not exists, "kind": office.symbol(p),
                 "size": size_text(size) if exists else "", "opened": opened_text(self._recent_opened.get(path, "")),
             })
         self._recent_stat = {path: info for path, info in self._recent_stat.items() if path in self._recent_paths}
@@ -1042,7 +1216,7 @@ class ReaderController(Observable):
         """F5: Präsentation – Vollbild auf schwarzem Grund, eine ganze Seite nach der anderen (Pfeiltasten,
         Leertaste, Bild auf/ab); Esc beendet sie und stellt Ansicht und Zoom wieder her."""
         doc = self._current
-        if doc is None or self.presenting:
+        if doc is None or self.presenting or getattr(doc, "isSheet", False):
             return
         self._before_presentation = (doc, doc.viewMode, doc.fit, doc.zoom, doc.tool)
         self.organize = False
@@ -1135,8 +1309,11 @@ class ReaderController(Observable):
     def quickTool(self, action: str) -> None:  # noqa: N802
         """PDF wählen, im Tab öffnen und das Werkzeug starten, sobald das Dokument geöffnet und aktiv ist
         (»Zusammenführen«: danach die PDFs wählen, die angehängt werden)."""
-        tool = next((entry for entry in QUICK_TOOLS if entry[0] == action), None)
+        tool = next((entry for entry in (*QUICK_TOOLS, *START_TOOLS) if entry[0] == action), None)
         if tool is None:
+            return
+        if action == "overview":
+            self.app.openTool(CONTRACTS.key)
             return
         if action == "images":
             self.imagesToPdf()
@@ -1147,7 +1324,8 @@ class ReaderController(Observable):
         if action == "office":
             self.officeToPdf()
             return
-        path = self.pick_pdf(f"{tool[1]} – erste PDF wählen" if action == "merge" else f"{tool[1]} – PDF wählen")
+        titles = {"merge": f"{tool[1]} – erste PDF wählen", "compare": "Vergleichen – neuere Fassung wählen"}
+        path = self.pick_pdf(titles.get(action, f"{tool[1]} – PDF wählen"))
         if not path:
             return
         self.source_dir = str(Path(path).parent)
@@ -1160,7 +1338,7 @@ class ReaderController(Observable):
 
         def start() -> None:
             # Inzwischen geschlossen oder ein anderer Tab aktiv: nichts starten
-            if controller.ident not in self._docs or self._current is not controller:
+            if controller.ident not in self._docs or self._current is not controller or getattr(controller, "isSheet", False):
                 return
             if action == "merge":
                 controller.mergeFiles()
@@ -1282,14 +1460,7 @@ class ReaderController(Observable):
             self.app.open_with_tool(CONTRACTS.key, [current.sourcePath])
         elif action == "external":
             # Ist Novadesk selbst das Standardprogramm, öffnete sich nur wieder dieser Tab: dann »Öffnen mit«
-            program = PureWindowsPath(winsys.default_program(current.sourcePath)).name.lower()
-            if program in ("pdf-tool.exe", "pythonw.exe", "python.exe"):
-                try:
-                    winsys.open_with(current.sourcePath)
-                except OSError as exc:
-                    self.app.notify("reader", "error", str(exc) or "Kein Programm zum Öffnen gefunden.", title="Nicht geöffnet")
-                return
-            self.openExternal(current.sourcePath)
+            self.open_in_program(current.sourcePath)
 
     @Slot(str)
     def openExternal(self, path: str) -> None:  # noqa: N802
@@ -1440,6 +1611,10 @@ class ReaderController(Observable):
         controller = self._current
         if controller is None:
             return
+        if getattr(controller, "isSheet", False) and (not controller.path or controller.dirty):
+            # Tabelle: erst speichern (ein nie gespeicherte fragt nach Name und Ort), dann die Datei senden
+            controller.save(then=lambda ok: self._mail_document(controller) if ok else None)
+            return
         if not controller.path:
             target = self.pick_save_pdf(controller.name or "Dokument.pdf", "Vor dem Senden speichern unter")
             if target:
@@ -1526,7 +1701,11 @@ class ReaderController(Observable):
                     self.app.set_status("Die PDFs der letzten Sitzung gibt es nicht mehr.", "warning")
                 return
             for entry in entries:
-                self._open(entry["pfad"], None, then=lambda controller, page=entry["seite"]: self._restored(state, controller, page), background=True)
+                restored = lambda controller, page=entry["seite"]: self._restored(state, controller, page)  # noqa: E731
+                if self.edits_sheet(entry["pfad"]):
+                    self._open_sheet(entry["pfad"], then=restored, background=True)
+                else:
+                    self._open(entry["pfad"], None, then=restored, background=True)
 
         def failed(_exc: BaseException, _details: str) -> None:
             self._restoring = False
@@ -1642,6 +1821,8 @@ class ReaderController(Observable):
         return True
 
     def _save_now(self, controller: DocumentController) -> bool:
+        if getattr(controller, "isSheet", False):
+            return controller.save_and_wait()
         target = controller.path or self.pick_save_pdf(controller.name or "Dokument.pdf", "Speichern unter")
         if not target:
             return False
@@ -1890,7 +2071,8 @@ class ReaderTool:
     def find_action(self, page: str) -> None:
         current = self.controller.current
         if current is not None:
-            self.controller.leftPanel = "search"
+            if not getattr(current, "isSheet", False):
+                self.controller.leftPanel = "search"
             current.requestSearch()
 
     def show_help(self, page: str) -> None:
@@ -1945,6 +2127,28 @@ class ReaderTool:
 
     def shown(self) -> None:
         self.controller.window_shown()
+
+
+# Bekannte Ordner im Benutzerordner: so heißen sie im Explorer (Startseite »Zuletzt verwendet«, Spalte »Ordner«)
+KNOWN_FOLDERS = {"documents": "Dokumente", "desktop": "Desktop", "downloads": "Downloads", "pictures": "Bilder",
+                 "music": "Musik", "videos": "Videos", "onedrive": "OneDrive"}
+
+
+def place_text(folder: str) -> str:
+    """Ordner kurz wie im Design: »Dokumente\\Kunden« statt »C:\\Users\\Name\\Documents\\Kunden«; außerhalb des
+    Benutzerordners der Pfad selbst."""
+    home = os.path.expanduser("~")
+    try:
+        relative = os.path.relpath(folder, home)
+    except ValueError:  # anderes Laufwerk
+        return folder
+    if relative.startswith("..") or os.path.isabs(relative):
+        return folder
+    if relative == ".":
+        return Path(home).name
+    parts = Path(relative).parts
+    first = KNOWN_FOLDERS.get(parts[0].lower(), parts[0])
+    return "\\".join([first, *parts[1:]]) if os.sep == "\\" else "/".join([first, *parts[1:]])
 
 
 def _shows(doc: DocumentController, path: str) -> bool:

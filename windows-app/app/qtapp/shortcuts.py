@@ -35,6 +35,7 @@ class Command:
 
 
 COMMANDS = (
+    Command("app.new", GENERAL, "Neue Tabelle", ("Ctrl+N",)),
     Command("app.open", GENERAL, "Datei öffnen", ("Ctrl+O",)),
     Command("app.find", GENERAL, "Suchen", ("Ctrl+F",)),
     Command("app.primary", GENERAL, "Hauptbefehl der Seite (z. B. PDF erstellen)", ("Ctrl+Return", "Ctrl+Enter")),

@@ -123,12 +123,14 @@ WERKZEUGE = ("toolCard_reader", "toolCard_actions", "toolCard_contracts", "toolC
 def _pruefe_startseite(h) -> tuple[bool, int]:
     """Aufbau der Startseite; liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
 
-    Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
+    Seit 5.0 steht dieser Teil unter »Alle Werkzeuge« (Navigation links). Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
     breit, Ränder mindestens 36 px; Willkommenskopf, Dateiarten, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis
     an derselben linken Kante und gleich breit. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
     untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte, kein Wort mitten im Wort
     umbrochen; nebeneinander gleich hoch mit »Öffnen ›« und Tastenkürzel auf einer Linie."""
-    oben, karte, ablage, zuletzt, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homeRecent", "homePrivacy"))
+    h.app.showHomeSection("tools")  # seit 5.0 unter »Alle Werkzeuge« in der Navigation
+    pump(0.3)
+    oben, karte, ablage, hinweis = (h.item(n) for n in ("homeTop", "homeTools", "homeDropZone", "homePrivacy"))
     flaeche = oben.parentItem()
     while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
         flaeche = flaeche.parentItem()
@@ -137,17 +139,13 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
     assert gbreite <= 1080 and min(links, rechts) >= 36
-    for teil in (zuletzt, hinweis, h.item("homeHero"), h.item("homeKinds")):
-        assert _szene(teil)[0] == gx and _szene(teil)[2] == gbreite, teil.objectName()
-    arten = [_szene(h.item("kindCard_" + art)) for art in ("tabelle", "text", "praesentation", "pdf")]
-    assert len({lage[2] for lage in arten}) == 1 and arten[0][0] == gx  # Dateiarten gleich breit, an der linken Kante
+    assert _szene(hinweis)[0] == gx and _szene(hinweis)[2] == gbreite
     k, a = _szene(karte), _szene(ablage)
     nebeneinander = a[1] == k[1]
     if nebeneinander:
         assert k[0] == gx and a[2] == 260 and a[3] == k[3] and a[0] - (k[0] + k[2]) == 16 and a[0] + a[2] == gx + gbreite
     else:
         assert k[0] == a[0] == gx and k[2] == a[2] == gbreite and a[1] - (k[1] + k[3]) == 16
-    assert _szene(zuletzt)[1] - max(k[1] + k[3], a[1] + a[3]) == 16
     werkzeuge = [h.item(name) for name in WERKZEUGE]
     lagen = [_szene(w) for w in werkzeuge]
     for lage in lagen:
@@ -184,7 +182,7 @@ def _alle(wurzel) -> list:
 # Spalten der Werkzeuge – vier Werkzeuge stehen zwei mal zwei). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
 # bei 150 %.
 GROESSEN = (((1920, 1080), (True, 2)), ((2560, 1440), (True, 2)), ((1366, 768), (True, 2)), ((1280, 720), (True, 2)),
-            ((1093, 614), (True, 2)), ((900, 700), (False, 2)), ((760, 700), (False, 2)))
+            ((1093, 614), (False, 2)), ((900, 700), (False, 2)), ((760, 700), (False, 1)))  # seit 5.0 neben der Navigation (240 px)
 
 
 @pytest.mark.parametrize("groesse,aufbau", GROESSEN)
@@ -193,8 +191,35 @@ def test_start_page_is_symmetric(ui_app, groesse, aufbau) -> None:
     h.window.resize(*groesse)
     pump(0.6)
     assert _pruefe_startseite(h) == aufbau
-    if aufbau[0] and groesse[0] >= 1280:
+    if aufbau[0] and groesse[0] >= 1600:  # neben der Navigation (240 px)
         assert _szene(h.item("homeTop"))[2] == 1080  # volle Gruppe
+
+
+@pytest.mark.parametrize("groesse", [g for g, _a in GROESSEN])
+def test_start_section_follows_design(ui_app, groesse) -> None:
+    """Startseite seit 5.0 (Entwurf 1-startseite.png): Navigation links (240 px), daneben mittig und höchstens 1080 px
+    breit Begrüßung, Dateiarten, Schnellwerkzeuge und »Zuletzt verwendet« an derselben linken Kante und gleich breit."""
+    h = ui_app
+    h.window.resize(*groesse)
+    h.app.showHomeSection("start")
+    pump(0.6)
+    nav = _szene(h.item("homeNav"))
+    assert nav[2] == 240
+    held = h.item("homeHero")
+    flaeche = held.parentItem()
+    while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
+        flaeche = flaeche.parentItem()
+    fx0, _fy0, fbreite, _fh0 = _szene(flaeche)
+    assert fx0 >= nav[0] + nav[2]
+    gx, _gy, gbreite, _gh = _szene(held)
+    links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
+    assert abs(links - rechts) <= 1 and gbreite <= 1080 and min(links, rechts) >= 24, (links, rechts, gbreite)
+    for name in ("homeKinds", "homeStartTools", "homeStartRecent" if h.item("homeStartRecent").isVisible() else "homeStartRecentEmpty"):
+        lage = _szene(h.item(name))
+        assert lage[0] == gx and lage[2] == gbreite, name
+    arten = [_szene(h.item("kindCard_" + art)) for art in ("tabelle", "text", "praesentation", "pdf")]
+    breiten = [lage[2] for lage in arten]
+    assert max(breiten) - min(breiten) <= 1 and arten[0][0] == gx, arten  # Dateiarten gleich breit, an der linken Kante
 
 
 def test_start_page_at_this_scale(ui_app) -> None:
@@ -238,7 +263,7 @@ def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(u
     """Nebeneinander nur, wenn jedes Werkzeug »Öffnen ›« und sein Tastenkürzel ganz zeigen kann (unter Windows
     bestimmen Schrift und Skalierung die Breite) – sonst untereinander, nie über den Rand der Karte hinaus."""
     h = ui_app
-    h.window.resize(1093, 614)
+    h.window.resize(1366, 768)
     pump(0.4)
     assert _pruefe_startseite(h) == (True, 2)
     werkzeug = h.item(WERKZEUGE[0])
@@ -260,11 +285,15 @@ def test_start_page_tools_open_their_tool(app) -> None:
 
     for name, page in (("toolCard_contracts", "create"), ("toolCard_repair", "repair")):
         app.navigate("home", 0.4)
+        app.app.showHomeSection("tools")  # seit 5.0 unter »Alle Werkzeuge«
+        pump(0.3)
         item = app.item(name)
         QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
         pump(0.4)
         assert app.app.currentPage == page
     app.navigate("home", 0.4)
+    app.app.showHomeSection("tools")
+    pump(0.3)
     karten = [app.item(name) for name in WERKZEUGE]
     assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 4
     files.RESPONSES.append([])  # Dateiauswahl: abbrechen
@@ -352,7 +381,7 @@ def test_tool_remembers_its_last_view(app) -> None:
 
 
 def test_status_hint_follows_the_tool(app) -> None:
-    assert "Vertragsübersichten" in app.app.hint
+    assert app.app.hint.startswith("Strg+N  Neu")  # Startseite (seit 5.0 wie im Entwurf)
     app.navigate("create")
     assert "PDF erstellen" in app.app.hint and "Kunde suchen" in app.app.hint
     app.navigate("batch")
@@ -477,10 +506,11 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     def mitte(item) -> float:
         return item.mapToScene(QPointF(item.width() / 2, 0)).x()
 
+    app.navigate("layout", 0.6)
     app.navigate("repair", 0.6)
     assert abs(mitte(marker) - mitte(app.item("tab_repair"))) < 1
-    vorher, ziel = mitte(marker), mitte(app.item("tabHome"))
-    app.app.navigate("home")
+    vorher, ziel = mitte(marker), mitte(app.item("tab_contracts"))
+    app.app.openTool(CONTRACTS.key)
     lagen = []
     for _ in range(30):
         pump(0.01)
@@ -488,6 +518,8 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     assert any(ziel + 2 < lage < vorher - 2 for lage in lagen) == (app.theme.effectiveProfile == "full")  # unterwegs (nur »Vollständig«)
     pump(0.4)
     assert abs(mitte(marker) - ziel) < 1
+    app.navigate("home", 0.6)
+    assert not marker.isVisible()  # Start: ohne Linie (seit 5.0, wie im Entwurf)
     app.navigate("settings", 0.6)
     assert abs(mitte(marker) - mitte(app.item("appSettingsButton"))) < 1  # Einstellungen: unter dem Zahnrad
     app.navigate("layout", 0.6)
@@ -496,8 +528,8 @@ def test_tab_marker_glides_to_the_active_tab_and_stays_under_it(app) -> None:
     pump(0.6)
     assert app.app.currentPage == "layout" and abs(mitte(marker) - mitte(app.item("tab_contracts"))) < 1
     app.settings.setProfile("off")
-    app.navigate("home", 0.1)
-    assert abs(mitte(marker) - mitte(app.item("tabHome"))) < 1  # »Aus«: sofort
+    app.navigate("settings", 0.1)
+    assert abs(mitte(marker) - mitte(app.item("appSettingsButton"))) < 1  # »Aus«: sofort
     app.settings.setProfile("full")
     assert not app.messages()
 
@@ -760,26 +792,38 @@ def _klicke(h, item) -> None:
 
 
 def test_start_page_kind_cards_and_recent_filter(ui_app, tmp_path: Path, monkeypatch) -> None:
-    """Novadesk-Startseite: je Dateiart eine Karte (Dateiauswahl nur dieser Art); »Zuletzt verwendet« zeigt das Symbol
-    der Dateiart und lässt sich nach Dateiart filtern (Tabellen mit CSV)."""
+    """Novadesk-Startseite (seit 5.0 Beta 2 wie im Entwurf): Karten »Neue Tabelle«, »Neuer Text«, »Neue Präsentation«
+    und »PDF öffnen«; je Dateiart (Navigation) »Öffnen …« mit Dateiauswahl nur dieser Art. »Zuletzt verwendet« zeigt das
+    Symbol der Dateiart und lässt sich nach Dateiart filtern (Tabellen mit CSV)."""
     from qtapp import files
 
     h = ui_app
     h.window.resize(1280, 2000)  # alles ohne Scrollen sichtbar
     pump(0.4)
-    gefragt = []
+    reader = h.runtime.reader.controller
+    gefragt, neu = [], []
     monkeypatch.setattr(files, "open_files", lambda title, directory, filters: gefragt.append((title, filters)) or [])
-    for art, titel in (("tabelle", "Tabelle öffnen"), ("text", "Text öffnen"), ("praesentation", "Präsentation öffnen"), ("pdf", "PDF öffnen")):
+    monkeypatch.setattr(type(reader), "newSheet", lambda self: neu.append("tabelle"))
+    monkeypatch.setattr(type(reader), "newOffice", lambda self, kind: neu.append(kind))
+    for art in ("tabelle", "text", "praesentation", "pdf"):
         karte = h.item("kindCard_" + art)
-        _klicke(h, karte)
-        assert gefragt[-1] == (titel, files.OPEN_FILTERS[art])
         assert karte.findChild(QObject, "kindIcon").property("source").toString().endswith("images/" + art + "-48.png")
+    _klicke(h, h.item("kindCard_pdf"))
+    assert gefragt == [("PDF öffnen", files.OPEN_FILTERS["pdf"])]
+    for art, titel in (("tabelle", "Tabelle öffnen"), ("text", "Text öffnen"), ("praesentation", "Präsentation öffnen")):
+        h.app.showHomeSection("kind:" + art)
+        pump(0.3)
+        _klicke(h, h.item("homeKindOpen"))
+        assert gefragt[-1] == (titel, files.OPEN_FILTERS[art])
     assert h.app.currentPage == "home" and len(gefragt) == 4
+    h.app.showHomeSection("start")
+    pump(0.3)
 
     namen = ("Vertrag.pdf", "Liste.xlsx", "Daten.csv", "Angebot.docx", "Bericht.pptx")
     for name in reversed(namen):
         (tmp_path / name).write_bytes(b"x")
-        h.runtime.reader.controller.remember_recent(str(tmp_path / name))
+        reader.remember_recent(str(tmp_path / name))
+    h.app.showHomeSection("recent")
     pump(0.4)
     karte = h.item("homeRecent")
 
@@ -794,4 +838,9 @@ def test_start_page_kind_cards_and_recent_filter(ui_app, tmp_path: Path, monkeyp
     for knopf, erwartet in (("tabelle", ["Liste.xlsx", "Daten.csv"]), ("text", ["Angebot.docx"]), ("praesentation", ["Bericht.pptx"]), ("pdf", ["Vertrag.pdf"]), ("alle", list(namen))):
         _klicke(h, h.item("homeRecentKind_" + knopf))
         assert zeilen() == erwartet, knopf
+    h.app.showHomeSection("start")
+    pump(0.3)
+    for art in ("tabelle", "text", "praesentation"):  # »Neu …« legt eine Datei dieser Art an
+        _klicke(h, h.item("kindCard_" + art))
+    assert neu == ["tabelle", "text", "praesentation"]
     assert not h.messages()

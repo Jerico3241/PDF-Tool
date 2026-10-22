@@ -614,6 +614,7 @@ def prepare_office(target: Path, search: list[Path]) -> None:
     if problems:
         fail("LibreOffice im Paket unvollständig: " + "; ".join(problems))
     probe_office(program)
+    probe_calc(program)
     count = sum(1 for path in target.rglob("*") if path.is_file())
     size = sum(path.stat().st_size for path in target.rglob("*") if path.is_file())
     log(f"LibreOffice {LIBREOFFICE_VERSION}: {count} Dateien ({size / 1e6:.0f} MB), Laufzeit ergänzt: {', '.join(path.name for path in added) or '-'}")
@@ -709,6 +710,42 @@ def probe_office(program: Path) -> None:
         fail("Probe fehlgeschlagen: LibreOffice hat keine PDF erstellt "
              f"(Code {result.returncode}): {(result.stdout + result.stderr).decode('utf-8', 'replace')[-1500:]}")
     log(f"  Probe: CSV -> PDF ({pdf.stat().st_size // 1024} KB)")
+    remove(work)
+
+
+def probe_calc(program: Path) -> None:
+    """Der Rechenkern der Tabellen (seit 5.0 Beta 2) läuft im entpackten LibreOffice: Python und Skript-Anbindung von
+    LibreOffice, Skript im eigenen Profil, Verbindung über 127.0.0.1. Er legt eine Mappe an, rechnet =SUMME und speichert
+    sie als .xlsx – sonst bricht der Build ab."""
+    work = BUILD / "calc-probe"
+    remove(work)
+    work.mkdir(parents=True)
+    if str(APP) not in sys.path:
+        sys.path.insert(0, str(APP))
+    from tools.sheet import engine as calc
+
+    calc.soffice = lambda: program / "soffice.bin"
+    calc.profile_dir = lambda: work / "profil"
+    probe = calc.Engine()
+    target = work / "probe.xlsx"
+    try:
+        probe.start()
+        doc = probe.call("new")["doc"]
+        for row, text in enumerate(("2", "3", "=SUMME(A1:A2)")):
+            probe.call("input", doc=doc, row=row, col=0, text=text)
+        probe.call("save", doc=doc, path=str(target))
+        probe.call("close", doc=doc)
+    except calc.CalcError as exc:
+        detail = getattr(exc, "detail", "")
+        fail(f"Probe des Rechenkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
+    finally:
+        probe.stop()
+    import openpyxl
+
+    value = openpyxl.load_workbook(target, data_only=True).active["A3"].value if target.is_file() else None
+    if value != 5:
+        fail(f"Probe des Rechenkerns fehlgeschlagen: =SUMME(A1:A2) ergab {value!r} statt 5")
+    log("  Probe: Rechenkern für Tabellen (=SUMME -> .xlsx)")
     remove(work)
 
 

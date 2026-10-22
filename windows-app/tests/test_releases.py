@@ -641,6 +641,8 @@ def test_libreoffice_in_the_payload_is_checked(tmp_path) -> None:
     (program / "soffice.exe").write_bytes(b"MZ")
     problems = release_check.check_office(payload)
     assert any("64 Bit" in problem for problem in problems) and any("Lizenztext" in problem for problem in problems)
+    # Python von LibreOffice: darin läuft der Rechenkern der Tabellen (seit 5.0 Beta 2)
+    assert "Im Paket fehlt: office/program/pythonscript.py" in problems
     (payload / "office" / "LICENSE.html").write_text("MPL", encoding="utf-8")
     (payload / "office" / "LibreOffice.msi").write_bytes(b"x")
     assert any("MSI" in problem for problem in release_check.check_office(payload))
@@ -653,7 +655,7 @@ def test_libreoffice_needs_the_vc_runtime_next_to_it(tmp_path, monkeypatch) -> N
 
     program = tmp_path / "payload" / "office" / "program"
     program.mkdir(parents=True)
-    for name in ("soffice.exe", "soffice.com", "soffice.bin", "mergedlo.dll"):
+    for name in ("soffice.exe", "soffice.com", "soffice.bin", "mergedlo.dll", "python.exe", "pythonscript.py", "uno.py"):
         (program / name).write_bytes(b"MZ")
     (tmp_path / "payload" / "office" / "LICENSE.html").write_text("MPL", encoding="utf-8")
     imports = {"mergedlo.dll": ["MSVCP140.dll", "VCRUNTIME140.dll", "KERNEL32.dll", "sal3.dll"]}

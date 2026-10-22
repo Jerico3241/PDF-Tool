@@ -2,6 +2,22 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.2
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.2.md).
+
+- Tabellen bearbeiten: Rechenkern `tools/sheet` (LibreOffice ohne Fenster, Skript `server.py` im Python von
+  LibreOffice, TCP mit Schlüssel auf 127.0.0.1; `engine.py` startet und überwacht ihn) und `qtapp/sheet`
+  (`SheetController` je Tab, Raster `SheetGrid` als `QQuickPaintedItem`, Druck über `reader.printing`).
+  `.xlsx/.xlsm/.xls/.ods/.csv` öffnen sich als Tabelle (`ReaderController._open_sheet`, auch mit Kennwort).
+- `Reader/SheetView.qml`: Menüband (Datei, Start, Einfügen, Formeln, Daten, Ansicht), Formelleiste mit
+  Zeigemodus, Format-Flyout, Filter, Funktions-Assistent, Diagramme, Blätter; Statuszeile mit Summe/Anzahl und Zoom.
+- Startseite nach Entwurf `1-startseite.png`: Navigation links (`App.navOpen`, `App.homeSection`), »Neu«
+  (`Reader.newSheet`, `Reader.newOffice`), Schnellwerkzeuge, »Zuletzt verwendet« mit Ort; der bisherige Inhalt
+  unter »Alle Werkzeuge«. Kürzel `app.new` (Strg+N).
+- Startbildschirm nach Entwurf `3-startbildschirm.png` (`qml/Splash.qml`, `qtapp/splash.py`).
+- `PButton` mit `kind: "link"`; `tools/i18n_extract.py`: `I18N_CALLS` für Module mit technischen Namen.
+
 # Novadesk 5.0.0-beta.1
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.1.md).

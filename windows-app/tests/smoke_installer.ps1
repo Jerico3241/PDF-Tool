@@ -139,7 +139,9 @@ if ($Previous) {
         Get-ChildItem $oldData -Recurse -File | ForEach-Object { $oldHashes[$_.FullName.Substring($oldData.Length)] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
     } elseif ((Test-Path (Join-Path $target "app\start.py")) -and $previousVersion -ge [version]"2.5") {
         $previousKind = if ($previousVersion -ge [version]"2.6") { "2.6" } else { "2.5" }
-        if (-not (Test-Path $pdfToolShortcut)) { throw "Verknuepfung der Vorversion fehlt: $pdfToolShortcut" }
+        # Ab 5.0 (auch die Betas) heisst die Verknuepfung schon »Novadesk«
+        $previousShortcut = if ($previousVersion -ge [version]"5.0") { $shortcut } else { $pdfToolShortcut }
+        if (-not (Test-Path $previousShortcut)) { throw "Verknuepfung der Vorversion fehlt: $previousShortcut" }
         Write-Host "   installiert: $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) in $target"
         # Benutzerdaten wie von PDF Tool 2.5: wie 2.4, dazu Stapel-Einstellungen; ausserdem ein
         # gespeicherter Vertragsstand (Benutzerdaten von 2.6 – ein Update darf ihn nie loeschen).
@@ -293,8 +295,9 @@ if ($Previous -and $previousKind -eq "2.3") {
 }
 
 if ($Previous -and ($previousKind -eq "2.5" -or $previousKind -eq "2.6")) {
-    Write-Host "2. Update von PDF Tool $($oldEntry.DisplayVersion) pruefen"
-    if ($oldEntry.DisplayName -ne $pdfToolName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
+    Write-Host "2. Update von $($oldEntry.DisplayName) $($oldEntry.DisplayVersion) pruefen"
+    $previousName = if ($previousVersion -ge [version]"5.0") { $appName } else { $pdfToolName }
+    if ($oldEntry.DisplayName -ne $previousName) { throw "Vorversion unter 'Installierte Apps': $($oldEntry.DisplayName)" }
     if ((Get-FileHash $seedFile -Algorithm SHA256).Hash -ne $seedHash) { throw "Das Setup hat die Einstellungen veraendert" }
     if ((Get-FileHash $storeFile -Algorithm SHA256).Hash -ne $storeHash) { throw "Das Setup hat die Kundenakten veraendert" }
     if (-not (Test-Path $historyFile) -or (Get-FileHash $historyFile -Algorithm SHA256).Hash -ne $historyHash) { throw "Das Setup hat den Vertragsstand veraendert oder geloescht" }

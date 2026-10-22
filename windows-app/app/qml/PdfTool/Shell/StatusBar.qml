@@ -10,6 +10,17 @@ Item {
     implicitHeight: Metrics.statusBarHeight
     Accessible.role: Accessible.StatusBar
     Accessible.name: I18n.tr(App.statusText, I18n.revision)
+    // Tabelle (seit 5.0): links Summe und Anzahl der Auswahl, rechts der Zoom – wie in Excel
+    readonly property var sheet: App.currentPage === "reader" && Reader.current && Reader.current.kind === "tabelle" ? Reader.current : null
+    readonly property string sheetText: {
+        if (!sheet) return ""
+        var stats = sheet.stats || {}
+        var parts = []
+        if (stats.sum) parts.push(I18n.tr("Summe", I18n.revision) + ": " + stats.sum)
+        if (stats.numbers > 1 && stats.average) parts.push(I18n.tr("Mittelwert", I18n.revision) + ": " + stats.average)
+        if (stats.count > 0) parts.push(I18n.tr("Anzahl", I18n.revision) + ": " + stats.count)
+        return parts.join("     ")
+    }
 
     Rectangle {
         anchors.left: parent.left
@@ -28,6 +39,7 @@ Item {
             objectName: "statusIcon"
             implicitWidth: 16
             implicitHeight: 16
+            visible: !bar.sheet || App.statusKind === "busy" || App.statusKind === "error"
             // Neuer Zustand: das Symbol blendet mit dem Text ein (»Vollständig«: wächst dabei leicht)
             readonly property string kind: App.statusKind
             onKindChanged: if (Motion.enabled && bar.visible) appear.restart()
@@ -54,7 +66,7 @@ Item {
             id: status
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: I18n.tr(App.statusText, I18n.revision)
+            text: bar.sheet && App.statusKind !== "busy" && App.statusKind !== "error" ? bar.sheetText : (I18n.tr(App.statusText, I18n.revision) || "")
             font: Typography.caption
             color: Theme.textSecondary
             // Gekürzte Meldung: vollständig als Tooltip (wie bis 2.6.1)
@@ -70,6 +82,13 @@ Item {
             }
         }
         Text {
+            objectName: "sheetZoomText"
+            visible: bar.sheet !== null
+            text: I18n.tr(bar.sheet ? bar.sheet.zoom + " %" : "", I18n.revision)
+            font: Typography.caption
+            color: Theme.textSecondary
+        }
+        Text {
             // Tastenhinweise behalten ihren Platz (wie 2.6.1) – gekürzt wird die Meldung links
             Layout.minimumWidth: implicitWidth
             text: I18n.tr(App.hint, I18n.revision)
@@ -77,7 +96,7 @@ Item {
             color: Theme.textTertiary
             elide: Text.ElideLeft
             textFormat: Text.PlainText
-            visible: bar.width > 640
+            visible: bar.width > 640 && bar.sheet === null
         }
     }
 }

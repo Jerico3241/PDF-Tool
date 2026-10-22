@@ -30,3 +30,4 @@ QuickTools 1.0 QuickTools.qml
 AllTools 1.0 AllTools.qml
 SplitPane 1.0 SplitPane.qml
 ComparePanel 1.0 ComparePanel.qml
+SheetView 1.0 SheetView.qml
