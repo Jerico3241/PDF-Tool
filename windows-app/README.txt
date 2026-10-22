@@ -2,13 +2,13 @@ Novadesk für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 5.0.0-beta.1
+Version 5.0.0-beta.2
 
 Novadesk (bis Version 4.0 „PDF Tool“) ist ein Office für Windows: Texte,
 Tabellen, Präsentationen und PDFs an einem Ort, alles lokal auf diesem PC.
-Word-, Excel- und PowerPoint-Dateien (auch OpenDocument, RTF und CSV)
-öffnen sich in eigenen Tabs zum Ansehen; Bearbeiten kommt mit den nächsten
-Betas.
+Tabellen (Excel, OpenDocument, CSV) lassen sich bearbeiten wie in Excel;
+Word- und PowerPoint-Dateien (auch OpenDocument und RTF) öffnen sich in
+eigenen Tabs zum Ansehen, Bearbeiten kommt mit den nächsten Betas.
 
 Werkzeuge für PDF-Dateien:
 - PDF Reader & Editor: öffnet PDFs in Tabs zum Lesen, Suchen und Drucken
@@ -41,7 +41,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“, bis Version 4.0
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-5.0.0-beta.1.exe
+PDF-Tool-Setup-5.0.0-beta.2.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -51,10 +51,26 @@ Texterkennung Tesseract mit Sprachdaten für Deutsch, Englisch, Französisch,
 Italienisch, Spanisch, Niederländisch, Portugiesisch, Polnisch, Türkisch und
 Russisch sowie die Laufzeit des
 optionalen KI-Assistenten (llama.cpp) und LibreOffice 26.2 zum Ansehen von
-Texten, Tabellen und Präsentationen. Eine eigene Python-Installation,
+Texten und Präsentationen und zum Bearbeiten von Tabellen. Eine eigene Python-Installation,
 Microsoft Office, qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme
 sind nicht nötig. Das Sprachmodell des KI-Assistenten ist nicht enthalten –
 Novadesk lädt es nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 5.0 Beta 2 – Tabellen bearbeiten
+------------------------------------------------
+Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
+Version bleibt 4.0.0.
+- Excel-Dateien (auch OpenDocument und CSV) öffnen sich zum Bearbeiten wie
+  in Excel: Zellen, Zeilen, Spalten, mehrere Blätter, Kopieren, Ausfüllen
+  und Rückgängig.
+- Formeln mit Funktions-Assistent (z. B. SUMME, SVERWEIS), Zahl, Währung,
+  Prozent und Datum, Rahmen, Farben, verbundene Zellen.
+- Sortieren und Filtern, Diagramme, fixierte Zeilen und Spalten, Zoom.
+- Drucken, Druckbereich und „Als PDF speichern“; „Übersicht erstellen“
+  macht aus der Tabelle eine Vertragsübersicht.
+- Neue Startseite mit Navigation links und „Neu“ (Tabelle, Text,
+  Präsentation); Strg+N legt eine neue Tabelle an. Neuer Startbildschirm.
 
 
 Neu in Version 5.0 Beta 1 – Aus PDF Tool wird Novadesk
@@ -478,7 +494,7 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 4.0.0 auf Novadesk 5.0.0-beta.1 (Kanal „Beta“): von
+Update von PDF Tool 4.0.0 oder Novadesk 5.0.0-beta.1 auf 5.0.0-beta.2 (Kanal „Beta“): von
 selbst beim Start oder mit einem Klick, ohne Setup-Assistent. Die Ordner
 bleiben dieselben; Startmenü und Desktop zeigen danach „Novadesk“ statt
 „PDF Tool“. Alle Daten und Einstellungen bleiben erhalten. Das Setup ist

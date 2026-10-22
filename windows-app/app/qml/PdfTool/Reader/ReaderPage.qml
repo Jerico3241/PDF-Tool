@@ -15,9 +15,11 @@ import PdfTool.Controls
 FocusScope {
     id: page
     objectName: "readerPage"
-    readonly property var doc: Reader.current
+    // Tabellen (seit 5.0) haben ihre eigene Ansicht (SheetView); »doc« ist immer ein PDF
+    readonly property bool sheetShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "tabelle"
+    readonly property var doc: sheetShown ? null : Reader.current
     readonly property bool narrow: width < Metrics.readerNarrowFrom
-    readonly property bool active: App.currentPage === "reader" && !Dialogs.open
+    readonly property bool active: App.currentPage === "reader" && !Dialogs.open && !sheetShown
     readonly property bool editing: doc !== null && doc !== undefined
     property var dismissedNotices: ({})
     property var dismissedOffice: ({})  // Hinweis »Ansicht« je Dokument geschlossen
@@ -74,13 +76,26 @@ FocusScope {
         objectName: "readerDocumentArea"
         property bool requested: false
         anchors.fill: parent
-        visible: Reader.hasDocument
-        focus: true
+        visible: Reader.hasDocument && !page.sheetShown
+        focus: !page.sheetShown
         active: requested || Reader.hasDocument
         asynchronous: !Reader.hasDocument
         sourceComponent: documentComponent
     }
     Component.onCompleted: Qt.callLater(function() { documentArea.requested = true })
+
+    // Tabelle bearbeiten (seit 5.0): Menüband, Formelleiste, Raster und Blätter
+    Loader {
+        id: sheetArea
+        objectName: "readerSheetArea"
+        anchors.fill: parent
+        active: page.sheetShown
+        visible: active
+        focus: page.sheetShown
+        sourceComponent: SheetView {
+            sheet: page.sheetShown ? Reader.current : null
+        }
+    }
     Component {
         id: documentComponent
         Item {

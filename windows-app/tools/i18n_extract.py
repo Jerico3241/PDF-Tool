@@ -47,6 +47,7 @@ def ui_text(value: str) -> bool:
 ENGLISH_WORDS = {
     "Item", "Text", "Rectangle", "Image", "None", "True", "False", "Arial", "Helvetica", "Times", "Courier", "Calibri", "Segoe", "Windows", "Qt",
     "PDF", "OCR", "Excel", "Word", "PowerPoint", "Office", "Tesseract", "Mica", "Microsoft", "English", "Deutsch", "Light", "Dark",
+    "Aptos", "Cambria", "Georgia", "Tahoma", "Verdana", "Carlito", "Caladea", "Header", "Icon", "Scripts", "SheetGrid",
 }
 
 
@@ -241,6 +242,18 @@ def python_files() -> list[Path]:
     return [path for path in files if "__pycache__" not in path.parts and path.name != "prompts.py"]
 
 
+def _ui_nodes(tree: ast.Module) -> list:
+    """Was nach Oberflächentexten durchsucht wird: das ganze Modul – oder, wenn es ``I18N_CALLS = ("Name", …)``
+    festlegt (z. B. der Rechenkern mit vielen technischen Namen von LibreOffice), nur die Argumente dieser Aufrufe."""
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "I18N_CALLS" for t in node.targets):
+            names = set(ast.literal_eval(node.value))
+            return [arg for call in ast.walk(tree) if isinstance(call, ast.Call)
+                    and (call.func.id if isinstance(call.func, ast.Name) else getattr(call.func, "attr", "")) in names
+                    for arg in [*call.args, *(k.value for k in call.keywords)]]
+    return [tree]
+
+
 def collect() -> tuple[set[str], set[str]]:
     exact: set[str] = set()
     patterns: set[str] = set()
@@ -249,13 +262,15 @@ def collect() -> tuple[set[str], set[str]]:
         exact |= e
         patterns |= p
     for path in python_files():
-        collector = _Collector()
         try:
-            collector.visit(ast.parse(path.read_text(encoding="utf-8")))
+            tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
-        exact |= collector.exact
-        patterns |= collector.patterns
+        for node in _ui_nodes(tree):
+            collector = _Collector()
+            collector.visit(node)
+            exact |= collector.exact
+            patterns |= collector.patterns
     patterns = {p for p in patterns if re.search(r"\{\d+\}", p)}
     return exact, patterns
 

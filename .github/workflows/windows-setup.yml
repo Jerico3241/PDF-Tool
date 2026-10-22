@@ -74,8 +74,8 @@ jobs:
             dateien: reader reader_layout reader_v31 pages_v31 forms_v31 speech
           - gruppe: PDF Editor – Objekte, Text, Bewegung, Texterkennung, Umwandeln
             dateien: objects objects_v31 edit_v31 reader_motion ocr convert
-          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen, digitale Signatur
-            dateien: protect comfort assistant assistant_v40 reader_v40 signing
+          - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen, digitale Signatur, Tabellen
+            dateien: protect comfort assistant assistant_v40 reader_v40 signing sheet
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:

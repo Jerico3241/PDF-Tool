@@ -88,6 +88,14 @@ QtObject {
     readonly property color paperText: "#333333"
     readonly property color paperPlaceholder: "#767676"  // Hinweis im leeren Feld (Kontrast 4,5:1 auf Weiß)
 
+    // Novadesk (seit 5.0 Beta 2): blauer Verlauf aus dem App-Symbol (Knopf »Neu«) und der Willkommenskopf
+    readonly property color brandStart: "#3D8EF7"
+    readonly property color brandEnd: "#1E5CD8"
+    readonly property color heroStart: dark ? Qt.rgba(0.24, 0.55, 0.97, 0.16) : "#E8F1FE"
+    readonly property color heroEnd: dark ? surface : "#F8FAFD"
+    // Navigation der Startseite: gewählter Eintrag
+    readonly property color navSelected: dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.055)
+
     // Hilfen ---------------------------------------------------------------------------
     // Farbe eines Status (»success«, »warning«/»caution«, »error«/»critical«, »info«, »neutral«)
     function tone(name) {

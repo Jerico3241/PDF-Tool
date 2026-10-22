@@ -20,7 +20,8 @@ T.Button {
     property bool toggle: false
 
     readonly property bool accentKind: kind === "accent"
-    readonly property bool subtleKind: kind === "subtle"
+    readonly property bool subtleKind: kind === "subtle" || kind === "link"
+    readonly property bool linkKind: kind === "link"  // wie »subtle«, Schrift und Symbol in der Akzentfarbe
     readonly property bool dangerKind: kind === "danger"
     readonly property bool iconOnly: text === "" && iconName !== ""
 
@@ -41,7 +42,7 @@ T.Button {
         if (!enabled) return accentKind || dangerKind ? Theme.textOnAccentDisabled : Theme.disabled
         if (accentKind || dangerKind) return pressed ? Theme.textOnAccentPressed : Theme.textOnAccent
         if (pressed) return Theme.textSecondary
-        return Theme.textPrimary
+        return linkKind ? Theme.accentText : Theme.textPrimary
     }
 
     contentItem: Item {

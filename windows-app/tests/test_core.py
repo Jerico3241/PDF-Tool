@@ -239,7 +239,7 @@ def test_versions_are_consistent() -> None:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     iss = (root / "installer" / "PDF-Tool.iss").read_text(encoding="utf-8-sig")
     readme = (root / "README.txt").read_text(encoding="utf-8")
-    assert appstate.VERSION == version == "5.0.0-beta.1"
+    assert appstate.VERSION == version == "5.0.0-beta.2"
     # Das Setup liest die Version aus derselben Datei, statt sie zu wiederholen.
     assert r'FileOpen(AddBackslash(SourcePath) + "..\VERSION")' in iss
     assert "2.0.5" not in iss.split("[Setup]")[1].split("[Languages]")[0]
@@ -301,7 +301,8 @@ def test_branding_is_consistent() -> None:
         text = datei.read_text(encoding="utf-8")
         for alt in ("PDF Multi Tool", "Vertragsübersichten-Ersteller", "VertraView"):
             assert alt not in text, datei
-        if datei.name != "appstate.py":
+        # Ausnahme: Startseite – der Bereich heißt in der Navigation »Übersichten-Ersteller« (Entwurf 5.0)
+        if datei.name not in ("appstate.py", "HomePage.qml"):
             assert "Übersichten-Ersteller" not in text and "Uebersichten-Ersteller" not in text, datei
     # Das Logo in den erzeugten Vertragsübersichten ist Dokument-Branding und bleibt unverändert.
     assert appstate.DEFAULT_LOGO.name == "hott_logo_final.png"

@@ -6,6 +6,7 @@ import PdfTool.Backend
 T.MenuItem {
     id: control
     property string iconName: ""
+    property url imageSource: ""  // farbiges Symbol (Dateiart) statt eines Fluent-Symbols
     property string hint: ""  // rechts, grau: Tastenkürzel (»F1«)
     implicitWidth: Math.max(160, contentItem.implicitWidth + leftPadding + rightPadding)
     implicitHeight: 34
@@ -28,6 +29,16 @@ T.MenuItem {
                 anchors.verticalCenter: parent.verticalCenter
                 name: control.iconName
                 color: control.enabled ? Theme.textPrimary : Theme.disabled
+                visible: control.imageSource == ""
+            }
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Metrics.iconSize
+                height: Metrics.iconSize
+                source: control.imageSource
+                sourceSize: Qt.size(Metrics.iconSize, Metrics.iconSize)
+                visible: control.imageSource != ""
+                Accessible.ignored: true
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter

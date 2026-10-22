@@ -54,7 +54,9 @@ AI_DIR = "ai"  # KI-Assistent: llama.cpp (assistant/runtime.py)
 # Der Updater von PDF Tool 4.0 lädt höchstens 512 MiB (updater/github.py, MAX_INSTALLER_SIZE) – mit Abstand darunter
 MAX_SETUP_SIZE = 480 * 1024 * 1024
 OFFICE_DIR = "office"  # LibreOffice (seit 5.0, tools/pdf_editor/office.py)
-OFFICE_FILES = ("program/soffice.exe", "program/soffice.com", "program/soffice.bin", "program/mergedlo.dll")
+# dazu Python und die Skript-Anbindung von LibreOffice: der Rechenkern der Tabellen (seit 5.0 Beta 2) läuft darin
+OFFICE_FILES = ("program/soffice.exe", "program/soffice.com", "program/soffice.bin", "program/mergedlo.dll",
+                "program/python.exe", "program/pythonscript.py", "program/uno.py")
 OFFICE_LICENSES = ("LICENSE.html", "license.txt", "LICENSE")
 VC_RUNTIME_PREFIXES = ("msvcp1", "vcruntime", "vcomp1", "concrt1")  # Visual-C++-Laufzeit (seit 2015: …140*.dll)  # mindestens einer der Lizenztexte von LibreOffice
 AI_SERVER = "llama-server.exe"

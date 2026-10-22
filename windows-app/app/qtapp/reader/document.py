@@ -2163,6 +2163,7 @@ class DocumentController(Observable):
             "protect": self.protectDocument, "watermark": self.watermarkDocument, "headerFooter": self.headerFooterDocument,
             "clean": self.cleanDocument, "flatten": self.flattenDocument, "sign": lambda: self.setTool("signature"),
             "stamp": lambda: self.setTool("stamp"), "crop": lambda: self.cropPages([]),
+            "split": lambda: self.splitDocument(""), "compare": lambda: self.reader.compare_with(self),
         }
         handler = handlers.get(name)
         if handler is not None:

@@ -33,7 +33,7 @@ PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
 SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key, ACTIONS.key)  # Strg+1 … Strg+6
 # Mit eigenem Tab neben ⌂ Start: diese Werkzeuge und die Einstellungen. Der Reader zeigt seine Dokumente als Tabs.
 TAB_KEYS = (ACTIONS.key, CONTRACTS.key, REPAIR.key, SETTINGS)
-HOME_HINT = "Strg+5  Reader   ·   Strg+6  Stapel   ·   Strg+2  Vertragsübersichten   ·   Strg+3  Reparieren"
+HOME_HINT = "Strg+N  Neu   ·   Strg+O  Öffnen"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
     "Lokale Windows-App mit Werkzeugen für PDF-Dateien: PDFs lesen, bearbeiten, organisieren und "
@@ -101,7 +101,7 @@ class AppController(Observable):
     unavailablePagesChanged, unavailablePages = prop(list, "unavailablePages", [])
     openTabsChanged, openTabs = prop(list, "openTabs", [])  # Werkzeuge mit eigenem Tab, in der Reihenfolge des Öffnens
     statusTextChanged, statusText = prop(str, "statusText", "Bereit")
-    statusKindChanged, statusKind = prop(str, "statusKind", "neutral")
+    statusKindChanged, statusKind = prop(str, "statusKind", "success")  # »Bereit« mit Häkchen (wie im Design)
     statusSerialChanged, statusSerial = prop(int, "statusSerial", 0)
     hintChanged, hint = prop(str, "hint", HOME_HINT)
     dragActiveChanged, dragActive = prop(bool, "dragActive", False)
@@ -109,6 +109,9 @@ class AppController(Observable):
     readyChanged, ready = prop(bool, "ready", False)
     pagesLoadedChanged, pagesLoaded = prop(bool, "pagesLoaded", False)  # alle Seiten im Hintergrund geladen
     closingChanged, closing = prop(bool, "closing", False)  # Novadesk wird beendet (QML: keine Übergänge mehr)
+    # Startseite (seit 5.0 Beta 2): Navigation links (≡ blendet sie ein und aus) und der gezeigte Bereich
+    navOpenChanged, navOpen = prop(bool, "navOpen", True)
+    homeSectionChanged, homeSection = prop(str, "homeSection", "start")
 
     closeAccepted = Signal()  # QML schließt danach das Fenster
     focusRequested = Signal(str)  # Name eines Eingabefelds (z. B. »kd«), das den Fokus erhalten soll
@@ -139,6 +142,7 @@ class AppController(Observable):
         self._dirs = {key: str(cfg.get(f"ordner_{key}") or "") for key in ("excel", "logo")}
         self.documents_open: Callable[[], bool] = lambda: False  # geöffnete PDFs im Reader (setzt der Reader)
         self.navigations = 0  # Seitenwechsel (Tests, Diagnose)
+        self.set_quietly("navOpen", cfg.get("start_navigation") is not False)
 
     # Konstante Angaben für QML ------------------------------------------------------------
     def _app_name(self) -> str:
@@ -308,6 +312,24 @@ class AppController(Observable):
         self.hint = self.key_text(hooks.hint(self.currentPage) if hooks is not None else HOME_HINT)
 
     # Tastenkürzel ------------------------------------------------------------------------------------
+    @Slot()
+    def toggleNav(self) -> None:  # noqa: N802
+        """≡ in der Tab-Leiste: Navigation der Startseite ein- bzw. ausblenden – von einer anderen Seite aus zur
+        Startseite mit Navigation."""
+        if self.currentPage != HOME:
+            self.navOpen = True
+            self.navigate(HOME)
+        else:
+            self.navOpen = not self.navOpen
+        self.schedule_save()
+
+    @Slot(str)
+    def showHomeSection(self, section: str) -> None:  # noqa: N802
+        """Bereich der Startseite: »start«, »recent«, »tools« oder eine Dateiart (»kind:text« …)."""
+        self.homeSection = section or "start"
+        if self.currentPage != HOME:
+            self.navigate(HOME)
+
     @Slot()
     def primaryAction(self) -> None:  # noqa: N802
         _key, hooks = self._page_tool()
@@ -547,6 +569,7 @@ class AppController(Observable):
         data.update(
             {
                 "gesehen": self.state.gesehen,
+                "start_navigation": self.navOpen,
                 "ordner_excel": self._dirs.get("excel", ""),
                 "ordner_logo": self._dirs.get("logo", ""),
             }

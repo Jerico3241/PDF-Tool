@@ -139,6 +139,7 @@ FocusScope {
     // Tastenkürzel (nicht, solange ein Dialog offen ist)
     Shortcut { sequences: Shortcuts.keys["app.primary"] || []; enabled: !Dialogs.open; onActivated: App.primaryAction() }
     Shortcut { sequences: Shortcuts.keys["app.open"] || []; enabled: !Dialogs.open; onActivated: App.openAction() }
+    Shortcut { objectName: "newSheetShortcut"; sequences: Shortcuts.keys["app.new"] || []; enabled: !Dialogs.open; onActivated: Reader.newSheet() }
     Shortcut { sequences: Shortcuts.keys["app.find"] || []; enabled: !Dialogs.open; onActivated: App.findAction() }
     Shortcut { sequences: Shortcuts.keys["app.help"] || []; enabled: !Dialogs.open; onActivated: App.showHelp() }
     Shortcut { sequences: Shortcuts.keys["app.shortcuts"] || []; enabled: !Dialogs.open; onActivated: Shortcuts.showOverview() }
