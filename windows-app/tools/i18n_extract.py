@@ -48,6 +48,9 @@ ENGLISH_WORDS = {
     "Item", "Text", "Rectangle", "Image", "None", "True", "False", "Arial", "Helvetica", "Times", "Courier", "Calibri", "Segoe", "Windows", "Qt",
     "PDF", "OCR", "Excel", "Word", "PowerPoint", "Office", "Tesseract", "Mica", "Microsoft", "English", "Deutsch", "Light", "Dark",
     "Aptos", "Cambria", "Georgia", "Tahoma", "Verdana", "Carlito", "Caladea", "Header", "Icon", "Scripts", "SheetGrid",
+    # Namen von LibreOffice (Argumente der Befehle, Formatvorlagen, Ordner) und QML-Typen der Texte
+    "Color", "Columns", "Rows", "FamilyName", "FileName", "Lower", "Upper", "On", "Style", "Title", "Subtitle", "TakeOwnership",
+    "TextCanvas", "URE", "ParagraphStyles", "Quotations",
 }
 
 

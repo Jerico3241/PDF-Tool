@@ -15,11 +15,13 @@ import PdfTool.Controls
 FocusScope {
     id: page
     objectName: "readerPage"
-    // Tabellen (seit 5.0) haben ihre eigene Ansicht (SheetView); »doc« ist immer ein PDF
+    // Tabellen (seit 5.0) und Texte (seit 5.0 Beta 3) haben ihre eigene Ansicht (SheetView, TextView); »doc« ist immer ein PDF
     readonly property bool sheetShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "tabelle"
-    readonly property var doc: sheetShown ? null : Reader.current
+    readonly property bool textShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "text"
+    readonly property bool officeShown: sheetShown || textShown
+    readonly property var doc: officeShown ? null : Reader.current
     readonly property bool narrow: width < Metrics.readerNarrowFrom
-    readonly property bool active: App.currentPage === "reader" && !Dialogs.open && !sheetShown
+    readonly property bool active: App.currentPage === "reader" && !Dialogs.open && !officeShown
     readonly property bool editing: doc !== null && doc !== undefined
     property var dismissedNotices: ({})
     property var dismissedOffice: ({})  // Hinweis »Ansicht« je Dokument geschlossen
@@ -76,8 +78,8 @@ FocusScope {
         objectName: "readerDocumentArea"
         property bool requested: false
         anchors.fill: parent
-        visible: Reader.hasDocument && !page.sheetShown
-        focus: !page.sheetShown
+        visible: Reader.hasDocument && !page.officeShown
+        focus: !page.officeShown
         active: requested || Reader.hasDocument
         asynchronous: !Reader.hasDocument
         sourceComponent: documentComponent
@@ -96,6 +98,19 @@ FocusScope {
             sheet: page.sheetShown ? Reader.current : null
         }
     }
+
+    // Text bearbeiten (seit 5.0 Beta 3): Menüband, Seiten und Formatvorlagen
+    Loader {
+        id: textArea
+        objectName: "readerTextArea"
+        anchors.fill: parent
+        active: page.textShown
+        visible: active
+        focus: page.textShown
+        sourceComponent: TextView {
+            doc: page.textShown ? Reader.current : null
+        }
+    }
     Component {
         id: documentComponent
         Item {
@@ -106,13 +121,18 @@ FocusScope {
 
                 // Die Dokument-Tabs stehen in der Leiste oben (AppTabs). Im Vollbild (F11) nur das Dokument mit den
                 // schwebenden Leisten
-                ReaderToolbar {
+                // Menüband wie bei Texten und Tabellen (seit 5.0 Beta 3)
+                PdfRibbon {
+                    id: ribbon
                     Layout.fillWidth: true
                     doc: page.doc
+                    view: view
+                    tools: allTools
                     visible: !Reader.fullScreen
                     allToolsOpen: allTools.opened
                     onAllToolsRequested: page.toggleAllTools()
                     onSearchRequested: page.showLeft("search")
+                    onSettingsRequested: page.toolSettingsOpen = !page.toolSettingsOpen
                 }
 
                 Item {
@@ -121,16 +141,13 @@ FocusScope {
                     Layout.fillHeight: true
                     clip: true
                     // Drei Ebenen: links und rechts je eine Seitenleiste mit fester Breite (springt nicht je nach
-                    // Inhalt) – geschlossen ein schmaler Streifen mit ihren Symbolen –, dazwischen die
-                    // Dokumentfläche. Öffnen/Schließen: die Leiste gleitet über ihren Streifen herein bzw. hinaus
+                    // Inhalt) – geschlossen ganz weg wie die Formatvorlagen bei Texten (ein- und ausgeblendet über das
+                    // Menüband) –, dazwischen die Dokumentfläche. Öffnen/Schließen: die Leiste gleitet über ihren Streifen herein bzw. hinaus
                     // (»Reduziert«: blendet, »Aus«: sofort). Die Dokumentfläche nimmt ihre neue Breite einmal an.
                     readonly property bool leftOpen: Reader.leftPanel !== "" && !Reader.fullScreen
                     readonly property bool rightOpen: Reader.rightPanel !== "" && !Reader.fullScreen
-                    readonly property int leftSpace: Reader.fullScreen ? 0 : (page.narrow || !leftOpen ? Metrics.readerRailWidth : Metrics.readerLeftPanelWidth)
-                    // Schnellwerkzeuge zwischen linker Seitenleiste und Dokument (nicht im Vollbild und beim Organisieren)
-                    readonly property bool quickShown: !Reader.fullScreen && !Reader.organize
-                    readonly property int quickSpace: quickShown ? Metrics.readerQuickToolsWidth + 2 * Metrics.s8 : 0
-                    readonly property int rightSpace: Reader.fullScreen ? 0 : (page.narrow || !rightOpen ? Metrics.readerRailWidth : Metrics.readerRightPanelWidth)
+                    readonly property int leftSpace: Reader.fullScreen || page.narrow || !leftOpen ? 0 : Metrics.readerLeftPanelWidth
+                    readonly property int rightSpace: Reader.fullScreen || page.narrow || !rightOpen ? 0 : Metrics.readerRightPanelWidth
                     property real leftShown: leftOpen ? 1 : 0   // 0…1: wie weit die Leiste zu sehen ist
                     property real rightShown: rightOpen ? 1 : 0
                     Behavior on leftShown { enabled: Motion.enabled; NumberAnimation { duration: Motion.moves ? Motion.pane : Motion.fade; easing.type: Motion.decelerate } }
@@ -140,7 +157,7 @@ FocusScope {
                         id: center
                         anchors.fill: parent
                         // neue Breite sofort (einmal neu angeordnet, nicht in jedem Bild der Leisten-Animation)
-                        anchors.leftMargin: workspace.leftSpace + workspace.quickSpace
+                        anchors.leftMargin: workspace.leftSpace
                         anchors.rightMargin: workspace.rightSpace
 
                         // Geteilte Ansicht: links das aktuelle PDF, rechts ein zweites (nicht beim Organisieren und
@@ -198,7 +215,8 @@ FocusScope {
                             anchors.bottomMargin: 16
                             doc: page.doc
                             view: view
-                            visible: !Reader.organize && !Reader.presenting && page.doc !== null
+                            // Seite und Zoom stehen im Menüband – schwebend nur noch im Vollbild
+                            visible: Reader.fullScreen && !Reader.organize && !Reader.presenting && page.doc !== null
                         }
                         // Schwebend über der Seite: Leiste des Werkzeugs, Meldungen des Readers und Hinweis zum Dokument
                         // (signiert, repariert, XFA …) – untereinander, ohne die Seiten zu verschieben
@@ -308,68 +326,15 @@ FocusScope {
                         }
                     }
 
-                    Rectangle {
-                        objectName: "readerQuickToolsArea"
-                        x: workspace.leftSpace
-                        width: workspace.quickSpace
-                        height: workspace.height
-                        visible: workspace.quickShown
-                        color: Theme.viewer
-                        QuickTools {
-                            id: quickTools
-                            x: Metrics.s8
-                            y: Metrics.readerViewMargin + (center.split ? Metrics.readerPanelHeaderHeight : 0)  // oben bündig mit der Seite
-                            doc: page.doc
-                            allToolsOpen: allTools.opened
-                            onAllToolsRequested: page.toggleAllTools()
-                            onSettingsRequested: page.toolSettingsOpen = !page.toolSettingsOpen
-                        }
-                    }
-                    // »Alle Werkzeuge«: gleitet neben den Schnellwerkzeugen über die Seite
+                    // »Alle Werkzeuge«: gleitet am linken Rand der Seitenfläche über die Seite
                     AllTools {
                         id: allTools
                         doc: page.doc
-                        x: workspace.leftSpace + workspace.quickSpace - Metrics.s4
-                        y: Metrics.readerViewMargin  // oben bündig mit Schnellwerkzeugen und Seite
+                        x: workspace.leftSpace + Metrics.s8
+                        y: Metrics.readerViewMargin  // oben bündig mit der Seite
                         height: workspace.height - 2 * Metrics.readerViewMargin
                     }
 
-                    // Eingeklappte Seitenleisten (bei offener Leiste: deren Hintergrund)
-                    PanelRail {
-                        objectName: "readerLeftRail"
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: workspace.leftSpace
-                        visible: !Reader.fullScreen
-                        z: 1
-                        side: "left"
-                        collapsed: !workspace.leftOpen
-                        items: [
-                            { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerRailThumbs" },
-                            { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerRailOutline" },
-                            { key: "search", icon: "search", tip: "Suchen" + Shortcuts.hints["app.find"], name: "readerRailSearch" },
-                            { key: "attachments", icon: "attach", tip: "Anhänge", name: "readerRailAttachments" }
-                        ]
-                        onSelected: (key) => page.showLeft(key)
-                    }
-                    PanelRail {
-                        objectName: "readerRightRail"
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: workspace.rightSpace
-                        visible: !Reader.fullScreen
-                        z: 1
-                        side: "right"
-                        collapsed: !workspace.rightOpen
-                        items: [
-                            { key: "comments", icon: "comment", tip: "Kommentare", name: "readerRailComments" },
-                            { key: "properties", icon: "text_font", tip: "Eigenschaften", name: "readerRailProperties" }
-                        ].concat(Assistant.enabled ? [{ key: "assistant", icon: "sparkle", tip: "KI-Assistent", name: "readerRailAssistant" }] : [])
-                         .concat(Reader.compareActive ? [{ key: "compare", icon: "branch_compare", tip: "Vergleich", name: "readerRailCompare" }] : [])
-                        onSelected: (key) => Reader.showRightPanel(key)
-                    }
                     LeftPanel {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -406,7 +371,7 @@ FocusScope {
             Shortcut { sequences: Shortcuts.keys["reader.fullScreen"] || []; enabled: page.active && page.editing; onActivated: Reader.toggleFullScreen() }
             Shortcut { sequences: Shortcuts.keys["reader.present"] || []; enabled: page.active && page.editing && !Reader.presenting; onActivated: Reader.startPresentation() }
             Shortcut { sequences: Shortcuts.keys["reader.speech"] || []; enabled: page.active && Reader.hasDocument && !Reader.organize; onActivated: Speech.toggle() }
-            Shortcut { sequences: Shortcuts.keys["reader.goToPage"] || []; enabled: page.active && page.editing && !Reader.organize; onActivated: controls.focusPage() }
+            Shortcut { sequences: Shortcuts.keys["reader.goToPage"] || []; enabled: page.active && page.editing && !Reader.organize; onActivated: Reader.fullScreen ? controls.focusPage() : ribbon.focusPage() }
             Shortcut {
                 sequences: Shortcuts.keys["reader.selectAll"] || []
                 enabled: page.active && page.editing && !Reader.organize && view.editing === null

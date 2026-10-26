@@ -141,11 +141,11 @@ CONFIG_FILE = Path(os.environ.get("UE_CONFIG_FILE") or DATA_DIR / "gui-config.js
 ERROR_LOG = DATA_DIR / "fehler.log"
 
 NEUERUNGEN = (
-    "Novadesk 5.0 Beta 2: Tabellen bearbeiten – Excel-Dateien (auch CSV und OpenDocument) öffnen sich zum Bearbeiten wie in Excel: Zellen, Zeilen, Spalten und mehrere Blätter.",
-    "Formeln mit Funktions-Assistent (z. B. SUMME, SVERWEIS), Zahlen-, Währungs- und Datumsformate, Rahmen und Farben, Sortieren und Filtern, Diagramme, fixierte Zeilen und verbundene Zellen.",
-    "Drucken, Druckbereich und »Als PDF speichern« direkt aus der Tabelle; »Übersicht erstellen« macht aus der Tabelle eine Vertragsübersicht.",
-    "Neue Startseite mit Navigation links: »Neu« legt eine Tabelle, einen Text oder eine Präsentation an (Strg+N: neue Tabelle). Dazu ein neuer Startbildschirm.",
-    "Texte und Präsentationen öffnen sich weiter zum Ansehen; neue Texte und Präsentationen öffnen sich in ihrem Standardprogramm.",
+    "Novadesk 5.0 Beta 3: Texte bearbeiten – Word-Dateien (auch .doc, OpenDocument und RTF) öffnen sich zum Bearbeiten wie in Word, mit Menüband und Formatvorlagen.",
+    "Schrift, Farbe, Ausrichtung, Aufzählung und Überschriften; Bilder, Tabellen, Seitenzahlen und Datum einfügen; Hoch- und Querformat, Seitenränder, Kopf- und Fußzeile.",
+    "Rechtschreibprüfung, Änderungen nachverfolgen, Suchen und Ersetzen; Speichern im Format der Datei, »Als PDF speichern« und Drucken.",
+    "Ein Menüband für alles: PDFs haben jetzt dieselben Reiter, dieselbe Seitenfläche und dieselben Seitenleisten wie Texte und Tabellen.",
+    "»Neu → Text« legt einen neuen Text direkt in Novadesk an. Präsentationen öffnen sich weiter zum Ansehen.",
     "Alle Werkzeuge von PDF Tool 4.0 sind weiter da (Startseite → »Alle Werkzeuge«). Alles bleibt lokal auf diesem PC: keine Cloud, keine Uploads.",
 )
 

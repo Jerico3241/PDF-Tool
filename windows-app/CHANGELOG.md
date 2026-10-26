@@ -2,6 +2,24 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.3
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.3.md).
+
+- Texte bearbeiten: Textkern `tools/text` (LibreOfficeKit über ctypes in einem eigenen Prozess mit dem Python von
+  Novadesk, JSON-Zeilen über TCP mit Schlüssel auf 127.0.0.1, Kacheln als BGRA; `engine.py` startet und überwacht
+  ihn) und `qtapp/text` (`TextService` mit Vorrang für Eingaben, `TextController` je Tab, Zeichenbereich
+  `TextCanvas` als `QQuickPaintedItem` mit Kacheln, Schreibmarke, Auswahl und Bildanfassern).
+  `.docx/.doc/.odt/.rtf` öffnen sich als Text (`ReaderController._open_text`, auch mit Kennwort); »Neu → Text«
+  legt `Dokument{n}.docx` in Novadesk an.
+- `Reader/TextView.qml` nach Entwurf `2-text.png`: Menüband (Datei, Start, Einfügen, Seite, Überprüfen, Ansicht),
+  Suchen und Ersetzen, Formatvorlagen rechts; Statuszeile mit Seite, Wörtern, Sprache und Zoom.
+- Einheitliches Menüband: `RibbonTab`/`RibbonSeparator` für Tabellen und Texte, `Reader/PdfRibbon.qml` für PDFs
+  (Datei, Start, Kommentieren, Bearbeiten, Seiten, Ansicht) statt Befehlsleiste, Schnellwerkzeugen und
+  Randstreifen; Seitenleisten ohne Streifen, Seite und Zoom im Menüband (schwebend nur im Vollbild), Statuszeile
+  wie bei Texten.
+- `build.py probe_text`: Textkern im Setup tippt, rendert und speichert eine .docx.
+
 # Novadesk 5.0.0-beta.2
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.2.md).

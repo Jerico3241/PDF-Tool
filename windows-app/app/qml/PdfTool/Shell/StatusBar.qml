@@ -12,6 +12,26 @@ Item {
     Accessible.name: I18n.tr(App.statusText, I18n.revision)
     // Tabelle (seit 5.0): links Summe und Anzahl der Auswahl, rechts der Zoom – wie in Excel
     readonly property var sheet: App.currentPage === "reader" && Reader.current && Reader.current.kind === "tabelle" ? Reader.current : null
+    // Text (seit 5.0 Beta 3, wie im Design): links Seite, Wörter und Sprache, rechts Speichern/Drucken und der Zoom
+    readonly property var textDoc: App.currentPage === "reader" && Reader.current && Reader.current.kind === "text" ? Reader.current : null
+    readonly property var office: sheet || textDoc
+    // PDF (seit 5.0 Beta 3 wie Texte): links Seite und die letzte Meldung, rechts Speichern/Drucken und der Zoom
+    readonly property var pdfDoc: App.currentPage === "reader" && Reader.current && Reader.current.kind !== "tabelle" && Reader.current.kind !== "text" ? Reader.current : null
+    readonly property var zoomDoc: office || pdfDoc
+    readonly property string pdfText: {
+        if (!pdfDoc) return ""
+        var parts = [I18n.tr("Seite " + (pdfDoc.currentPage + 1) + " von " + pdfDoc.pageCount, I18n.revision)]
+        if (App.statusText && App.statusKind !== "neutral") parts.push(I18n.tr(App.statusText, I18n.revision))
+        return parts.join("     ")
+    }
+    readonly property string textText: {
+        if (!textDoc) return ""
+        var parts = []
+        if (textDoc.pageText) parts.push(I18n.tr(textDoc.pageText, I18n.revision))
+        if (textDoc.wordText) parts.push(I18n.tr(textDoc.wordText, I18n.revision))
+        if (textDoc.languageText) parts.push(I18n.tr(textDoc.languageText, I18n.revision))
+        return parts.join("     ")
+    }
     readonly property string sheetText: {
         if (!sheet) return ""
         var stats = sheet.stats || {}
@@ -39,7 +59,7 @@ Item {
             objectName: "statusIcon"
             implicitWidth: 16
             implicitHeight: 16
-            visible: !bar.sheet || App.statusKind === "busy" || App.statusKind === "error"
+            visible: !bar.zoomDoc || App.statusKind === "busy" || App.statusKind === "error"
             // Neuer Zustand: das Symbol blendet mit dem Text ein (»Vollständig«: wächst dabei leicht)
             readonly property string kind: App.statusKind
             onKindChanged: if (Motion.enabled && bar.visible) appear.restart()
@@ -66,7 +86,7 @@ Item {
             id: status
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: bar.sheet && App.statusKind !== "busy" && App.statusKind !== "error" ? bar.sheetText : (I18n.tr(App.statusText, I18n.revision) || "")
+            text: bar.zoomDoc && App.statusKind !== "busy" && App.statusKind !== "error" ? (bar.sheet ? bar.sheetText : (bar.textDoc ? bar.textText : bar.pdfText)) : (I18n.tr(App.statusText, I18n.revision) || "")
             font: Typography.caption
             color: Theme.textSecondary
             // Gekürzte Meldung: vollständig als Tooltip (wie bis 2.6.1)
@@ -82,9 +102,19 @@ Item {
             }
         }
         Text {
+            objectName: "textHints"
+            visible: (bar.textDoc !== null || bar.pdfDoc !== null) && bar.width > 640
+            readonly property string saveKey: (Shortcuts.hints["reader.save"] || "").replace(/[()]/g, "").trim()
+            readonly property string printKey: (Shortcuts.hints["reader.print"] || "").replace(/[()]/g, "").trim()
+            text: (saveKey ? saveKey + " " : "") + I18n.tr("Speichern", I18n.revision) + " · " + (printKey ? printKey + " " : "") + I18n.tr("Drucken", I18n.revision)
+            font: Typography.caption
+            color: Theme.textSecondary
+            Layout.rightMargin: 12
+        }
+        Text {
             objectName: "sheetZoomText"
-            visible: bar.sheet !== null
-            text: I18n.tr(bar.sheet ? bar.sheet.zoom + " %" : "", I18n.revision)
+            visible: bar.zoomDoc !== null
+            text: I18n.tr(bar.zoomDoc ? Math.round(bar.zoomDoc.zoom) + " %" : "", I18n.revision)
             font: Typography.caption
             color: Theme.textSecondary
         }
@@ -96,7 +126,7 @@ Item {
             color: Theme.textTertiary
             elide: Text.ElideLeft
             textFormat: Text.PlainText
-            visible: bar.width > 640 && bar.sheet === null
+            visible: bar.width > 640 && bar.zoomDoc === null
         }
     }
 }
