@@ -120,8 +120,10 @@ def test_office_view_tab_restore_and_failures(ui_app, tmp_path: Path, monkeypatc
     for path in (letter, sheet):
         path.write_bytes(b"PK")
     controller = reader(h)
-    # Texte öffnen sich seit 5.0 Beta 3 zum Bearbeiten (test_qt_text.py), solange LibreOffice da ist; ohne bleibt die Ansicht
+    # Texte (seit 5.0 Beta 3, test_qt_text.py) und Präsentationen (seit Beta 4, test_qt_slides.py) öffnen sich zum
+    # Bearbeiten, solange LibreOffice da ist; ohne bleibt die Ansicht
     monkeypatch.setattr(type(controller), "edits_text", lambda self, path: False)
+    monkeypatch.setattr(type(controller), "edits_slides", lambda self, path: False)
     controller.open_paths([str(letter), str(sheet)])
     assert wait_until(lambda: len(controller.tabs.items()) == 2, 30)
     settle(h)
