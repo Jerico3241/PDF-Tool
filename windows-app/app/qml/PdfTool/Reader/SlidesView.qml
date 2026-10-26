@@ -118,7 +118,7 @@ FocusScope {
                     kind: "link"
                     iconName: "play"
                     text: I18n.tr("Präsentieren", I18n.revision)
-                    tip: I18n.tr("Vollbild ab dieser Folie (F5)", I18n.revision)
+                    tip: I18n.tr("Vollbild ab dieser Folie" + Shortcuts.hints["reader.present"], I18n.revision)
                     enabled: view.ready
                     onClicked: view.doc.present()
                 }
@@ -610,7 +610,7 @@ FocusScope {
         objectName: "slidesShowWindow"
         visibility: view.doc !== null && view.doc.presenting ? Window.FullScreen : Window.Hidden
         color: "#000000"
-        title: view.doc ? view.doc.name : ""
+        title: I18n.tr(view.doc ? view.doc.name : "", I18n.revision)
         onVisibleChanged: if (visible) showItem.forceActiveFocus()
         FocusScope {
             id: showItem
@@ -755,6 +755,6 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active; onActivated: view.doc.zoomStep(-1) }
     Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
     Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
-    Shortcut { sequences: ["F5"]; enabled: view.active; onActivated: view.doc.present() }
+    Shortcut { sequences: Shortcuts.keys["reader.present"] || []; enabled: view.active && !view.doc.presenting; onActivated: view.doc.present() }
     Shortcut { sequences: ["Escape"]; enabled: view.active && findBar.visible; onActivated: findBar.hide() }
 }

@@ -50,7 +50,7 @@ ENGLISH_WORDS = {
     "Aptos", "Cambria", "Georgia", "Tahoma", "Verdana", "Carlito", "Caladea", "Header", "Icon", "Scripts", "SheetGrid",
     # Namen von LibreOffice (Argumente der Befehle, Formatvorlagen, Ordner) und QML-Typen der Texte
     "Color", "Columns", "Rows", "FamilyName", "FileName", "Lower", "Upper", "On", "Style", "Title", "Subtitle", "TakeOwnership",
-    "TextCanvas", "URE", "ParagraphStyles", "Quotations",
+    "TextCanvas", "SlideImage", "URE", "ParagraphStyles", "Quotations", "KIND", "WhatLayout",
 }
 
 
