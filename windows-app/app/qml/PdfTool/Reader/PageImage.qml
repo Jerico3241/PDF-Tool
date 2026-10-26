@@ -1,5 +1,6 @@
 import QtQuick
 import PdfTool.Style
+import PdfTool.Backend
 
 // Seitenbild aus »image://pdfpage/<Dokument>/<Seite>/<Breite>/<Fassung>…« (Ansicht, Miniaturen, Seiten
 // organisieren). Das erste fertige Bild einer Seite blendet kurz über das weiße Blatt ein; neue Fassungen
@@ -17,7 +18,8 @@ Image {
     property string url: ""
     onUrlChanged: apply.restart()
     Component.onCompleted: apply.restart()
-    Timer { id: apply; interval: 0; onTriggered: if (String(image.source) !== image.url) image.source = image.url }
+    // Wurde das letzte Dokument inzwischen geschlossen (die Ansicht behält es beim Ausblenden), kein Bild mehr anfragen
+    Timer { id: apply; interval: 0; onTriggered: if (String(image.source) !== image.url && (Reader.hasDocument || image.url === "")) image.source = image.url }
     // Seite einer Quelle (Dokument und Index), ohne Breite und Fassung
     function pageOf(url) {
         var parts = String(url).split("/")
