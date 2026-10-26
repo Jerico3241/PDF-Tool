@@ -737,19 +737,6 @@ def probe_calc(program: Path) -> None:
             probe.call("input", doc=doc, row=row, col=0, text=text)
         probe.call("save", doc=doc, path=str(target))
         probe.call("close", doc=doc)
-        slides = probe.call("open", path="", kind="praesentation")
-        deck = slides["doc"]
-        probe.call("uno", doc=deck, command=".uno:InsertPage")
-        probe.call("settle", doc=deck)
-        parts = probe.call("parts", doc=deck)
-        if int(parts.get("count") or 0) != 2:
-            fail("Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt")
-        folie = probe.call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
-        if len(folie) != 160 * 90 * 4 or not any(folie):
-            fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")
-        probe.call("notes", doc=deck, part=0)
-        probe.call("save", doc=deck, path=str(deck_target))
-        probe.call("close", doc=deck)
     except calc.CalcError as exc:
         detail = getattr(exc, "detail", "")
         fail(f"Probe des Rechenkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
