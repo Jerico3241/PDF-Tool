@@ -44,7 +44,7 @@ Item {
     function requestImage() {
         // Beim Wechsel des Dokuments kann die Seite noch zum vorigen gehören – dann nichts anfragen
         if (base === "" || page >= doc.pageCount) {
-            pageImage.source = ""
+            pageImage.url = ""
             dropPrevious()
             shownPage = -1
             shownBase = ""
@@ -53,13 +53,13 @@ Item {
         }
         if (width < 16) return  // Ansicht noch nicht angeordnet
         if (shownPage !== page || shownBase !== base) {
-            pageImage.source = ""  // andere Seite oder anderes Dokument: nicht das Bild der vorigen zeigen
+            pageImage.url = ""  // andere Seite oder anderes Dokument: nicht das Bild der vorigen zeigen
             dropPrevious()
             shownPage = page
             shownBase = base
         }
         requestedWidth = wantedWidth
-        pageImage.source = base + wantedWidth + "/" + revision
+        pageImage.url = base + wantedWidth + "/" + revision
     }
     onPageChanged: {
         widthTimer.stop()

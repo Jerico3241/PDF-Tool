@@ -386,7 +386,7 @@ FocusScope {
                         readonly property bool fresh: loadedRevision === root.revision
                         anchors.fill: parent
                         anchors.margins: 1
-                        source: root.doc ? "image://pdfpage/" + root.doc.docId + Reader.imageTag + "/" + cell.index + "/" + Math.round(thumb.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
+                        url: root.doc ? "image://pdfpage/" + root.doc.docId + Reader.imageTag + "/" + cell.index + "/" + Math.round(thumb.width * root.ratio) + "/" + root.doc.revision + "/thumb" : ""
                         onImageReady: {
                             loadedRevision = root.revision
                             cell.settle()

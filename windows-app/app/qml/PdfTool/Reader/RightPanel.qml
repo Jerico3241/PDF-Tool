@@ -32,8 +32,6 @@ Rectangle {
         PanelHeader {
             title: I18n.tr(root.titles[root.shown] || "", I18n.revision)
             current: root.shown
-            tabs: root.tabs
-            onTabSelected: (key) => Reader.showRightPanel(key)
             onCloseRequested: Reader.setRightPanel(root.panel)
             PText {
                 objectName: "readerCommentsCount"

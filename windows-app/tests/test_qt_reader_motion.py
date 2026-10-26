@@ -87,8 +87,8 @@ def test_side_panels_slide_fade_or_switch_and_keep_their_state_after_rapid_toggl
     h = motion_app
     open_pdf(h, samples.standard_text(tmp_path / "leisten.pdf"))
     r = reader(h)
-    panel, rail = h.item("readerRightPanel"), h.item("readerRightRail")
-    edge = scene_x(rail) + rail.width()
+    panel = h.item("readerRightPanel")
+    edge = scene_x(h.item("readerSideRail"))  # die Seitenleiste endet am Symbolstreifen und gleitet unter ihn
     r.setRightPanel("comments")
     seen = trace(lambda: (scene_x(panel) + panel.width(), panel.property("opacity")) if panel.isVisible() else (edge, 1.0))
     xs, opacities = [x for x, _ in seen], [o for _, o in seen]
@@ -106,17 +106,6 @@ def test_side_panels_slide_fade_or_switch_and_keep_their_state_after_rapid_toggl
     assert r.rightPanel == "" and r.leftPanel == ""
     assert not panel.isVisible() and not h.item("readerLeftPanel").isVisible()
     assert h.item("readerRailComments").isVisible() and h.item("readerRailThumbs").isVisible()
-
-
-def test_panel_tabs_crossfade_and_the_selection_slides(motion_app, tmp_path: Path) -> None:
-    h = motion_app
-    open_pdf(h, samples.standard_text(tmp_path / "reiter.pdf"))
-    selection = [item for item in h.items("readerPanelTabSelection") if item.isVisible()][0]
-    start, target = selection.property("x"), h.item("readerTabSearch").property("x")
-    QTest.mouseClick(h.window, LEFT, NO_MOD, window_point(h.item("readerTabSearch"), 14, 14))
-    xs = trace(lambda: selection.property("x"))
-    assert between(xs, start, target) == (profile(h) == "full")  # gleitet nur bei »Vollständig«
-    assert selection.property("x") == target and reader(h).leftPanel == "search"
 
 
 # --- Dokument-Tabs ---------------------------------------------------------------------------------------------
@@ -154,7 +143,7 @@ def test_document_tabs_indicator_and_dirty_dot(motion_app, tmp_path: Path) -> No
 
 
 # --- Kontextmenü und Werkzeuge ---------------------------------------------------------------------------------
-def test_context_menu_fades_and_grows_and_the_tool_marker_follows(motion_app, tmp_path: Path) -> None:
+def test_context_menu_fades_and_grows_and_the_chosen_tool_is_marked(motion_app, tmp_path: Path) -> None:
     h = motion_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "menue.pdf"), whole_page=True)
     item = page_item(h, 0)
@@ -170,15 +159,15 @@ def test_context_menu_fades_and_grows_and_the_tool_marker_follows(motion_app, tm
     assert menu.property("scale") == 1 and menu.property("opacity") == 1
     QTest.keyClick(h.window, Qt.Key.Key_Escape)
     pump(0.3)
-    # Werkzeug wechseln: die Markierung sitzt danach neben dem neuen Werkzeug (Schnellwerkzeuge links)
-    marker = h.item("readerToolIndicator")
-    assert abs(center_y(marker) - center_y(h.item("readerToolSelect"))) < 1.5
-    click(h, window_point(h.item("readerToolEditText"), 10, 10))
+    # Werkzeug wechseln: im Menüband ist genau das gewählte Werkzeug markiert
+    select, edit = h.item("readerToolSelect"), h.item("readerToolEditText")
+    assert select.property("checked") and not edit.property("checked")
+    click(h, window_point(edit, 10, 10))
     pump(0.5)
-    assert doc.tool == "editText" and abs(center_y(marker) - center_y(h.item("readerToolEditText"))) < 1.5
-    doc.setTool("image")  # Werkzeug aus »Alle Werkzeuge«: markiert ist »Alle Werkzeuge«
+    assert doc.tool == "editText" and edit.property("checked") and not select.property("checked")
+    doc.setTool("image")  # Werkzeug aus »Alle Werkzeuge«: keines der Leiste »Start« ist markiert
     pump(0.5)
-    assert abs(center_y(marker) - center_y(h.item("readerQuickAllTools"))) < 1.5
+    assert not edit.property("checked") and not select.property("checked")
 
 
 # --- Miniaturen ------------------------------------------------------------------------------------------------

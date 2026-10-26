@@ -24,6 +24,7 @@ Rectangle {
     readonly property string tool: doc ? doc.tool : "select"
     // Schmale Fenster: Schaltflächen nur mit Symbol
     readonly property bool roomy: width >= 1180
+    readonly property bool wide: width >= 1260   // genug Platz auch für »Unterschreiben« mit Text
 
     implicitHeight: 38 + 46
     color: Theme.layer
@@ -72,7 +73,8 @@ Rectangle {
     component ToolChoice: ToolButton {
         property string toolKey: ""
         property string label: ""
-        text: label !== "" && root.roomy ? I18n.tr(label, I18n.revision) : ""
+        property bool needsWide: false    // Text erst im breiten Fenster
+        text: label !== "" && root.roomy && (root.wide || !needsWide) ? I18n.tr(label, I18n.revision) : ""
         toggle: true
         checked: root.tool === toolKey && !Reader.organize
         onClicked: root.chooseTool(toolKey)
@@ -172,6 +174,7 @@ Rectangle {
             // Start: Auswählen, Verschieben | Markieren, Notiz, Freihand, Text hinzufügen | Text bearbeiten,
             // Unterschreiben | Seite | Zoom … Suchen, Seitenleiste
             Bar {
+                objectName: "readerRibbonBar_start"
                 visible: root.ribbon === "start"
                 ToolChoice { objectName: "readerToolSelect"; toolKey: "select"; iconName: "cursor"; label: I18n.tr("Auswählen", I18n.revision); tip: I18n.tr("Auswählen: Text markieren und kopieren, Kommentare verschieben", I18n.revision) }
                 ToolChoice { objectName: "readerToolHand"; toolKey: "hand"; iconName: "hand_left"; tip: I18n.tr("Verschieben: das Dokument mit gedrückter Maustaste bewegen", I18n.revision) }
@@ -182,7 +185,7 @@ Rectangle {
                 ToolChoice { objectName: "readerToolAddText"; toolKey: "addText"; iconName: "text_add"; label: I18n.tr("Text hinzufügen", I18n.revision); tip: I18n.tr("Text hinzufügen", I18n.revision) }
                 RibbonSeparator {}
                 ToolChoice { objectName: "readerToolEditText"; toolKey: "editText"; iconName: "text_edit_style"; label: I18n.tr("Text bearbeiten", I18n.revision); tip: I18n.tr("Text bearbeiten: Absätze mit Cursor ändern, ergänzen, umbrechen", I18n.revision) }
-                ToolChoice { objectName: "readerToolSign"; toolKey: "signature"; iconName: "signature"; label: I18n.tr("Unterschreiben", I18n.revision); tip: I18n.tr("Unterschreiben: Unterschrift zeichnen oder einlesen und auf die Seite setzen (keine digitale Signatur)", I18n.revision) }
+                ToolChoice { objectName: "readerToolSign"; toolKey: "signature"; iconName: "signature"; needsWide: true; label: I18n.tr("Unterschreiben", I18n.revision); tip: I18n.tr("Unterschreiben: Unterschrift zeichnen oder einlesen und auf die Seite setzen (keine digitale Signatur)", I18n.revision) }
                 RibbonSeparator {}
                 ToolButton { iconName: "chevron_left"; tip: I18n.tr("Vorherige Seite (Bild ↑)", I18n.revision); enabled: root.doc !== null && root.doc.currentPage > 0; onClicked: root.doc.step(-1) }
                 PTextField {
@@ -205,10 +208,33 @@ Rectangle {
                 ToolButton { iconName: "chevron_right"; tip: I18n.tr("Nächste Seite (Bild ↓)", I18n.revision); enabled: root.doc !== null && root.doc.currentPage < root.doc.pageCount - 1; onClicked: root.doc.step(1) }
                 RibbonSeparator {}
                 ToolButton { objectName: "readerZoomOut"; iconName: "zoom_out"; tip: I18n.tr("Verkleinern" + Shortcuts.hints["reader.zoomOut"], I18n.revision); onClicked: root.zoom(function() { root.doc.zoomOut() }) }
+                // Zoom: eigenen Wert eintippen (Eingabetaste) oder eine Stufe aus dem Menü wählen
+                PTextField {
+                    id: zoomField
+                    objectName: "readerZoomField"
+                    preferredWidth: 60
+                    horizontalAlignment: TextInput.AlignHCenter
+                    label: I18n.tr("Zoom in Prozent", I18n.revision)
+                    enabled: root.ready
+                    text: root.zoomText()
+                    validator: RegularExpressionValidator { regularExpression: /^\s*\d{1,3}([,.]\d)?\s*%?\s*$/ }
+                    onAccepted: {
+                        var value = parseFloat(text.replace(",", ".").replace("%", ""))
+                        if (!isNaN(value) && root.doc) root.zoom(function() { root.doc.setZoom(value) })
+                        text = Qt.binding(root.zoomText)
+                        if (root.view) root.view.forceActiveFocus()
+                    }
+                    onActiveFocusChanged: {
+                        if (activeFocus) selectAll()
+                        else text = Qt.binding(root.zoomText)
+                    }
+                    Keys.onEscapePressed: { text = Qt.binding(root.zoomText); if (root.view) root.view.forceActiveFocus() }
+                }
                 ToolButton {
                     id: zoomButton
                     objectName: "readerZoom"
-                    text: I18n.tr(root.zoomText(), I18n.revision)
+                    implicitWidth: 24
+                    iconName: "chevron_down"
                     tip: I18n.tr("Zoomstufe wählen", I18n.revision)
                     onClicked: zoomMenu.popup(zoomButton, 0, zoomButton.height + 4)
                 }
@@ -217,16 +243,21 @@ Rectangle {
                 PIconButton { objectName: "readerSearchButton"; iconName: "search"; tip: I18n.tr("Suchen" + Shortcuts.hints["app.find"], I18n.revision); enabled: root.ready; onClicked: root.searchRequested() }
                 PIconButton {
                     objectName: "readerSidebarToggle"
-                    iconName: "panel_left"
+                    iconName: "panel_right"
                     tip: I18n.tr("Seitenleiste ein- oder ausblenden", I18n.revision)
                     toggle: true
-                    checked: Reader.leftPanel !== ""
-                    onClicked: Reader.leftPanel !== "" ? Reader.setLeftPanel(Reader.leftPanel) : Reader.showLeftPanel("thumbs")
+                    checked: Reader.leftPanel !== "" || Reader.rightPanel !== ""
+                    onClicked: {
+                        if (Reader.leftPanel !== "") Reader.setLeftPanel(Reader.leftPanel)
+                        else if (Reader.rightPanel !== "") Reader.setRightPanel(Reader.rightPanel)
+                        else Reader.showLeftPanel("thumbs")
+                    }
                 }
             }
 
             // Datei
             Bar {
+                objectName: "readerRibbonBar_file"
                 visible: root.ribbon === "file"
                 ToolButton { objectName: "readerOpen"; iconName: "folder_open"; text: I18n.tr("Öffnen", I18n.revision); tip: I18n.tr("Öffnen" + Shortcuts.hints["app.open"], I18n.revision); enabled: true; onClicked: Reader.openDialog() }
                 RibbonSeparator {}
@@ -247,6 +278,7 @@ Rectangle {
 
             // Kommentieren: Text markieren, Notizen, Formen, Stempel … Kommentare
             Bar {
+                objectName: "readerRibbonBar_comment"
                 visible: root.ribbon === "comment"
                 ToolChoice { toolKey: "highlight"; iconName: "highlight"; label: I18n.tr("Markieren", I18n.revision); tip: I18n.tr("Markieren", I18n.revision) }
                 ToolChoice { toolKey: "underline"; iconName: "text_underline"; label: I18n.tr("Unterstreichen", I18n.revision); tip: I18n.tr("Unterstreichen", I18n.revision) }
@@ -265,7 +297,7 @@ Rectangle {
                 Item { Layout.fillWidth: true }
                 ToolButton {
                     objectName: "readerCommentsToggle"
-                    iconName: "panel_right"
+                    iconName: "comment"
                     text: I18n.tr("Kommentare", I18n.revision)
                     toggle: true
                     checked: Reader.rightPanel === "comments"
@@ -275,6 +307,7 @@ Rectangle {
 
             // Bearbeiten: Text und Objekte, Bilder, Links, Formulare, Unterschrift, Schwärzen, Texterkennung
             Bar {
+                objectName: "readerRibbonBar_edit"
                 visible: root.ribbon === "edit"
                 ToolChoice { toolKey: "editText"; iconName: "text_edit_style"; label: I18n.tr("Text bearbeiten", I18n.revision); tip: I18n.tr("Text bearbeiten: Absätze mit Cursor ändern, ergänzen, umbrechen", I18n.revision) }
                 ToolChoice { objectName: "readerToolObjects"; toolKey: "objects"; iconName: "select_object"; label: I18n.tr("Objekt bearbeiten", I18n.revision); tip: I18n.tr("Objekt bearbeiten: Text und andere PDF-Inhalte einzeln auswählen und bearbeiten.", I18n.revision) }
@@ -283,9 +316,9 @@ Rectangle {
                 ToolChoice { toolKey: "link"; iconName: "link"; label: I18n.tr("Link", I18n.revision); tip: I18n.tr("Links", I18n.revision) }
                 RibbonSeparator {}
                 ToolChoice { toolKey: "form"; iconName: "form"; label: I18n.tr("Formular ausfüllen", I18n.revision); tip: I18n.tr("Formular ausfüllen", I18n.revision) }
-                ToolChoice { toolKey: "formDesign"; iconName: "form_new"; tip: I18n.tr("Formular gestalten", I18n.revision) }
+                ToolChoice { objectName: "readerRibbonFormDesign"; toolKey: "formDesign"; iconName: "form_new"; tip: I18n.tr("Formular gestalten", I18n.revision) }
                 RibbonSeparator {}
-                ToolButton { id: signButton; iconName: "signature"; text: root.roomy ? I18n.tr("Unterschrift", I18n.revision) : ""; tip: I18n.tr("Unterschrift, digitale Signatur oder Stempel", I18n.revision); onClicked: signMenu.popup(signButton, 0, signButton.height + 4) }
+                ToolButton { id: signButton; objectName: "readerSignMenu"; iconName: "signature"; text: root.roomy ? I18n.tr("Unterschrift", I18n.revision) : ""; tip: I18n.tr("Unterschrift, digitale Signatur oder Stempel", I18n.revision); onClicked: signMenu.popup(signButton, 0, signButton.height + 4) }
                 ToolChoice { toolKey: "redact"; iconName: "eye_off"; label: I18n.tr("Schwärzen", I18n.revision); tip: I18n.tr("Schwärzen", I18n.revision) }
                 ToolButton { iconName: "document_search"; text: root.roomy ? I18n.tr("Text erkennen", I18n.revision) : ""; tip: I18n.tr("Text erkennen (OCR) …", I18n.revision); onClicked: root.run("ocr") }
                 Item { Layout.fillWidth: true }
@@ -293,6 +326,7 @@ Rectangle {
 
             // Seiten
             Bar {
+                objectName: "readerRibbonBar_pages"
                 visible: root.ribbon === "pages"
                 ToolButton { objectName: "readerOrganize"; iconName: "grid"; text: I18n.tr("Seiten organisieren", I18n.revision); toggle: true; checked: Reader.organize; onClicked: Reader.setOrganize(!Reader.organize) }
                 RibbonSeparator {}
@@ -309,6 +343,7 @@ Rectangle {
 
             // Ansicht: Seitenansicht, Zoom, Seitenleisten, Vergleichen und Präsentation
             Bar {
+                objectName: "readerRibbonBar_view"
                 visible: root.ribbon === "view"
                 ToolButton { objectName: "readerViewSingle"; iconName: "document_one_page"; tip: I18n.tr("Einzelseite", I18n.revision); toggle: true; checked: root.doc !== null && root.doc.viewMode === "single"; onClicked: root.doc.setViewMode("single") }
                 ToolButton { objectName: "readerViewMode"; iconName: "document_one_page_multiple"; tip: I18n.tr("Fortlaufend", I18n.revision); toggle: true; checked: root.doc !== null && root.doc.viewMode === "continuous"; onClicked: root.doc.setViewMode("continuous") }

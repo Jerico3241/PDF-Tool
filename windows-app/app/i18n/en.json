@@ -1901,7 +1901,7 @@
   "Manuell": "Manual",
   "Mark": "Mark",
   "Markieren": "Highlight",
-  "Markieren, Notizen und Formen über »Kommentieren« und »Zeichnen« in der Befehlsleiste.": "Highlight, notes, and shapes via “Comment” and “Draw” in the command bar.",
+  "Markieren, Notizen und Formen im Menüband unter »Kommentieren«.": "Highlight, notes and shapes in the ribbon under “Comment”.",
   "Markierte Inhalte endgültig schwärzen?": "Permanently redact the marked content?",
   "Markierung": "Highlight",
   "Markierung entfernen": "Remove highlight",
@@ -3745,7 +3745,9 @@
   "Novadesk 5.0 Beta 3: Texte bearbeiten – Word-Dateien (auch .doc, OpenDocument und RTF) öffnen sich zum Bearbeiten wie in Word, mit Menüband und Formatvorlagen.": "Novadesk 5.0 Beta 3: edit texts – Word files (also .doc, OpenDocument and RTF) open for editing like in Word, with a ribbon and styles.",
   "Rechtschreibprüfung, Änderungen nachverfolgen, Suchen und Ersetzen; Speichern im Format der Datei, »Als PDF speichern« und Drucken.": "Spell check, track changes, find and replace; save in the file's format, “Save as PDF” and print.",
   "Schrift, Farbe, Ausrichtung, Aufzählung und Überschriften; Bilder, Tabellen, Seitenzahlen und Datum einfügen; Hoch- und Querformat, Seitenränder, Kopf- und Fußzeile.": "Font, color, alignment, bullets and headings; insert images, tables, page numbers and the date; portrait and landscape, margins, header and footer.",
-  "»Neu → Text« legt einen neuen Text direkt in Novadesk an. Präsentationen öffnen sich weiter zum Ansehen.": "“New → Text” creates a new text right in Novadesk. Presentations still open for viewing."
+  "»Neu → Text« legt einen neuen Text direkt in Novadesk an. Präsentationen öffnen sich weiter zum Ansehen.": "“New → Text” creates a new text right in Novadesk. Presentations still open for viewing.",
+  "Seitenleiste": "Sidebar",
+  "Suchen und ersetzen (Strg+F)": "Find and replace (Ctrl+F)"
  },
  "patterns": {
   "App-Design: {0}": "App theme: {0}",

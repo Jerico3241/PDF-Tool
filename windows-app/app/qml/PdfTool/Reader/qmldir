@@ -32,6 +32,7 @@ AllTools 1.0 AllTools.qml
 SplitPane 1.0 SplitPane.qml
 ComparePanel 1.0 ComparePanel.qml
 SheetView 1.0 SheetView.qml
+SideRail 1.0 SideRail.qml
 TextView 1.0 TextView.qml
 RibbonTab 1.0 RibbonTab.qml
 RibbonSeparator 1.0 RibbonSeparator.qml

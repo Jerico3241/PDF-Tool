@@ -18,7 +18,7 @@ def perform(h, command: str) -> None:
     from test_qt_protect import center, child
     from test_qt_reader import click
 
-    workspace = h.item("readerQuickToolsArea").parentItem()
+    workspace = h.item("readerWorkspace")
     panel = child(workspace, "readerAllToolsPanel")
     click(h, center(h.item("readerAllTools")))
     assert wait_until(lambda: panel.property("opened"), 3)
@@ -120,6 +120,8 @@ def test_office_view_tab_restore_and_failures(ui_app, tmp_path: Path, monkeypatc
     for path in (letter, sheet):
         path.write_bytes(b"PK")
     controller = reader(h)
+    # Texte öffnen sich seit 5.0 Beta 3 zum Bearbeiten (test_qt_text.py), solange LibreOffice da ist; ohne bleibt die Ansicht
+    monkeypatch.setattr(type(controller), "edits_text", lambda self, path: False)
     controller.open_paths([str(letter), str(sheet)])
     assert wait_until(lambda: len(controller.tabs.items()) == 2, 30)
     settle(h)

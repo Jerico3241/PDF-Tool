@@ -268,7 +268,7 @@ def ask(h, question: str) -> None:
 # --- Aus, bis eingeschaltet ---------------------------------------------------------------------------------------
 def test_off_by_default_nothing_loaded_and_nothing_shown(ui_app, tmp_path: Path) -> None:
     """Standard: aus. Ohne gebündelten KI-Prozess lässt er sich nicht einschalten; im Reader gibt es weder Streifen-
-    noch Kopf-Schalter, und auf dem PC wird nichts angelegt."""
+    noch Symbol, und auf dem PC wird nichts angelegt."""
     h = ui_app
     h.app.dialogs.shutdown()
     assistant = a(h)
@@ -282,7 +282,7 @@ def test_off_by_default_nothing_loaded_and_nothing_shown(ui_app, tmp_path: Path)
     assert h.item("readerRailAssistant") is None
     reader(h).showRightPanel("comments")
     pump(0.3)
-    assert h.item("readerTabComments") is not None and h.item("readerTabAssistant") is None
+    assert h.item("readerRailComments") is not None and h.item("readerRailAssistant") is None
     assert not store.models_dir().exists() and not any(store.root().iterdir())  # nichts angelegt
 
 

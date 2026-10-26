@@ -8,8 +8,8 @@ import PdfTool.Controls
 
 // Text bearbeiten (seit 5.0 Beta 3, nach dem Entwurf »2-text«): oben die Reiter Datei, Start, Einfügen, Seite,
 // Überprüfen und Ansicht (der aktive blau unterstrichen) mit Speichern, Drucken, Rückgängig, Wiederholen und »Als PDF
-// speichern« rechts; darunter die Leiste des Reiters, in der Mitte die Seiten auf grauem Grund (TextCanvas) und rechts
-// die Formatvorlagen zum Zuklappen. Seite, Wörter und Sprache stehen in der Statuszeile des Fensters.
+// speichern« rechts; darunter die Leiste des Reiters, in der Mitte die Seiten auf grauem Grund (TextCanvas), rechts
+// die zuklappbaren Formatvorlagen und am Fensterrand der Streifen mit ihren Symbolen (SideRail) – wie bei PDFs. Seite, Wörter und Sprache stehen in der Statuszeile des Fensters.
 FocusScope {
     id: view
     objectName: "textView"
@@ -129,6 +129,7 @@ FocusScope {
             // Start (wie im Entwurf): Einfügen, Ausschneiden, Kopieren | Schrift, Größe | F, K, U, Farbe |
             // Ausrichtung, Aufzählung | Formatvorlage … Suchen, Seitenleiste
             Bar {
+                objectName: "textRibbonBar_start"
                 visible: view.ribbon === "start"
                 ToolButton {
                     objectName: "textPaste"
@@ -215,6 +216,7 @@ FocusScope {
 
             // Datei
             Bar {
+                objectName: "textRibbonBar_file"
                 visible: view.ribbon === "file"
                 ToolButton { objectName: "textFileNew"; iconName: "document_add"; text: I18n.tr("Neuer Text", I18n.revision); enabled: true; onClicked: Reader.newText() }
                 ToolButton { iconName: "folder_open"; text: I18n.tr("Öffnen", I18n.revision); enabled: true; onClicked: Reader.openDialog() }
@@ -232,6 +234,7 @@ FocusScope {
 
             // Einfügen
             Bar {
+                objectName: "textRibbonBar_insert"
                 visible: view.ribbon === "insert"
                 ToolButton { objectName: "textInsertImage"; iconName: "image_add"; text: I18n.tr("Bild", I18n.revision); tip: I18n.tr("Bild aus einer Datei einfügen", I18n.revision); onClicked: { view.doc.insertImage(); view.back() } }
                 ToolButton { id: tableButton; objectName: "textInsertTable"; iconName: "table_simple"; text: I18n.tr("Tabelle", I18n.revision); onClicked: tableMenu.popup(tableButton, 0, tableButton.height + 4) }
@@ -246,6 +249,7 @@ FocusScope {
 
             // Seite
             Bar {
+                objectName: "textRibbonBar_page"
                 visible: view.ribbon === "page"
                 ToolButton { objectName: "textPortrait"; iconName: "document"; text: I18n.tr("Hochformat", I18n.revision); toggle: true; checked: view.ready && !view.doc.landscape; onClicked: { view.doc.setLandscape(false); view.back() } }
                 ToolButton { objectName: "textLandscape"; iconName: "document_landscape"; text: I18n.tr("Querformat", I18n.revision); toggle: true; checked: view.ready && view.doc.landscape; onClicked: { view.doc.setLandscape(true); view.back() } }
@@ -261,6 +265,7 @@ FocusScope {
 
             // Überprüfen
             Bar {
+                objectName: "textRibbonBar_review"
                 visible: view.ribbon === "review"
                 ToolButton { objectName: "textSpelling"; iconName: "text_proofing_tools"; text: I18n.tr("Rechtschreibung prüfen", I18n.revision); tip: I18n.tr("Falsch geschriebene Wörter rot unterstreichen", I18n.revision); toggle: true; checked: view.ready && view.doc.spelling; onClicked: { view.doc.toggle("spelling"); view.back() } }
                 RibbonSeparator {}
@@ -272,6 +277,7 @@ FocusScope {
 
             // Ansicht
             Bar {
+                objectName: "textRibbonBar_view"
                 visible: view.ribbon === "view"
                 ToolButton { iconName: "zoom_out"; tip: I18n.tr("Verkleinern", I18n.revision); onClicked: view.doc.zoomStep(-1) }
                 ToolButton { text: I18n.tr(view.doc ? view.doc.zoom + " %" : "", I18n.revision); tip: I18n.tr("Zoom auf 100 %", I18n.revision); onClicked: view.doc.setZoom(100) }
@@ -416,11 +422,11 @@ FocusScope {
                 }
             }
 
-            // Formatvorlagen (rechts, wie die Seitenleisten im PDF Reader zum Zuklappen) --------------------------------
+            // Formatvorlagen rechts neben der Seite, der Streifen mit den Symbolen am Fensterrand (wie bei PDFs) ---------
             Rectangle {
                 objectName: "textSidebar"
                 Layout.fillHeight: true
-                Layout.preferredWidth: Metrics.readerRightPanelWidth
+                Layout.preferredWidth: Metrics.readerLeftPanelWidth
                 visible: view.doc !== null && view.doc.sidebar
                 color: Theme.layer
                 Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
@@ -481,6 +487,25 @@ FocusScope {
                     Item { Layout.fillHeight: true }
                 }
             }
+
+            // Streifen mit den Inhalten der Seitenleiste – wie bei PDFs
+            SideRail {
+                objectName: "textSideRail"
+                Layout.fillHeight: true
+                Layout.preferredWidth: Metrics.readerRailWidth
+                current: view.doc !== null && view.doc.sidebar ? "styles" : ""
+                accentColor: view.kindColor
+                items: [
+                    { key: "styles", icon: "text_edit_style", tip: "Formatvorlagen", name: "textRailStyles" },
+                    { key: "search", icon: "search", tip: "Suchen und ersetzen (Strg+F)", name: "textRailSearch" }
+                ]
+                onSelected: (key) => {
+                    if (!view.doc) return
+                    if (key === "styles") { view.doc.toggleSidebar(); view.back() }
+                    else findBar.show()
+                }
+            }
+
         }
     }
 

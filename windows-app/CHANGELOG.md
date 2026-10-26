@@ -16,8 +16,12 @@ Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.3.md).
   Suchen und Ersetzen, Formatvorlagen rechts; Statuszeile mit Seite, Wörtern, Sprache und Zoom.
 - Einheitliches Menüband: `RibbonTab`/`RibbonSeparator` für Tabellen und Texte, `Reader/PdfRibbon.qml` für PDFs
   (Datei, Start, Kommentieren, Bearbeiten, Seiten, Ansicht) statt Befehlsleiste, Schnellwerkzeugen und
-  Randstreifen; Seitenleisten ohne Streifen, Seite und Zoom im Menüband (schwebend nur im Vollbild), Statuszeile
-  wie bei Texten.
+  Randstreifen; Seite und Zoom im Menüband (schwebend nur im Vollbild), Statuszeile wie bei Texten.
+- Seitenleisten für PDFs und Texte rechts, daneben `Reader/SideRail.qml` mit den Symbolen am Fensterrand; immer
+  nur eine Seitenleiste offen.
+- Behoben: Hänger beim Verlassen des Vollbilds. `PageImage` übernimmt seine Quelle (`url`) erst im nächsten
+  Durchlauf der Ereignisschleife; vorher konnte QML mit gehaltener Python-Sperre auf den Bildlader warten, der
+  für das Python-Seitenbild auf genau diese Sperre wartete.
 - `build.py probe_text`: Textkern im Setup tippt, rendert und speichert eine .docx.
 
 # Novadesk 5.0.0-beta.2

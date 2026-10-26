@@ -64,10 +64,9 @@ def changed(h, doc, check, timeout: float = 20) -> None:
 
 
 def design_mode(h, doc) -> None:
-    """Werkzeug »Formular gestalten« über »Alle Werkzeuge«."""
-    press(h, "readerAllTools")
-    pump(0.3)
-    press(h, "readerToolFormDesign")
+    """Werkzeug »Formular gestalten« im Menüband unter »Bearbeiten«."""
+    h.item("readerRibbonFormDesign")  # wählt den Reiter
+    press(h, "readerRibbonFormDesign")
     pump(0.3)
     assert doc.tool == "formDesign"
     assert wait_until(lambda: h.item("readerFormKind_text") is not None and h.item("readerFormKind_text").isVisible(), 5)
@@ -105,6 +104,8 @@ def test_create_move_resize_duplicate_delete_and_undo(reader_app, tmp_path: Path
     Strg+Z holt es zurück."""
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "leer.pdf"), whole_page=True)
+    doc.setZoom(100)  # »Ganze Seite« ist unter dem Menüband zu klein: die Ecke des Textfelds läge über dem Kästchen
+    pump(0.3)
     design_mode(h, doc)
     # Textfeld: Feldart wählen, Rahmen aufziehen
     press(h, "readerFormKind_text")

@@ -7,15 +7,24 @@ import PdfTool.Style
 // Zeile, anderes Dokument), ist das alte Bild im selben Moment weg: Ausblenden hängt an keiner Animation, nur
 // das Einblenden läuft über eine eigens gestartete Animation – unabhängig davon, in welcher Reihenfolge QML
 // Bindungen auswertet (ein Behavior würde das Ausblenden abfangen und das alte Bild kurz stehen lassen).
+//
+// Die Quelle setzt man über ``url``: Das Bild übernimmt sie erst im nächsten Durchlauf der Ereignisschleife. Ändert
+// Python eine Bindung (Zoom, Seite, Fassung), liefe das Setzen von ``source`` sonst noch innerhalb des Python-Aufrufs –
+// mit gehaltener Python-Sperre wartet QML dann auf den Bildlader, der im eigenen Thread für das Python-Seitenbild genau
+// auf diese Sperre wartet: Die Oberfläche stand für immer (selten, z. B. beim Verlassen des Vollbilds).
 Image {
     id: image
+    property string url: ""
+    onUrlChanged: apply.restart()
+    Component.onCompleted: apply.restart()
+    Timer { id: apply; interval: 0; onTriggered: if (String(image.source) !== image.url) image.source = image.url }
     // Seite einer Quelle (Dokument und Index), ohne Breite und Fassung
     function pageOf(url) {
         var parts = String(url).split("/")
         return parts.length > 4 ? parts[3] + "/" + parts[4] : ""
     }
     property string readyPage: ""   // Seite, deren Bild fertig dasteht
-    readonly property bool ready: readyPage !== "" && readyPage === pageOf(source)
+    readonly property bool ready: readyPage !== "" && readyPage === pageOf(source) && readyPage === pageOf(url)  // neue Seite gewünscht: altes Bild sofort weg
     property real reveal: 1
     signal imageReady()             // ein Bild der aktuellen Quelle ist da (auch eine neue Fassung)
 

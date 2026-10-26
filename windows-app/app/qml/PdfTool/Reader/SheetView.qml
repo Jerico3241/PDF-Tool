@@ -195,6 +195,7 @@ FocusScope {
                 anchors.rightMargin: 12
                 anchors.bottomMargin: 1
                 spacing: 2
+                objectName: "sheetRibbonBar_start"
                 visible: view.ribbon === "start"
                 ToolButton {
                     objectName: "sheetPaste"
@@ -287,6 +288,7 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_file"
                 visible: view.ribbon === "file"
                 ToolButton { objectName: "sheetFileNew"; iconName: "document_add"; text: I18n.tr("Neue Tabelle", I18n.revision); tip: I18n.tr("Neue Tabelle" + Shortcuts.hints["app.new"], I18n.revision); enabled: true; onClicked: Reader.newSheet() }
                 ToolButton { iconName: "folder_open"; text: I18n.tr("Öffnen", I18n.revision); enabled: true; onClicked: Reader.openDialog() }
@@ -308,6 +310,7 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_insert"
                 visible: view.ribbon === "insert"
                 ToolButton { objectName: "sheetInsertRows"; iconName: "table_insert_row"; text: I18n.tr("Zeilen", I18n.revision); tip: I18n.tr("Zeilen über der Auswahl einfügen", I18n.revision); onClicked: view.sheet.insertCells("rows", false) }
                 ToolButton { objectName: "sheetInsertCols"; iconName: "table_insert_column"; text: I18n.tr("Spalten", I18n.revision); tip: I18n.tr("Spalten links der Auswahl einfügen", I18n.revision); onClicked: view.sheet.insertCells("cols", false) }
@@ -330,6 +333,7 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_formulas"
                 visible: view.ribbon === "formulas"
                 ToolButton { objectName: "sheetFunctions"; iconName: "math_formula"; text: I18n.tr("Funktion einfügen", I18n.revision); tip: I18n.tr("Funktions-Assistent (Umschalt+F3)", I18n.revision); onClicked: functionDialog.openDialog() }
                 RibbonSeparator {}
@@ -351,6 +355,7 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_data"
                 visible: view.ribbon === "data"
                 ToolButton { objectName: "sheetSortUp"; iconName: "text_sort_ascending"; text: I18n.tr("A bis Z", I18n.revision); onClicked: view.sheet.sort(true) }
                 ToolButton { iconName: "text_sort_descending"; text: I18n.tr("Z bis A", I18n.revision); onClicked: view.sheet.sort(false) }
@@ -370,6 +375,7 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_view"
                 visible: view.ribbon === "view"
                 ToolButton { objectName: "sheetFreezeRow"; iconName: "table_freeze_row"; text: I18n.tr("Oberste Zeile fixieren", I18n.revision); onClicked: view.sheet.freezePanes("row") }
                 ToolButton { iconName: "table_freeze_column"; text: I18n.tr("Erste Spalte fixieren", I18n.revision); onClicked: view.sheet.freezePanes("col") }

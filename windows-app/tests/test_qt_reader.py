@@ -1344,7 +1344,7 @@ def test_open_settings_left_panel_applies_to_new_documents(reader_app, tmp_path:
     pump(0.5)
     assert r.leftPanel == panel
     assert h.item("readerLeftPanel").property("panel") == panel
-    assert h.item("readerLeftRail").property("collapsed") is (panel == "")
+    assert h.item("readerSideRail").property("current") == panel  # Symbol am Rand markiert
     # beim Lesen umgeschaltet: gilt für dieses Dokument, das nächste öffnet wieder mit der Vorgabe
     r.showLeftPanel("search")
     open_pdf(h, samples.standard_text(tmp_path / "weiter.pdf"))

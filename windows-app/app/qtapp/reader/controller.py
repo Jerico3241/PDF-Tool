@@ -1980,12 +1980,15 @@ class ReaderController(Observable):
     def _release_clipboard(self) -> None:
         """Vor dem Beenden: Unsere Daten in der Zwischenablage (in Python angelegt) durch Qt-eigene ersetzen –
         Text bzw. Bild bleiben für andere Programme erhalten, nur die interne Kennung entfällt. Sonst würde Qt sie
-        erst nach dem Ende von Python abbauen, und das Programm stürzt beim Beenden ab (PySide6)."""
+        erst nach dem Ende von Python abbauen, und das Programm stürzt beim Beenden ab (PySide6). Das gilt auch für
+        Kopien aus Texten (``TEXT_CLIP_FORMAT``); deren Formatierung (HTML) entfällt dabei, der Text bleibt."""
         from PySide6.QtGui import QGuiApplication
 
         board = QGuiApplication.clipboard()
         data = board.mimeData() if board is not None else None
-        if data is None or not data.hasFormat(CLIP_FORMAT):
+        from ..text.document import TEXT_CLIP_FORMAT
+
+        if data is None or not (data.hasFormat(CLIP_FORMAT) or data.hasFormat(TEXT_CLIP_FORMAT)):
             return
         text = data.text() if data.hasText() else ""
         if text:

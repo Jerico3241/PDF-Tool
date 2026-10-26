@@ -44,7 +44,7 @@ def test_presentation_shows_whole_pages_on_black_and_esc_restores_the_view(reade
     assert not r.presenting and not r.fullScreen
     assert doc.viewMode == "continuous" and doc.fit == "width" and doc.tool == "highlight"
     assert wait_until(lambda: h.window.visibility() != QWindow.Visibility.FullScreen, 5)
-    assert h.item("readerViewControls").isVisible()
+    assert h.item("readerToolbar").isVisible() and not h.item("readerViewControls").isVisible()  # wieder mit Menüband
 
 
 # --- Geteilte Ansicht --------------------------------------------------------------------------------------------

@@ -102,6 +102,13 @@ def test_type_format_copy_paste_and_save(ui_app, tmp_path: Path) -> None:
     xml = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8")
     assert xml.count("Hallo Welt, äöü!") == 2 and "Fett" in xml
     assert wait_until(lambda: not doc.dirty and doc.name == "Test äöü.docx", 10)
+    # Beenden: die Kopie wird durch Qt-eigene Daten ersetzt, der Text bleibt (sonst Absturz beim Abbau der Anwendung)
+    from qtapp.text.document import TEXT_CLIP_FORMAT
+
+    board = QGuiApplication.clipboard()
+    assert board.mimeData().hasFormat(TEXT_CLIP_FORMAT)
+    h.runtime.singletons["Reader"]._release_clipboard()  # noqa: SLF001 - wie beim Beenden (close_all)
+    assert board.text() == "Hallo Welt, äöü!" and not board.mimeData().hasFormat(TEXT_CLIP_FORMAT)
 
 
 @needs_text

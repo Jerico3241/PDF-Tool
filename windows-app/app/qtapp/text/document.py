@@ -50,6 +50,9 @@ GRAPHIC_SELECTION, HYPERLINK_CLICKED, STATE_CHANGED, SEARCH_NOT_FOUND = 6, 7, 8,
 DOCUMENT_SIZE_CHANGED, MOUSE_POINTER, ERROR = 13, 18, 22
 # Tasten von LibreOffice (com.sun.star.awt.Key) und Umschalter
 KEY_DELETE = 1286
+# Kennzeichen unserer Kopien in der Zwischenablage: Beim Beenden ersetzt der Reader sie durch Qt-eigene Daten
+# (``ReaderController._release_clipboard``), sonst stürzt der Abbau der Anwendung ab
+TEXT_CLIP_FORMAT = "application/x-novadesk-text"
 MOD_SHIFT, MOD_CTRL, MOD_ALT = 0x1000, 0x2000, 0x4000
 # Seiten: A4 in 1/100 mm; Ränder in 1/100 mm (Normal wie in Word: 2,5 cm, Schmal 1,27 cm, Breit 2,5/5 cm)
 MARGINS = {"normal": (2500, 2500, 2500, 2500), "narrow": (1270, 1270, 1270, 1270), "wide": (5080, 5080, 2540, 2540)}
@@ -455,6 +458,7 @@ class TextController(Observable):
             if html:
                 mime.setHtml(html)
             mime.setText(plain)
+            mime.setData(TEXT_CLIP_FORMAT, b"1")
             QGuiApplication.clipboard().setMimeData(mime)
             TextController._own_copy = (id(self), doc, generation, plain)
             if cut:
