@@ -737,6 +737,19 @@ def probe_calc(program: Path) -> None:
             probe.call("input", doc=doc, row=row, col=0, text=text)
         probe.call("save", doc=doc, path=str(target))
         probe.call("close", doc=doc)
+        slides = probe.call("open", path="", kind="praesentation")
+        deck = slides["doc"]
+        probe.call("uno", doc=deck, command=".uno:InsertPage")
+        probe.call("settle", doc=deck)
+        parts = probe.call("parts", doc=deck)
+        if int(parts.get("count") or 0) != 2:
+            fail("Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt")
+        folie = probe.call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
+        if len(folie) != 160 * 90 * 4 or not any(folie):
+            fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")
+        probe.call("notes", doc=deck, part=0)
+        probe.call("save", doc=deck, path=str(deck_target))
+        probe.call("close", doc=deck)
     except calc.CalcError as exc:
         detail = getattr(exc, "detail", "")
         fail(f"Probe des Rechenkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
@@ -754,7 +767,7 @@ def probe_calc(program: Path) -> None:
 def probe_text(program: Path) -> None:
     """Der Textkern (seit 5.0 Beta 3) lädt LibreOfficeKit aus dem entpackten LibreOffice – mit dem Python des Setups,
     wie später bei den Anwendern. Er legt ein Dokument an, tippt einen Satz, zeichnet die Seite und speichert sie als
-    .docx – sonst bricht der Build ab."""
+    .docx; dazu (seit Beta 4) eine Präsentation mit zwei Folien als .pptx – sonst bricht der Build ab."""
     work = BUILD / "text-probe"
     remove(work)
     work.mkdir(parents=True)
@@ -771,6 +784,7 @@ def probe_text(program: Path) -> None:
         text.python = lambda: [str(runtime), "-I", "-X", "utf8"]
     probe = text.Engine()
     target = work / "probe.docx"
+    deck_target = work / "probe.pptx"
     try:
         probe.start()
         doc = probe.call("open", path="")["doc"]
@@ -781,6 +795,19 @@ def probe_text(program: Path) -> None:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
         probe.call("save", doc=doc, path=str(target))
         probe.call("close", doc=doc)
+        slides = probe.call("open", path="", kind="praesentation")
+        deck = slides["doc"]
+        probe.call("uno", doc=deck, command=".uno:InsertPage")
+        probe.call("settle", doc=deck)
+        parts = probe.call("parts", doc=deck)
+        if int(parts.get("count") or 0) != 2:
+            fail("Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt")
+        folie = probe.call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
+        if len(folie) != 160 * 90 * 4 or not any(folie):
+            fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")
+        probe.call("notes", doc=deck, part=0)
+        probe.call("save", doc=deck, path=str(deck_target))
+        probe.call("close", doc=deck)
     except text.TextError as exc:
         detail = getattr(exc, "detail", "")
         fail(f"Probe des Textkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
@@ -789,7 +816,10 @@ def probe_text(program: Path) -> None:
     content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""
     if "Novadesk Textprobe äöü" not in content:
         fail("Probe des Textkerns fehlgeschlagen: der getippte Satz fehlt in der gespeicherten .docx")
-    log("  Probe: Textkern (tippen, zeichnen, .docx speichern)")
+    slide_names = zipfile.ZipFile(deck_target).namelist() if deck_target.is_file() else []
+    if "ppt/slides/slide2.xml" not in slide_names:
+        fail("Probe des Textkerns fehlgeschlagen: die gespeicherte .pptx hat keine zweite Folie")
+    log("  Probe: Textkern (tippen, zeichnen, .docx und .pptx speichern)")
     remove(work)
 
 

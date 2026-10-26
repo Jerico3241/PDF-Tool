@@ -54,9 +54,19 @@ EVENTS = {
     23,  # CONTEXT_MENU
     15,  # SEARCH_RESULT_SELECTION
 }
+# Ereignisse der Notizenansicht: dieselben Nummern, um 1000 erhöht (Kacheln, Schreibmarke, Auswahl, Größe)
+NOTES_BASE = 1000
+NOTES_EVENTS = {0, 1, 2, 5, 13}
 
 # Dateiformate zum Speichern: Endung → Format von LibreOfficeKit
-FORMATS = {".docx": "docx", ".doc": "doc", ".odt": "odt", ".rtf": "rtf", ".txt": "txt", ".pdf": "pdf", ".html": "html"}
+FORMATS = {".docx": "docx", ".doc": "doc", ".odt": "odt", ".rtf": "rtf", ".txt": "txt", ".pdf": "pdf", ".html": "html",
+           ".pptx": "pptx", ".ppt": "ppt", ".odp": "odp"}
+
+# Dokumentarten: Novadesk-Name → (LOK_DOCTYPE, Fabrik für ein neues Dokument, Name in Meldungen)
+KINDS = {
+    "text": (0, "private:factory/swriter", "Textdokument"),
+    "praesentation": (2, "private:factory/simpress", "Präsentation"),
+}
 
 P = C.c_void_p
 CALLBACK = C.CFUNCTYPE(None, C.c_int, C.c_char_p, C.c_void_p)
@@ -119,7 +129,8 @@ _DOC_FUNCTIONS = (
     ("getViewsCount", C.c_int, (P,)),
     ("renderFont", P, (P,)),  # unbenutzt (Platzhalter für die Reihenfolge)
     ("getPartHash", P, (P,)),
-    ("paintPartTile", P, (P,)),
+    # paintPartTile(Puffer, Teil, Modus, Breite px, Höhe px, x, y, Breite twips, Höhe twips)
+    ("paintPartTile", None, (P, P, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int)),
     ("getViewIds", P, (P,)),
     ("setOutlineState", P, (P,)),
     ("paintWindow", P, (P,)),
@@ -206,6 +217,8 @@ class Document:
         self.cls = pointer.contents.pClass.contents
         self.view = view
         self.callback = None
+        self.notes_view = None  # zweite Ansicht im Notizen-Modus (Präsentationen: Notizen unter der Folie)
+        self.notes_callback = None
 
 
 class Kernel:
@@ -246,8 +259,9 @@ class Kernel:
         doc = self.docs.get(int(args.get("doc", 0)))
         if doc is None:
             raise KernelError("Das Dokument ist nicht mehr geöffnet.", "dokument")
-        if doc.cls.getView(doc.pointer) != doc.view:
-            doc.cls.setView(doc.pointer, doc.view)
+        view = doc.notes_view if args.get("notes") and doc.notes_view is not None else doc.view
+        if doc.cls.getView(doc.pointer) != view:
+            doc.cls.setView(doc.pointer, view)
         return doc
 
     def settle(self, quiet=0.06, limit=2.0):
@@ -260,7 +274,8 @@ class Kernel:
     # Befehle -------------------------------------------------------------------------------------------------
     def cmd_open(self, args):
         path = args.get("path") or ""
-        url = file_url(path) if path else "private:factory/swriter"
+        doctype, factory, label = KINDS.get(str(args.get("kind") or "text"), KINDS["text"])
+        url = file_url(path) if path else factory
         options = "Language=" + str(args.get("language") or "de-DE")
         self.password = args.get("password") or None
         self.password_asked = 0
@@ -275,10 +290,9 @@ class Kernel:
             raise KernelError("Die Datei ließ sich nicht öffnen." + (f" ({message[:200]})" if message else ""), "laden")
         pointer = C.cast(pointer, C.POINTER(Doc))
         cls = pointer.contents.pClass.contents
-        kind = cls.getDocumentType(pointer)
-        if kind != 0:  # LOK_DOCTYPE_TEXT
+        if cls.getDocumentType(pointer) != doctype:
             cls.destroy(pointer)
-            raise KernelError("Das ist kein Textdokument.", "art")
+            raise KernelError(f"Das ist keine {label}." if label != "Textdokument" else "Das ist kein Textdokument.", "art")
         ident = self.next_id
         self.next_id += 1
         doc = Document(ident, pointer, cls.getView(pointer))
@@ -314,6 +328,64 @@ class Kernel:
 
     def cmd_size(self, args):
         return self._size(self.doc(args))
+
+    def cmd_parts(self, args):
+        """Teile des Dokuments – bei Präsentationen die Folien: Anzahl, gezeigter Teil und die Namen."""
+        doc = self.doc(args)
+        count = doc.cls.getParts(doc.pointer)
+        return {"count": count, "current": doc.cls.getPart(doc.pointer),
+                "names": [self._string(doc.cls.getPartName(doc.pointer, index)) for index in range(count)]}
+
+    def cmd_part(self, args):
+        """Zu einem Teil wechseln (Folie zeigen und bearbeiten)."""
+        doc = self.doc(args)
+        doc.cls.setPart(doc.pointer, int(args["part"]))
+        return {"current": doc.cls.getPart(doc.pointer), **self._size(doc)}
+
+    def cmd_partmode(self, args):
+        """Ansicht der Präsentation: 0 = Folie, 1 = Notizen (die Notizenseite der gezeigten Folie)."""
+        doc = self.doc(args)
+        doc.cls.setPartMode(doc.pointer, int(args.get("mode", 0)))
+        return {"mode": int(args.get("mode", 0)), **self._size(doc)}
+
+    def cmd_notes(self, args):
+        """Zweite Ansicht im Notizen-Modus anlegen (einmal je Präsentation): Tasten und Klicks mit ``notes`` gehen
+        dorthin, die Folie der Hauptansicht bleibt, wie sie ist. Antwort: Größe der Notizenseite."""
+        doc = self.doc(args)
+        if doc.notes_view is None:
+            main = doc.cls.getView(doc.pointer)
+            view = doc.cls.createView(doc.pointer)
+            doc.cls.setView(doc.pointer, view)
+
+            def event(kind, payload, _data, ident=doc.ident):
+                # Die Notizenansicht meldet getrennt (1000 + Nummer), damit Schreibmarke und Auswahl der Folie
+                # nicht durcheinandergeraten
+                self.last_event = time.monotonic()
+                if kind in NOTES_EVENTS:
+                    self.send_event(ident, NOTES_BASE + kind, (payload or b"").decode("utf-8", "replace"))
+
+            doc.notes_callback = CALLBACK(event)
+            doc.cls.registerCallback(doc.pointer, doc.notes_callback, None)
+            doc.cls.initializeForRendering(doc.pointer, b"{}")
+            doc.cls.setPartMode(doc.pointer, 1)
+            doc.notes_view = view
+            doc.cls.setView(doc.pointer, main)
+        doc.cls.setView(doc.pointer, doc.notes_view)
+        doc.cls.setPart(doc.pointer, int(args.get("part", doc.cls.getPart(doc.pointer))))
+        size = self._size(doc)
+        doc.cls.setView(doc.pointer, doc.view)
+        return size
+
+    def cmd_thumb(self, args):
+        """Bild eines Teils (Folie), ohne zu ihm zu wechseln – für die Folienleiste."""
+        doc = self.doc(args)
+        pw, ph = int(args["pw"]), int(args["ph"])
+        if not (0 < pw <= 4096 and 0 < ph <= 4096):
+            raise KernelError("Ungültige Kachelgröße.")
+        buffer = (C.c_ubyte * (pw * ph * 4))()
+        doc.cls.paintPartTile(doc.pointer, C.cast(buffer, P), int(args["part"]), int(args.get("mode", 0)), pw, ph,
+                              int(args.get("x", 0)), int(args.get("y", 0)), int(args["w"]), int(args["h"]))
+        return bytes(buffer)
 
     def cmd_tile(self, args):
         doc = self.doc(args)

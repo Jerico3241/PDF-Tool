@@ -49,6 +49,7 @@ NIGHT_KEY = "reader_nachtmodus"  # Nachtmodus (gui-config.json)
 CONTRACT_LISTS = (".xlsx", ".xlsm", ".xls")  # Startseite: Excel-Listen gehören den »Vertragsübersichten« (wie dort)
 SHEET_SUFFIXES = (".xlsx", ".xlsm", ".xls", ".ods", ".csv")  # Tabellen zum Bearbeiten (seit 5.0 Beta 2)
 TEXT_SUFFIXES = (".docx", ".doc", ".odt", ".rtf")  # Texte zum Bearbeiten (seit 5.0 Beta 3)
+SLIDE_SUFFIXES = (".pptx", ".ppt", ".odp")  # Präsentationen zum Bearbeiten (seit 5.0 Beta 4)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
 UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
@@ -146,6 +147,7 @@ class ReaderController(Observable):
         self._sheets_made = 0  # neue Tabellen: »Mappe1«, »Mappe2« …
         self._text = None  # Textkern (``TextService``) – erst mit dem ersten Text
         self._texts_made = 0  # neue Texte: »Dokument1«, »Dokument2« …
+        self._slides_made = 0  # neue Präsentationen: »Präsentation1«, »Präsentation2« …
         recent = cfg.get("reader_zuletzt")
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
         # Wann zuletzt geöffnet (Startseite »Zuletzt verwendet«); Einträge aus älteren Versionen haben keine Zeit
@@ -362,7 +364,7 @@ class ReaderController(Observable):
         # Tabellen (seit 5.0 Beta 2): zum Bearbeiten im eigenen Tab, sobald LibreOffice da ist
         sheets = [p for p in documents if self.edits_sheet(p)]
         # Texte (seit 5.0 Beta 3) ebenso
-        texts = [p for p in documents if self.edits_text(p)]
+        texts = [p for p in documents if self.edits_text(p) or self.edits_slides(p)]
         documents = [p for p in documents if p not in sheets and p not in texts]
         missing = [p for p in documents if not office.installed(office.kind_of(p) or "word")]
         if missing:
@@ -395,7 +397,7 @@ class ReaderController(Observable):
             if path in sheets:
                 self._open_sheet(path, then=then)
             elif path in texts:
-                self._open_text(path, then=then)
+                self._open_text(path, then=then, kind="praesentation" if self.edits_slides(path) else "text")
             else:
                 self._open(path, None, then=then)
 
@@ -408,8 +410,12 @@ class ReaderController(Observable):
         """Word-, OpenDocument- und RTF-Texte öffnen sich zum Bearbeiten (mit dem mitgelieferten LibreOffice)."""
         return Path(path).suffix.lower() in TEXT_SUFFIXES and office.libreoffice() is not None
 
+    def edits_slides(self, path: str) -> bool:
+        """PowerPoint- und OpenDocument-Präsentationen öffnen sich zum Bearbeiten (mit dem mitgelieferten LibreOffice)."""
+        return Path(path).suffix.lower() in SLIDE_SUFFIXES and office.libreoffice() is not None
+
     def edits_office(self, path: str) -> bool:
-        return self.edits_sheet(path) or self.edits_text(path)
+        return self.edits_sheet(path) or self.edits_text(path) or self.edits_slides(path)
 
     def text_service(self):
         """Textkern (startet beim ersten Befehl)."""
@@ -435,6 +441,18 @@ class ReaderController(Observable):
             return
         self._texts_made += 1
         self._open_text("", name=f"Dokument{self._texts_made}.docx")
+
+    @Slot()
+    def newSlides(self) -> None:  # noqa: N802
+        """Neue, leere Präsentation (Startseite »Neue Präsentation«, seit 5.0 Beta 4)."""
+        if office.libreoffice() is None:
+            self.app.notify("reader", "warning", "Für Präsentationen fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title="Neue Präsentation")
+            return
+        if len(self._docs) >= TAB_LIMIT:
+            self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
+            return
+        self._slides_made += 1
+        self._open_text("", name=f"Präsentation{self._slides_made}.pptx", kind="praesentation")
 
     def calc(self):
         """Rechenkern der Tabellen (startet beim ersten Befehl)."""
@@ -463,41 +481,12 @@ class ReaderController(Observable):
 
     @Slot(str)
     def newOffice(self, kind: str) -> None:  # noqa: N802
-        """»Neuer Text« bzw. »Neue Präsentation«: Texte öffnen sich neu und leer in Novadesk (seit Beta 3); für eine
-        Präsentation Name und Ort wählen, leere Datei anlegen und im Standardprogramm öffnen (Präsentationen bearbeitet
-        Novadesk erst mit einer späteren Beta)."""
+        """»Neuer Text« bzw. »Neue Präsentation«: beide öffnen sich neu und leer in Novadesk (Texte seit Beta 3,
+        Präsentationen seit Beta 4)."""
         if kind == "text":
             self.newText()
-            return
-        if kind != "praesentation":
-            return
-        if office.libreoffice() is None:
-            self.app.notify("reader", "warning", "Für neue Dateien fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title="Neue Datei")
-            return
-        name, pattern = (("Dokument1.docx", "Word-Dokument (*.docx);;OpenDocument-Text (*.odt)") if kind == "text"
-                         else ("Präsentation1.pptx", "PowerPoint-Präsentation (*.pptx);;OpenDocument-Präsentation (*.odp)"))
-        folder = self.app.initial_dir("reader", self.source_dir)
-        target = files.save_file("Neuer Text" if kind == "text" else "Neue Präsentation", str(Path(folder) / name), pattern)
-        if not target:
-            return
-        if Path(target).suffix.lower() not in ((".docx", ".odt") if kind == "text" else (".pptx", ".odp")):
-            target += Path(name).suffix
-        self.source_dir = str(Path(target).parent)
-        self.app.schedule_save()
-        self.app.set_status(f"Wird angelegt: {Path(target).name} …", "busy")
-
-        def done(_result) -> None:
-            self.remember_recent(target)
-            self.app.set_status(f"Angelegt: {Path(target).name} – öffnet sich im Standardprogramm.", "success")
-            self.open_in_program(target)
-
-        def failed(exc: BaseException) -> None:
-            from tools.sheet.engine import CalcError
-
-            message = str(exc) if isinstance(exc, CalcError) else "Die Datei ließ sich nicht anlegen."
-            self.app.notify("reader", "error", message, title="Nicht angelegt")
-
-        self.calc().submit("blank", {"kind": kind, "path": str(Path(target).resolve())}, done, failed)
+        elif kind == "praesentation":
+            self.newSlides()
 
     def open_in_program(self, path: str) -> None:
         """Datei im Standardprogramm öffnen – ist das Novadesk selbst, »Öffnen mit« (sonst öffnete sie sich hier)."""
@@ -511,14 +500,16 @@ class ReaderController(Observable):
         self.openExternal(path)
 
     def _open_text(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                   password: str | None = None) -> None:
-        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True)
+                   password: str | None = None, kind: str = "text") -> None:
+        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True, kind=kind)
 
     def _open_sheet(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                    password: str | None = None, text: bool = False) -> None:
-        """Tabelle (bzw. mit ``text`` einen Text) zum Bearbeiten in einem eigenen Tab öffnen; ``path`` leer: neu."""
+                    password: str | None = None, text: bool = False, kind: str = "text") -> None:
+        """Tabelle (bzw. mit ``text`` einen Text oder eine Präsentation) zum Bearbeiten in einem eigenen Tab öffnen;
+        ``path`` leer: neu."""
         from ..sheet.document import SheetController
         from ..text.document import TextController
+        from ..text.slides import SlidesController
 
         if path and password is None and office.encrypted(Path(path)):
             if background:
@@ -533,7 +524,11 @@ class ReaderController(Observable):
                 return
         self._ids += 1
         ident = f"d{self._ids}"
-        controller = TextController(self, self.text_service(), ident, self) if text else SheetController(self, self.calc(), ident, self)
+        if text:
+            editor = SlidesController if kind == "praesentation" else TextController
+            controller = editor(self, self.text_service(), ident, self)
+        else:
+            controller = SheetController(self, self.calc(), ident, self)
         controller.name = name or Path(path).name
         self.opening = self.opening + 1
         if path:
@@ -577,7 +572,7 @@ class ReaderController(Observable):
                 if isinstance(exc, (CalcError, TextError)) and exc.code == "kennwort" and path:
                     secret = self.ask_password(Path(path).name, True)
                     if secret is not None:
-                        self._open_sheet(path, then=None, password=secret, text=text)
+                        self._open_sheet(path, then=None, password=secret, text=text, kind=kind)
                     return
                 message = str(exc) if isinstance(exc, (CalcError, TextError)) else f"»{controller.name}« konnte nicht geöffnet werden."
                 self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
@@ -777,7 +772,7 @@ class ReaderController(Observable):
     def _tab_item(self, controller: DocumentController) -> dict:
         if getattr(controller, "isText", False):
             return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path,
-                    "tip": controller.path or controller.name, "kind": "text"}
+                    "tip": controller.path or controller.name, "kind": getattr(controller, "KIND", "text")}
         if getattr(controller, "isSheet", False):
             kind = office.symbol(Path(controller.path)) if controller.path else "tabelle"
             return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path,
@@ -1762,6 +1757,8 @@ class ReaderController(Observable):
                     self._open_sheet(entry["pfad"], then=restored, background=True)
                 elif self.edits_text(entry["pfad"]):
                     self._open_text(entry["pfad"], then=restored, background=True)
+                elif self.edits_slides(entry["pfad"]):
+                    self._open_text(entry["pfad"], then=restored, background=True, kind="praesentation")
                 else:
                     self._open(entry["pfad"], None, then=restored, background=True)
 

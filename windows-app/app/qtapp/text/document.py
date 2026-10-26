@@ -86,6 +86,11 @@ def _hex(value) -> str:
 
 
 class TextController(Observable):
+    KIND = "text"  # Dokumentart im Textkern und in QML (»text«; Präsentationen: ``SlidesController``)
+    # Formate zum Speichern (Präsentationen bringen eigene mit); die erste Endung ist die voreingestellte
+    SAVE_FILTER = SAVE_FILTER
+    SAVE_SUFFIXES = SAVE_SUFFIXES
+    DEFAULT_NAME = "Dokument1"
     _own_copy: tuple | None = None  # (Text, Dokument, Start, Inhalt) der letzten Kopie aus Novadesk
     nameChanged, name = prop(str, "name", "")
     pathChanged, path = prop(str, "path", "")
@@ -170,7 +175,7 @@ class TextController(Observable):
         self.path = path
         self.name = Path(path).name if path else self.name or "Dokument1.docx"
         self.password = password
-        args: dict = {"path": str(Path(path).resolve()) if path else "", "language": "de-DE"}
+        args: dict = {"path": str(Path(path).resolve()) if path else "", "language": "de-DE", "kind": self.KIND}
         if password:
             args["password"] = password
 
@@ -605,7 +610,7 @@ class TextController(Observable):
                 self._save_then.append(then)
             return
         if not target:
-            if not self.path or Path(self.path).suffix.lower() not in SAVE_SUFFIXES:
+            if not self.path or Path(self.path).suffix.lower() not in self.SAVE_SUFFIXES:
                 target = self._pick_target()
                 if not target:
                     if then is not None:
@@ -667,11 +672,12 @@ class TextController(Observable):
         from .. import files
 
         folder = str(Path(self.path).parent) if self.path else self.app.initial_dir("reader", self.reader.source_dir)
-        stem = Path(self.name or "Dokument1").stem
-        suffix = Path(self.path).suffix.lower() if self.path and Path(self.path).suffix.lower() in SAVE_SUFFIXES else ".docx"
-        target = files.save_file("Speichern unter", suggestion or str(Path(folder) / (stem + suffix)), SAVE_FILTER)
-        if target and Path(target).suffix.lower() not in SAVE_SUFFIXES:
-            target += ".docx"
+        stem = Path(self.name or self.DEFAULT_NAME).stem
+        default = self.SAVE_SUFFIXES[0]
+        suffix = Path(self.path).suffix.lower() if self.path and Path(self.path).suffix.lower() in self.SAVE_SUFFIXES else default
+        target = files.save_file("Speichern unter", suggestion or str(Path(folder) / (stem + suffix)), self.SAVE_FILTER)
+        if target and Path(target).suffix.lower() not in self.SAVE_SUFFIXES:
+            target += default
         return target
 
     @Slot()
@@ -763,7 +769,7 @@ class TextController(Observable):
                   lambda exc: self.app.notify("reader", "error", str(exc), title=self.name), self.password)
 
     def _get_kind(self) -> str:
-        return "text"
+        return self.KIND
 
     _constant = Signal()
     kind = Property(str, _get_kind, notify=_constant)

@@ -18,7 +18,8 @@ FocusScope {
     // Tabellen (seit 5.0) und Texte (seit 5.0 Beta 3) haben ihre eigene Ansicht (SheetView, TextView); »doc« ist immer ein PDF
     readonly property bool sheetShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "tabelle"
     readonly property bool textShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "text"
-    readonly property bool officeShown: sheetShown || textShown
+    readonly property bool slidesShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "praesentation"
+    readonly property bool officeShown: sheetShown || textShown || slidesShown
     readonly property var doc: officeShown ? null : Reader.current
     readonly property bool narrow: width < Metrics.readerNarrowFrom
     readonly property bool active: App.currentPage === "reader" && !Dialogs.open && !officeShown
@@ -123,6 +124,18 @@ FocusScope {
         focus: page.textShown
         sourceComponent: TextView {
             doc: page.textShown ? Reader.current : null
+        }
+    }
+    // Präsentation bearbeiten (seit 5.0 Beta 4): Menüband, Folie mit Notizen und die Folienleiste
+    Loader {
+        id: slidesArea
+        objectName: "readerSlidesArea"
+        anchors.fill: parent
+        active: page.slidesShown
+        visible: active
+        focus: page.slidesShown
+        sourceComponent: SlidesView {
+            doc: page.slidesShown ? Reader.current : null
         }
     }
     Component {
