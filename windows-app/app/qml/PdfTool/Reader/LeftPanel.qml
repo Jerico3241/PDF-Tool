@@ -20,22 +20,16 @@ Rectangle {
     readonly property var titles: ({ thumbs: "Seiten", outline: "Lesezeichen", search: "Suchen", attachments: "Anhänge" })
     signal chosen(string key)  // Inhalt im Kopf gewählt
     color: Theme.layer
-    Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
+    Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.rightMargin: 1
+        anchors.leftMargin: 1
         spacing: 0
         PanelHeader {
             title: I18n.tr(root.titles[root.shown] || "", I18n.revision)
             current: root.shown
-            tabs: [
-                { key: "thumbs", icon: "document_one_page_multiple", tip: "Seiten", name: "readerTabThumbs" },
-                { key: "outline", icon: "bookmark", tip: "Lesezeichen", name: "readerTabOutline" },
-                { key: "search", icon: "search", tip: "Suchen" + Shortcuts.hints["app.find"], name: "readerTabSearch" },
-                { key: "attachments", icon: "attach", tip: "Anhänge", name: "readerTabAttachments" }
-            ]
-            onTabSelected: (key) => root.chosen(key)
+            // Umschalter stehen im Streifen links (SideRail), nicht mehr im Kopf
             onCloseRequested: Reader.setLeftPanel(root.panel)
             PText {
                 objectName: "readerAttachmentsCount"

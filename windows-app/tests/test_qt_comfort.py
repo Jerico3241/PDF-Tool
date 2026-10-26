@@ -425,9 +425,10 @@ def test_night_mode_darkens_only_the_page_images(reader_app, tmp_path: Path, con
     assert night._image.pixelColor(2, 2).name() == "#1e1e1e"  # noqa: SLF001
     assert r.cache.get((doc.docId, 0, 200, doc.revision, "page", (), True)) is not None
     assert r.cache.get((doc.docId, 0, 200, doc.revision, "page", (), False)) is not None
-    # Ungültige Kennung bleibt ungültig, ein unbekanntes Dokument auch mit »~n«
+    # Ungültige Kennung bleibt ungültig; ein unbekanntes Dokument (auch mit »~n«) gibt ein leeres Bild
     assert request(provider, "~n/0/200/0")._error == "Ungültige Bildadresse"  # noqa: SLF001
-    assert request(provider, "d999~n/0/200/0")._error == "Dokument nicht geöffnet"  # noqa: SLF001
+    unknown = request(provider, "d999~n/0/200/0")  # geschlossen, während QML noch anfragte: leer, ohne Meldung
+    assert unknown._error == "" and unknown._image.size().width() == 1  # noqa: SLF001
     # Einschalten: Miniaturen fragen die Bilder für den Nachtmodus an
     r.showLeftPanel("thumbs")
     r.setNightMode(True)

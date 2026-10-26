@@ -49,7 +49,7 @@ def test_full_screen_shows_only_the_document_and_esc_returns(reader_app, tmp_pat
     assert wait_until(lambda: h.window.visibility() == QWindow.Visibility.FullScreen, 5)
     pump(0.3)
     assert not nav.isVisible() and not tabs.isVisible() and not toolbar.isVisible()
-    assert not h.item("readerLeftRail").isVisible() and not h.item("readerRightRail").isVisible()
+    assert not h.item("readerSideRail").isVisible()
     controls = h.item("readerViewControls")
     assert controls.isVisible()  # Seite, Zoom und »Vollbild beenden« bleiben erreichbar
     # Esc in der Seite: zuerst Auswahl bzw. Werkzeug, dann das Vollbild
@@ -63,7 +63,7 @@ def test_full_screen_shows_only_the_document_and_esc_returns(reader_app, tmp_pat
     assert wait_until(lambda: h.window.visibility() == before, 5)
     pump(0.3)
     assert nav.isVisible() and tabs.isVisible() and toolbar.isVisible()
-    # Schaltfläche in der schwebenden Leiste; Verlassen des Readers beendet das Vollbild
+    # Schaltfläche im Menüband (»Ansicht«); Verlassen des Readers beendet das Vollbild
     click(h, center(h.item("readerFullScreen")))
     assert r.fullScreen is True
     h.navigate("home")
@@ -159,7 +159,6 @@ def test_side_panels_search_options_and_position_are_per_tab(reader_app, tmp_pat
     r.showLeftPanel("search")
     a.search("Zeile", True, False)
     settle(h)
-    r.showRightPanel("comments")
     view = h.item("readerView")
     view.setProperty("contentY", view.property("contentHeight") * 0.55)
     pump(0.3)
@@ -167,13 +166,15 @@ def test_side_panels_search_options_and_position_are_per_tab(reader_app, tmp_pat
     y_a = view.property("contentY")
     assert page_a > 2
     b = open_pdf(h, samples.standard_text(tmp_path / "B.pdf", pages=2))
-    # Neuer Tab übernimmt die Leisten des bisherigen; danach eigene Wahl
+    # Neuer Tab übernimmt die Seitenleiste des bisherigen; danach eigene Wahl (immer nur eine Leiste offen)
+    assert r.leftPanel == "search"
+    r.showRightPanel("comments")
+    assert (r.leftPanel, r.rightPanel) == ("", "comments")
     r.showLeftPanel("outline")
-    r.setRightPanel("comments")
     assert (r.leftPanel, r.rightPanel) == ("outline", "")
     r.activate(a.ident)
     pump(0.4)
-    assert (r.leftPanel, r.rightPanel) == ("search", "comments")
+    assert (r.leftPanel, r.rightPanel) == ("search", "")
     assert a.currentPage == page_a and abs(view.property("contentY") - y_a) < 4
     case_box = h.item("readerSearchCase")
     assert case_box.property("checked") is True and a.searchCase is True
@@ -186,13 +187,14 @@ def test_side_panels_search_options_and_position_are_per_tab(reader_app, tmp_pat
 
 
 # --- Navigation und Zoom ----------------------------------------------------------------------------------------
-def test_first_last_page_buttons_and_go_to_shortcut(reader_app, tmp_path: Path) -> None:
+def test_first_last_page_keys_and_go_to_shortcut(reader_app, tmp_path: Path) -> None:
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "Blättern.pdf", pages=6))
-    click(h, center(h.item("readerLastPage")))
+    h.item("readerView").forceActiveFocus()  # Ende und Pos1 in der Seite (die Knöpfe dafür hat das Vollbild)
+    key(h, Qt.Key.Key_End)
     pump(0.2)
     assert doc.currentPage == 5
-    click(h, center(h.item("readerFirstPage")))
+    key(h, Qt.Key.Key_Home)
     pump(0.2)
     assert doc.currentPage == 0
     key(h, Qt.Key.Key_G, CTRL)
@@ -299,13 +301,13 @@ def test_clicking_the_chosen_tool_shows_its_settings_and_esc_returns_to_select(r
     Esc kehrt zu »Auswählen« zurück."""
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "Werkzeuge.pdf"))
-    select, objects, hand = h.item("readerToolSelect"), h.item("readerToolObjects"), h.item("readerToolHand")
+    select, hand, objects = h.item("readerToolSelect"), h.item("readerToolHand"), h.item("readerToolObjects")  # zeigt »Bearbeiten«
     card = h.item("readerToolOptionsCard")
     click(h, center(objects))
     assert doc.tool == "objects" and objects.property("checked") and not select.property("checked")
     click(h, center(objects))  # erneut: bleibt gewählt (Objekt bearbeiten hat keine Einstellungen)
     assert doc.tool == "objects" and objects.property("checked") and not card.isVisible()
-    click(h, center(select))
+    click(h, center(h.item("readerToolSelect")))  # »Objekt bearbeiten« steht unter »Bearbeiten«, »Auswählen« unter »Start«
     assert doc.tool == "select" and select.property("checked") and not objects.property("checked")
     click(h, center(hand))
     click(h, center(hand))
@@ -318,7 +320,7 @@ def test_clicking_the_chosen_tool_shows_its_settings_and_esc_returns_to_select(r
     click(h, center(comment))
     pump(0.4)
     assert doc.tool == "highlight" and card.isVisible()
-    click(h, page_point(h, 0, 300, 400))
+    click(h, page_point(h, 0, 300, 200))
     pump(0.4)
     assert doc.tool == "highlight" and not card.isVisible()
     click(h, center(comment))

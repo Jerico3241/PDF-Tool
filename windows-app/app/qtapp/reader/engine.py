@@ -333,5 +333,8 @@ class PageImageProvider(QQuickAsyncImageProvider):
             return response
         response.task = self._render(document, page, width, revision, kind, region, response.deliver, night)
         if response.task is None:
-            QTimer.singleShot(0, lambda: response.deliver(None, "Dokument nicht geöffnet"))
+            # Dokument inzwischen geschlossen (QML fragte kurz davor noch an): leeres Bild statt Fehlermeldung
+            empty = QImage(1, 1, QImage.Format.Format_ARGB32_Premultiplied)
+            empty.fill(0)
+            QTimer.singleShot(0, lambda: response.deliver(empty))
         return response

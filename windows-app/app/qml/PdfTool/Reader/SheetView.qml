@@ -107,59 +107,12 @@ FocusScope {
     }
 
     // Leisten: kleine Bausteine ---------------------------------------------------------------------------------------
-    component Separator: Rectangle {
-        Layout.preferredWidth: 1
-        Layout.preferredHeight: 20
-        Layout.leftMargin: 6
-        Layout.rightMargin: 6
-        color: Theme.divider
-    }
     // Schaltfläche der Leiste: Symbol und (optional) Text, ohne Fläche
     component ToolButton: PButton {
         kind: "subtle"
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
         enabled: view.sheet !== null && view.sheet.ready
-    }
-    component RibbonTab: T.AbstractButton {
-        id: ribbonTab
-        property string key: ""
-        readonly property bool selected: view.ribbon === key
-        implicitHeight: 38
-        implicitWidth: ribbonLabel.implicitWidth + 2 * 10
-        hoverEnabled: true
-        focusPolicy: Qt.TabFocus
-        Accessible.role: Accessible.PageTab
-        Accessible.name: I18n.tr(text, I18n.revision)
-        Accessible.selected: selected
-        onClicked: view.ribbon = key
-        background: Rectangle {
-            radius: Metrics.radiusControl
-            color: !ribbonTab.selected && ribbonTab.hovered ? Theme.subtleHover : "transparent"
-            anchors.fill: parent
-            anchors.topMargin: 4
-            anchors.bottomMargin: 6
-        }
-        contentItem: Item {}
-        Text {
-            id: ribbonLabel
-            anchors.centerIn: parent
-            text: I18n.tr(ribbonTab.text, I18n.revision)
-            font: ribbonTab.selected ? Typography.bodyStrong : Typography.body
-            color: Theme.textPrimary
-            textFormat: Text.PlainText
-        }
-        Rectangle {
-            objectName: "ribbonUnderline"
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 3
-            width: ribbonLabel.implicitWidth
-            height: 3
-            radius: 1.5
-            color: view.kindColor
-            visible: ribbonTab.selected
-        }
     }
 
     ColumnLayout {
@@ -177,12 +130,12 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
-                RibbonTab { objectName: "ribbon_file"; key: "file"; text: "Datei" }
-                RibbonTab { objectName: "ribbon_start"; key: "start"; text: "Start" }
-                RibbonTab { objectName: "ribbon_insert"; key: "insert"; text: "Einfügen" }
-                RibbonTab { objectName: "ribbon_formulas"; key: "formulas"; text: "Formeln" }
-                RibbonTab { objectName: "ribbon_data"; key: "data"; text: "Daten" }
-                RibbonTab { objectName: "ribbon_view"; key: "view"; text: "Ansicht" }
+                RibbonTab { objectName: "ribbon_file"; key: "file"; text: "Datei"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_start"; key: "start"; text: "Start"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_insert"; key: "insert"; text: "Einfügen"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_formulas"; key: "formulas"; text: "Formeln"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_data"; key: "data"; text: "Daten"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_view"; key: "view"; text: "Ansicht"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 Item { Layout.fillWidth: true }
                 PIconButton {
                     objectName: "sheetSave"
@@ -206,7 +159,7 @@ FocusScope {
                     enabled: view.sheet !== null && view.sheet.undoText !== ""
                     onClicked: view.sheet.undo()
                 }
-                Separator {}
+                RibbonSeparator {}
                 PButton {
                     objectName: "sheetOverview"
                     kind: "link"
@@ -242,6 +195,7 @@ FocusScope {
                 anchors.rightMargin: 12
                 anchors.bottomMargin: 1
                 spacing: 2
+                objectName: "sheetRibbonBar_start"
                 visible: view.ribbon === "start"
                 ToolButton {
                     objectName: "sheetPaste"
@@ -250,7 +204,7 @@ FocusScope {
                     tip: I18n.tr("Einfügen (Strg+V)", I18n.revision)
                     onClicked: { view.sheet.paste(); grid.forceActiveFocus() }
                 }
-                Separator {}
+                RibbonSeparator {}
                 PComboBox {
                     id: fontBox
                     objectName: "sheetFont"
@@ -292,7 +246,7 @@ FocusScope {
                     checked: formatFlyout.opened
                     onClicked: formatFlyout.opened ? formatFlyout.close() : formatFlyout.open()
                 }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton {
                     objectName: "sheetSum"
                     iconName: "add"
@@ -316,7 +270,7 @@ FocusScope {
                     checked: view.sheet !== null && view.sheet.filterOn
                     onClicked: view.sheet.toggleFilter()
                 }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton {
                     id: chartButton
                     objectName: "sheetChart"
@@ -334,15 +288,16 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_file"
                 visible: view.ribbon === "file"
                 ToolButton { objectName: "sheetFileNew"; iconName: "document_add"; text: I18n.tr("Neue Tabelle", I18n.revision); tip: I18n.tr("Neue Tabelle" + Shortcuts.hints["app.new"], I18n.revision); enabled: true; onClicked: Reader.newSheet() }
                 ToolButton { iconName: "folder_open"; text: I18n.tr("Öffnen", I18n.revision); enabled: true; onClicked: Reader.openDialog() }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "save"; text: I18n.tr("Speichern", I18n.revision); onClicked: view.sheet.saveNow() }
                 ToolButton { objectName: "sheetSaveAs"; iconName: "save"; text: I18n.tr("Speichern unter …", I18n.revision); onClicked: view.sheet.saveAs() }
                 ToolButton { iconName: "document_pdf"; text: I18n.tr("Als PDF speichern …", I18n.revision); onClicked: pdfMenu.popup(this, 0, height + 4) }
                 ToolButton { iconName: "print"; text: I18n.tr("Drucken", I18n.revision); onClicked: view.sheet.printSheet() }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "mail"; text: I18n.tr("Per E-Mail senden", I18n.revision); onClicked: Reader.sendByMail() }
                 ToolButton { iconName: "folder"; text: I18n.tr("Ordner öffnen", I18n.revision); enabled: view.sheet !== null && view.sheet.path !== ""; onClicked: Reader.showInFolder(view.sheet.path) }
                 ToolButton { iconName: "dismiss"; text: I18n.tr("Schließen", I18n.revision); onClicked: Reader.closeCurrent() }
@@ -355,18 +310,19 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_insert"
                 visible: view.ribbon === "insert"
                 ToolButton { objectName: "sheetInsertRows"; iconName: "table_insert_row"; text: I18n.tr("Zeilen", I18n.revision); tip: I18n.tr("Zeilen über der Auswahl einfügen", I18n.revision); onClicked: view.sheet.insertCells("rows", false) }
                 ToolButton { objectName: "sheetInsertCols"; iconName: "table_insert_column"; text: I18n.tr("Spalten", I18n.revision); tip: I18n.tr("Spalten links der Auswahl einfügen", I18n.revision); onClicked: view.sheet.insertCells("cols", false) }
                 ToolButton { iconName: "table_delete_row"; text: I18n.tr("Zeilen löschen", I18n.revision); onClicked: view.sheet.insertCells("rows", true) }
                 ToolButton { iconName: "table_delete_column"; text: I18n.tr("Spalten löschen", I18n.revision); onClicked: view.sheet.insertCells("cols", true) }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "data_bar_vertical"; text: I18n.tr("Säulen", I18n.revision); onClicked: view.sheet.addChart("column") }
                 ToolButton { iconName: "data_bar_horizontal"; text: I18n.tr("Balken", I18n.revision); onClicked: view.sheet.addChart("bar") }
                 ToolButton { iconName: "data_line"; text: I18n.tr("Linie", I18n.revision); onClicked: view.sheet.addChart("line") }
                 ToolButton { iconName: "data_pie"; text: I18n.tr("Kreis", I18n.revision); onClicked: view.sheet.addChart("pie") }
                 ToolButton { iconName: "data_area"; text: I18n.tr("Fläche", I18n.revision); onClicked: view.sheet.addChart("area") }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { objectName: "sheetAddSheet"; iconName: "table_add"; text: I18n.tr("Blatt", I18n.revision); tip: I18n.tr("Neues Tabellenblatt", I18n.revision); onClicked: view.sheet.addSheet() }
                 Item { Layout.fillWidth: true }
             }
@@ -377,15 +333,16 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_formulas"
                 visible: view.ribbon === "formulas"
                 ToolButton { objectName: "sheetFunctions"; iconName: "math_formula"; text: I18n.tr("Funktion einfügen", I18n.revision); tip: I18n.tr("Funktions-Assistent (Umschalt+F3)", I18n.revision); onClicked: functionDialog.openDialog() }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "autosum"; text: I18n.tr("Summe", I18n.revision); onClicked: view.sheet.autoSum("SUMME") }
                 ToolButton { text: I18n.tr("Mittelwert", I18n.revision); onClicked: view.sheet.autoSum("MITTELWERT") }
                 ToolButton { text: I18n.tr("Anzahl", I18n.revision); onClicked: view.sheet.autoSum("ANZAHL") }
                 ToolButton { text: I18n.tr("Max", I18n.revision); onClicked: view.sheet.autoSum("MAX") }
                 ToolButton { text: I18n.tr("Min", I18n.revision); onClicked: view.sheet.autoSum("MIN") }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { text: I18n.tr("WENN", I18n.revision); onClicked: view.insertFunction("WENN") }
                 ToolButton { text: I18n.tr("SVERWEIS", I18n.revision); onClicked: view.insertFunction("SVERWEIS") }
                 ToolButton { text: I18n.tr("HEUTE", I18n.revision); onClicked: view.insertFunction("HEUTE") }
@@ -398,15 +355,16 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_data"
                 visible: view.ribbon === "data"
                 ToolButton { objectName: "sheetSortUp"; iconName: "text_sort_ascending"; text: I18n.tr("A bis Z", I18n.revision); onClicked: view.sheet.sort(true) }
                 ToolButton { iconName: "text_sort_descending"; text: I18n.tr("Z bis A", I18n.revision); onClicked: view.sheet.sort(false) }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "filter"; text: I18n.tr("Filter", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.filterOn; onClicked: view.sheet.toggleFilter() }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "arrow_autofit_content"; text: I18n.tr("Nach unten ausfüllen", I18n.revision); tip: I18n.tr("Strg+U", I18n.revision); onClicked: view.sheet.fill("down") }
                 ToolButton { text: I18n.tr("Nach rechts ausfüllen", I18n.revision); tip: I18n.tr("Strg+R", I18n.revision); onClicked: view.sheet.fill("right") }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "search"; text: I18n.tr("Suchen", I18n.revision); onClicked: findBar.show() }
                 Item { Layout.fillWidth: true }
             }
@@ -417,16 +375,17 @@ FocusScope {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 2
+                objectName: "sheetRibbonBar_view"
                 visible: view.ribbon === "view"
                 ToolButton { objectName: "sheetFreezeRow"; iconName: "table_freeze_row"; text: I18n.tr("Oberste Zeile fixieren", I18n.revision); onClicked: view.sheet.freezePanes("row") }
                 ToolButton { iconName: "table_freeze_column"; text: I18n.tr("Erste Spalte fixieren", I18n.revision); onClicked: view.sheet.freezePanes("col") }
                 ToolButton { iconName: "table_freeze_column_and_row"; text: I18n.tr("An der Zelle fixieren", I18n.revision); onClicked: view.sheet.freezePanes("cursor") }
                 ToolButton { text: I18n.tr("Aufheben", I18n.revision); enabled: view.sheet !== null && (view.sheet.freeze[0] > 0 || view.sheet.freeze[1] > 0); onClicked: view.sheet.freezePanes("none") }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "zoom_out"; tip: I18n.tr("Verkleinern", I18n.revision); onClicked: view.sheet.zoomStep(-1) }
                 ToolButton { text: view.sheet ? view.sheet.zoom + " %" : ""; tip: I18n.tr("Zoom auf 100 %", I18n.revision); onClicked: view.sheet.setZoom(100) }
                 ToolButton { iconName: "zoom_in"; tip: I18n.tr("Vergrößern", I18n.revision); onClicked: view.sheet.zoomStep(1) }
-                Separator {}
+                RibbonSeparator {}
                 ToolButton { iconName: "print_add"; text: I18n.tr("Druckbereich festlegen", I18n.revision); onClicked: view.sheet.setPrintArea(true) }
                 ToolButton { text: I18n.tr("Druckbereich aufheben", I18n.revision); onClicked: view.sheet.setPrintArea(false) }
                 Item { Layout.fillWidth: true }

@@ -56,29 +56,27 @@ def child(item, name: str):
 
 # --- Werkzeugleiste ------------------------------------------------------------------------------------------------
 def test_toolbar_menus_open_and_tools_switch(reader_app, tmp_path: Path) -> None:
-    """Schnellwerkzeuge links (Menüs für Kommentar, Zeichnen, Unterschrift) und »Alle Werkzeuge« mit Namen."""
+    """Menü »Unterschrift« im Menüband (Reiter »Bearbeiten«) und »Alle Werkzeuge« mit Namen (seit 5.0 Beta 3)."""
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "Leiste.pdf"))
-    quick = h.item("readerQuickTools")
-    for button, name in (("readerCommentMenu", "readerCommentToolMenu"), ("readerDrawMenu", "readerDrawToolMenu"), ("readerSignMenu", "readerSignToolMenu")):
-        menu = child(quick, name)
-        click(h, center(h.item(button)))
-        assert wait_until(lambda: menu.property("opened"), 3), name
-        key(h, Qt.Key.Key_Escape)
-        assert wait_until(lambda: not menu.property("visible"), 3)
-    workspace = h.item("readerQuickToolsArea").parentItem()
+    ribbon = h.item("readerToolbar")
+    menu = child(ribbon, "readerSignToolMenu")
+    click(h, center(h.item("readerSignMenu")))
+    assert wait_until(lambda: menu.property("opened"), 3)
+    key(h, Qt.Key.Key_Escape)
+    assert wait_until(lambda: not menu.property("visible"), 3)
+    workspace = h.item("readerWorkspace")  # festhalten: sonst gibt PySide auch die Hülle des Popups frei
     panel = child(workspace, "readerAllToolsPanel")  # Popup: hängt nicht im Elementbaum
-    for opener in ("readerAllTools", "readerQuickAllTools"):  # Befehlsleiste oder Schnellwerkzeuge
-        click(h, center(h.item(opener)))
-        assert wait_until(lambda: panel.property("opened"), 3), opener
-        key(h, Qt.Key.Key_Escape)
-        assert wait_until(lambda: not panel.property("visible"), 3)
+    click(h, center(h.item("readerAllTools")))
+    assert wait_until(lambda: panel.property("opened"), 3)
+    key(h, Qt.Key.Key_Escape)
+    assert wait_until(lambda: not panel.property("visible"), 3)
     # Ein Werkzeug aus der Liste: eingeschaltet, Liste zu, »Alle Werkzeuge« markiert
     click(h, center(h.item("readerAllTools")))
     assert wait_until(lambda: panel.property("opened"), 3)
     click(h, center(h.item("readerToolLink")))
     assert wait_until(lambda: not panel.property("visible"), 3)
-    assert doc.tool == "link" and h.item("readerQuickAllTools").property("checked") is True
+    assert doc.tool == "link"
     for tool in ("redact", "signature"):  # Befehle zum Arbeiten (Anwenden, Unterschrift wählen): Leiste immer
         doc.setTool(tool)
         pump(0.2)
@@ -87,12 +85,8 @@ def test_toolbar_menus_open_and_tools_switch(reader_app, tmp_path: Path) -> None
         doc.setTool(tool)
         pump(0.4)
         assert doc.tool == tool and not h.item("readerToolOptionsCard").isVisible()
-    doc.setTool("select")
-    pump(0.1)
-    assert h.item("readerQuickAllTools").property("checked") is False
     doc.setTool("redact")
     pump(0.1)
-    assert h.item("readerQuickAllTools").property("checked") is True  # Schwärzen ist aktiv: »Alle Werkzeuge« markiert
     h.item("readerView").forceActiveFocus()
     key(h, Qt.Key.Key_Escape)
     assert doc.tool == "select"
@@ -404,7 +398,7 @@ def test_dialog_from_all_tools_is_visible(ui_app, tmp_path: Path, monkeypatch) -
         service.answer(service.request["id"], "close", {})
 
     QTimer.singleShot(50, respond)
-    workspace = h.item("readerQuickToolsArea").parentItem()
+    workspace = h.item("readerWorkspace")
     panel = child(workspace, "readerAllToolsPanel")
     click(h, center(h.item("readerAllTools")))
     assert wait_until(lambda: panel.property("opened"), 3)

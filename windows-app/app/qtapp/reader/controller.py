@@ -48,6 +48,7 @@ CLOSED_LIMIT = 10  # »Geschlossenen Tab wieder öffnen«: so viele zuletzt gesc
 NIGHT_KEY = "reader_nachtmodus"  # Nachtmodus (gui-config.json)
 CONTRACT_LISTS = (".xlsx", ".xlsm", ".xls")  # Startseite: Excel-Listen gehören den »Vertragsübersichten« (wie dort)
 SHEET_SUFFIXES = (".xlsx", ".xlsm", ".xls", ".ods", ".csv")  # Tabellen zum Bearbeiten (seit 5.0 Beta 2)
+TEXT_SUFFIXES = (".docx", ".doc", ".odt", ".rtf")  # Texte zum Bearbeiten (seit 5.0 Beta 3)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
 UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
@@ -143,6 +144,8 @@ class ReaderController(Observable):
         self._ids = 0
         self._calc = None  # Rechenkern der Tabellen (``CalcService``) – erst mit der ersten Tabelle
         self._sheets_made = 0  # neue Tabellen: »Mappe1«, »Mappe2« …
+        self._text = None  # Textkern (``TextService``) – erst mit dem ersten Text
+        self._texts_made = 0  # neue Texte: »Dokument1«, »Dokument2« …
         recent = cfg.get("reader_zuletzt")
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
         # Wann zuletzt geöffnet (Startseite »Zuletzt verwendet«); Einträge aus älteren Versionen haben keine Zeit
@@ -358,14 +361,16 @@ class ReaderController(Observable):
                 return
         # Tabellen (seit 5.0 Beta 2): zum Bearbeiten im eigenen Tab, sobald LibreOffice da ist
         sheets = [p for p in documents if self.edits_sheet(p)]
-        documents = [p for p in documents if p not in sheets]
+        # Texte (seit 5.0 Beta 3) ebenso
+        texts = [p for p in documents if self.edits_text(p)]
+        documents = [p for p in documents if p not in sheets and p not in texts]
         missing = [p for p in documents if not office.installed(office.kind_of(p) or "word")]
         if missing:
             # Ohne LibreOffice nur mit Microsoft Office – je Art (Word, Excel, PowerPoint) einzeln geprüft
             self.app.notify("reader", "warning", office.missing_text(office.kind_of(missing[0]) or "word"), title="Office-Datei ansehen")
             documents = [p for p in documents if p not in missing]
         # Word, Excel, PowerPoint (seit 5.0): eine Ansicht als PDF in einem eigenen Tab – in der Reihenfolge der Auswahl
-        pdfs = [p for p in paths if p in pdfs or p in documents or p in sheets]
+        pdfs = [p for p in paths if p in pdfs or p in documents or p in sheets or p in texts]
         if not pdfs:
             if not documents and not images and not missing:
                 self.app.notify("reader", "warning", "Bitte eine PDF- oder Office-Datei wählen.", title="Nicht geöffnet")
@@ -389,6 +394,8 @@ class ReaderController(Observable):
                 return
             if path in sheets:
                 self._open_sheet(path, then=then)
+            elif path in texts:
+                self._open_text(path, then=then)
             else:
                 self._open(path, None, then=then)
 
@@ -396,6 +403,38 @@ class ReaderController(Observable):
     def edits_sheet(self, path: str) -> bool:
         """Excel-, OpenDocument- und CSV-Dateien öffnen sich zum Bearbeiten (mit dem mitgelieferten LibreOffice)."""
         return Path(path).suffix.lower() in SHEET_SUFFIXES and office.libreoffice() is not None
+
+    def edits_text(self, path: str) -> bool:
+        """Word-, OpenDocument- und RTF-Texte öffnen sich zum Bearbeiten (mit dem mitgelieferten LibreOffice)."""
+        return Path(path).suffix.lower() in TEXT_SUFFIXES and office.libreoffice() is not None
+
+    def edits_office(self, path: str) -> bool:
+        return self.edits_sheet(path) or self.edits_text(path)
+
+    def text_service(self):
+        """Textkern (startet beim ersten Befehl)."""
+        if self._text is None:
+            from ..text.service import TextService
+
+            self._text = TextService(self.app, self)
+            self._text.startingChanged.connect(self._text_starting)
+        return self._text
+
+    def _text_starting(self, starting: bool) -> None:
+        if starting:
+            self.app.set_status("Texte werden vorbereitet …", "busy")
+
+    @Slot()
+    def newText(self) -> None:  # noqa: N802
+        """Neuer, leerer Text (Startseite »Neuer Text«)."""
+        if office.libreoffice() is None:
+            self.app.notify("reader", "warning", "Für Texte fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title="Neuer Text")
+            return
+        if len(self._docs) >= TAB_LIMIT:
+            self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
+            return
+        self._texts_made += 1
+        self._open_text("", name=f"Dokument{self._texts_made}.docx")
 
     def calc(self):
         """Rechenkern der Tabellen (startet beim ersten Befehl)."""
@@ -424,9 +463,13 @@ class ReaderController(Observable):
 
     @Slot(str)
     def newOffice(self, kind: str) -> None:  # noqa: N802
-        """»Neuer Text« bzw. »Neue Präsentation«: Name und Ort wählen, leere Datei anlegen und im Standardprogramm
-        öffnen (Texte und Präsentationen bearbeitet Novadesk erst mit einer späteren Beta)."""
-        if kind not in ("text", "praesentation"):
+        """»Neuer Text« bzw. »Neue Präsentation«: Texte öffnen sich neu und leer in Novadesk (seit Beta 3); für eine
+        Präsentation Name und Ort wählen, leere Datei anlegen und im Standardprogramm öffnen (Präsentationen bearbeitet
+        Novadesk erst mit einer späteren Beta)."""
+        if kind == "text":
+            self.newText()
+            return
+        if kind != "praesentation":
             return
         if office.libreoffice() is None:
             self.app.notify("reader", "warning", "Für neue Dateien fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title="Neue Datei")
@@ -467,9 +510,15 @@ class ReaderController(Observable):
             return
         self.openExternal(path)
 
+    def _open_text(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
+                   password: str | None = None) -> None:
+        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True)
+
     def _open_sheet(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                    password: str | None = None) -> None:
+                    password: str | None = None, text: bool = False) -> None:
+        """Tabelle (bzw. mit ``text`` einen Text) zum Bearbeiten in einem eigenen Tab öffnen; ``path`` leer: neu."""
         from ..sheet.document import SheetController
+        from ..text.document import TextController
 
         if path and password is None and office.encrypted(Path(path)):
             if background:
@@ -484,7 +533,7 @@ class ReaderController(Observable):
                 return
         self._ids += 1
         ident = f"d{self._ids}"
-        controller = SheetController(self, self.calc(), ident, self)
+        controller = TextController(self, self.text_service(), ident, self) if text else SheetController(self, self.calc(), ident, self)
         controller.name = name or Path(path).name
         self.opening = self.opening + 1
         if path:
@@ -503,13 +552,17 @@ class ReaderController(Observable):
                 self.app.navigate(READER.key)
             if path:
                 self.remember_recent(path)
-            count = len(controller.sheets)
-            self.app.set_status(f"Geöffnet: {controller.name} – {count} {'Blatt' if count == 1 else 'Blätter'}", "success")
+            if text:
+                self.app.set_status(f"Geöffnet: {controller.name}", "success")
+            else:
+                count = len(controller.sheets)
+                self.app.set_status(f"Geöffnet: {controller.name} – {count} {'Blatt' if count == 1 else 'Blätter'}", "success")
             if then is not None:
                 then(controller)
 
         def failed(exc: BaseException) -> None:
             from tools.sheet.engine import CalcError
+            from tools.text.engine import TextError
 
             self.opening = max(0, self.opening - 1)
             self._forget_opening(path)
@@ -521,12 +574,12 @@ class ReaderController(Observable):
                 if background:
                     _log().info("Letzte Sitzung: eine Tabelle ließ sich nicht öffnen (%s)", type(exc).__name__)
                     return
-                if isinstance(exc, CalcError) and exc.code == "kennwort" and path:
+                if isinstance(exc, (CalcError, TextError)) and exc.code == "kennwort" and path:
                     secret = self.ask_password(Path(path).name, True)
                     if secret is not None:
-                        self._open_sheet(path, then=None, password=secret)
+                        self._open_sheet(path, then=None, password=secret, text=text)
                     return
-                message = str(exc) if isinstance(exc, CalcError) else f"»{controller.name}« konnte nicht geöffnet werden."
+                message = str(exc) if isinstance(exc, (CalcError, TextError)) else f"»{controller.name}« konnte nicht geöffnet werden."
                 self.app.notify("reader", "error", message, title="Öffnen nicht möglich")
                 self.app.set_status("Nicht geöffnet.", "neutral")
             finally:
@@ -722,6 +775,9 @@ class ReaderController(Observable):
 
     # Tabs ---------------------------------------------------------------------------------------------------
     def _tab_item(self, controller: DocumentController) -> dict:
+        if getattr(controller, "isText", False):
+            return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path,
+                    "tip": controller.path or controller.name, "kind": "text"}
         if getattr(controller, "isSheet", False):
             kind = office.symbol(Path(controller.path)) if controller.path else "tabelle"
             return {"key": controller.ident, "name": controller.name, "dirty": controller.dirty, "path": controller.path,
@@ -754,9 +810,9 @@ class ReaderController(Observable):
         self.currentChanged.emit()
         # Geteilte Ansicht: das Dokument rechts wird angeklickt → die beiden tauschen; ein eben für die geteilte
         # Ansicht geöffnetes PDF kommt neben das bisherige
-        if getattr(controller, "isSheet", False) or getattr(previous, "isSheet", False):
-            # Tabellen stehen nie in der geteilten Ansicht
-            if self.splitKey and (getattr(controller, "isSheet", False) or key == self.splitKey):
+        if _office(controller) or _office(previous):
+            # Tabellen und Texte stehen nie in der geteilten Ansicht
+            if self.splitKey and (_office(controller) or key == self.splitKey):
                 self.splitKey = ""
         elif previous is not None and previous.ident in self._docs:
             if key == self.splitKey or self._split_pending:
@@ -780,9 +836,9 @@ class ReaderController(Observable):
             return
         if not self.hasDocument:
             return
-        if self._current is not None and getattr(self._current, "isSheet", False):
+        if self._current is not None and _office(self._current):
             return
-        others = [key for key in self.tabs.keys() if key != self.currentKey and not getattr(self._docs.get(key), "isSheet", False)]
+        others = [key for key in self.tabs.keys() if key != self.currentKey and not _office(self._docs.get(key))]
         if others:
             self.splitKey = others[-1]
             return
@@ -950,7 +1006,7 @@ class ReaderController(Observable):
 
     @Slot(str)
     def setSplit(self, key: str) -> None:  # noqa: N802
-        if key in self._docs and key != self.currentKey and not getattr(self._docs[key], "isSheet", False):
+        if key in self._docs and key != self.currentKey and not _office(self._docs[key]):
             self.splitKey = key
 
     @Slot()
@@ -1216,7 +1272,7 @@ class ReaderController(Observable):
         """F5: Präsentation – Vollbild auf schwarzem Grund, eine ganze Seite nach der anderen (Pfeiltasten,
         Leertaste, Bild auf/ab); Esc beendet sie und stellt Ansicht und Zoom wieder her."""
         doc = self._current
-        if doc is None or self.presenting or getattr(doc, "isSheet", False):
+        if doc is None or self.presenting or _office(doc):
             return
         self._before_presentation = (doc, doc.viewMode, doc.fit, doc.zoom, doc.tool)
         self.organize = False
@@ -1338,7 +1394,7 @@ class ReaderController(Observable):
 
         def start() -> None:
             # Inzwischen geschlossen oder ein anderer Tab aktiv: nichts starten
-            if controller.ident not in self._docs or self._current is not controller or getattr(controller, "isSheet", False):
+            if controller.ident not in self._docs or self._current is not controller or _office(controller):
                 return
             if action == "merge":
                 controller.mergeFiles()
@@ -1611,7 +1667,7 @@ class ReaderController(Observable):
         controller = self._current
         if controller is None:
             return
-        if getattr(controller, "isSheet", False) and (not controller.path or controller.dirty):
+        if _office(controller) and (not controller.path or controller.dirty):
             # Tabelle: erst speichern (ein nie gespeicherte fragt nach Name und Ort), dann die Datei senden
             controller.save(then=lambda ok: self._mail_document(controller) if ok else None)
             return
@@ -1704,6 +1760,8 @@ class ReaderController(Observable):
                 restored = lambda controller, page=entry["seite"]: self._restored(state, controller, page)  # noqa: E731
                 if self.edits_sheet(entry["pfad"]):
                     self._open_sheet(entry["pfad"], then=restored, background=True)
+                elif self.edits_text(entry["pfad"]):
+                    self._open_text(entry["pfad"], then=restored, background=True)
                 else:
                     self._open(entry["pfad"], None, then=restored, background=True)
 
@@ -1821,7 +1879,7 @@ class ReaderController(Observable):
         return True
 
     def _save_now(self, controller: DocumentController) -> bool:
-        if getattr(controller, "isSheet", False):
+        if _office(controller):
             return controller.save_and_wait()
         target = controller.path or self.pick_save_pdf(controller.name or "Dokument.pdf", "Speichern unter")
         if not target:
@@ -1922,12 +1980,15 @@ class ReaderController(Observable):
     def _release_clipboard(self) -> None:
         """Vor dem Beenden: Unsere Daten in der Zwischenablage (in Python angelegt) durch Qt-eigene ersetzen –
         Text bzw. Bild bleiben für andere Programme erhalten, nur die interne Kennung entfällt. Sonst würde Qt sie
-        erst nach dem Ende von Python abbauen, und das Programm stürzt beim Beenden ab (PySide6)."""
+        erst nach dem Ende von Python abbauen, und das Programm stürzt beim Beenden ab (PySide6). Das gilt auch für
+        Kopien aus Texten (``TEXT_CLIP_FORMAT``); deren Formatierung (HTML) entfällt dabei, der Text bleibt."""
         from PySide6.QtGui import QGuiApplication
 
         board = QGuiApplication.clipboard()
         data = board.mimeData() if board is not None else None
-        if data is None or not data.hasFormat(CLIP_FORMAT):
+        from ..text.document import TEXT_CLIP_FORMAT
+
+        if data is None or not (data.hasFormat(CLIP_FORMAT) or data.hasFormat(TEXT_CLIP_FORMAT)):
             return
         text = data.text() if data.hasText() else ""
         if text:
@@ -2071,7 +2132,7 @@ class ReaderTool:
     def find_action(self, page: str) -> None:
         current = self.controller.current
         if current is not None:
-            if not getattr(current, "isSheet", False):
+            if not _office(current):
                 self.controller.leftPanel = "search"
             current.requestSearch()
 
@@ -2149,6 +2210,11 @@ def place_text(folder: str) -> str:
     parts = Path(relative).parts
     first = KNOWN_FOLDERS.get(parts[0].lower(), parts[0])
     return "\\".join([first, *parts[1:]]) if os.sep == "\\" else "/".join([first, *parts[1:]])
+
+
+def _office(doc) -> bool:
+    """Tabelle oder Text zum Bearbeiten (eigene Ansicht, kein PDF)?"""
+    return bool(getattr(doc, "isSheet", False) or getattr(doc, "isText", False))
 
 
 def _shows(doc: DocumentController, path: str) -> bool:

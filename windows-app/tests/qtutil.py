@@ -185,6 +185,7 @@ class Harness:
         found = self.items(name)
         if found:
             self._reveal_settings_section(found[0])
+            self._reveal_ribbon_bar(found[0])
         return found[0] if found else None
 
     # Einstellungen (seit 4.0) in Bereichen: Wie ein Klick in der Bereichsleiste zeigt ein Test den Bereich, in dem
@@ -203,6 +204,24 @@ class Harness:
                     pump(0.15)
                 return
             parent_item = getattr(current, "parentItem", None)  # Popups u. a. sind QObject ohne parentItem
+            current = parent_item() if parent_item is not None else None
+
+    # Menübänder (seit 5.0 Beta 3): Steht das Element in der Leiste eines anderen Reiters, wählt der Test wie ein Klick
+    # auf den Reiter diesen Reiter (Leisten heißen ``readerRibbonBar_<Reiter>``, ``textRibbonBar_…``, ``sheetRibbonBar_…``).
+    def _reveal_ribbon_bar(self, item) -> None:
+        import re
+
+        current, key = item, None
+        while current is not None:
+            if key is None:
+                match = re.fullmatch(r"(?:reader|text|sheet)RibbonBar_(\w+)", current.objectName())
+                key = match.group(1) if match else None
+            elif isinstance(current.property("ribbon"), str):
+                if current.property("ribbon") != key:
+                    current.setProperty("ribbon", key)
+                    pump(0.1)
+                return
+            parent_item = getattr(current, "parentItem", None)
             current = parent_item() if parent_item is not None else None
 
     def items(self, name: str) -> list:

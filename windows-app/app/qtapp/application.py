@@ -208,13 +208,19 @@ def register_backend(singletons: dict[str, QObject]) -> None:
 
 
 def _register_types() -> None:
-    """Eigene QML-Elemente (einmal je Prozess): das Tabellenraster."""
+    """Eigene QML-Elemente (einmal je Prozess): das Tabellenraster und der Zeichenbereich der Texte."""
     if _REGISTERED.get("SheetGrid") is None:
         from .sheet.grid import SheetGrid
         from PySide6.QtQml import qmlRegisterType
 
         qmlRegisterType(SheetGrid, BACKEND_URI, 1, 0, "SheetGrid")
         _REGISTERED["SheetGrid"] = SheetGrid
+    if _REGISTERED.get("TextCanvas") is None:
+        from .text.canvas import TextCanvas
+        from PySide6.QtQml import qmlRegisterType
+
+        qmlRegisterType(TextCanvas, BACKEND_URI, 1, 0, "TextCanvas")
+        _REGISTERED["TextCanvas"] = TextCanvas
 
 
 def release_engine(engine: QQmlEngine) -> None:

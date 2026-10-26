@@ -25,7 +25,7 @@ ColumnLayout {
         visible: root.doc !== null && root.doc.annotationList.count === 0
         iconName: "comment"
         title: I18n.tr("Noch keine Kommentare", I18n.revision)
-        text: I18n.tr("Markieren, Notizen und Formen über »Kommentieren« und »Zeichnen« in der Befehlsleiste.", I18n.revision)
+        text: I18n.tr("Markieren, Notizen und Formen im Menüband unter »Kommentieren«.", I18n.revision)
     }
     ListView {
         id: list

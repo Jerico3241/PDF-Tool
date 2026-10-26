@@ -1,9 +1,8 @@
 """Qt-Oberfläche: Aufbau des PDF Readers – Tab-Leiste, Seitenleisten und Dokumentfläche.
 
-Drei Ebenen: die Tab-Leiste oben (jedes PDF ein Tab neben ⌂ Start, seit 3.1.0-beta.4), die Seitenleisten links
-und rechts mit festen Breiten und ihren Umschaltern im eigenen Kopf (geschlossen: ein schmaler Streifen mit ihren
-Symbolen), in der Mitte die Dokumentfläche. Bedient wird wie von Hand (Klicks auf Tabs, Reiter, Streifen und
-Schließen, Mausrad). Nach jedem Test darf die QML-Engine keine Meldung ausgegeben haben (Fixtures ``ui_app`` bzw.
+Drei Ebenen: die Tab-Leiste oben (jedes PDF ein Tab neben ⌂ Start, seit 3.1.0-beta.4), rechts die Seitenleiste mit
+fester Breite und daneben am Fensterrand der Streifen mit ihren Symbolen (seit 5.0 Beta 3), links davon die
+Dokumentfläche. Bedient wird wie von Hand (Klicks auf Tabs, Symbole und Schließen, Mausrad). Nach jedem Test darf die QML-Engine keine Meldung ausgegeben haben (Fixtures ``ui_app`` bzw.
 ``app``).
 """
 
@@ -19,8 +18,7 @@ import editorsamples as samples
 from conftest import neustart, pump, wait_until
 from test_qt_reader import click, open_pdf, reader, settle, window_point
 
-LEFT_WIDTH, RIGHT_WIDTH, RAIL = 300, 280, 44  # Metrics.readerLeftPanelWidth / readerRightPanelWidth / readerRailWidth
-QUICK = 40 + 2 * 8  # Schnellwerkzeuge zwischen linker Leiste und Dokument (Metrics.readerQuickToolsWidth + Rand)
+LEFT_WIDTH, RAIL = 300, 44  # Metrics.readerLeftPanelWidth (alle Seitenleisten) / readerRailWidth
 
 
 @pytest.fixture
@@ -58,103 +56,92 @@ def right_x(item) -> float:
     return left_x(item) + item.width()
 
 
-# --- Seitenleisten: feste Breiten, Umschalter im eigenen Kopf ---------------------------------------------------
-def test_left_panel_keeps_its_width_and_the_document_does_not_move(reader_app, tmp_path: Path) -> None:
-    """Seiten, Lesezeichen, Suchen: dieselbe Breite; die Dokumentfläche bleibt beim Umschalten stehen."""
+# --- Seitenleiste rechts: feste Breite, Symbole senkrecht am Rand (seit 5.0 Beta 3) -------------------------------
+def test_side_panel_keeps_its_width_and_the_document_does_not_move(reader_app, tmp_path: Path) -> None:
+    """Seiten, Lesezeichen, Suchen: dieselbe Breite direkt links neben dem Symbolstreifen; die Dokumentfläche bleibt
+    beim Umschalten stehen und endet an der Seitenleiste."""
     h = reader_app
     open_pdf(h, samples.standard_text(tmp_path / "breite.pdf", pages=3))
-    panel, view = h.item("readerLeftPanel"), h.item("readerView")
+    panel, view, rail = h.item("readerLeftPanel"), h.item("readerView"), h.item("readerSideRail")
     assert reader(h).leftPanel == "thumbs"
+    assert round(rail.width()) == RAIL and round(right_x(rail)) == round(h.window.width())
     widths, positions, sizes = set(), set(), set()
-    for name in ("readerTabOutline", "readerTabSearch", "readerTabThumbs"):
+    for name in ("readerRailOutline", "readerRailSearch", "readerRailThumbs"):
         press(h, name)
         widths.add(round(panel.width()))
-        positions.add(round(left_x(view)))
+        positions.add(round(right_x(view)))
         sizes.add(round(view.width()))
+        assert round(right_x(panel)) == round(left_x(rail))
     assert widths == {LEFT_WIDTH}
-    assert positions == {round(right_x(panel)) + QUICK}  # die Dokumentfläche beginnt nach Leiste und Schnellwerkzeugen
+    assert positions == {round(left_x(rail)) - LEFT_WIDTH}
     assert len(sizes) == 1
 
 
-def test_tabs_in_the_header_switch_and_the_strip_reopens(reader_app, tmp_path: Path) -> None:
+def test_rail_switches_closes_and_shows_one_panel_at_a_time(reader_app, tmp_path: Path) -> None:
+    """Ein Klick auf ein Symbol zeigt diesen Inhalt, ein zweiter Klick schließt die Seitenleiste; es ist immer nur
+    eine Seitenleiste offen, das gezeigte Symbol ist markiert."""
     h = reader_app
     open_pdf(h, samples.standard_text(tmp_path / "leisten.pdf"))
-    r = reader(h)
-    # Links: im Kopf wechseln; ein Klick auf den gewählten Reiter ändert nichts
-    press(h, "readerTabOutline")
-    assert r.leftPanel == "outline" and "Lesezeichen" in titles(h)
-    press(h, "readerTabOutline")
-    assert r.leftPanel == "outline"
-    assert not h.item("readerRailOutline").isVisible()  # offen: keine doppelten Umschalter im Streifen
-    # Schließen über den Kopf: übrig bleibt der Streifen mit den Symbolen, die Dokumentfläche rückt nach
-    closer = min((item for item in h.items("readerPanelClose") if item.isVisible()), key=left_x)
-    click(h, window_point(closer, closer.width() / 2, closer.height() / 2))
-    pump(0.4)
-    assert r.leftPanel == ""
-    assert wait_until(lambda: not h.item("readerLeftPanel").isVisible(), 3)
-    rail, view = h.item("readerLeftRail"), h.item("readerView")
-    assert round(rail.width()) == RAIL and round(left_x(view)) == round(right_x(rail)) + QUICK
-    # Wieder öffnen über den Streifen – gleich mit dem gewünschten Inhalt
+    r, rail = reader(h), h.item("readerSideRail")
     press(h, "readerRailOutline")
-    assert r.leftPanel == "outline" and "Lesezeichen" in titles(h)
-    assert wait_until(lambda: round(left_x(h.item("readerLeftPanel"))) == round(left_x(rail)), 3)
-    # Rechts: geschlossen nur der Streifen; Kommentare ↔ Eigenschaften im Kopf; Schließen
-    assert r.rightPanel == "" and h.item("readerRailComments").isVisible()
+    assert r.leftPanel == "outline" and "Lesezeichen" in titles(h) and rail.property("current") == "outline"
+    press(h, "readerRailOutline")
+    assert r.leftPanel == "" and r.rightPanel == "" and rail.property("current") == ""
+    assert wait_until(lambda: not h.item("readerLeftPanel").isVisible(), 3)
+    assert round(right_x(h.item("readerView"))) == round(left_x(rail))  # zu: das Dokument reicht bis zum Streifen
+    # Kommentare: dieselbe Stelle; Seiten schließen sich dabei
+    press(h, "readerRailThumbs")
     press(h, "readerRailComments")
-    assert r.rightPanel == "comments" and "Kommentare" in titles(h)
-    assert round(h.item("readerRightPanel").width()) == RIGHT_WIDTH
-    press(h, "readerTabProperties")
+    assert r.rightPanel == "comments" and r.leftPanel == "" and rail.property("current") == "comments"
+    right = h.item("readerRightPanel")
+    assert round(right.width()) == LEFT_WIDTH
+    assert wait_until(lambda: round(right_x(right)) == round(left_x(rail)), 3)
+    press(h, "readerRailProperties")
     assert r.rightPanel == "properties" and "Eigenschaften" in titles(h)
-    closer = max((item for item in h.items("readerPanelClose") if item.isVisible()), key=left_x)
+    closer = next(item for item in h.items("readerPanelClose") if item.isVisible())
     click(h, window_point(closer, closer.width() / 2, closer.height() / 2))
     pump(0.4)
-    assert r.rightPanel == "" and r.leftPanel == "outline"
-    assert wait_until(lambda: h.item("readerRailProperties").isVisible(), 3)
+    assert r.rightPanel == "" and r.leftPanel == ""
+    assert wait_until(lambda: not right.isVisible(), 3)
 
 
 def test_headers_are_uniform_and_titles_fit(reader_app, tmp_path: Path) -> None:
-    """Alle Köpfe gleich hoch; jeder Titel passt neben die Umschalter (nicht gekürzt)."""
+    """Alle Köpfe gleich hoch; jeder Titel passt (nicht gekürzt)."""
     h = reader_app
     open_pdf(h, samples.standard_text(tmp_path / "koepfe.pdf"))
-    press(h, "readerRailComments")
+    reader(h).leftPanel = ""  # »Seiten« ist beim Öffnen schon offen; der erste Klick soll sie öffnen
+    pump(0.4)
     seen = {}
-    for name in ("readerTabThumbs", "readerTabOutline", "readerTabSearch", "readerTabComments", "readerTabProperties"):
+    for name in ("readerRailThumbs", "readerRailOutline", "readerRailSearch", "readerRailComments", "readerRailProperties"):
         press(h, name)
         for title in h.items("readerPanelTitle"):
             if title.isVisible():
                 seen[title.property("text")] = (round(title.parentItem().parentItem().height()), title.property("truncated"))
-    assert set(seen) == {"Seiten", "Lesezeichen", "Suchen", "Kommentare", "Eigenschaften"}
+    assert {"Seiten", "Lesezeichen", "Suchen", "Kommentare", "Eigenschaften"} <= set(seen)
     assert {height for height, _ in seen.values()} == {44}  # Metrics.readerPanelHeaderHeight
     assert not any(truncated for _, truncated in seen.values()), seen
 
 
-def test_toolbar_no_longer_holds_panel_toggles(reader_app, tmp_path: Path) -> None:
+def test_switches_live_in_the_rail_not_in_the_headers(reader_app, tmp_path: Path) -> None:
     h = reader_app
     open_pdf(h, samples.standard_text(tmp_path / "leiste.pdf"))
-    toolbar = h.item("readerToolbar")
-    names = []
-    todo = [toolbar]
-    while todo:
-        item = todo.pop()
-        names.append(item.objectName())
-        todo.extend(item.childItems())
-    assert "readerComments" not in names and "readerSearch" not in names
-    for name in ("readerTabThumbs", "readerTabOutline", "readerTabSearch", "readerTabComments", "readerTabProperties",
-                 "readerRailThumbs", "readerRailOutline", "readerRailSearch", "readerRailComments", "readerRailProperties"):
+    for name in ("readerRailThumbs", "readerRailOutline", "readerRailSearch", "readerRailComments", "readerRailProperties"):
         assert h.item(name) is not None, name
+    for name in ("readerTabThumbs", "readerTabOutline", "readerTabComments", "readerLeftRail", "readerRightRail", "readerQuickTools"):
+        assert h.item(name) is None, name
 
 
 def test_empty_states_are_calm_and_explain_what_to_do(reader_app, tmp_path: Path) -> None:
     h = reader_app
     doc = open_pdf(h, samples.standard_text(tmp_path / "leer.pdf"))
-    press(h, "readerTabOutline")
+    press(h, "readerRailOutline")
     empty = h.item("readerOutlineEmpty")
     assert empty.isVisible() and empty.property("title") == "Keine Lesezeichen"
     press(h, "readerRailComments")
     assert h.item("readerCommentsEmpty").isVisible()
     doc.setTool("objects")
     settle(h)
-    press(h, "readerTabProperties")
+    press(h, "readerRailProperties")
     empty = h.item("readerObjectPanelEmpty")
     assert empty.isVisible() and empty.property("title") == "Kein Objekt ausgewählt"
 
@@ -306,7 +293,10 @@ def test_panel_opens_without_relayouting_the_document_every_frame(reader_profile
     view, panel = h.item("readerView"), h.item("readerRightPanel")
     widths: list[float] = []
     view.widthChanged.connect(lambda: widths.append(view.width()))
-    edge = right_x(h.item("readerRightRail"))  # rechter Rand der Arbeitsfläche
+    r.leftPanel = ""  # Seiten zu: dann nimmt die Dokumentfläche beim Öffnen ihre neue Breite an
+    pump(0.5)
+    widths.clear()
+    edge = left_x(h.item("readerSideRail"))  # rechts endet die Arbeitsfläche am Symbolstreifen
     r.setRightPanel("comments")
     pump(0.02)
     if h.runtime.theme.effectiveProfile == "off":  # »Aus«: sofort an ihrem Platz

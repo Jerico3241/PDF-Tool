@@ -289,6 +289,7 @@ REQUIRED_PAYLOAD = [
     "app/tools/pdf_editor/pdfa.py",
     "app/tools/pdf_editor/imagepdf.py",
     "app/tools/pdf_actions/runner.py",
+    "app/tools/text/kernel.py",
     "app/qtapp/actions.py",
     "assets/icon.ico",
     "assets/hott_logo_final.png",
@@ -615,6 +616,7 @@ def prepare_office(target: Path, search: list[Path]) -> None:
         fail("LibreOffice im Paket unvollständig: " + "; ".join(problems))
     probe_office(program)
     probe_calc(program)
+    probe_text(program)
     count = sum(1 for path in target.rglob("*") if path.is_file())
     size = sum(path.stat().st_size for path in target.rglob("*") if path.is_file())
     log(f"LibreOffice {LIBREOFFICE_VERSION}: {count} Dateien ({size / 1e6:.0f} MB), Laufzeit ergänzt: {', '.join(path.name for path in added) or '-'}")
@@ -746,6 +748,48 @@ def probe_calc(program: Path) -> None:
     if value != 5:
         fail(f"Probe des Rechenkerns fehlgeschlagen: =SUMME(A1:A2) ergab {value!r} statt 5")
     log("  Probe: Rechenkern für Tabellen (=SUMME -> .xlsx)")
+    remove(work)
+
+
+def probe_text(program: Path) -> None:
+    """Der Textkern (seit 5.0 Beta 3) lädt LibreOfficeKit aus dem entpackten LibreOffice – mit dem Python des Setups,
+    wie später bei den Anwendern. Er legt ein Dokument an, tippt einen Satz, zeichnet die Seite und speichert sie als
+    .docx – sonst bricht der Build ab."""
+    work = BUILD / "text-probe"
+    remove(work)
+    work.mkdir(parents=True)
+    if str(APP) not in sys.path:
+        sys.path.insert(0, str(APP))
+    import zipfile
+
+    from tools.text import engine as text
+
+    runtime = PAYLOAD / "runtime" / "pythonw.exe"
+    text.program_dir = lambda: program
+    text.profile_dir = lambda: work / "profil"
+    if runtime.is_file():
+        text.python = lambda: [str(runtime), "-I", "-X", "utf8"]
+    probe = text.Engine()
+    target = work / "probe.docx"
+    try:
+        probe.start()
+        doc = probe.call("open", path="")["doc"]
+        probe.call("text", doc=doc, text="Novadesk Textprobe äöü")
+        probe.call("settle", doc=doc)
+        tile = probe.call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
+        if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
+            fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
+        probe.call("save", doc=doc, path=str(target))
+        probe.call("close", doc=doc)
+    except text.TextError as exc:
+        detail = getattr(exc, "detail", "")
+        fail(f"Probe des Textkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
+    finally:
+        probe.stop()
+    content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""
+    if "Novadesk Textprobe äöü" not in content:
+        fail("Probe des Textkerns fehlgeschlagen: der getippte Satz fehlt in der gespeicherten .docx")
+    log("  Probe: Textkern (tippen, zeichnen, .docx speichern)")
     remove(work)
 
 
