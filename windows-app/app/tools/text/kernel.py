@@ -234,6 +234,7 @@ class Kernel:
         self.kc = kit.contents.pClass.contents
         self.docs = {}
         self.next_id = 1
+        self.active = None  # Ansicht, deren Fenster LibreOffice zuletzt aktiv gesetzt hat
         self.send_event = send_event
         self.password = None  # Kennwort für das Dokument, das gerade geladen wird
         self.password_asked = 0
@@ -268,7 +269,17 @@ class Kernel:
             raise KernelError("Das Dokument ist nicht mehr geöffnet.", "dokument")
         view = doc.notes_view if args.get("notes") and doc.notes_view is not None else doc.view
         if doc.cls.getView(doc.pointer) != view:
+            doc.cls.setView(doc.pointer, view)  # macht auch ihr Fenster zum aktiven (für .uno-Befehle)
+        elif self.active != view:
+            # Schon die gezeigte Ansicht, aber ihr Fenster ist vielleicht nicht das aktive (neu geladen, ein anderes
+            # Dokument geschlossen): .uno-Befehle gingen dann ins Leere. Unter Linux aktiviert LibreOffice das Fenster
+            # selbst, unter Windows nicht – also über eine kurze Hilfsansicht umschalten.
+            helper = doc.cls.createView(doc.pointer)
             doc.cls.setView(doc.pointer, view)
+            doc.cls.destroyView(doc.pointer, helper)
+            if doc.cls.getView(doc.pointer) != view:
+                doc.cls.setView(doc.pointer, view)
+        self.active = view
         return doc
 
     def settle(self, quiet=0.06, limit=2.0):
@@ -304,6 +315,7 @@ class Kernel:
         self.next_id += 1
         doc = Document(ident, pointer, cls.getView(pointer))
         self.docs[ident] = doc
+        self.active = None  # das Fenster des neuen Dokuments ist noch nicht sicher das aktive (siehe doc)
 
         def event(kind, payload, _data, ident=ident):
             self.last_event = time.monotonic()
@@ -321,6 +333,7 @@ class Kernel:
             if doc.cls.getView(doc.pointer) != doc.view:
                 doc.cls.setView(doc.pointer, doc.view)
             doc.cls.destroy(doc.pointer)
+            self.active = None
         return True
 
     def _size(self, doc):
@@ -381,6 +394,7 @@ class Kernel:
         doc.cls.setPart(doc.pointer, int(args.get("part", doc.cls.getPart(doc.pointer))))
         size = self._size(doc)
         doc.cls.setView(doc.pointer, doc.view)
+        self.active = doc.view
         return size
 
     def cmd_thumb(self, args):
