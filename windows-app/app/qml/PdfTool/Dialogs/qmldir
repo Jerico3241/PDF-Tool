@@ -33,3 +33,4 @@ TranslateContent 1.0 TranslateContent.qml
 CrossReferenceContent 1.0 CrossReferenceContent.qml
 FormulaContent 1.0 FormulaContent.qml
 ChartContent 1.0 ChartContent.qml
+SheetFormContent 1.0 SheetFormContent.qml

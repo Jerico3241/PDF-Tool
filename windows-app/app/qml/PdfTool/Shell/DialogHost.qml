@@ -170,6 +170,7 @@ T.Popup {
                             case "text_crossref": return crossReferenceContent
                             case "text_formula": return formulaContent
                             case "text_chart": return chartContent
+                            case "sheet_form": return sheetFormContent
                             default: return null
                             }
                         }
@@ -258,4 +259,5 @@ T.Popup {
     Component { id: crossReferenceContent; CrossReferenceContent {} }
     Component { id: formulaContent; FormulaContent {} }
     Component { id: chartContent; ChartContent {} }
+    Component { id: sheetFormContent; SheetFormContent {} }
 }

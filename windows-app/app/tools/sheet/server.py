@@ -974,6 +974,7 @@ class Kernel:
             cell.setString("")
             sheet.getCellRangeByPosition(int(args["col"]), int(args["row"]), int(args["col"]), int(args["row"])).clearContents(CONTENT_DATA)
             return self.changed(doc)
+        was_modified = doc.model.isModified()
         manager = self.undo_context(doc, "Eingabe")
         try:
             cell.FormulaLocal = text
@@ -985,6 +986,8 @@ class Kernel:
                 # Datenüberprüfung: die Eingabe zurücknehmen, als wäre sie nie gewesen
                 manager.undo()
                 manager.clearRedo()
+                if not was_modified:
+                    doc.model.setModified(False)
                 raise CalcError(problem, "ungueltig")
             return self.changed(doc, {"warning": problem})
         return self.changed(doc)

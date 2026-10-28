@@ -735,8 +735,28 @@ def probe_calc(program: Path) -> None:
         doc = probe.call("new")["doc"]
         for row, text in enumerate(("2", "3", "=SUMME(A1:A2)")):
             probe.call("input", doc=doc, row=row, col=0, text=text)
+        # seit Beta 5: Datenbalken, Auswahlliste und Pivot-Tabelle (eigene Mappe, damit A3 oben bleibt)
         probe.call("save", doc=doc, path=str(target))
         probe.call("close", doc=doc)
+        data = probe.call("new")["doc"]
+        for row, (place, amount) in enumerate((("Ort", "Betrag"), ("Köln", "480"), ("Bonn", "1250"), ("Köln", "190"))):
+            probe.call("input", doc=data, row=row, col=0, text=place)
+            probe.call("input", doc=data, row=row, col=1, text=amount)
+        probe.call("conditional", doc=data, sheet=0, range=[1, 1, 3, 1], rule="bar_blue")
+        cells = probe.call("cells", doc=data, sheet=0, range=[0, 0, 3, 1])
+        if not any((style or {}).get("bar") for style in cells.get("styles", {}).values()):
+            fail("Probe des Rechenkerns fehlgeschlagen: Datenbalken werden nicht berechnet")
+        probe.call("validation", doc=data, sheet=0, range=[1, 0, 3, 0], kind="list", items=["Köln", "Bonn"], strict=True)
+        try:
+            probe.call("input", doc=data, sheet=0, row=1, col=0, text="Paris")
+            fail("Probe des Rechenkerns fehlgeschlagen: Die Auswahlliste lässt falsche Eingaben zu")
+        except calc.CalcError:
+            pass
+        pivot = probe.call("pivot", doc=data, sheet=0, range=[0, 0, 0, 0], rows=[0], data=1, function="sum")
+        probe.call("save", doc=data, path=str(work / "daten.xlsx"))
+        probe.call("close", doc=data)
+        if len(pivot["sheets"]) != 2 or not pivot["sheets"][1]["name"].startswith("Pivot"):
+            fail(f"Probe des Rechenkerns fehlgeschlagen: keine Pivot-Tabelle ({pivot['sheets']})")
     except calc.CalcError as exc:
         detail = getattr(exc, "detail", "")
         fail(f"Probe des Rechenkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
@@ -747,7 +767,7 @@ def probe_calc(program: Path) -> None:
     value = openpyxl.load_workbook(target, data_only=True).active["A3"].value if target.is_file() else None
     if value != 5:
         fail(f"Probe des Rechenkerns fehlgeschlagen: =SUMME(A1:A2) ergab {value!r} statt 5")
-    log("  Probe: Rechenkern für Tabellen (=SUMME -> .xlsx)")
+    log("  Probe: Rechenkern für Tabellen (=SUMME -> .xlsx, Datenbalken, Auswahlliste, Pivot-Tabelle)")
     remove(work)
 
 

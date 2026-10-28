@@ -436,6 +436,8 @@ class SheetGrid(QQuickPaintedItem):
             painter.save()
             painter.setClipRect(clip)
             self._paint_cells(painter, rows, cols, col_bounds)
+            if controller.crosshair:
+                self._paint_crosshair(painter, rows, cols)
             self._paint_selection(painter, row_bounds, col_bounds)
             painter.restore()
         self._paint_freeze_lines(painter, hw, fw, fh)
@@ -514,6 +516,19 @@ class SheetGrid(QQuickPaintedItem):
                     background = self._qcolor((styles.get(value[2]) or {}).get("background"))
                     if background is not None:
                         painter.fillRect(QRectF(xs[c], ys[r], right[c] - xs[c] - 1, bottom[r] - ys[r] - 1), background)
+        # Datenbalken (bedingte Formatierung): Balken von links, Länge = Anteil am größten Wert
+        for r in range(r0, r1 + 1):
+            for c in range(c0, c1 + 1):
+                value = cells.get(r, c)
+                bar = (styles.get(value[2]) or {}).get("bar") if value is not None else None
+                if not bar or (r, c) in layout.covered:
+                    continue
+                color = QColor(self._qcolor(bar[0]) or colors["accent"])
+                color.setAlphaF(0.75)
+                inset = max(1.0, 2 * z)
+                length = max(0.0, (right[c] - xs[c] - 2 * inset - 1) * float(bar[1]))
+                if length > 0:
+                    painter.fillRect(QRectF(xs[c] + inset, ys[r] + inset, length, bottom[r] - ys[r] - 2 * inset - 1), color)
         # Verbundene Zellen: Fläche ohne Gitter innen
         for m in merges:
             rect = self._cell_rect(m[0], m[1])
@@ -691,6 +706,24 @@ class SheetGrid(QQuickPaintedItem):
                 painter.drawPolygon(QPolygonF([QPointF(center.x() - 3.5, center.y() - 1.5), QPointF(center.x() + 3.5, center.y() - 1.5),
                                                QPointF(center.x(), center.y() + 2.5)]))
             painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    def _paint_crosshair(self, painter: QPainter, rows: tuple[int, int], cols: tuple[int, int]) -> None:
+        """Lese-Kreuz: Zeile und Spalte der aktiven Zelle leicht in der Akzentfarbe hinterlegt."""
+        controller = self._controller
+        layout = self._layout()
+        z = self._zoom()
+        row, col = controller.cursorRow, controller.cursorCol
+        band = QColor(self._colors["accent"])
+        band.setAlphaF(0.13)
+        left, top = self.x_of(cols[0]), self.y_of(rows[0])
+        right = self.x_of(cols[1]) + layout.cols.size(cols[1]) * z
+        bottom = self.y_of(rows[1]) + layout.rows.size(rows[1]) * z
+        if rows[0] <= row <= rows[1]:
+            y = self.y_of(row)
+            painter.fillRect(QRectF(left, y, right - left, layout.rows.size(row) * z), band)
+        if cols[0] <= col <= cols[1]:
+            x = self.x_of(col)
+            painter.fillRect(QRectF(x, top, layout.cols.size(col) * z, bottom - top), band)
 
     def _paint_selection(self, painter: QPainter, row_bounds: tuple[int, int], col_bounds: tuple[int, int]) -> None:
         controller = self._controller
@@ -1197,6 +1230,8 @@ class SheetGrid(QQuickPaintedItem):
             controller.selectRow(controller.cursorRow, False)
         elif ctrl and not alt and key == Key.Key_A:
             controller.selectAll()
+        elif ctrl and not alt and key == Key.Key_E:
+            controller.flashFill()
         elif ctrl and not alt and key == Key.Key_C:
             controller.copy()
         elif ctrl and not alt and key == Key.Key_X:
