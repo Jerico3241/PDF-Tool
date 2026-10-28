@@ -831,10 +831,14 @@ def probe_text(program: Path) -> None:
         slides = call("open", path="", kind="praesentation")
         deck = slides["doc"]
         call("uno", doc=deck, command=".uno:InsertPage")
-        call("settle", doc=deck)
-        parts = call("parts", doc=deck)
-        if int(parts.get("count") or 0) != 2:
-            fail("Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt")
+        # Der Befehl läuft im Hintergrund von LibreOffice: höchstens einige Sekunden auf die zweite Folie warten
+        for _attempt in range(10):
+            call("settle", doc=deck)
+            parts = call("parts", doc=deck)
+            if int(parts.get("count") or 0) == 2:
+                break
+        else:
+            fail(f"Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt ({parts.get('count')} Folien)")
         folie = call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
         if len(folie) != 160 * 90 * 4 or not any(folie):
             fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")

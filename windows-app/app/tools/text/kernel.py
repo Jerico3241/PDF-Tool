@@ -718,7 +718,8 @@ class MainThreadLoop:
         if self.settle is None:
             args = request.get("args") or {}
             limit = float(args.get("limit", 2.0)) if request.get("cmd") == "settle" else 2.0
-            self.settle = (now + 0.02, now + limit)
+            # Mindestens 0,1 s: LibreOffice arbeitet eingereihte Befehle erst ab, wenn der Kern ihm den Thread lässt
+            self.settle = (now + 0.1, now + limit)
             self.arm(True)
             return False
         earliest, end = self.settle
