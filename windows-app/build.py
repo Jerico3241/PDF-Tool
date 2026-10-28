@@ -776,7 +776,7 @@ def probe_text(program: Path) -> None:
 
     def call(name: str, /, **args):
         nonlocal step
-        step = name
+        step = name + (f" {args['kind']}" if "kind" in args else "")
         return probe.call(name, **args)
 
     try:
