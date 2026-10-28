@@ -772,32 +772,41 @@ def probe_text(program: Path) -> None:
     probe = text.Engine()
     target = work / "probe.docx"
     deck_target = work / "probe.pptx"
+    step = "Start"
+
+    def call(name: str, /, **args):
+        nonlocal step
+        step = name
+        return probe.call(name, **args)
+
     try:
         probe.start()
-        doc = probe.call("open", path="")["doc"]
-        probe.call("text", doc=doc, text="Novadesk Textprobe äöü")
-        probe.call("settle", doc=doc)
-        tile = probe.call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
+        doc = call("open", path="")["doc"]
+        call("text", doc=doc, text="Novadesk Textprobe äöü")
+        call("settle", doc=doc)
+        tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
-        probe.call("save", doc=doc, path=str(target))
-        probe.call("close", doc=doc)
-        slides = probe.call("open", path="", kind="praesentation")
+        call("save", doc=doc, path=str(target))
+        call("close", doc=doc)
+        slides = call("open", path="", kind="praesentation")
         deck = slides["doc"]
-        probe.call("uno", doc=deck, command=".uno:InsertPage")
-        probe.call("settle", doc=deck)
-        parts = probe.call("parts", doc=deck)
+        call("uno", doc=deck, command=".uno:InsertPage")
+        call("settle", doc=deck)
+        parts = call("parts", doc=deck)
         if int(parts.get("count") or 0) != 2:
             fail("Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt")
-        folie = probe.call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
+        folie = call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
         if len(folie) != 160 * 90 * 4 or not any(folie):
             fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")
-        probe.call("notes", doc=deck, part=0)
-        probe.call("save", doc=deck, path=str(deck_target))
-        probe.call("close", doc=deck)
+        call("notes", doc=deck, part=0)
+        call("save", doc=deck, path=str(deck_target))
+        call("close", doc=deck)
     except text.TextError as exc:
-        detail = getattr(exc, "detail", "")
-        fail(f"Probe des Textkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
+        # Erst beenden: Dann liegt auch das Protokoll des Kerns vor (Exit-Code, letzte Meldungen)
+        probe.stop()
+        detail = getattr(exc, "detail", "") or probe.detail()
+        fail(f"Probe des Textkerns fehlgeschlagen ({step}): {exc}" + (f"\n{detail}" if detail else ""))
     finally:
         probe.stop()
     content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""

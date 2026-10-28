@@ -259,17 +259,19 @@ class Engine:
     def _shutdown_process(self, wait: float = 0.0) -> None:
         connection, self._socket = self._socket, None
         stream, self._stream = self._stream, None
+        # Erst die Verbindung kappen: Das weckt den Lese-Thread. Sonst wartet stream.close() auf ihn, solange ein
+        # hängender Kern nichts mehr schickt – und Novadesk (oder die Build-Probe) hinge beim Beenden
+        if connection is not None:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
         for item in (connection, stream):
             if item is not None:
                 try:
                     item.close()
                 except OSError:
                     pass
-        if connection is not None:
-            try:
-                connection.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
         process, self._process = self._process, None
         if process is not None:
             self.last_exit = None
