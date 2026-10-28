@@ -751,10 +751,53 @@ def probe_calc(program: Path) -> None:
     remove(work)
 
 
+def _blank_odp(path: Path) -> None:
+    """Kleinste OpenDocument-Präsentation (eine leere Folie) – für die Probe »vorhandene Präsentation öffnen«."""
+    import zipfile
+
+    office = 'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
+    content = (f'<?xml version="1.0" encoding="UTF-8"?><office:document-content {office} office:version="1.3">'
+               '<office:body><office:presentation><draw:page draw:name="Folie1"/></office:presentation></office:body>'
+               '</office:document-content>')
+    manifest = ('<?xml version="1.0" encoding="UTF-8"?><manifest:manifest '
+                'xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
+                '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
+                '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>')
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(zipfile.ZipInfo("mimetype"), "application/vnd.oasis.opendocument.presentation")
+        archive.writestr("content.xml", content, zipfile.ZIP_DEFLATED)
+        archive.writestr("META-INF/manifest.xml", manifest, zipfile.ZIP_DEFLATED)
+
+
+def _windows_of(pid: int) -> str:
+    """Windows: Fenster eines Prozesses (Klasse und Titel) – zeigt, ob ein Dialog den Kern aufhält."""
+    if os.name != "nt" or not pid:
+        return ""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _param):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid:
+            title, kind = ctypes.create_unicode_buffer(256), ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(hwnd, title, 256)
+            user32.GetClassNameW(hwnd, kind, 256)
+            found.append(f"{kind.value} »{title.value}«" + (" (sichtbar)" if user32.IsWindowVisible(hwnd) else ""))
+        return True
+
+    user32.EnumWindows(visit, 0)
+    return "Fenster des Kerns: " + ("; ".join(found) if found else "keine")
+
+
 def probe_text(program: Path) -> None:
     """Der Textkern (seit 5.0 Beta 3) lädt LibreOfficeKit aus dem entpackten LibreOffice – mit dem Python des Setups,
     wie später bei den Anwendern. Er legt ein Dokument an, tippt einen Satz, zeichnet die Seite und speichert sie als
-    .docx – sonst bricht der Build ab."""
+    .docx; dazu (seit Beta 4) eine Präsentation mit zwei Folien als .pptx – sonst bricht der Build ab."""
     work = BUILD / "text-probe"
     remove(work)
     work.mkdir(parents=True)
@@ -769,27 +812,62 @@ def probe_text(program: Path) -> None:
     text.profile_dir = lambda: work / "profil"
     if runtime.is_file():
         text.python = lambda: [str(runtime), "-I", "-X", "utf8"]
+    os.environ["NOVADESK_TEXT_WACHE"] = "60"
     probe = text.Engine()
     target = work / "probe.docx"
+    deck_target = work / "probe.pptx"
+    step = "Start"
+
+    def call(name: str, /, **args):
+        nonlocal step
+        step = name + (f" {args['kind']}" if "kind" in args else "") + (" (Datei)" if args.get("path") and name == "open" else "")
+        return probe.call(name, **args)
+
     try:
         probe.start()
-        doc = probe.call("open", path="")["doc"]
-        probe.call("text", doc=doc, text="Novadesk Textprobe äöü")
-        probe.call("settle", doc=doc)
-        tile = probe.call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
+        _blank_odp(work / "leer.odp")
+        existing = call("open", path=str(work / "leer.odp"), kind="praesentation")
+        call("close", doc=existing["doc"])
+        slides = call("open", path="", kind="praesentation")
+        deck = slides["doc"]
+        call("uno", doc=deck, command=".uno:InsertPage")
+        # Der Befehl läuft im Hintergrund von LibreOffice: höchstens einige Sekunden auf die zweite Folie warten
+        for _attempt in range(10):
+            call("settle", doc=deck)
+            parts = call("parts", doc=deck)
+            if int(parts.get("count") or 0) == 2:
+                break
+        else:
+            fail(f"Probe des Textkerns fehlgeschlagen: die zweite Folie fehlt ({parts.get('count')} Folien)")
+        folie = call("thumb", doc=deck, part=0, pw=160, ph=90, w=slides["width"], h=slides["height"])
+        if len(folie) != 160 * 90 * 4 or not any(folie):
+            fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")
+        call("notes", doc=deck, part=0)
+        call("save", doc=deck, path=str(deck_target))
+        call("close", doc=deck)
+        doc = call("open", path="")["doc"]
+        call("text", doc=doc, text="Novadesk Textprobe äöü")
+        call("settle", doc=doc)
+        tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
-        probe.call("save", doc=doc, path=str(target))
-        probe.call("close", doc=doc)
+        call("save", doc=doc, path=str(target))
+        call("close", doc=doc)
     except text.TextError as exc:
-        detail = getattr(exc, "detail", "")
-        fail(f"Probe des Textkerns fehlgeschlagen: {exc}" + (f"\n{detail}" if detail else ""))
+        # Erst beenden: Dann liegt auch das Protokoll des Kerns vor (Exit-Code, letzte Meldungen)
+        windows = _windows_of(probe._process.pid if probe._process else 0)  # noqa: SLF001 - nur für die Fehlermeldung
+        probe.stop()
+        detail = "\n".join(part for part in (getattr(exc, "detail", "") or probe.detail(), windows) if part)
+        fail(f"Probe des Textkerns fehlgeschlagen ({step}): {exc}" + (f"\n{detail}" if detail else ""))
     finally:
         probe.stop()
     content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""
     if "Novadesk Textprobe äöü" not in content:
         fail("Probe des Textkerns fehlgeschlagen: der getippte Satz fehlt in der gespeicherten .docx")
-    log("  Probe: Textkern (tippen, zeichnen, .docx speichern)")
+    slide_names = zipfile.ZipFile(deck_target).namelist() if deck_target.is_file() else []
+    if "ppt/slides/slide2.xml" not in slide_names:
+        fail("Probe des Textkerns fehlgeschlagen: die gespeicherte .pptx hat keine zweite Folie")
+    log("  Probe: Textkern (tippen, zeichnen, .docx und .pptx speichern)")
     remove(work)
 
 

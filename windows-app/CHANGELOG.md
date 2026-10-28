@@ -2,6 +2,25 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.4
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.4.md).
+
+- Präsentationen bearbeiten: `SlidesController` (in `qtapp/text/slides.py`) als `TextController` mit Folien –
+  `parts`/`part` im Kern wechseln die Folie, `.uno:InsertPage`, `DuplicatePage`, `DeletePage`, `MovePageUp/Down`
+  und `AssignLayout` ändern sie. `.pptx/.ppt/.odp` öffnen sich als Präsentation (`ReaderController._open_text`
+  mit `kind`), »Neu → Präsentation« legt `Präsentation{n}.pptx` in Novadesk an.
+- Kern (`tools/text/kernel.py`): `kind` beim Öffnen (Writer oder Impress, Dokumentart geprüft), `parts`/`part`,
+  `thumb` (paintPartTile – Bild einer Folie, ohne zu ihr zu wechseln), `partmode` und `notes`: eine zweite
+  Ansicht im Notizen-Modus, deren Ereignisse getrennt ankommen (1000 + Nummer).
+- `Reader/SlidesView.qml` nach Entwurf `4-praesentation.png`: Menüband (Datei, Start, Einfügen, Entwurf,
+  Überprüfen, Ansicht), Folie mit Zoom »an die Ansicht angepasst«, Notizen unter der Folie
+  (`NotesController` schneidet den Notizenrahmen aus der Notizenseite), Folien- und Layout-Leiste rechts mit
+  `SideRail`; Statuszeile mit Folie, Sprache und Zoom.
+- `SlideImage` (`qtapp/text/slideview.py`): Bild einer Folie als `QQuickPaintedItem` – für die Folienleiste und
+  das Vorführen im Vollbild (F5, Pfeiltasten, Esc).
+- `build.py probe_text` prüft zusätzlich eine Präsentation: zwei Folien, Folienbild, Notizenansicht, .pptx.
+
 # Novadesk 5.0.0-beta.3
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.3.md).

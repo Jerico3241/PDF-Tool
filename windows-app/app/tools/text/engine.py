@@ -38,6 +38,10 @@ TEXT_SETTINGS = PROFILE_SETTINGS.replace(
     '<item oor:path="/org.openoffice.Office.UI/ColorScheme/ColorSchemes/org.openoffice.Office.UI:ColorScheme[\'COLOR_SCHEME_LIBREOFFICE_AUTOMATIC\']/DocBoundaries">'
     '<prop oor:name="IsVisible" oor:op="fuse"><value>false</value></prop></item>\n'
     '<item oor:path="/org.openoffice.Office.Linguistic/General"><prop oor:name="DefaultLocale" oor:op="fuse"><value>de-DE</value></prop></item>\n'
+    # Neue Präsentation ohne Vorlagenauswahl und Layout-Dialog: Unter Windows bliebe der Kern sonst unsichtbar an
+    # diesem Dialog hängen (seit 5.0 Beta 4)
+    '<item oor:path="/org.openoffice.Office.Impress/Misc/NewDoc"><prop oor:name="AutoPilot" oor:op="fuse"><value>false</value></prop>'
+    '<prop oor:name="Layout" oor:op="fuse"><value>false</value></prop></item>\n'
     "</oor:items>",
 )
 
@@ -126,7 +130,7 @@ class Engine:
         user = profile / "user"
         user.mkdir(parents=True, exist_ok=True)
         settings = user / "registrymodifications.xcu"
-        if not settings.is_file() or b"COLOR_SCHEME_LIBREOFFICE_AUTOMATIC" not in settings.read_bytes():
+        if not settings.is_file() or b"Office.Impress/Misc/NewDoc" not in settings.read_bytes():
             settings.write_text(TEXT_SETTINGS, encoding="utf-8")
         return profile
 
@@ -259,17 +263,19 @@ class Engine:
     def _shutdown_process(self, wait: float = 0.0) -> None:
         connection, self._socket = self._socket, None
         stream, self._stream = self._stream, None
+        # Erst die Verbindung kappen: Das weckt den Lese-Thread. Sonst wartet stream.close() auf ihn, solange ein
+        # hängender Kern nichts mehr schickt – und Novadesk (oder die Build-Probe) hinge beim Beenden
+        if connection is not None:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
         for item in (connection, stream):
             if item is not None:
                 try:
                     item.close()
                 except OSError:
                     pass
-        if connection is not None:
-            try:
-                connection.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
         process, self._process = self._process, None
         if process is not None:
             self.last_exit = None
@@ -302,7 +308,7 @@ class Engine:
         if work is None:
             return
         texts = []
-        for name in ("port.fehler", "kern.log"):
+        for name in ("port.fehler", "kern.log", "wache.log"):
             try:
                 text = (work / name).read_text(encoding="utf-8", errors="replace").strip() if (work / name).is_file() else ""
             except OSError:

@@ -36,3 +36,4 @@ SideRail 1.0 SideRail.qml
 TextView 1.0 TextView.qml
 RibbonTab 1.0 RibbonTab.qml
 RibbonSeparator 1.0 RibbonSeparator.qml
+SlidesView 1.0 SlidesView.qml

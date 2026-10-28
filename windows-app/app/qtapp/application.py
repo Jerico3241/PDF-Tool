@@ -221,6 +221,12 @@ def _register_types() -> None:
 
         qmlRegisterType(TextCanvas, BACKEND_URI, 1, 0, "TextCanvas")
         _REGISTERED["TextCanvas"] = TextCanvas
+    if _REGISTERED.get("SlideImage") is None:
+        from .text.slideview import SlideImage
+        from PySide6.QtQml import qmlRegisterType
+
+        qmlRegisterType(SlideImage, BACKEND_URI, 1, 0, "SlideImage")
+        _REGISTERED["SlideImage"] = SlideImage
 
 
 def release_engine(engine: QQmlEngine) -> None:

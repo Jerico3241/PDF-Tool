@@ -14,9 +14,12 @@ Item {
     readonly property var sheet: App.currentPage === "reader" && Reader.current && Reader.current.kind === "tabelle" ? Reader.current : null
     // Text (seit 5.0 Beta 3, wie im Design): links Seite, Wörter und Sprache, rechts Speichern/Drucken und der Zoom
     readonly property var textDoc: App.currentPage === "reader" && Reader.current && Reader.current.kind === "text" ? Reader.current : null
-    readonly property var office: sheet || textDoc
+    // Präsentation (seit 5.0 Beta 4, wie im Entwurf): links die Folie und die Sprache, rechts Speichern,
+    // »F5 Präsentieren« und der Zoom
+    readonly property var slidesDoc: App.currentPage === "reader" && Reader.current && Reader.current.kind === "praesentation" ? Reader.current : null
+    readonly property var office: sheet || textDoc || slidesDoc
     // PDF (seit 5.0 Beta 3 wie Texte): links Seite und die letzte Meldung, rechts Speichern/Drucken und der Zoom
-    readonly property var pdfDoc: App.currentPage === "reader" && Reader.current && Reader.current.kind !== "tabelle" && Reader.current.kind !== "text" ? Reader.current : null
+    readonly property var pdfDoc: App.currentPage === "reader" && Reader.current && Reader.current.kind !== "tabelle" && Reader.current.kind !== "text" && Reader.current.kind !== "praesentation" ? Reader.current : null
     readonly property var zoomDoc: office || pdfDoc
     readonly property string pdfText: {
         if (!pdfDoc) return ""
@@ -30,6 +33,12 @@ Item {
         if (textDoc.pageText) parts.push(I18n.tr(textDoc.pageText, I18n.revision))
         if (textDoc.wordText) parts.push(I18n.tr(textDoc.wordText, I18n.revision))
         if (textDoc.languageText) parts.push(I18n.tr(textDoc.languageText, I18n.revision))
+        return parts.join("     ")
+    }
+    readonly property string slidesText: {
+        if (!slidesDoc) return ""
+        var parts = [I18n.tr("Folie " + (slidesDoc.slideIndex + 1) + " von " + slidesDoc.slideCount, I18n.revision)]
+        if (slidesDoc.languageText) parts.push(I18n.tr(slidesDoc.languageText, I18n.revision))
         return parts.join("     ")
     }
     readonly property string sheetText: {
@@ -86,7 +95,7 @@ Item {
             id: status
             Layout.fillWidth: true
             Layout.fillHeight: true
-            text: bar.zoomDoc && App.statusKind !== "busy" && App.statusKind !== "error" ? (bar.sheet ? bar.sheetText : (bar.textDoc ? bar.textText : bar.pdfText)) : (I18n.tr(App.statusText, I18n.revision) || "")
+            text: bar.zoomDoc && App.statusKind !== "busy" && App.statusKind !== "error" ? (bar.sheet ? bar.sheetText : (bar.textDoc ? bar.textText : (bar.slidesDoc ? bar.slidesText : bar.pdfText))) : (I18n.tr(App.statusText, I18n.revision) || "")
             font: Typography.caption
             color: Theme.textSecondary
             // Gekürzte Meldung: vollständig als Tooltip (wie bis 2.6.1)
@@ -103,10 +112,12 @@ Item {
         }
         Text {
             objectName: "textHints"
-            visible: (bar.textDoc !== null || bar.pdfDoc !== null) && bar.width > 640
+            visible: (bar.textDoc !== null || bar.pdfDoc !== null || bar.slidesDoc !== null) && bar.width > 640
             readonly property string saveKey: (Shortcuts.hints["reader.save"] || "").replace(/[()]/g, "").trim()
             readonly property string printKey: (Shortcuts.hints["reader.print"] || "").replace(/[()]/g, "").trim()
-            text: (saveKey ? saveKey + " " : "") + I18n.tr("Speichern", I18n.revision) + " · " + (printKey ? printKey + " " : "") + I18n.tr("Drucken", I18n.revision)
+            text: bar.slidesDoc !== null
+                ? (saveKey ? saveKey + " " : "") + I18n.tr("Speichern", I18n.revision) + " · F5 " + I18n.tr("Präsentieren", I18n.revision)
+                : (saveKey ? saveKey + " " : "") + I18n.tr("Speichern", I18n.revision) + " · " + (printKey ? printKey + " " : "") + I18n.tr("Drucken", I18n.revision)
             font: Typography.caption
             color: Theme.textSecondary
             Layout.rightMargin: 12
