@@ -797,7 +797,8 @@ def _windows_of(pid: int) -> str:
 def probe_text(program: Path) -> None:
     """Der Textkern (seit 5.0 Beta 3) lädt LibreOfficeKit aus dem entpackten LibreOffice – mit dem Python des Setups,
     wie später bei den Anwendern. Er legt ein Dokument an, tippt einen Satz, zeichnet die Seite und speichert sie als
-    .docx; dazu (seit Beta 4) eine Präsentation mit zwei Folien als .pptx – sonst bricht der Build ab."""
+    .docx; dazu (seit Beta 4) eine Präsentation mit zwei Folien als .pptx und (seit Beta 5) Formel, Diagramm und
+    Inhaltsverzeichnis über die Hilfsmakros – sonst bricht der Build ab."""
     work = BUILD / "text-probe"
     remove(work)
     work.mkdir(parents=True)
@@ -848,6 +849,13 @@ def probe_text(program: Path) -> None:
         doc = call("open", path="")["doc"]
         call("text", doc=doc, text="Novadesk Textprobe äöü")
         call("settle", doc=doc)
+        # Hilfsmakros (seit Beta 5): Basic-Bibliothek im Profil, Formel (Math) und Diagramm (Chart) im Text
+        call("macro", doc=doc, name="Formel", values=["a^2 + b^2 = c^2", ""])
+        call("macro", doc=doc, name="Diagramm", values=["column", "Probe", "", "\x1fA\x1fB", "Januar\x1f4\x1f3", "Februar\x1f5\x1f6"])
+        call("macro", doc=doc, name="Verzeichnis", values=["Inhaltsverzeichnis", "3"])
+        if call("macro", doc=doc, name="VerzeichnisseAktualisieren") != ["1"]:
+            fail("Probe des Textkerns fehlgeschlagen: das Inhaltsverzeichnis fehlt")
+        call("settle", doc=doc)
         tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
@@ -864,10 +872,13 @@ def probe_text(program: Path) -> None:
     content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""
     if "Novadesk Textprobe äöü" not in content:
         fail("Probe des Textkerns fehlgeschlagen: der getippte Satz fehlt in der gespeicherten .docx")
+    names = zipfile.ZipFile(target).namelist()
+    if "<m:oMath" not in content or not any(name.startswith("word/charts/chart") for name in names) or 'w:docPartGallery w:val="Table of Contents"' not in content:
+        fail("Probe des Textkerns fehlgeschlagen: Formel, Diagramm oder Inhaltsverzeichnis fehlen in der gespeicherten .docx")
     slide_names = zipfile.ZipFile(deck_target).namelist() if deck_target.is_file() else []
     if "ppt/slides/slide2.xml" not in slide_names:
         fail("Probe des Textkerns fehlgeschlagen: die gespeicherte .pptx hat keine zweite Folie")
-    log("  Probe: Textkern (tippen, zeichnen, .docx und .pptx speichern)")
+    log("  Probe: Textkern (tippen, Formel, Diagramm, Verzeichnis, zeichnen, .docx und .pptx speichern)")
     remove(work)
 
 

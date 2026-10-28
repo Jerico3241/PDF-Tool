@@ -25,6 +25,7 @@ from typing import Callable
 
 from tools.pdf_editor import office
 from tools.sheet.engine import PROFILE_SETTINGS
+from tools.text import macros
 
 KERNEL_SOURCE = Path(__file__).with_name("kernel.py")
 START_TIMEOUT = 120.0  # erster Start mit neuem Profil: LibreOffice richtet sich ein
@@ -37,11 +38,22 @@ TEXT_SETTINGS = PROFILE_SETTINGS.replace(
     "</oor:items>",
     '<item oor:path="/org.openoffice.Office.UI/ColorScheme/ColorSchemes/org.openoffice.Office.UI:ColorScheme[\'COLOR_SCHEME_LIBREOFFICE_AUTOMATIC\']/DocBoundaries">'
     '<prop oor:name="IsVisible" oor:op="fuse"><value>false</value></prop></item>\n'
+    # Felder und Verzeichnisse ohne grauen Hintergrund und Rahmen (wie gedruckt und wie in Word, seit 5.0 Beta 5)
+    '<item oor:path="/org.openoffice.Office.UI/ColorScheme/ColorSchemes/org.openoffice.Office.UI:ColorScheme[\'COLOR_SCHEME_LIBREOFFICE_AUTOMATIC\']/WriterFieldShadings">'
+    '<prop oor:name="IsVisible" oor:op="fuse"><value>false</value></prop></item>\n'
+    '<item oor:path="/org.openoffice.Office.UI/ColorScheme/ColorSchemes/org.openoffice.Office.UI:ColorScheme[\'COLOR_SCHEME_LIBREOFFICE_AUTOMATIC\']/WriterIdxShadings">'
+    '<prop oor:name="IsVisible" oor:op="fuse"><value>false</value></prop></item>\n'
+    '<item oor:path="/org.openoffice.Office.UI/ColorScheme/ColorSchemes/org.openoffice.Office.UI:ColorScheme[\'COLOR_SCHEME_LIBREOFFICE_AUTOMATIC\']/WriterSectionBoundaries">'
+    '<prop oor:name="IsVisible" oor:op="fuse"><value>false</value></prop></item>\n'
     '<item oor:path="/org.openoffice.Office.Linguistic/General"><prop oor:name="DefaultLocale" oor:op="fuse"><value>de-DE</value></prop></item>\n'
     # Neue Präsentation ohne Vorlagenauswahl und Layout-Dialog: Unter Windows bliebe der Kern sonst unsichtbar an
     # diesem Dialog hängen (seit 5.0 Beta 4)
     '<item oor:path="/org.openoffice.Office.Impress/Misc/NewDoc"><prop oor:name="AutoPilot" oor:op="fuse"><value>false</value></prop>'
     '<prop oor:name="Layout" oor:op="fuse"><value>false</value></prop></item>\n'
+    # Profil gilt als eingerichtet: LibreOffice kopiert beim ersten Start sonst seine Vorgaben über die Bibliothek der
+    # Hilfsmakros (``macros.install``) – und wiederholt das bei jedem Start, bis es die Einstellungen einmal gesichert
+    # hat (seit 5.0 Beta 5)
+    '<item oor:path="/org.openoffice.Setup/Office"><prop oor:name="ooSetupInstCompleted" oor:op="fuse"><value>true</value></prop></item>\n'
     "</oor:items>",
 )
 
@@ -130,8 +142,9 @@ class Engine:
         user = profile / "user"
         user.mkdir(parents=True, exist_ok=True)
         settings = user / "registrymodifications.xcu"
-        if not settings.is_file() or b"Office.Impress/Misc/NewDoc" not in settings.read_bytes():
+        if not settings.is_file() or b"WriterSectionBoundaries" not in settings.read_bytes():  # Profil älter als Beta 5
             settings.write_text(TEXT_SETTINGS, encoding="utf-8")
+        macros.install(user)
         return profile
 
     def _environment(self) -> dict:

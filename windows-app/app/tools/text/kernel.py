@@ -34,9 +34,13 @@ MAIN_THREAD_VARIABLE = "NOVADESK_TEXT_HAUPTTHREAD"
 
 # LibreOfficeKitEnums.h
 FEATURE_DOCUMENT_PASSWORD = 1 << 0
+FEATURE_NO_TILED_ANNOTATIONS = 1 << 3  # Kommentare zeigt Novadesk selbst (Seitenleiste), nicht in den Kacheln
 CALLBACK_DOCUMENT_PASSWORD = 20
 SETTEXTSELECTION_RESET = 2
 EXT_TEXTINPUT, EXT_TEXTINPUT_END = 0, 2
+# Hilfsmakros (Bibliothek »Novadesk«, Modul »Text«; siehe tools/text/macros.py): Werte getrennt durch das Zeichen 30
+MACRO_LIBRARY = "Novadesk.Text"
+MACRO_SEPARATOR = "\x1e"
 # Ereignisse, die Novadesk braucht (die übrigen bleiben im Kern)
 EVENTS = {
     0,   # INVALIDATE_TILES
@@ -55,6 +59,9 @@ EVENTS = {
     22,  # ERROR
     23,  # CONTEXT_MENU
     15,  # SEARCH_RESULT_SELECTION
+    30,  # REDLINE_TABLE_SIZE_CHANGED
+    31,  # REDLINE_TABLE_ENTRY_MODIFIED
+    32,  # COMMENT
 }
 # Ereignisse der Notizenansicht: dieselben Nummern, um 1000 erhöht (Kacheln, Schreibmarke, Auswahl, Größe)
 NOTES_BASE = 1000
@@ -241,7 +248,7 @@ class Kernel:
         self.last_event = time.monotonic()
         self.kit_callback = CALLBACK(self._kit_event)
         self.kc.registerCallback(self.kit, self.kit_callback, None)
-        self.kc.setOptionalFeatures(self.kit, FEATURE_DOCUMENT_PASSWORD)
+        self.kc.setOptionalFeatures(self.kit, FEATURE_DOCUMENT_PASSWORD | FEATURE_NO_TILED_ANNOTATIONS)
 
     # Hilfen ------------------------------------------------------------------------------------------------
     def _string(self, pointer):
@@ -390,11 +397,13 @@ class Kernel:
             doc.cls.setPartMode(doc.pointer, 1)
             doc.notes_view = view
             doc.cls.setView(doc.pointer, main)
-        doc.cls.setView(doc.pointer, doc.notes_view)
-        doc.cls.setPart(doc.pointer, int(args.get("part", doc.cls.getPart(doc.pointer))))
+        part = int(args.get("part", doc.cls.getPart(doc.pointer)))
+        # Über ``doc`` umschalten, damit auch das Fenster der Notizenansicht das aktive ist: sonst misst LibreOffice
+        # mitunter die Folie statt der Notizenseite – dann lag der Rahmen daneben und Klicks trafen die Notizen nicht
+        self.doc({**args, "notes": True})
+        doc.cls.setPart(doc.pointer, part)
         size = self._size(doc)
-        doc.cls.setView(doc.pointer, doc.view)
-        self.active = doc.view
+        self.doc({**args, "notes": False})
         return size
 
     def cmd_thumb(self, args):
@@ -489,6 +498,32 @@ class Kernel:
         doc = self.doc(args)
         data = base64.b64decode(args.get("data") or "")
         return bool(doc.cls.paste(doc.pointer, str(args["mime"]).encode("utf-8"), data, len(data)))
+
+    def cmd_macro(self, args):
+        """Hilfsmakro von Novadesk (Basic-Bibliothek im Profil, ``tools/text/macros.py``) am Dokument: Werte hinein,
+        Antworten heraus (über zwei Dateien im Arbeitsordner des Kerns)."""
+        self.doc(args)
+        name = str(args.get("name") or "")
+        if not name.isidentifier():
+            raise KernelError("Unbekanntes Makro.", "makro")
+        inbox, outbox = os.path.abspath("makro-ein.txt"), os.path.abspath("makro-aus.txt")
+        with open(inbox, "w", encoding="utf-8", newline="") as handle:
+            handle.write(MACRO_SEPARATOR.join(str(value) for value in args.get("values") or []))
+        try:
+            os.remove(outbox)
+        except OSError:
+            pass
+        ok = self.kc.runMacro(self.kit, f'macro:///{MACRO_LIBRARY}.{name}("{file_url(inbox)}","{file_url(outbox)}")'.encode("utf-8"))
+        try:
+            with open(outbox, encoding="utf-8", newline="") as handle:
+                answer = handle.read().split(MACRO_SEPARATOR)
+        except OSError:
+            answer = []
+        if not ok or not answer:
+            raise KernelError("Das hat nicht geklappt." + (f" ({self.error_text()[:200]})" if self.error_text() else ""), "makro")
+        if answer[0] != "ok":
+            raise KernelError(f"Das hat nicht geklappt ({answer[0].lstrip('!')[:200]}).", "makro")
+        return answer[1:]
 
     def cmd_values(self, args):
         doc = self.doc(args)

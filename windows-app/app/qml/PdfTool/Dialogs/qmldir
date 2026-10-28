@@ -30,3 +30,6 @@ ShortcutsContent 1.0 ShortcutsContent.qml
 DigitalSignContent 1.0 DigitalSignContent.qml
 SignaturesContent 1.0 SignaturesContent.qml
 TranslateContent 1.0 TranslateContent.qml
+CrossReferenceContent 1.0 CrossReferenceContent.qml
+FormulaContent 1.0 FormulaContent.qml
+ChartContent 1.0 ChartContent.qml

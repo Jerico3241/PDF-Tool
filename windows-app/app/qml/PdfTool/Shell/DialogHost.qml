@@ -167,6 +167,9 @@ T.Popup {
                             case "link": return linkContent
                             case "crop": return cropContent
                             case "assistant_setup": return assistantSetupContent
+                            case "text_crossref": return crossReferenceContent
+                            case "text_formula": return formulaContent
+                            case "text_chart": return chartContent
                             default: return null
                             }
                         }
@@ -252,4 +255,7 @@ T.Popup {
     Component { id: linkContent; LinkContent {} }
     Component { id: cropContent; CropContent {} }
     Component { id: assistantSetupContent; AssistantSetupContent {} }
+    Component { id: crossReferenceContent; CrossReferenceContent {} }
+    Component { id: formulaContent; FormulaContent {} }
+    Component { id: chartContent; ChartContent {} }
 }
