@@ -2,6 +2,29 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.5
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.5.md).
+
+- Texte: Basic-Bibliothek »Novadesk.Text« im Profil des Textkerns (`tools/text/macros.py`) für Verzeichnis,
+  Querverweise, Formeln (`<m:oMath>` in .docx), Diagramme (`word/charts`), Serienbrief-Umbruch; Kommentare und
+  Änderungen über die LOK-Ereignisse; Vergleichen, Lesemodus und Augenschutz in `TextView.qml`;
+  `qtapp/text/merge.py` (Serienbrief aus .xlsx/.csv) und `review.py` (Listen der Seitenleisten).
+- Notizen der Präsentationen: `cmd_notes` misst die Notizenseite in der Notizenansicht (vorher mitunter die
+  Folie – Klicks gingen daneben).
+- Tabellenkern (`tools/sheet/server.py`): `conditional`/`clear_conditional` (Regeln und Datenbalken; das Raster
+  wertet sie in `cmd_cells` selbst aus, Farbskalen nur aus Dateien), `validation` mit Prüfung bei `input`
+  (abgelehnt: Undo), `table_info`/`pivot`/`pivot_refresh`, `duplicates`, `column_texts`/`text_to_columns`,
+  `region_texts`/`set_texts`, `split_sheet`/`merge_sheets`/`import_book`/`export_sheets`, `protect`/`lock`/
+  `encrypt` und `guard` (geschützte Blätter und Mappen lehnen Änderungen ab, statt sie still zu verwerfen).
+  `queryContentCells` liefert auch übergelaufene Zellen links des Bereichs – `_filled` schneidet sie ab.
+- Blitzvorschau `qtapp/sheet/flashfill.py`: günstigstes Muster aus Bausteinen (Zelle, Wort, Anfangsbuchstabe,
+  Ziffern, feste Zeichen) über alle Beispiele.
+- Formular `Dialogs/SheetFormContent.qml` (`sheet_form`) für alle Tabellen-Dialoge; Reiter »Überprüfen«,
+  Datenbalken, Lese-Kreuz und Auswahlliste im Raster.
+- `build.py probe_calc` prüft zusätzlich Datenbalken, Auswahlliste und Pivot-Tabelle; `probe_text` Formel,
+  Diagramm und Verzeichnis.
+
 # Novadesk 5.0.0-beta.4
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.4.md).
