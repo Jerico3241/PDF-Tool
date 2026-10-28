@@ -812,6 +812,7 @@ def probe_text(program: Path) -> None:
     text.profile_dir = lambda: work / "profil"
     if runtime.is_file():
         text.python = lambda: [str(runtime), "-I", "-X", "utf8"]
+    os.environ["NOVADESK_TEXT_WACHE"] = "60"
     probe = text.Engine()
     target = work / "probe.docx"
     deck_target = work / "probe.pptx"
@@ -824,14 +825,6 @@ def probe_text(program: Path) -> None:
 
     try:
         probe.start()
-        doc = call("open", path="")["doc"]
-        call("text", doc=doc, text="Novadesk Textprobe äöü")
-        call("settle", doc=doc)
-        tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
-        if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
-            fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
-        call("save", doc=doc, path=str(target))
-        call("close", doc=doc)
         _blank_odp(work / "leer.odp")
         existing = call("open", path=str(work / "leer.odp"), kind="praesentation")
         call("close", doc=existing["doc"])
@@ -848,6 +841,14 @@ def probe_text(program: Path) -> None:
         call("notes", doc=deck, part=0)
         call("save", doc=deck, path=str(deck_target))
         call("close", doc=deck)
+        doc = call("open", path="")["doc"]
+        call("text", doc=doc, text="Novadesk Textprobe äöü")
+        call("settle", doc=doc)
+        tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
+        if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
+            fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
+        call("save", doc=doc, path=str(target))
+        call("close", doc=doc)
     except text.TextError as exc:
         # Erst beenden: Dann liegt auch das Protokoll des Kerns vor (Exit-Code, letzte Meldungen)
         windows = _windows_of(probe._process.pid if probe._process else 0)  # noqa: SLF001 - nur für die Fehlermeldung

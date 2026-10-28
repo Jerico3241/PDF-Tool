@@ -29,6 +29,7 @@ import time
 import traceback
 
 TOKEN_VARIABLE = "NOVADESK_TEXT_SCHLUESSEL"
+WATCH_VARIABLE = "NOVADESK_TEXT_WACHE"
 
 # LibreOfficeKitEnums.h
 FEATURE_DOCUMENT_PASSWORD = 1 << 0
@@ -627,6 +628,12 @@ def serve(kernel_factory, port_file, token):
 def main(argv):
     program, profile, port_file = argv[1], argv[2], argv[3]
     token = os.environ.pop(TOKEN_VARIABLE, "")
+    watch = os.environ.pop(WATCH_VARIABLE, "")
+    if watch:
+        # Build-Probe: hängt ein Befehl, schreibt Python alle paar Sekunden auf, wo der Kern gerade steht
+        import faulthandler
+
+        faulthandler.dump_traceback_later(float(watch), repeat=True, file=open("wache.log", "w", encoding="utf-8"))  # noqa: SIM115
     try:
         _library, kit = load_kit(program, profile)
     except Exception as exc:  # noqa: BLE001 - Grund für Novadesk (Build-Probe, Protokoll)

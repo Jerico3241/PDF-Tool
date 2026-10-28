@@ -308,7 +308,7 @@ class Engine:
         if work is None:
             return
         texts = []
-        for name in ("port.fehler", "kern.log"):
+        for name in ("port.fehler", "kern.log", "wache.log"):
             try:
                 text = (work / name).read_text(encoding="utf-8", errors="replace").strip() if (work / name).is_file() else ""
             except OSError:
