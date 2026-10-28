@@ -6,7 +6,7 @@ import PdfTool.Style
 import PdfTool.Controls
 
 // Tabelle bearbeiten (seit 5.0 Beta 2, nach dem freigegebenen Design): oben die Reiter Datei, Start, Einfügen,
-// Formeln, Daten und Ansicht (der aktive grün unterstrichen) mit Speichern, Drucken, Rückgängig, »Übersicht
+// Formeln, Daten, Überprüfen (seit Beta 5) und Ansicht (der aktive grün unterstrichen) mit Speichern, Drucken, Rückgängig, »Übersicht
 // erstellen« und »Als PDF speichern« rechts; darunter die Leiste des Reiters, die Formelzeile (Namenfeld, fx,
 // Eingabe), das Raster (SheetGrid) mit Editor, Diagrammen und Filtermenü und unten die Blätter. Summe und Anzahl
 // der Auswahl stehen in der Statuszeile des Fensters.
@@ -135,6 +135,7 @@ FocusScope {
                 RibbonTab { objectName: "ribbon_insert"; key: "insert"; text: "Einfügen"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 RibbonTab { objectName: "ribbon_formulas"; key: "formulas"; text: "Formeln"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 RibbonTab { objectName: "ribbon_data"; key: "data"; text: "Daten"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_review"; key: "review"; text: "Überprüfen"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 RibbonTab { objectName: "ribbon_view"; key: "view"; text: "Ansicht"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 Item { Layout.fillWidth: true }
                 PIconButton {
@@ -270,6 +271,14 @@ FocusScope {
                     checked: view.sheet !== null && view.sheet.filterOn
                     onClicked: view.sheet.toggleFilter()
                 }
+                ToolButton {
+                    id: conditionalButton
+                    objectName: "sheetConditional"
+                    iconName: "paint_brush"
+                    text: I18n.tr("Bedingte Formatierung", I18n.revision)
+                    tip: I18n.tr("Zellen je nach Wert hervorheben oder Datenbalken zeigen", I18n.revision)
+                    onClicked: conditionalMenu.popup(conditionalButton, 0, conditionalButton.height + 4)
+                }
                 RibbonSeparator {}
                 ToolButton {
                     id: chartButton
@@ -357,15 +366,65 @@ FocusScope {
                 spacing: 2
                 objectName: "sheetRibbonBar_data"
                 visible: view.ribbon === "data"
-                ToolButton { objectName: "sheetSortUp"; iconName: "text_sort_ascending"; text: I18n.tr("A bis Z", I18n.revision); onClicked: view.sheet.sort(true) }
-                ToolButton { iconName: "text_sort_descending"; text: I18n.tr("Z bis A", I18n.revision); onClicked: view.sheet.sort(false) }
-                RibbonSeparator {}
+                ToolButton { objectName: "sheetSortUp"; iconName: "text_sort_ascending"; tip: I18n.tr("Sortieren von A bis Z", I18n.revision); onClicked: view.sheet.sort(true) }
+                ToolButton { iconName: "text_sort_descending"; tip: I18n.tr("Sortieren von Z bis A", I18n.revision); onClicked: view.sheet.sort(false) }
                 ToolButton { iconName: "filter"; text: I18n.tr("Filter", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.filterOn; onClicked: view.sheet.toggleFilter() }
                 RibbonSeparator {}
-                ToolButton { iconName: "arrow_autofit_content"; text: I18n.tr("Nach unten ausfüllen", I18n.revision); tip: I18n.tr("Strg+U", I18n.revision); onClicked: view.sheet.fill("down") }
-                ToolButton { text: I18n.tr("Nach rechts ausfüllen", I18n.revision); tip: I18n.tr("Strg+R", I18n.revision); onClicked: view.sheet.fill("right") }
+                ToolButton { objectName: "sheetDuplicates"; iconName: "copy_select"; text: I18n.tr("Duplikate entfernen", I18n.revision); tip: I18n.tr("Doppelte Zeilen der Tabelle entfernen", I18n.revision); onClicked: view.sheet.removeDuplicates() }
+                ToolButton { objectName: "sheetTextColumns"; iconName: "text_column_two"; text: I18n.tr("Text in Spalten", I18n.revision); tip: I18n.tr("Texte an einem Trennzeichen auf Spalten verteilen", I18n.revision); onClicked: view.sheet.textToColumns() }
+                ToolButton { objectName: "sheetFlashFill"; iconName: "flash"; text: I18n.tr("Blitzvorschau", I18n.revision); tip: I18n.tr("Spalte nach dem Muster der Beispiele ausfüllen (Strg+E)", I18n.revision); onClicked: { view.sheet.flashFill(); grid.forceActiveFocus() } }
+                ToolButton { objectName: "sheetValidation"; iconName: "shield_task"; text: I18n.tr("Datenüberprüfung", I18n.revision); tip: I18n.tr("Erlaubte Eingaben festlegen, z. B. eine Auswahlliste", I18n.revision); onClicked: view.sheet.validationDialog() }
                 RibbonSeparator {}
-                ToolButton { iconName: "search"; text: I18n.tr("Suchen", I18n.revision); onClicked: findBar.show() }
+                ToolButton { objectName: "sheetPivot"; iconName: "table_settings"; text: I18n.tr("Pivot-Tabelle", I18n.revision); tip: I18n.tr("Daten zusammenfassen: Pivot-Tabelle auf einem neuen Blatt", I18n.revision); onClicked: view.sheet.pivotDialog() }
+                ToolButton { objectName: "sheetPivotRefresh"; iconName: "arrow_sync"; tip: I18n.tr("Pivot-Tabellen aktualisieren", I18n.revision); onClicked: view.sheet.refreshPivots() }
+                RibbonSeparator {}
+                ToolButton { id: combineButton; objectName: "sheetCombine"; iconName: "arrow_join"; text: I18n.tr("Zusammenführen", I18n.revision); tip: I18n.tr("Blätter und Mappen teilen oder zusammenführen", I18n.revision); onClicked: combineMenu.popup(combineButton, 0, combineButton.height + 4) }
+                RibbonSeparator {}
+                ToolButton { id: fillButton; iconName: "arrow_autofit_content"; tip: I18n.tr("Ausfüllen", I18n.revision); onClicked: fillMenu.popup(fillButton, 0, fillButton.height + 4) }
+                ToolButton { iconName: "search"; tip: I18n.tr("Suchen (Strg+F)", I18n.revision); onClicked: findBar.show() }
+                Item { Layout.fillWidth: true }
+            }
+
+            // Überprüfen: Schutz und Kennwort
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 2
+                objectName: "sheetRibbonBar_review"
+                visible: view.ribbon === "review"
+                ToolButton {
+                    objectName: "sheetProtect"
+                    iconName: "shield_lock"
+                    text: I18n.tr(view.sheet && view.sheet.sheetProtected ? "Blattschutz aufheben" : "Blatt schützen", I18n.revision)
+                    tip: I18n.tr("Inhalte und Formate dieses Blatts vor Änderungen schützen", I18n.revision)
+                    toggle: true
+                    checked: view.sheet !== null && view.sheet.sheetProtected
+                    onClicked: view.sheet.protectSheet()
+                }
+                ToolButton {
+                    objectName: "sheetProtectBook"
+                    iconName: "document_lock"
+                    text: I18n.tr(view.sheet && view.sheet.bookProtected ? "Mappenschutz aufheben" : "Mappe schützen", I18n.revision)
+                    tip: I18n.tr("Blätter vor Einfügen, Löschen, Umbenennen und Verschieben schützen", I18n.revision)
+                    toggle: true
+                    checked: view.sheet !== null && view.sheet.bookProtected
+                    onClicked: view.sheet.protectBook()
+                }
+                ToolButton {
+                    objectName: "sheetEncrypt"
+                    iconName: "key"
+                    text: I18n.tr("Mit Kennwort verschlüsseln", I18n.revision)
+                    tip: I18n.tr("Die Datei lässt sich nur mit Kennwort öffnen", I18n.revision)
+                    toggle: true
+                    checked: view.sheet !== null && view.sheet.encrypted
+                    onClicked: view.sheet.encrypt()
+                }
+                RibbonSeparator {}
+                ToolButton { objectName: "sheetUnlockCells"; iconName: "table_lightning"; text: I18n.tr("Zellen freigeben", I18n.revision); tip: I18n.tr("Ausgewählte Zellen bleiben bei geschütztem Blatt bearbeitbar", I18n.revision); onClicked: view.sheet.lockCells(false) }
+                ToolButton { objectName: "sheetLockCells"; iconName: "lock_closed"; text: I18n.tr("Zellen sperren", I18n.revision); tip: I18n.tr("Ausgewählte Zellen wieder sperren (Standard)", I18n.revision); onClicked: view.sheet.lockCells(true) }
+                RibbonSeparator {}
+                ToolButton { iconName: "shield_task"; text: I18n.tr("Datenüberprüfung", I18n.revision); onClicked: view.sheet.validationDialog() }
                 Item { Layout.fillWidth: true }
             }
 
@@ -382,12 +441,13 @@ FocusScope {
                 ToolButton { iconName: "table_freeze_column_and_row"; text: I18n.tr("An der Zelle fixieren", I18n.revision); onClicked: view.sheet.freezePanes("cursor") }
                 ToolButton { text: I18n.tr("Aufheben", I18n.revision); enabled: view.sheet !== null && (view.sheet.freeze[0] > 0 || view.sheet.freeze[1] > 0); onClicked: view.sheet.freezePanes("none") }
                 RibbonSeparator {}
+                ToolButton { objectName: "sheetCrosshair"; iconName: "target"; text: I18n.tr("Lese-Kreuz", I18n.revision); tip: I18n.tr("Zeile und Spalte der aktiven Zelle hervorheben", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.crosshair; onClicked: { view.sheet.toggleCrosshair(); grid.forceActiveFocus() } }
+                RibbonSeparator {}
                 ToolButton { iconName: "zoom_out"; tip: I18n.tr("Verkleinern", I18n.revision); onClicked: view.sheet.zoomStep(-1) }
                 ToolButton { text: view.sheet ? view.sheet.zoom + " %" : ""; tip: I18n.tr("Zoom auf 100 %", I18n.revision); onClicked: view.sheet.setZoom(100) }
                 ToolButton { iconName: "zoom_in"; tip: I18n.tr("Vergrößern", I18n.revision); onClicked: view.sheet.zoomStep(1) }
                 RibbonSeparator {}
-                ToolButton { iconName: "print_add"; text: I18n.tr("Druckbereich festlegen", I18n.revision); onClicked: view.sheet.setPrintArea(true) }
-                ToolButton { text: I18n.tr("Druckbereich aufheben", I18n.revision); onClicked: view.sheet.setPrintArea(false) }
+                ToolButton { id: printAreaButton; objectName: "sheetPrintArea"; iconName: "print_add"; text: I18n.tr("Druckbereich", I18n.revision); tip: I18n.tr("Nur die Auswahl drucken bzw. wieder alles", I18n.revision); onClicked: printAreaMenu.popup(printAreaButton, 0, printAreaButton.height + 4) }
                 Item { Layout.fillWidth: true }
             }
         }
@@ -537,6 +597,9 @@ FocusScope {
                         event.accepted = true
                     } else if (event.key === Qt.Key_F3 && (event.modifiers & Qt.ShiftModifier)) {
                         functionDialog.openDialog()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Down && (event.modifiers & Qt.AltModifier) && listButton.items.length > 0) {
+                        listPopup.open()
                         event.accepted = true
                     } else if (event.key === Qt.Key_Delete && chartLayer.selected >= 0) {
                         view.sheet.deleteObject(chartLayer.selected)
@@ -691,6 +754,68 @@ FocusScope {
                 }
             }
 
+            // Auswahlliste der Datenüberprüfung: Pfeil rechts neben der aktiven Zelle
+            T.AbstractButton {
+                id: listButton
+                objectName: "sheetListButton"
+                readonly property var items: view.sheet && view.sheet.validation.kind === "list" && view.sheet.validation.dropdown !== false ? (view.sheet.validation.items || []) : []
+                readonly property rect cell: { grid.viewRevision; return view.sheet ? (view.sheet.cursorRow, view.sheet.cursorCol, grid.cellRect(view.sheet.cursorRow, view.sheet.cursorCol)) : Qt.rect(0, 0, 0, 0) }
+                visible: items.length > 0 && view.editing === "" && cell.width > 0 && cell.x + cell.width < grid.width
+                x: cell.x + cell.width + 1
+                y: cell.y + cell.height - height
+                width: 18
+                height: Math.min(22, Math.max(16, cell.height))
+                hoverEnabled: true
+                Accessible.name: I18n.tr("Auswahlliste", I18n.revision)
+                onClicked: listPopup.open()
+                background: Rectangle { color: listButton.hovered ? Theme.subtleHover : grid.paperColor; border.width: 1; border.color: Theme.controlStroke }
+                contentItem: PIcon { name: "chevron_down"; size: 12; color: Theme.textSecondary; anchors.centerIn: parent }
+                PToolTip { text: I18n.tr("Eintrag aus der Liste wählen", I18n.revision); visible: listButton.hovered }
+            }
+            T.Popup {
+                id: listPopup
+                objectName: "sheetListPopup"
+                parent: gridArea
+                x: Math.max(0, Math.min(listButton.cell.x, gridArea.width - width - 8))
+                y: listButton.cell.y + listButton.cell.height + 2
+                width: Math.max(160, listButton.cell.width + listButton.width)
+                padding: 4
+                implicitHeight: Math.min(260, listView.contentHeight) + topPadding + bottomPadding
+                focus: true
+                closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
+                onClosed: grid.forceActiveFocus()
+                // andere Zelle oder anderes Blatt: Liste zu (sonst bliebe sie an der alten Stelle stehen)
+                Connections {
+                    target: view.sheet
+                    function onCursorRowChanged() { listPopup.close() }
+                    function onCursorColChanged() { listPopup.close() }
+                    function onActiveSheetChanged() { listPopup.close() }
+                }
+                background: Rectangle {
+                    color: Theme.flyout
+                    border.color: Theme.flyoutStroke
+                    radius: Metrics.radiusOverlay
+                    PShadow { radius: Metrics.radiusOverlay }
+                }
+                contentItem: ListView {
+                    id: listView
+                    clip: true
+                    model: listButton.items
+                    T.ScrollBar.vertical: PScrollBar {}
+                    delegate: T.ItemDelegate {
+                        required property var modelData
+                        required property int index
+                        objectName: "sheetListItem_" + index
+                        width: ListView.view.width
+                        height: 30
+                        hoverEnabled: true
+                        onClicked: { var text = String(modelData); listPopup.close(); view.sheet.chooseListItem(text) }
+                        background: Rectangle { radius: Metrics.radiusControl; color: parent.hovered ? Theme.subtleHover : "transparent" }
+                        contentItem: PText { text: String(parent.modelData); leftPadding: 8; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                    }
+                }
+            }
+
             PScrollBar {
                 id: vbar
                 objectName: "sheetVScroll"
@@ -788,7 +913,7 @@ FocusScope {
                         objectName: "sheetTab_" + index
                         visible: modelData.visible !== false
                         implicitHeight: 28
-                        implicitWidth: tabLabel.implicitWidth + 26
+                        implicitWidth: tabRow.implicitWidth + 26
                         hoverEnabled: true
                         Accessible.role: Accessible.PageTab
                         Accessible.name: I18n.tr(modelData.name, I18n.revision)
@@ -812,13 +937,19 @@ FocusScope {
                             }
                         }
                         contentItem: Item {}
-                        Text {
-                            id: tabLabel
+                        Row {
+                            id: tabRow
                             anchors.centerIn: parent
-                            text: sheetTab.modelData.name
-                            font: sheetTab.selected ? Typography.bodyStrong : Typography.body
-                            color: sheetTab.selected ? Theme.textPrimary : Theme.textSecondary
-                            textFormat: Text.PlainText
+                            spacing: 4
+                            // geschütztes Blatt: Schloss vor dem Namen
+                            PIcon { name: sheetTab.modelData.protected ? "lock_closed" : ""; size: 12; color: Theme.textSecondary; anchors.verticalCenter: parent.verticalCenter }
+                            Text {
+                                id: tabLabel
+                                text: sheetTab.modelData.name
+                                font: sheetTab.selected ? Typography.bodyStrong : Typography.body
+                                color: sheetTab.selected ? Theme.textPrimary : Theme.textSecondary
+                                textFormat: Text.PlainText
+                            }
                         }
                         TapHandler {
                             acceptedButtons: Qt.RightButton
@@ -872,6 +1003,44 @@ FocusScope {
         PMenuItem { text: I18n.tr("Linie", I18n.revision); iconName: "data_line"; onTriggered: view.sheet.addChart("line") }
         PMenuItem { text: I18n.tr("Kreis", I18n.revision); iconName: "data_pie"; onTriggered: view.sheet.addChart("pie") }
         PMenuItem { text: I18n.tr("Fläche", I18n.revision); iconName: "data_area"; onTriggered: view.sheet.addChart("area") }
+    }
+    PMenu {
+        id: conditionalMenu
+        objectName: "sheetConditionalMenu"
+        PMenuItem { text: I18n.tr("Größer als …", I18n.revision); iconName: "highlight"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("greater") } }
+        PMenuItem { text: I18n.tr("Kleiner als …", I18n.revision); iconName: "highlight"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("less") } }
+        PMenuItem { text: I18n.tr("Zwischen …", I18n.revision); iconName: "highlight"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("between") } }
+        PMenuItem { text: I18n.tr("Gleich …", I18n.revision); iconName: "highlight"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("equal") } }
+        PMenuItem { text: I18n.tr("Text enthält …", I18n.revision); iconName: "highlight"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("contains") } }
+        PMenuItem { text: I18n.tr("Doppelte Werte …", I18n.revision); iconName: "copy_select"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("duplicate") } }
+        PMenuItem { text: I18n.tr("Obere 10 …", I18n.revision); iconName: "chevron_up"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("top") } }
+        PMenuItem { text: I18n.tr("Untere 10 …", I18n.revision); iconName: "chevron_down"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("bottom") } }
+        PMenuItem { text: I18n.tr("Über dem Durchschnitt …", I18n.revision); iconName: "data_bar_vertical"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("above") } }
+        PMenuItem { text: I18n.tr("Unter dem Durchschnitt …", I18n.revision); iconName: "data_bar_vertical"; onTriggered: conditionalMenu.afterClose = function() { view.sheet.conditional("below") } }
+        PMenuItem { objectName: "sheetBarBlue"; text: I18n.tr("Datenbalken blau", I18n.revision); iconName: "data_bar_horizontal"; onTriggered: view.sheet.conditional("bar_blue") }
+        PMenuItem { text: I18n.tr("Datenbalken grün", I18n.revision); iconName: "data_bar_horizontal"; onTriggered: view.sheet.conditional("bar_green") }
+        PMenuItem { text: I18n.tr("Datenbalken rot", I18n.revision); iconName: "data_bar_horizontal"; onTriggered: view.sheet.conditional("bar_red") }
+        PMenuItem { text: I18n.tr("Regeln der Auswahl löschen", I18n.revision); iconName: "eraser"; onTriggered: view.sheet.clearConditional("selection") }
+        PMenuItem { text: I18n.tr("Regeln des Blatts löschen", I18n.revision); iconName: "delete"; onTriggered: view.sheet.clearConditional("sheet") }
+    }
+    PMenu {
+        id: combineMenu
+        objectName: "sheetCombineMenu"
+        PMenuItem { text: I18n.tr("Blatt nach Spalte teilen …", I18n.revision); iconName: "arrow_split"; onTriggered: combineMenu.afterClose = function() { view.sheet.splitSheet() } }
+        PMenuItem { text: I18n.tr("Blätter zusammenführen …", I18n.revision); iconName: "arrow_join"; onTriggered: combineMenu.afterClose = function() { view.sheet.mergeSheets() } }
+        PMenuItem { text: I18n.tr("Jedes Blatt als eigene Mappe …", I18n.revision); iconName: "document_multiple"; onTriggered: combineMenu.afterClose = function() { view.sheet.exportSheets() } }
+        PMenuItem { text: I18n.tr("Mappen anfügen …", I18n.revision); iconName: "table_add"; onTriggered: combineMenu.afterClose = function() { view.sheet.importBook() } }
+    }
+    PMenu {
+        id: printAreaMenu
+        PMenuItem { text: I18n.tr("Druckbereich festlegen", I18n.revision); iconName: "print_add"; onTriggered: view.sheet.setPrintArea(true) }
+        PMenuItem { text: I18n.tr("Druckbereich aufheben", I18n.revision); iconName: "dismiss"; onTriggered: view.sheet.setPrintArea(false) }
+    }
+    PMenu {
+        id: fillMenu
+        PMenuItem { text: I18n.tr("Nach unten ausfüllen", I18n.revision); hint: "Strg+U"; iconName: "chevron_down"; onTriggered: view.sheet.fill("down") }
+        PMenuItem { text: I18n.tr("Nach rechts ausfüllen", I18n.revision); hint: "Strg+R"; iconName: "arrow_right"; onTriggered: view.sheet.fill("right") }
+        PMenuItem { text: I18n.tr("Blitzvorschau", I18n.revision); hint: "Strg+E"; iconName: "flash"; onTriggered: view.sheet.flashFill() }
     }
     PMenu {
         id: objectMenu

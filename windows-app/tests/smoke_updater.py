@@ -173,10 +173,12 @@ def main() -> int:
             releases = github.parse_releases(result["feed"])
             stable = github.latest_stable(releases)
             check(stable is not None and stable >= Version.parse("2.7.1"), f"Release-Liste ohne stabile Version ≥ 2.7.1: {[str(r.version) for r in releases]}")
+            # Die Liste enthält nur die neuesten 30 Releases – 2.7.1 ist mit jeder Beta weiter hinausgerutscht
             match = next((release for release in releases if str(release.version) == "2.7.1"), None)
-            check(match is not None and match.complete, "Release 2.7.1 fehlt oder ist unvollständig")
-            if match.installer.digest:
-                check(match.installer.digest == sha, "Prüfsummendatei und GitHub-Angabe von 2.7.1 widersprechen sich")
+            if match is not None:
+                check(match.complete, "Release 2.7.1 ist unvollständig")
+                if match.installer.digest:
+                    check(match.installer.digest == sha, "Prüfsummendatei und GitHub-Angabe von 2.7.1 widersprechen sich")
             print(f"   Release-Liste über die Repository-ID: {len(releases)} Releases, neueste stabile {stable}")
         elif getattr(result.get("error"), "rate_limited", False):
             print("   WARNUNG: GitHub-Anfragelimit erreicht – Release-Liste nicht geprüft")

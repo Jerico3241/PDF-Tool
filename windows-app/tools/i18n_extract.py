@@ -52,6 +52,10 @@ ENGLISH_WORDS = {
     # Namen von LibreOffice (Argumente der Befehle, Formatvorlagen, Ordner) und QML-Typen der Texte
     "Color", "Columns", "Rows", "FamilyName", "FileName", "Lower", "Upper", "On", "Style", "Title", "Subtitle", "TakeOwnership",
     "TextCanvas", "SlideImage", "URE", "ParagraphStyles", "Quotations", "KIND", "WhatLayout",
+    # Seit Beta 5: Arten nachverfolgter Änderungen und Befehle von LibreOffice, Namen der Hilfsmakros, Schrift der Formeln
+    "AcceptTrackedChange", "RejectTrackedChange", "ShowTrackedChanges", "Attributes", "Delete", "Insert", "Move", "Format", "Id",
+    "ParagraphFormat", "TableCellDelete", "TableCellInsert", "TableRowDelete", "TableRowInsert", "NovadeskSerienbriefUmbruch",
+    "DiagrammLesen", "FormelLesen", "Geaendert", "VerzeichnisseAktualisieren", "Consolas",
 }
 
 

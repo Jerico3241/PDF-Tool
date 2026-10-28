@@ -37,3 +37,6 @@ TextView 1.0 TextView.qml
 RibbonTab 1.0 RibbonTab.qml
 RibbonSeparator 1.0 RibbonSeparator.qml
 SlidesView 1.0 SlidesView.qml
+TextCommentsPanel 1.0 TextCommentsPanel.qml
+TextChangesPanel 1.0 TextChangesPanel.qml
+TextMergePanel 1.0 TextMergePanel.qml

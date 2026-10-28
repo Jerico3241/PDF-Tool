@@ -26,6 +26,7 @@ import uno
 import unohelper
 from com.sun.star.beans import PropertyValue
 from com.sun.star.frame import TerminationVetoException, XTerminateListener
+from com.sun.star.sheet import XDataBarEntry
 
 PORT_VARIABLE = "NOVADESK_TABELLE_PORT"
 TOKEN_VARIABLE = "NOVADESK_TABELLE_SCHLUESSEL"
@@ -63,6 +64,240 @@ CHART_TYPES = {
 }
 LOCALE = ("de", "DE")
 I18N_CALLS = ("CalcError",)  # Oberflächentexte nur in Fehlermeldungen (sonst technische Namen von LibreOffice)
+
+# Bedingte Formatierung (seit 5.0 Beta 5): Vorlagen zum Hervorheben (wie Excel), Regeln, Farbskalen, Datenbalken
+CONDITION_STYLES = {
+    "red": ("Novadesk Rot", 0xFFC7CE, 0x9C0006),
+    "yellow": ("Novadesk Gelb", 0xFFEB9C, 0x9C5700),
+    "green": ("Novadesk Grün", 0xC6EFCE, 0x006100),
+}
+# com.sun.star.sheet.ConditionFormatOperator
+OPERATORS = {"equal": 0, "less": 1, "greater": 2, "between": 6, "duplicate": 8, "unique": 9, "top": 10, "bottom": 11,
+             "above": 14, "below": 15, "contains": 22}
+VALUE_OPERATORS = {0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 20, 21, 22, 23}
+BARS = {"bar_blue": 0x638EC6, "bar_green": 0x63C384, "bar_red": 0xFF555A}
+CONDITION_ENTRY, COLORSCALE_ENTRY, DATABAR_ENTRY = 0, 1, 2  # com.sun.star.sheet.ConditionEntryType
+SCALE_MIN, SCALE_MAX, SCALE_PERCENTILE, SCALE_VALUE, SCALE_PERCENT = 0, 1, 2, 3, 4  # ColorScaleEntryType
+BAR_MIN, BAR_MAX = 1, 2  # DataBarEntryType
+MAX_CONDITION_CELLS = 200000
+_UNKNOWN = object()
+
+# Datenüberprüfung: Art → com.sun.star.sheet.ValidationType, Vergleich → ConditionOperator
+VALIDATION_TYPES = {"any": "ANY", "list": "LIST", "whole": "WHOLE", "decimal": "DECIMAL", "date": "DATE", "textlen": "TEXT_LEN"}
+VALIDATION_OPERATORS = {"between": "BETWEEN", "not_between": "NOT_BETWEEN", "equal": "EQUAL", "not_equal": "NOT_EQUAL",
+                        "greater": "GREATER", "greater_equal": "GREATER_EQUAL", "less": "LESS", "less_equal": "LESS_EQUAL"}
+VALIDATION_MESSAGES = {"list": "Bitte einen Eintrag aus der Liste wählen.", "whole": "Hier ist nur eine ganze Zahl im erlaubten Bereich möglich.",
+                       "decimal": "Hier ist nur eine Zahl im erlaubten Bereich möglich.", "date": "Hier ist nur ein Datum im erlaubten Bereich möglich.",
+                       "textlen": "Der Text ist zu lang oder zu kurz."}
+PIVOT_FUNCTIONS = {"sum": "SUM", "count": "COUNT", "average": "AVERAGE", "max": "MAX", "min": "MIN"}
+MAX_SPLIT_SHEETS = 60
+
+# Geschützte Blätter und Mappen: Befehle, die Zellen bzw. den Aufbau der Mappe ändern
+CELL_COMMANDS = {"input", "paste_text", "paste", "clear", "fill", "format", "number_format", "borders", "merge", "insert", "size", "sort",
+                 "autofilter", "filter", "add_chart", "chart_type", "move_object", "delete_object", "conditional", "clear_conditional",
+                 "validation", "duplicates", "text_to_columns", "set_texts", "lock", "freeze", "print_area"}
+UNLOCKED_COMMANDS = {"input", "paste_text", "clear", "set_texts"}  # erlaubt in freigegebenen Zellen
+BOOK_COMMANDS = {"add_sheet", "rename_sheet", "delete_sheet", "move_sheet", "tab_color", "pivot", "split_sheet", "merge_sheets", "import_book"}
+
+
+class _BarPoint(unohelper.Base, XDataBarEntry):
+    def __init__(self, kind, formula="0"):
+        self.kind, self.formula = kind, formula
+
+    def getType(self):  # noqa: N802 - UNO
+        return self.kind
+
+    def setType(self, value):  # noqa: N802
+        self.kind = value
+
+    def getFormula(self):  # noqa: N802
+        return self.formula
+
+    def setFormula(self, value):  # noqa: N802
+        self.formula = value
+
+
+def _filled(block):
+    """Gefüllte Zellen eines Bereichs. ``queryContentCells`` meldet auch eine Zelle links daneben, deren Text in den
+    Bereich hineinragt – deshalb mit dem Bereich geschnitten."""
+    own = block.getRangeAddress()
+    count = 0
+    for a in block.queryContentCells(1 | 2 | 4 | 16).getRangeAddresses():
+        rows = min(a.EndRow, own.EndRow) - max(a.StartRow, own.StartRow) + 1
+        cols = min(a.EndColumn, own.EndColumn) - max(a.StartColumn, own.StartColumn) + 1
+        if rows > 0 and cols > 0:
+            count += rows * cols
+    return count
+
+
+def _touches(a, r0, c0, r1, c1):
+    return not (a.EndRow < r0 or a.StartRow > r1 or a.EndColumn < c0 or a.StartColumn > c1)
+
+
+def _plain(value):
+    """Zahl wie in der Zelle ohne Format (»5« statt »5.0«), Text unverändert."""
+    if isinstance(value, float):
+        return str(int(value)) if value == int(value) else repr(value)
+    return str(value)
+
+
+def _formula_value(value):
+    """Wert für eine Bedingung: Zahl (auch »1,5«) als Zahl, sonst Text in Anführungszeichen."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return repr(float(value))
+    text = str(value).strip()
+    number = text.replace(".", "").replace(",", ".") if "," in text else text
+    try:
+        return repr(float(number))
+    except ValueError:
+        return '"%s"' % text.replace('"', '""')
+
+
+def _compare(operator, value, first, second):
+    """ConditionFormatOperator 0–7 (gleich, kleiner, größer, ≤, ≥, ungleich, zwischen, nicht zwischen)."""
+    if isinstance(first, float) or isinstance(second, float):
+        if not isinstance(value, float):
+            return False
+    else:
+        value = (value if isinstance(value, str) else _plain(value)).lower()
+        first = str(first).lower() if first is not None else None
+        second = str(second).lower() if second is not None else None
+    try:
+        if operator == 0:
+            return value == first
+        if operator == 1:
+            return value < first
+        if operator == 2:
+            return value > first
+        if operator == 3:
+            return value <= first
+        if operator == 4:
+            return value >= first
+        if operator == 5:
+            return value != first
+        low, high = sorted((first, second))
+        inside = low <= value <= high
+        return inside if operator == 6 else not inside
+    except TypeError:
+        return False
+
+
+def _compare_op(name, value, first, second):
+    """Wie ``_compare`` für die Namen von com.sun.star.sheet.ConditionOperator (Datenüberprüfung)."""
+    numbers = {"EQUAL": 0, "LESS": 1, "GREATER": 2, "LESS_EQUAL": 3, "GREATER_EQUAL": 4, "NOT_EQUAL": 5, "BETWEEN": 6, "NOT_BETWEEN": 7}
+    if name not in numbers:
+        return True
+    if first is _UNKNOWN or second is _UNKNOWN and numbers[name] in (6, 7):
+        return True  # Formel als Grenze: nicht prüfbar, also zulassen
+    return _compare(numbers[name], value, first, second)
+
+
+def _scale_value(kind, formula, numbers, literal, sheet):
+    if not numbers:
+        return None
+    if kind == SCALE_MIN:
+        return numbers[0]
+    if kind == SCALE_MAX:
+        return numbers[-1]
+    try:
+        number = float(formula)
+    except (TypeError, ValueError):
+        value = literal(sheet, formula)
+        return value if isinstance(value, float) else None
+    if kind == SCALE_VALUE:
+        return number
+    if kind == SCALE_PERCENT:
+        return numbers[0] + (numbers[-1] - numbers[0]) * number / 100.0
+    if kind == SCALE_PERCENTILE:
+        position = (len(numbers) - 1) * number / 100.0
+        low = int(position)
+        high = min(len(numbers) - 1, low + 1)
+        return numbers[low] + (numbers[high] - numbers[low]) * (position - low)
+    return None
+
+
+def _blend(points, value):
+    """Farbe an ``value`` zwischen den Punkten [(Wert, 0xRRGGBB)] der Farbskala."""
+    if value <= points[0][0]:
+        return points[0][1]
+    for (low, low_color), (high, high_color) in zip(points, points[1:]):
+        if value <= high:
+            share = 0.0 if high == low else (value - low) / (high - low)
+            parts = []
+            for shift in (16, 8, 0):
+                a, b = (low_color >> shift) & 255, (high_color >> shift) & 255
+                parts.append(int(round(a + (b - a) * share)))
+            return (parts[0] << 16) | (parts[1] << 8) | parts[2]
+    return points[-1][1]
+
+
+def _date_serial(text):
+    """»31.12.2026« → Tageszahl wie in Excel (ab 30.12.1899)."""
+    import datetime
+
+    parts = str(text).strip().split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        day, month, year = (int(part) for part in parts)
+        if year < 100:
+            year += 2000
+        return (datetime.date(year, month, day) - datetime.date(1899, 12, 30)).days
+    except ValueError:
+        return None
+
+
+def _validation_value(kind, value):
+    if value is None or str(value).strip() == "":
+        return None
+    if kind == "date":
+        serial = _date_serial(value)
+        return str(serial) if serial is not None else None
+    text = str(value).strip().replace(".", "").replace(",", ".") if "," in str(value) else str(value).strip()
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    if kind in ("whole", "textlen"):
+        number = int(round(number))
+        return str(number)
+    return repr(number)
+
+
+def _shown_value(kind, formula):
+    """Grenze einer Prüfung für den Dialog (deutsche Schreibweise, Datum als TT.MM.JJJJ)."""
+    text = str(formula or "").strip()
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    if kind == "DATE":
+        import datetime
+
+        return (datetime.date(1899, 12, 30) + datetime.timedelta(days=int(number))).strftime("%d.%m.%Y")
+    return _plain(number).replace(".", ",")
+
+
+def _runs(rows):
+    """Aufeinanderfolgende Zeilennummern zusammenfassen: [3, 4, 5, 9] → [(3, 5), (9, 9)]."""
+    runs = []
+    for row in sorted(rows):
+        if runs and row == runs[-1][1] + 1:
+            runs[-1] = (runs[-1][0], row)
+        else:
+            runs.append((row, row))
+    return runs
+
+
+def _sheet_name(text):
+    """Erlaubter Name für ein Blatt (höchstens 31 Zeichen, ohne [ ] * ? : / \\)."""
+    name = "".join(" " if char in "[]*?:/\\" else char for char in str(text)).strip().strip("'")
+    return (name or "Blatt")[:31]
+
+
+def _file_part(text):
+    name = "".join("_" if char in '<>:"/\\|?*' or ord(char) < 32 else char for char in str(text)).strip().rstrip(".")
+    return name[:80] or "Blatt"
 
 
 class CalcError(Exception):
@@ -199,13 +434,16 @@ class Kernel:
         names = []
         for index in range(sheets.getCount()):
             sheet = sheets.getByIndex(index)
-            names.append({"name": sheet.getName(), "visible": bool(sheet.IsVisible), "color": _color(getattr(sheet, "TabColor", -1))})
+            names.append({"name": sheet.getName(), "visible": bool(sheet.IsVisible), "color": _color(getattr(sheet, "TabColor", -1)),
+                          "protected": bool(sheet.isProtected())})
         return {
             "modified": bool(doc.model.isModified()),
             "undo": undo.getCurrentUndoActionTitle() if undo.isUndoPossible() else "",
             "redo": undo.getCurrentRedoActionTitle() if undo.isRedoPossible() else "",
             "sheets": names,
             "active": self.active_sheet(doc),
+            "book": bool(doc.model.isProtected()),  # Aufbau der Mappe geschützt
+            "encrypted": bool(doc.password),
         }
 
     def active_sheet(self, doc):
@@ -600,6 +838,27 @@ class Kernel:
                 for col in range(pa.StartColumn, pa.EndColumn + 1):
                     line[col - c0] = number
         default = doc.styles.get(self._default_style(doc))
+        # Bedingte Formatierung: LibreOffice gibt das Aussehen nicht heraus – hier ausgewertet, als eigener Stil der Zelle
+        looks = self._conditional(doc, sheet, r0, c0, a.EndRow, a.EndColumn)
+        if looks:
+            keys = {number: key for key, number in doc.styles.items()}
+            for (row, col), look in looks.items():
+                base = list(keys.get(styles[row - r0][col - c0]) or self._default_style(doc))
+                if "bold" in look:
+                    base[2] = look["bold"]
+                if look.get("color"):
+                    base[6] = look["color"]
+                if look.get("background"):
+                    base[7] = look["background"]
+                if look.get("bar"):
+                    base[16] = tuple(look["bar"])
+                style = tuple(base)
+                number = doc.styles.get(style)
+                if number is None:
+                    number = len(doc.styles) + 1
+                    doc.styles[style] = number
+                    new_styles[number] = self._style_dict(style)
+                styles[row - r0][col - c0] = number
         cells = [[None if styles[r][c] == default else ["", " ", styles[r][c]] for c in range(width)] for r in range(height)]
         content = block.queryContentCells(CONTENT_DATA)
         enum = content.getCells().createEnumeration()
@@ -607,6 +866,8 @@ class Kernel:
             cell = enum.nextElement()
             ca = cell.getCellAddress()
             row, col = ca.Row - r0, ca.Column - c0
+            if not (0 <= row < height and 0 <= col < width):
+                continue  # Text einer Zelle links daneben, der in den Bereich ragt (meldet queryContentCells mit)
             kind = cell.getType().value
             if kind == "VALUE":
                 art = "n"
@@ -652,16 +913,16 @@ class Kernel:
             _color(part.CharColor), _color(background), _enum_value(part.HoriJustify), int(part.VertJustify),
             bool(part.IsTextWrapped),
             self._border(part.TopBorder2), self._border(part.BottomBorder2), self._border(part.LeftBorder2), self._border(part.RightBorder2),
-            int(part.NumberFormat),
+            int(part.NumberFormat), None,  # zuletzt: Datenbalken der bedingten Formatierung (Farbe, Anteil)
         )
 
     def _style_dict(self, style):
-        font, size, bold, italic, underline, strike, color, background, halign, valign, wrap, top, bottom, left, right, number = style
+        font, size, bold, italic, underline, strike, color, background, halign, valign, wrap, top, bottom, left, right, number, bar = style
         return {
             "font": font, "size": size, "bold": bold, "italic": italic, "underline": underline, "strike": strike,
             "color": color, "background": background, "halign": {"LEFT": "left", "CENTER": "center", "RIGHT": "right", "BLOCK": "justify"}.get(halign, ""),
             "valign": {1: "top", 2: "center", 3: "bottom"}.get(valign, ""), "wrap": wrap,
-            "top": top, "bottom": bottom, "left": left, "right": right, "format": number,
+            "top": top, "bottom": bottom, "left": left, "right": right, "format": number, "bar": list(bar) if bar else None,
         }
 
     def cmd_cell(self, args):
@@ -673,7 +934,8 @@ class Kernel:
         cursor.collapseToMergedArea()
         style = self._style_dict(self._style_of(cell))
         return {"input": cell.FormulaLocal if cell.getType().value != "EMPTY" else "", "style": style,
-                "formatKind": self._format_kind(doc, cell.NumberFormat), "merged": _address(cursor)}
+                "formatKind": self._format_kind(doc, cell.NumberFormat), "merged": _address(cursor),
+                "validation": self._validation_info(doc, sheet, cell)}
 
     def _format_kind(self, doc, key):
         try:
@@ -711,8 +973,23 @@ class Kernel:
         if text == "":
             cell.setString("")
             sheet.getCellRangeByPosition(int(args["col"]), int(args["row"]), int(args["col"]), int(args["row"])).clearContents(CONTENT_DATA)
-        else:
+            return self.changed(doc)
+        was_modified = doc.model.isModified()
+        manager = self.undo_context(doc, "Eingabe")
+        try:
             cell.FormulaLocal = text
+            problem = self._invalid(doc, sheet, cell)
+        finally:
+            manager.leaveUndoContext()
+        if problem:
+            if _enum_value(cell.Validation.ErrorAlertStyle) == "STOP":
+                # Datenüberprüfung: die Eingabe zurücknehmen, als wäre sie nie gewesen
+                manager.undo()
+                manager.clearRedo()
+                if not was_modified:
+                    doc.model.setModified(False)
+                raise CalcError(problem, "ungueltig")
+            return self.changed(doc, {"warning": problem})
         return self.changed(doc)
 
     def cmd_paste_text(self, args):
@@ -1233,11 +1510,7 @@ class Kernel:
         """Statuszeile: Summe (im Format der ersten Zahl), Anzahl der Zahlen und gefüllten Zellen, Mittelwert."""
         doc = self.doc(args)
         sheet, block = self.cell_range(doc, args)
-        filled = block.queryContentCells(CONTENT_DATA)
-        count = 0
-        for index in range(filled.getCount()):
-            a = filled.getByIndex(index).getRangeAddress()
-            count += (a.EndRow - a.StartRow + 1) * (a.EndColumn - a.StartColumn + 1)
+        count = _filled(block)
         if count == 0:
             return {"count": 0, "numbers": 0, "sum": "", "average": ""}
         numbers = int(block.computeFunction(uno.Enum("com.sun.star.sheet.GeneralFunction", "COUNTNUMS")))
@@ -1380,6 +1653,776 @@ class Kernel:
         doc.model.setModified(True)
         return self.changed(doc, {"objects": self._objects(sheet)})
 
+    # Bedingte Formatierung (seit 5.0 Beta 5) ----------------------------------------------------------------------
+    def _formats_ranges(self, doc, block):
+        ranges = doc.model.createInstance("com.sun.star.sheet.SheetCellRanges")
+        ranges.addRangeAddress(block.getRangeAddress(), False)
+        return ranges
+
+    def _condition_style(self, doc, key):
+        """Zellvorlage für »Hervorheben« (wie in Excel: helle Füllung, dunkle Schrift) – einmal je Mappe angelegt."""
+        name, background, color = CONDITION_STYLES.get(key, CONDITION_STYLES["red"])
+        family = doc.model.getStyleFamilies().getByName("CellStyles")
+        if not family.hasByName(name):
+            style = doc.model.createInstance("com.sun.star.style.CellStyle")
+            family.insertByName(name, style)
+            style.CellBackColor = background
+            style.IsCellBackgroundTransparent = False
+            style.CharColor = color
+        return name
+
+    def cmd_conditional(self, args):
+        """Regel für die Auswahl: ``rule`` greater, less, between, equal, contains, duplicate, unique, top, bottom, above,
+        below (mit ``style`` red, yellow, green und Werten ``value1``/``value2``) oder Datenbalken (bar_*)."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        rule = str(args.get("rule") or "")
+        manager = self.undo_context(doc, "Bedingte Formatierung")
+        try:
+            formats = sheet.ConditionalFormats
+            ident = formats.createByRange(self._formats_ranges(doc, block))
+            target = [item for item in formats.getConditionalFormats() if item.ID == ident]
+            if not target:
+                raise CalcError("Die Regel ließ sich nicht anlegen.", "regel")
+            target = target[0]
+            # Farbskalen legt Novadesk nicht an: LibreOffice stürzt ab, wenn man die Punkte einer neuen Skala setzt (sie
+            # hat noch keine). Farbskalen aus Dateien zeigt Novadesk aber an.
+            if rule in BARS:
+                target.createEntry(DATABAR_ENTRY, 0)
+                bar = target.getByIndex(0)
+                bar.Color = BARS[rule]
+                bar.UseGradient = False
+                bar.DataBarEntries = (_BarPoint(BAR_MIN), _BarPoint(BAR_MAX))
+            elif rule in OPERATORS:
+                target.createEntry(CONDITION_ENTRY, 0)
+                entry = target.getByIndex(0)
+                entry.Operator = OPERATORS[rule]
+                first, second = args.get("value1"), args.get("value2")
+                if rule in ("greater", "less", "between", "equal", "contains"):
+                    if first in (None, "") or rule == "between" and second in (None, ""):
+                        raise CalcError("Bitte einen Wert eingeben.", "wert")
+                    entry.Formula1 = _formula_value(first)
+                    if rule == "between":
+                        entry.Formula2 = _formula_value(second)
+                elif rule in ("top", "bottom"):
+                    entry.Formula1 = str(max(1, int(float(first or 10))))
+                entry.StyleName = self._condition_style(doc, args.get("style") or "red")
+            else:
+                formats.removeByID(ident)
+                raise CalcError("Unbekannte Regel.", "regel")
+        finally:
+            manager.leaveUndoContext()
+        doc.model.setModified(True)
+        return self.changed(doc)
+
+    def cmd_clear_conditional(self, args):
+        """Regeln löschen: die, die die Auswahl berühren (``range``) bzw. alle des Blatts."""
+        doc = self.doc(args)
+        sheet = doc.sheet(args.get("sheet", 0))
+        formats = sheet.ConditionalFormats
+        r0 = c0 = r1 = c1 = None
+        if args.get("range"):
+            r0, c0, r1, c1 = (int(v) for v in args["range"])
+        removed = 0
+        for item in list(formats.getConditionalFormats()):
+            if r0 is not None and not any(_touches(a, r0, c0, r1, c1) for a in item.Range.getRangeAddresses()):
+                continue
+            formats.removeByID(item.ID)
+            removed += 1
+        if removed:
+            doc.model.setModified(True)
+        return self.changed(doc, {"removed": removed})
+
+    def _style_look(self, doc, name, cache):
+        if name not in cache:
+            look = {}
+            try:
+                style = doc.model.getStyleFamilies().getByName("CellStyles").getByName(name)
+                if not style.IsCellBackgroundTransparent:
+                    look["background"] = _color(style.CellBackColor)
+                if int(style.CharColor) >= 0:
+                    look["color"] = _color(style.CharColor)
+                if float(style.CharWeight) >= BOLD:
+                    look["bold"] = True
+            except Exception:  # noqa: BLE001 - Vorlage fehlt
+                pass
+            cache[name] = look
+        return cache[name]
+
+    def _literal(self, sheet, text):
+        """Wert einer Bedingung: Zahl, Text in Anführungszeichen oder Zellbezug – sonst ``_UNKNOWN`` (Formel)."""
+        text = str(text or "").strip()
+        if not text:
+            return _UNKNOWN
+        if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+            return text[1:-1].replace('""', '"')
+        try:
+            return float(text)
+        except ValueError:
+            pass
+        if not text.replace("$", "").replace(":", "").isalnum():
+            return _UNKNOWN
+        try:
+            cell = sheet.getCellRangeByName(text.replace("$", "")).getCellByPosition(0, 0)
+        except Exception:  # noqa: BLE001
+            return _UNKNOWN
+        kind = cell.getType().value
+        if kind == "VALUE" or kind == "FORMULA" and cell.FormulaResultType2 == RESULT_VALUE:
+            return cell.getValue()
+        return cell.getString()
+
+    def _conditional(self, doc, sheet, r0, c0, r1, c1):
+        """Aussehen aus den Regeln der bedingten Formatierung für die gefüllten Zellen des Bereichs: {(Zeile, Spalte):
+        {background, color, bold, bar}}. Ausgewertet werden Vergleiche, Text, Doppelte, Obere/Untere, Durchschnitt,
+        Farbskalen und Datenbalken; Regeln mit Formeln zeigt Novadesk nicht (sie bleiben in der Datei)."""
+        try:
+            formats = sheet.ConditionalFormats.getConditionalFormats()
+        except Exception:  # noqa: BLE001 - ältere Dateien ohne Regeln
+            return {}
+        result = {}
+        styles = {}
+        for item in formats:
+            try:
+                addresses = item.Range.getRangeAddresses()
+            except Exception:  # noqa: BLE001
+                continue
+            if not any(_touches(a, r0, c0, r1, c1) for a in addresses):
+                continue
+            if sum((a.EndRow - a.StartRow + 1) * (a.EndColumn - a.StartColumn + 1) for a in addresses) > MAX_CONDITION_CELLS:
+                continue
+            values = {}
+            for a in addresses:
+                data = sheet.getCellRangeByPosition(a.StartColumn, a.StartRow, a.EndColumn, a.EndRow).getDataArray()
+                for i, line in enumerate(data):
+                    for j, value in enumerate(line):
+                        if value != "":
+                            values[(a.StartRow + i, a.StartColumn + j)] = value
+            if not values:
+                continue
+            numbers = sorted(value for value in values.values() if isinstance(value, float))
+            entries = []
+            for index in range(item.getCount()):
+                try:
+                    entries.append(item.getByIndex(index))
+                except Exception:  # noqa: BLE001
+                    continue
+            prepared = [self._prepare_entry(doc, sheet, entry, values, numbers, styles) for entry in entries]
+            for (row, col), value in values.items():
+                if not (r0 <= row <= r1 and c0 <= col <= c1):
+                    continue
+                for test in prepared:
+                    if test is None:
+                        continue
+                    look = test(value)
+                    if look:
+                        target = result.setdefault((row, col), {})
+                        for key, part in look.items():
+                            target.setdefault(key, part)
+        return result
+
+    def _prepare_entry(self, doc, sheet, entry, values, numbers, styles):
+        """Prüffunktion einer Regel (Wert → Aussehen oder None) – oder None, wenn Novadesk sie nicht auswerten kann."""
+        try:
+            kind = int(entry.Type)
+        except Exception:  # noqa: BLE001
+            return None
+        if kind == COLORSCALE_ENTRY:
+            points = []
+            for point in entry.ColorScaleEntries:
+                value = _scale_value(int(point.getType()), point.getFormula(), numbers, self._literal, sheet)
+                if value is None:
+                    return None
+                points.append((value, int(point.getColor())))
+            if len(points) < 2:
+                return None
+            points.sort(key=lambda p: p[0])
+
+            def scale(value):
+                if not isinstance(value, float):
+                    return None
+                return {"background": _color(_blend(points, value))}
+
+            return scale
+        if kind == DATABAR_ENTRY:
+            if not numbers:
+                return None
+            low, high = min(0.0, numbers[0]), max(0.0, numbers[-1])
+            color = _color(getattr(entry, "Color", 0x638EC6))
+
+            def bar(value):
+                if not isinstance(value, float) or high <= low:
+                    return None
+                return {"bar": (color, round(max(0.0, min(1.0, (value - low) / (high - low))), 2))}
+
+            return bar
+        if kind != CONDITION_ENTRY:
+            return None
+        look = self._style_look(doc, entry.StyleName, styles)
+        if not look:
+            return None
+        operator = int(entry.Operator)
+        first = self._literal(sheet, entry.Formula1) if operator in VALUE_OPERATORS else None
+        second = self._literal(sheet, entry.Formula2) if operator in (6, 7) else None
+        if first is _UNKNOWN or second is _UNKNOWN:
+            return None
+        if operator in (8, 9):
+            counts = {}
+            for value in values.values():
+                key = value.lower() if isinstance(value, str) else value
+                counts[key] = counts.get(key, 0) + 1
+
+            def duplicate(value):
+                many = counts.get(value.lower() if isinstance(value, str) else value, 0) > 1
+                return look if many == (operator == 8) else None
+
+            return duplicate
+        if operator in (10, 11, 12, 13):
+            if not numbers:
+                return None
+            count = int(first) if isinstance(first, float) else 10
+            if operator in (12, 13):
+                count = max(1, int(len(numbers) * count / 100.0))
+            count = max(1, min(len(numbers), count))
+            limit = numbers[-count] if operator in (10, 12) else numbers[count - 1]
+
+            def rank(value):
+                if not isinstance(value, float):
+                    return None
+                return look if (value >= limit if operator in (10, 12) else value <= limit) else None
+
+            return rank
+        if operator in (14, 15, 16, 17):
+            if not numbers:
+                return None
+            average = sum(numbers) / len(numbers)
+            checks = {14: lambda v: v > average, 15: lambda v: v < average, 16: lambda v: v >= average, 17: lambda v: v <= average}
+            check = checks[operator]
+            return lambda value: look if isinstance(value, float) and check(value) else None
+        if operator in (20, 21, 22, 23):
+            needle = str(first if not isinstance(first, float) else _plain(first)).lower()
+            checks = {20: lambda t: t.startswith(needle), 21: lambda t: t.endswith(needle), 22: lambda t: needle in t, 23: lambda t: needle not in t}
+            check = checks[operator]
+            return lambda value: look if check((value if isinstance(value, str) else _plain(value)).lower()) else None
+        if operator in range(0, 8):
+
+            def compare(value):
+                return look if _compare(operator, value, first, second) else None
+
+            return compare
+        return None
+
+    # Datenüberprüfung (seit 5.0 Beta 5) -------------------------------------------------------------------------
+    def cmd_validation(self, args):
+        """Erlaubte Eingaben der Auswahl: ``kind`` any (alles), list (``items``), whole, decimal, date, textlen mit
+        ``operator`` und ``value1``/``value2``; ``message`` erscheint bei falscher Eingabe, ``strict`` lehnt sie ab."""
+        doc = self.doc(args)
+        _sheet, block = self.cell_range(doc, args)
+        kind = str(args.get("kind") or "any")
+        if kind not in VALIDATION_TYPES:
+            raise CalcError("Unbekannte Art der Prüfung.", "pruefung")
+        validation = block.Validation
+        validation.Type = uno.Enum("com.sun.star.sheet.ValidationType", VALIDATION_TYPES[kind])
+        if kind == "list":
+            items = [str(item).strip() for item in args.get("items") or [] if str(item).strip()]
+            if not items:
+                raise CalcError("Bitte mindestens einen Eintrag für die Liste angeben.", "wert")
+            validation.setFormula1(";".join('"%s"' % item.replace('"', '""') for item in items))
+            validation.ShowList = 1  # com.sun.star.sheet.TableValidationVisibility.UNSORTED
+        elif kind != "any":
+            operator = str(args.get("operator") or "between")
+            validation.setOperator(uno.Enum("com.sun.star.sheet.ConditionOperator", VALIDATION_OPERATORS.get(operator, "BETWEEN")))
+            for number, key in ((1, "value1"), (2, "value2")):
+                if number == 2 and operator not in ("between", "not_between"):
+                    continue
+                value = _validation_value(kind, args.get(key))
+                if value is None:
+                    raise CalcError("Bitte einen gültigen Wert eingeben (Zahl bzw. Datum wie 31.12.2026).", "wert")
+                getattr(validation, "setFormula%d" % number)(value)
+        message = str(args.get("message") or "").strip()
+        validation.ShowErrorMessage = kind != "any"
+        validation.ErrorMessage = message
+        validation.ErrorTitle = "Novadesk"
+        validation.ErrorAlertStyle = uno.Enum("com.sun.star.sheet.ValidationAlertStyle", "STOP" if args.get("strict", True) else "INFO")
+        validation.IgnoreBlankCells = True
+        manager = self.undo_context(doc, "Datenüberprüfung")
+        try:
+            block.Validation = validation
+        finally:
+            manager.leaveUndoContext()
+        doc.model.setModified(True)
+        return self.changed(doc)
+
+    def _validation_info(self, doc, sheet, cell):
+        """Prüfung einer Zelle für die Oberfläche: {kind, operator, value1, value2, items, message, strict}."""
+        try:
+            validation = cell.Validation
+            kind = _enum_value(validation.Type)
+        except Exception:  # noqa: BLE001
+            return None
+        names = {value: key for key, value in VALIDATION_TYPES.items()}
+        if kind not in names or kind == "ANY":
+            return None
+        info = {"kind": names[kind], "message": str(validation.ErrorMessage or ""),
+                "strict": _enum_value(validation.ErrorAlertStyle) == "STOP"}
+        if kind == "LIST":
+            info["items"] = self._list_items(doc, sheet, validation.getFormula1())
+            info["dropdown"] = int(validation.ShowList) != 0
+        else:
+            operators = {value: key for key, value in VALIDATION_OPERATORS.items()}
+            info["operator"] = operators.get(_enum_value(validation.getOperator()), "between")
+            info["value1"] = _shown_value(kind, validation.getFormula1())
+            info["value2"] = _shown_value(kind, validation.getFormula2())
+        return info
+
+    def _list_items(self, doc, sheet, formula):
+        """Einträge einer Auswahlliste: »"A";"B"« oder ein Bereich (auch auf einem anderen Blatt)."""
+        formula = str(formula or "").strip()
+        if formula.startswith('"'):
+            items, current, quoted, index = [], "", False, 0
+            while index < len(formula):
+                char = formula[index]
+                if char == '"':
+                    if quoted and formula[index + 1:index + 2] == '"':
+                        current += '"'
+                        index += 1
+                    else:
+                        quoted = not quoted
+                elif char == ";" and not quoted:
+                    items.append(current)
+                    current = ""
+                else:
+                    current += char
+                index += 1
+            items.append(current)
+            return [item for item in items if item != ""][:500]
+        target = sheet
+        reference = formula.lstrip("=").replace("$", "")
+        if "." in reference:
+            name, reference = reference.rsplit(".", 1)
+            name = name.strip("'")
+            if doc.model.Sheets.hasByName(name):
+                target = doc.model.Sheets.getByName(name)
+        try:
+            block = target.getCellRangeByName(reference)
+        except Exception:  # noqa: BLE001 - benannter Bereich oder Formel
+            return []
+        a = block.getRangeAddress()
+        items = []
+        for row in range(a.StartRow, min(a.EndRow, a.StartRow + 499) + 1):
+            for col in range(a.StartColumn, a.EndColumn + 1):
+                text = target.getCellByPosition(col, row).getString()
+                if text and text not in items:
+                    items.append(text)
+        return items
+
+    def _invalid(self, doc, sheet, cell):
+        """Text der Meldung, wenn der Inhalt der Zelle gegen ihre Prüfung verstößt – sonst ``None``."""
+        info = self._validation_info(doc, sheet, cell)
+        if not info:
+            return None
+        kind = cell.getType().value
+        if kind == "EMPTY":
+            return None
+        number = None
+        if kind == "VALUE" or kind == "FORMULA" and cell.FormulaResultType2 == RESULT_VALUE:
+            number = cell.getValue()
+        text = cell.getString()
+        validation = cell.Validation
+        ok = True
+        if info["kind"] == "list":
+            ok = text.lower() in [item.lower() for item in info.get("items") or []]
+        elif info["kind"] == "textlen":
+            ok = _compare_op(_enum_value(validation.getOperator()), float(len(text)), self._literal(sheet, validation.getFormula1()),
+                             self._literal(sheet, validation.getFormula2()))
+        else:
+            if number is None or info["kind"] == "whole" and number != int(number):
+                ok = False
+            else:
+                ok = _compare_op(_enum_value(validation.getOperator()), number, self._literal(sheet, validation.getFormula1()),
+                                 self._literal(sheet, validation.getFormula2()))
+        if ok:
+            return None
+        return info.get("message") or VALIDATION_MESSAGES.get(info["kind"], "Diese Eingabe ist hier nicht erlaubt.")
+
+    # Pivot-Tabellen, Duplikate, Text in Spalten, Blitzvorschau (seit 5.0 Beta 5) ---------------------------------------
+    def cmd_table_info(self, args):
+        """Tabelle um die Auswahl: Bereich, Spaltennamen (erste Zeile), welche Spalten Zahlen haben, Kopfzeile erkannt."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        region = self._region(sheet, block)
+        a = region.getRangeAddress()
+        header = self._has_header(sheet, a)
+        names, numeric = [], []
+        data = sheet.getCellRangeByPosition(a.StartColumn, a.StartRow, a.EndColumn, min(a.EndRow, a.StartRow + 300)).getDataArray()
+        for col in range(a.StartColumn, a.EndColumn + 1):
+            title = sheet.getCellByPosition(col, a.StartRow).getString().strip() if header else ""
+            names.append(title or "Spalte %s" % column_name(col))
+            numeric.append(any(isinstance(line[col - a.StartColumn], float) for line in data[1 if header else 0:]))
+        return {"range": [a.StartRow, a.StartColumn, a.EndRow, a.EndColumn], "fields": names, "numeric": numeric,
+                "header": bool(header), "rows": a.EndRow - a.StartRow + (0 if header else 1)}
+
+    def cmd_pivot(self, args):
+        """Pivot-Tabelle auf einem neuen Blatt: ``rows``/``cols`` (Spalten der Tabelle, ab 0), ``data`` (Spalte der Werte)
+        und ``function`` sum, count, average, max, min."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        region = self._region(sheet, block)
+        a = region.getRangeAddress()
+        if a.EndRow <= a.StartRow:
+            raise CalcError("Für eine Pivot-Tabelle braucht die Tabelle eine Kopfzeile und Daten darunter.", "pivot")
+        sheets = doc.model.Sheets
+        width = a.EndColumn - a.StartColumn + 1
+        rows = [int(i) for i in args.get("rows") or [] if 0 <= int(i) < width]
+        cols = [int(i) for i in args.get("cols") or [] if 0 <= int(i) < width and int(i) not in rows]
+        data = int(args.get("data", -1))
+        if not rows and not cols or not 0 <= data < width:
+            raise CalcError("Bitte Zeilen und Werte für die Pivot-Tabelle wählen.", "pivot")
+        name = self._unique_name(doc, "Pivot")
+        position = self.active_sheet(doc) + 1
+        sheets.insertNewByName(name, position)
+        target = sheets.getByName(name)
+        tables = target.getDataPilotTables()
+        descriptor = tables.createDataPilotDescriptor()
+        descriptor.setSourceRange(a)
+        try:
+            descriptor.ShowFilterButton = False  # ohne Zeile »Filter« darüber (wie Excel)
+        except Exception:  # noqa: BLE001
+            pass
+        fields = descriptor.getDataPilotFields()
+        for index in rows:
+            fields.getByIndex(index).Orientation = uno.Enum("com.sun.star.sheet.DataPilotFieldOrientation", "ROW")
+        for index in cols:
+            fields.getByIndex(index).Orientation = uno.Enum("com.sun.star.sheet.DataPilotFieldOrientation", "COLUMN")
+        field = fields.getByIndex(data)
+        field.Orientation = uno.Enum("com.sun.star.sheet.DataPilotFieldOrientation", "DATA")
+        field.Function = uno.Enum("com.sun.star.sheet.GeneralFunction", PIVOT_FUNCTIONS.get(args.get("function"), "SUM"))
+        address = uno.createUnoStruct("com.sun.star.table.CellAddress")
+        address.Sheet, address.Column, address.Row = position, 0, 0
+        number = 1
+        while tables.hasByName("Pivot-Tabelle %d" % number):
+            number += 1
+        tables.insertNewByName("Pivot-Tabelle %d" % number, address, descriptor)
+        try:
+            columns = target.getColumns()
+            for col in range(0, len(rows) + 12):
+                columns.getByIndex(col).OptimalWidth = True
+            doc.controller.setActiveSheet(target)
+        except Exception:  # noqa: BLE001
+            pass
+        return self.changed(doc, {"sheet": position})
+
+    def cmd_pivot_refresh(self, args):
+        doc = self.doc(args)
+        count = 0
+        sheets = doc.model.Sheets
+        for index in range(sheets.getCount()):
+            tables = sheets.getByIndex(index).getDataPilotTables()
+            for name in tables.getElementNames():
+                tables.getByName(name).refresh()
+                count += 1
+        return self.changed(doc, {"count": count})
+
+    def cmd_duplicates(self, args):
+        """Doppelte Zeilen der Tabelle um die Auswahl entfernen (die erste bleibt): verglichen werden ``columns`` (ab 0,
+        Spalten der Tabelle; leer: alle), Groß-/Kleinschreibung zählt nicht (wie Excel)."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        region = self._region(sheet, block)
+        a = region.getRangeAddress()
+        width = a.EndColumn - a.StartColumn + 1
+        columns = [int(i) for i in args.get("columns") or range(width) if 0 <= int(i) < width] or list(range(width))
+        header = bool(args.get("header", self._has_header(sheet, a)))
+        data = region.getDataArray()
+        seen, remove = set(), []
+        for index in range(1 if header else 0, len(data)):
+            key = tuple(_plain(data[index][col]).lower() if isinstance(data[index][col], str) else data[index][col] for col in columns)
+            if key in seen:
+                remove.append(a.StartRow + index)
+            else:
+                seen.add(key)
+        manager = self.undo_context(doc, "Duplikate entfernen")
+        try:
+            for first, last in reversed(_runs(remove)):
+                address = uno.createUnoStruct("com.sun.star.table.CellRangeAddress")
+                address.Sheet, address.StartColumn, address.EndColumn = a.Sheet, a.StartColumn, a.EndColumn
+                address.StartRow, address.EndRow = first, last
+                sheet.removeRange(address, uno.Enum("com.sun.star.sheet.CellDeleteMode", "UP"))
+        finally:
+            manager.leaveUndoContext()
+        kept = len(data) - (1 if header else 0) - len(remove)
+        return self.changed(doc, {"removed": len(remove), "remaining": kept,
+                                  "range": [a.StartRow, a.StartColumn, a.EndRow - len(remove), a.EndColumn]})
+
+    def _column_rows(self, sheet, block):
+        """Spalte und Zeilen für »Text in Spalten«: die markierten Zellen der ersten Spalte – bei einer Zelle die Zeilen
+        der Tabelle um sie herum."""
+        a = block.getRangeAddress()
+        col = a.StartColumn
+        if a.StartRow == a.EndRow:
+            region = self._region(sheet, block).getRangeAddress()
+            return col, region.StartRow, region.EndRow
+        cursor = sheet.createCursor()
+        cursor.gotoEndOfUsedArea(False)
+        return col, a.StartRow, min(a.EndRow, cursor.getRangeAddress().EndRow)
+
+    def cmd_column_texts(self, args):
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        col, r0, r1 = self._column_rows(sheet, block)
+        samples = [sheet.getCellByPosition(col, row).getString() for row in range(r0, min(r1, r0 + 7) + 1)]
+        return {"col": col, "rows": [r0, r1], "samples": samples}
+
+    def cmd_text_to_columns(self, args):
+        """Texte einer Spalte an ``separator`` (»;«, »,«, Tab, Leerzeichen oder ein Zeichen) auf Spalten rechts daneben
+        verteilen. Ohne ``force`` kommt zuerst ``overwrite`` (Zahl der gefüllten Zielzellen) zurück, wenn welche voll sind."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        col, r0, r1 = self._column_rows(sheet, block)
+        separator = str(args.get("separator") or ";")
+        if separator == "tab":
+            separator = "\t"
+        rows = []
+        for row in range(r0, r1 + 1):
+            text = sheet.getCellByPosition(col, row).getString()
+            rows.append(text.split() if separator == " " else text.split(separator))
+        width = max((len(parts) for parts in rows), default=1)
+        if width <= 1:
+            raise CalcError("Das Trennzeichen kommt in den Texten nicht vor.", "trennzeichen")
+        if not args.get("force"):
+            count = _filled(sheet.getCellRangeByPosition(col + 1, r0, col + width - 1, r1))
+            if count:
+                return {"overwrite": count}
+        manager = self.undo_context(doc, "Text in Spalten")
+        try:
+            for offset, parts in enumerate(rows):
+                for index in range(width):
+                    cell = sheet.getCellByPosition(col + index, r0 + offset)
+                    part = parts[index].strip() if index < len(parts) else ""
+                    if part.startswith("="):
+                        cell.setString(part)
+                    elif part:
+                        cell.FormulaLocal = part
+                    else:
+                        cell.setString("")
+        finally:
+            manager.leaveUndoContext()
+        return self.changed(doc, {"range": [r0, col, r1, col + width - 1]})
+
+    def cmd_region_texts(self, args):
+        """Angezeigte Texte der Tabelle um die Auswahl (für die Blitzvorschau): Bereich und Zeilen."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        region = self._region(sheet, block)
+        a = region.getRangeAddress()
+        last_row = min(a.EndRow, a.StartRow + 4999)
+        last_col = min(a.EndColumn, a.StartColumn + 29)
+        lines = []
+        for row in range(a.StartRow, last_row + 1):
+            lines.append([sheet.getCellByPosition(col, row).getString() for col in range(a.StartColumn, last_col + 1)])
+        return {"range": [a.StartRow, a.StartColumn, last_row, last_col], "rows": lines}
+
+    def cmd_set_texts(self, args):
+        """Texte untereinander ab ``row``/``col`` eintragen (als Text, wie getippt nicht ausgewertet)."""
+        doc = self.doc(args)
+        sheet = doc.sheet(args.get("sheet", 0))
+        row, col = int(args["row"]), int(args["col"])
+        manager = self.undo_context(doc, str(args.get("title") or "Blitzvorschau"))
+        try:
+            for offset, text in enumerate(args.get("texts") or []):
+                if text is not None:
+                    sheet.getCellByPosition(col, row + offset).setString(str(text))
+        finally:
+            manager.leaveUndoContext()
+        return self.changed(doc)
+
+    # Blätter und Mappen teilen und zusammenführen (seit 5.0 Beta 5) --------------------------------------------------
+    def _copy_block(self, source, address, target, row, col):
+        destination = uno.createUnoStruct("com.sun.star.table.CellAddress")
+        destination.Sheet, destination.Column, destination.Row = target.getRangeAddress().Sheet, col, row
+        target.copyRange(destination, address)
+
+    def _copy_widths(self, source, target, first, last):
+        columns, widths = source.getColumns(), target.getColumns()
+        for col in range(first, last + 1):
+            widths.getByIndex(col - first).Width = columns.getByIndex(col).Width
+
+    def cmd_split_sheet(self, args):
+        """Tabelle um die Auswahl nach den Werten der Spalte ``col`` (ab 0) auf neue Blätter verteilen – je Wert ein
+        Blatt mit der Kopfzeile."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        region = self._region(sheet, block)
+        a = region.getRangeAddress()
+        col = int(args.get("col", 0))
+        if not 0 <= col <= a.EndColumn - a.StartColumn or a.EndRow <= a.StartRow:
+            raise CalcError("Bitte eine Spalte der Tabelle wählen.", "teilen")
+        groups = {}
+        for row in range(a.StartRow + 1, a.EndRow + 1):
+            value = sheet.getCellByPosition(a.StartColumn + col, row).getString().strip() or "(leer)"
+            groups.setdefault(value, []).append(row)
+        if len(groups) > MAX_SPLIT_SHEETS:
+            raise CalcError("Die Spalte hat mehr als %d verschiedene Werte – das wären zu viele Blätter." % MAX_SPLIT_SHEETS, "teilen")
+        sheets = doc.model.Sheets
+        names = []
+        manager = self.undo_context(doc, "Blatt teilen")
+        try:
+            for value, rows in groups.items():
+                name = self._unique_name(doc, _sheet_name(value))
+                sheets.insertNewByName(name, sheets.getCount())
+                target = sheets.getByName(name)
+                header = sheet.getCellRangeByPosition(a.StartColumn, a.StartRow, a.EndColumn, a.StartRow).getRangeAddress()
+                self._copy_block(sheet, header, target, 0, 0)
+                offset = 1
+                for first, last in _runs(rows):
+                    part = sheet.getCellRangeByPosition(a.StartColumn, first, a.EndColumn, last).getRangeAddress()
+                    self._copy_block(sheet, part, target, offset, 0)
+                    offset += last - first + 1
+                self._copy_widths(sheet, target, a.StartColumn, a.EndColumn)
+                names.append(name)
+        finally:
+            manager.leaveUndoContext()
+        return self.changed(doc, {"created": names})
+
+    def cmd_merge_sheets(self, args):
+        """Blätter ``sheets`` (Nummern) untereinander auf ein neues Blatt »Zusammengeführt«; mit ``header`` steht die
+        Kopfzeile nur einmal oben."""
+        doc = self.doc(args)
+        indexes = [int(i) for i in args.get("sheets") or []]
+        if len(indexes) < 2:
+            raise CalcError("Bitte mindestens zwei Blätter wählen.", "zusammen")
+        sources = [doc.sheet(i) for i in indexes]
+        sheets = doc.model.Sheets
+        name = self._unique_name(doc, "Zusammengeführt")
+        manager = self.undo_context(doc, "Blätter zusammenführen")
+        try:
+            sheets.insertNewByName(name, sheets.getCount())
+            target = sheets.getByName(name)
+            row = 0
+            for number, source in enumerate(sources):
+                cursor = source.createCursor()
+                cursor.gotoEndOfUsedArea(False)
+                used = cursor.getRangeAddress()
+                first = 1 if args.get("header") and number > 0 else 0
+                if used.EndRow < first:
+                    continue
+                part = source.getCellRangeByPosition(0, first, used.EndColumn, used.EndRow).getRangeAddress()
+                self._copy_block(source, part, target, row, 0)
+                if number == 0:
+                    self._copy_widths(source, target, 0, used.EndColumn)
+                row += used.EndRow - first + 1
+            doc.controller.setActiveSheet(target)
+        finally:
+            manager.leaveUndoContext()
+        return self.changed(doc, {"rows": row})
+
+    def cmd_import_book(self, args):
+        """Alle Blätter einer anderen Mappe (``path``) hinten anfügen (Namen, die es schon gibt, bekommen »_2«)."""
+        doc = self.doc(args)
+        load = (_prop("Hidden", True), _prop("MacroExecutionMode", 0), _prop("ReadOnly", True))
+        try:
+            other = self.desktop.loadComponentFromURL(_url(args["path"]), "_blank", 0, load)
+        except Exception as exc:  # noqa: BLE001
+            raise CalcError("Die Mappe ließ sich nicht öffnen (beschädigt oder mit Kennwort geschützt?).", "laden") from exc
+        if other is None or not other.supportsService("com.sun.star.sheet.SpreadsheetDocument"):
+            if other is not None:
+                other.close(True)
+            raise CalcError("Diese Datei ist keine Tabelle.", "art")
+        names = []
+        try:
+            sheets = doc.model.Sheets
+            for name in other.Sheets.getElementNames():
+                index = sheets.importSheet(other, name, sheets.getCount())
+                names.append(sheets.getByIndex(index).getName())
+        finally:
+            other.close(True)
+        return self.changed(doc, {"created": names})
+
+    def cmd_export_sheets(self, args):
+        """Jedes sichtbare Blatt als eigene Mappe in ``folder`` speichern (»<Name> – <Blatt>.xlsx«)."""
+        doc = self.doc(args)
+        folder = args["folder"]
+        stem = _file_part(args.get("stem") or "Mappe")
+        suffix = args.get("suffix") if args.get("suffix") in FILTERS and args.get("suffix") != ".csv" else ".xlsx"
+        written = []
+        sheets = doc.model.Sheets
+        for index in range(sheets.getCount()):
+            sheet = sheets.getByIndex(index)
+            if not sheet.IsVisible:
+                continue
+            single = self.desktop.loadComponentFromURL("private:factory/scalc", "_blank", 0, (_prop("Hidden", True),))
+            try:
+                first = single.Sheets.getByIndex(0).getName()
+                single.Sheets.importSheet(doc.model, sheet.getName(), 0)
+                single.Sheets.removeByName(first)  # das leere Blatt der neuen Mappe (das kopierte heißt sonst »…_2«)
+                if single.Sheets.getByIndex(0).getName() != sheet.getName():
+                    single.Sheets.getByIndex(0).setName(sheet.getName())
+                path = os.path.join(folder, "%s – %s%s" % (stem, _file_part(sheet.getName()), suffix))
+                single.storeToURL(_url(path), (_prop("FilterName", FILTERS[suffix]), _prop("Overwrite", True)))
+                written.append(path)
+            except Exception as exc:  # noqa: BLE001
+                raise CalcError("Das Blatt »%s« ließ sich nicht speichern." % sheet.getName(), "speichern") from exc
+            finally:
+                single.close(True)
+        return {"files": written}
+
+    # Schutz (seit 5.0 Beta 5) --------------------------------------------------------------------------------------
+    def cmd_protect(self, args):
+        """Blatt (``target`` sheet) oder Aufbau der Mappe (book) mit ``password`` schützen (``on``) bzw. freigeben."""
+        doc = self.doc(args)
+        item = doc.model if args.get("target") == "book" else doc.sheet(args.get("sheet", 0))
+        password = str(args.get("password") or "")
+        if args.get("on", True):
+            item.protect(password)
+        else:
+            try:
+                item.unprotect(password)
+            except Exception as exc:  # noqa: BLE001 - IllegalArgumentException
+                raise CalcError("Das Kennwort ist falsch.", "kennwort") from exc
+        doc.model.setModified(True)
+        return self.changed(doc)
+
+    def cmd_lock(self, args):
+        """Zellen der Auswahl sperren bzw. freigeben (freigegebene bleiben bei geschütztem Blatt bearbeitbar)."""
+        doc = self.doc(args)
+        _sheet, block = self.cell_range(doc, args)
+        protection = block.CellProtection
+        protection.IsLocked = bool(args.get("locked", True))
+        block.CellProtection = protection
+        doc.model.setModified(True)
+        return self.changed(doc)
+
+    def cmd_encrypt(self, args):
+        """Kennwort zum Öffnen setzen (leer: entfernen) – gilt ab dem nächsten Speichern als Excel oder ODF."""
+        doc = self.doc(args)
+        doc.password = str(args.get("password") or "")
+        doc.model.setModified(True)
+        return self.changed(doc)
+
+    def guard(self, command, args):
+        """Geschützte Blätter und Mappen: Änderungen ablehnen, statt sie still zu verwerfen (LibreOffice ignoriert sie)."""
+        if "doc" not in args or (command not in CELL_COMMANDS and command not in BOOK_COMMANDS):
+            return
+        doc = self.docs.get(int(args.get("doc", 0)))
+        if doc is None:
+            return
+        if command in BOOK_COMMANDS and doc.model.isProtected():
+            raise CalcError("Der Aufbau der Mappe ist geschützt. Zum Ändern unter »Überprüfen« den Mappenschutz aufheben.", "geschuetzt")
+        if command not in CELL_COMMANDS:
+            return
+        sheet = doc.sheet(args.get("sheet", 0))
+        if not sheet.isProtected():
+            return
+        if command in UNLOCKED_COMMANDS:
+            if "range" in args:
+                _sheet, block = self.cell_range(doc, args)
+            else:
+                row, col = int(args.get("row", 0)), int(args.get("col", 0))
+                block = sheet.getCellRangeByPosition(col, row, col, row)
+            parts = block.getCellFormatRanges()
+            if all(not parts.getByIndex(i).CellProtection.IsLocked for i in range(parts.getCount())):
+                return
+        raise CalcError("Das Blatt ist geschützt. Zum Ändern unter »Überprüfen« den Blattschutz aufheben.", "geschuetzt")
+
     # Rückgängig ---------------------------------------------------------------------------------------------------
     def cmd_undo(self, args):
         doc = self.doc(args)
@@ -1513,6 +2556,7 @@ def _serve(ctx, state):
             try:
                 if handler is None:
                     raise CalcError("Unbekannter Befehl: %s" % command, "befehl")
+                kernel.guard(command, request.get("args") or {})
                 answer = {"id": ident, "ok": True, "result": handler(request.get("args") or {})}
             except CalcError as exc:
                 answer = {"id": ident, "ok": False, "error": str(exc), "code": exc.code}

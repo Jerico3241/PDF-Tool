@@ -79,7 +79,9 @@ class TextCanvas(QQuickPaintedItem):
         self._scroll_x = 0.0
         self._scroll_y = 0.0
         self._colors = {"background": QColor("#E9E9E9"), "paper": QColor("#FFFFFF"), "caret": QColor("#000000"),
-                        "selection": QColor(0, 120, 212, 70), "accent": QColor("#0F6CBD")}
+                        "selection": QColor(0, 120, 212, 70), "accent": QColor("#0F6CBD"), "tint": QColor(0, 0, 0, 0),
+                        "comment": QColor("#FFF1A8")}
+        self._read_only = False  # Lesemodus: nur lesen, auswählen und kopieren
         self._tiles: dict[tuple[int, int], QImage] = {}
         self._dirty: set[tuple[int, int]] = set()
         self._pending: set[tuple[int, int]] = set()
@@ -154,6 +156,7 @@ class TextCanvas(QQuickPaintedItem):
             (controller.graphicChanged, self.update),
             (controller.caretMoved, self.ensureCaretVisible),
             (controller.readyChanged, self._extent_changed),
+            (controller.commentsChanged, self.update),
         ]
 
     controller = Property(QObject, _get_controller, _set_controller, notify=controllerChanged)
@@ -214,7 +217,24 @@ class TextCanvas(QQuickPaintedItem):
     caretColor = _color_property("caret", colorsChanged)
     selectionColor = _color_property("selection", colorsChanged)
     accentColor = _color_property("accent", colorsChanged)
+    # Augenschutz (seit 5.0 Beta 5): Die Seiten werden mit dieser Farbe multipliziert – Weiß wird zum sanften Ton,
+    # Schrift bleibt dunkel. Durchsichtig = aus.
+    tintColor = _color_property("tint", colorsChanged)
+    commentColor = _color_property("comment", colorsChanged)  # Text mit Kommentar
     del _color_property
+
+    readOnlyChanged = Signal()
+
+    def _get_read_only(self) -> bool:
+        return self._read_only
+
+    def _set_read_only(self, value: bool) -> None:
+        if bool(value) != self._read_only:
+            self._read_only = bool(value)
+            self._drag = None
+            self.readOnlyChanged.emit()
+
+    readOnly = Property(bool, _get_read_only, _set_read_only, notify=readOnlyChanged)
 
     # Pixelverhältnis des Bildschirms (aus QML: ``Screen.devicePixelRatio``). Nie über ``self.window()``: PySide hängt
     # das Fenster dann an diesen Bereich – endet er (Text geschlossen), löscht es das ganze Fenster mit.
@@ -399,6 +419,23 @@ class TextCanvas(QQuickPaintedItem):
             target = self._tile_target(i, j, size)
             if target.intersects(view.toRect()):
                 painter.drawImage(target, image)
+        marked = self._colors["comment"]
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+        for entry in getattr(controller, "comments", None) or []:
+            if entry.get("reply") or entry.get("resolved"):
+                continue
+            for rect in entry.get("ranges") or []:
+                target = self._view_rect(rect)
+                if target.width() < 2:  # Kommentar ohne Textbereich: schmaler Streifen an der Stelle
+                    target = QRectF(target.x() - 1, target.y(), 3, target.height())
+                if target.intersects(view):
+                    painter.fillRect(target, marked)
+        tint = self._colors["tint"]
+        if tint.alpha():
+            for rect in pages:
+                if rect.intersects(view):
+                    painter.fillRect(rect, tint)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         for rect in controller.selection:
             painter.fillRect(self._view_rect(rect), self._colors["selection"])
         painter.restore()
@@ -543,7 +580,7 @@ class TextCanvas(QQuickPaintedItem):
         self._last_mouse = point
         button = {Qt.MouseButton.LeftButton: 1, Qt.MouseButton.MiddleButton: 2, Qt.MouseButton.RightButton: 4}.get(event.button(), 1)
         mods = awt_modifiers(event.modifiers())
-        if button == 1:
+        if button == 1 and not self._read_only:
             hit = self._graphic_hit(point)
             if hit:
                 # ausgewähltes Bild: verschieben oder an einem Anfasser die Größe ändern (beim Loslassen)
@@ -640,6 +677,9 @@ class TextCanvas(QQuickPaintedItem):
         alt = bool(modifiers & Qt.KeyboardModifier.AltModifier)
         shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
         text = event.text()
+        if self._read_only and not self._read_only_key(key, ctrl):
+            event.ignore()
+            return
         if ctrl and alt and text and text.isprintable():  # AltGr (@, €, {, …)
             controller.type_text(text)
             event.accept()
@@ -699,10 +739,18 @@ class TextCanvas(QQuickPaintedItem):
             return
         event.ignore()
 
+    @staticmethod
+    def _read_only_key(key: int, ctrl: bool) -> bool:
+        """Im Lesemodus erlaubt: bewegen, blättern, auswählen (mit Umschalt), Strg+C und Strg+A."""
+        if ctrl:
+            return key in (Qt.Key.Key_C, Qt.Key.Key_A, Qt.Key.Key_Insert, Qt.Key.Key_Home, Qt.Key.Key_End, Qt.Key.Key_Left, Qt.Key.Key_Right)
+        return key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
+                       Qt.Key.Key_Home, Qt.Key.Key_End)
+
     def inputMethodEvent(self, event) -> None:  # noqa: N802
         """Tottasten (^, ´, `) und Eingabehilfen: der fertige Text wird getippt."""
         text = event.commitString()
-        if text and self._controller is not None and self._controller.ready:
+        if text and not self._read_only and self._controller is not None and self._controller.ready:
             self._controller.type_text(text)
         event.accept()
 

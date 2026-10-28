@@ -110,9 +110,12 @@ def test_notes_are_edited_under_the_slide(ui_app, tmp_path: Path) -> None:
     assert wait_until(lambda: notes.ready and notes.docWidth > 0, 30)
     assert doc.notesOpen and h.item("slidesNotesBox").isVisible()
     canvas = h.item("slidesNotesCanvas")
+    # Gemessen wird die Notizenseite (hochkant), nicht die Folie – früher mitunter die Folie, dann gingen Klicks daneben
+    assert notes.pageSize[1] > notes.pageSize[0], notes.pageSize
     QTest.mouseDClick(h.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
                       canvas.mapToScene(QPointF(canvas.width() / 2, canvas.height() / 2)).toPoint())
-    pump(0.5)
+    assert wait_until(lambda: bool(notes.cursor), 10), "Schreibmarke in den Notizen"
+    pump(0.3)
     _type(h, "Preise bis 30.11.")
     pump(1.0)
     target = tmp_path / "Notizen.pptx"

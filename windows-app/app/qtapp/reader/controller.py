@@ -500,13 +500,23 @@ class ReaderController(Observable):
         self.openExternal(path)
 
     def _open_text(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                   password: str | None = None, kind: str = "text") -> None:
-        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True, kind=kind)
+                   password: str | None = None, kind: str = "text", untitled: bool = False) -> None:
+        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True, kind=kind, untitled=untitled)
+
+    def open_text_copy(self, path: str, name: str, then: Callable | None = None) -> None:
+        """Text aus einer vorbereiteten Datei als neues, noch nicht gespeichertes Dokument öffnen (Serienbrief): Speichern
+        fragt nach Ort und Namen, die Datei selbst kommt nicht in »Zuletzt verwendet«."""
+        if len(self._docs) >= TAB_LIMIT:
+            self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
+            if then is not None:
+                then(None)
+            return
+        self._open_text(path, name=name, then=then, untitled=True)
 
     def _open_sheet(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                    password: str | None = None, text: bool = False, kind: str = "text") -> None:
+                    password: str | None = None, text: bool = False, kind: str = "text", untitled: bool = False) -> None:
         """Tabelle (bzw. mit ``text`` einen Text oder eine Präsentation) zum Bearbeiten in einem eigenen Tab öffnen;
-        ``path`` leer: neu."""
+        ``path`` leer: neu. ``untitled``: aus ``path`` laden, aber als neues Dokument mit dem Namen ``name``."""
         from ..sheet.document import SheetController
         from ..text.document import TextController
         from ..text.slides import SlidesController
@@ -538,6 +548,8 @@ class ReaderController(Observable):
         def done() -> None:
             self.opening = max(0, self.opening - 1)
             self._forget_opening(path)
+            if untitled:
+                controller.path, controller.name, controller.dirty = "", name, True
             self._docs[ident] = controller
             controller.panels = {"left": "", "right": "", "organize": False}
             self.tabs.set_items([*self.tabs.items(), self._tab_item(controller)])
@@ -545,7 +557,7 @@ class ReaderController(Observable):
                 self.activate(ident)
             if not background and self.app.currentPage != "reader":
                 self.app.navigate(READER.key)
-            if path:
+            if path and not untitled:
                 self.remember_recent(path)
             if text:
                 self.app.set_status(f"Geöffnet: {controller.name}", "success")

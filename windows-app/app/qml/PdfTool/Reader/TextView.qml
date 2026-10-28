@@ -10,6 +10,10 @@ import PdfTool.Controls
 // Überprüfen und Ansicht (der aktive blau unterstrichen) mit Speichern, Drucken, Rückgängig, Wiederholen und »Als PDF
 // speichern« rechts; darunter die Leiste des Reiters, in der Mitte die Seiten auf grauem Grund (TextCanvas), rechts
 // die zuklappbaren Formatvorlagen und am Fensterrand der Streifen mit ihren Symbolen (SideRail) – wie bei PDFs. Seite, Wörter und Sprache stehen in der Statuszeile des Fensters.
+// Seit Beta 5: Reiter »Referenzen« (Inhaltsverzeichnis, Fuß- und Endnoten, Querverweise) und »Sendungen«
+// (Serienbrief), in »Überprüfen« Kommentare, Änderungen annehmen/ablehnen und Vergleichen; die Seitenleiste zeigt
+// Formatvorlagen, Kommentare, Änderungen oder den Serienbrief. »Ansicht« hat Lesemodus (nur lesen, ohne Menüband)
+// und Augenschutz (Seiten in sanftem Ton).
 FocusScope {
     id: view
     objectName: "textView"
@@ -22,9 +26,23 @@ FocusScope {
     readonly property var sizes: ["8", "9", "10", "10,5", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72"]
     readonly property var swatches: ["#000000", "#404040", "#7F7F7F", "#C00000", "#FF0000", "#ED7D31", "#FFC000", "#00B050", "#0070C0", "#002060", "#7030A0", "#1F4E79"]
     readonly property var sidebarStyles: ["Überschrift 1", "Überschrift 2", "Standard", "Zitat"]
+    readonly property bool roomy: width >= 1440   // genug Platz für alle Beschriftungen in »Überprüfen«
+    property bool reading: false   // Lesemodus: nur lesen, ohne Menüband und Seitenleiste
+    property bool eyeCare: false   // Augenschutz: Seiten sanft grün getönt (wie WPS), gilt für alle Texte
+    readonly property string panel: doc !== null && doc.sidebar ? doc.panel : ""
+    readonly property var panelTitles: ({ "styles": "Formatvorlagen", "comments": "Kommentare", "changes": "Änderungen", "merge": "Serienbrief" })
 
-    onDocChanged: if (doc) Qt.callLater(function() { canvas.forceActiveFocus() })
+    onDocChanged: { reading = false; if (doc) Qt.callLater(function() { canvas.forceActiveFocus() }) }
     function back() { canvas.forceActiveFocus() }
+    function startReading() {
+        findBar.visible = false
+        reading = true
+        back()
+    }
+    function stopReading() {
+        reading = false
+        back()
+    }
 
     Connections {
         target: view.doc
@@ -54,6 +72,7 @@ FocusScope {
         Rectangle {
             objectName: "textRibbonTabs"
             Layout.fillWidth: true
+            visible: !view.reading
             implicitHeight: 38
             color: Theme.layer
             RowLayout {
@@ -64,7 +83,8 @@ FocusScope {
                 Repeater {
                     model: [
                         { key: "file", label: "Datei" }, { key: "start", label: "Start" }, { key: "insert", label: "Einfügen" },
-                        { key: "page", label: "Seite" }, { key: "review", label: "Überprüfen" }, { key: "view", label: "Ansicht" }
+                        { key: "page", label: "Seite" }, { key: "references", label: "Referenzen" }, { key: "mailings", label: "Sendungen" },
+                        { key: "review", label: "Überprüfen" }, { key: "view", label: "Ansicht" }
                     ]
                     RibbonTab {
                         required property var modelData
@@ -122,6 +142,7 @@ FocusScope {
         Rectangle {
             objectName: "textToolbar"
             Layout.fillWidth: true
+            visible: !view.reading
             implicitHeight: 46
             color: Theme.layer
             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
@@ -207,7 +228,7 @@ FocusScope {
                 PIconButton {
                     objectName: "textSidebarToggle"
                     iconName: "panel_right"
-                    tip: I18n.tr("Formatvorlagen ein- oder ausblenden", I18n.revision)
+                    tip: I18n.tr("Seitenleiste ein- oder ausblenden", I18n.revision)
                     toggle: true
                     checked: view.doc !== null && view.doc.sidebar
                     onClicked: view.doc.toggleSidebar()
@@ -238,6 +259,11 @@ FocusScope {
                 visible: view.ribbon === "insert"
                 ToolButton { objectName: "textInsertImage"; iconName: "image_add"; text: I18n.tr("Bild", I18n.revision); tip: I18n.tr("Bild aus einer Datei einfügen", I18n.revision); onClicked: { view.doc.insertImage(); view.back() } }
                 ToolButton { id: tableButton; objectName: "textInsertTable"; iconName: "table_simple"; text: I18n.tr("Tabelle", I18n.revision); onClicked: tableMenu.popup(tableButton, 0, tableButton.height + 4) }
+                ToolButton { objectName: "textInsertChart"; iconName: "data_bar_vertical"; text: I18n.tr("Diagramm", I18n.revision); tip: I18n.tr("Säulen-, Balken-, Linien- oder Kreisdiagramm aus eigenen Werten", I18n.revision); onClicked: view.doc.insertChart() }
+                ToolButton { objectName: "textInsertFormula"; iconName: "math_formula"; text: I18n.tr("Formel", I18n.revision); tip: I18n.tr("Mathematische Formel einfügen oder die ausgewählte ändern", I18n.revision); onClicked: view.doc.insertFormula() }
+                RibbonSeparator {}
+                ToolButton { objectName: "textInsertComment"; iconName: "comment_add"; text: I18n.tr("Kommentar", I18n.revision); tip: I18n.tr("Kommentar zur Auswahl", I18n.revision); onClicked: view.doc.requestComment() }
+                ToolButton { iconName: "text_footnote"; text: I18n.tr("Fußnote", I18n.revision); onClicked: { view.doc.insertFootnote(); view.back() } }
                 RibbonSeparator {}
                 ToolButton { objectName: "textPageBreak"; iconName: "document_page_break"; text: I18n.tr("Seitenumbruch", I18n.revision); tip: I18n.tr("Neue Seite beginnen", I18n.revision); onClicked: { view.doc.insertPageBreak(); view.back() } }
                 RibbonSeparator {}
@@ -263,16 +289,52 @@ FocusScope {
                 Item { Layout.fillWidth: true }
             }
 
+            // Referenzen (seit Beta 5)
+            Bar {
+                objectName: "textRibbonBar_references"
+                visible: view.ribbon === "references"
+                ToolButton { objectName: "textToc"; iconName: "text_bullet_list_tree"; text: I18n.tr("Inhaltsverzeichnis", I18n.revision); tip: I18n.tr("Verzeichnis der Überschriften an der Schreibmarke einfügen", I18n.revision); onClicked: { view.doc.insertToc(); view.back() } }
+                ToolButton { objectName: "textTocUpdate"; iconName: "arrow_sync"; text: I18n.tr("Aktualisieren", I18n.revision); tip: I18n.tr("Verzeichnisse, Seitenzahlen und Querverweise auf den neuesten Stand bringen", I18n.revision); onClicked: { view.doc.updateToc(); view.back() } }
+                RibbonSeparator {}
+                ToolButton { objectName: "textFootnote"; iconName: "text_footnote"; text: I18n.tr("Fußnote", I18n.revision); tip: I18n.tr("Fußnote unten auf der Seite", I18n.revision); onClicked: { view.doc.insertFootnote(); view.back() } }
+                ToolButton { objectName: "textEndnote"; iconName: "document_endnote"; text: I18n.tr("Endnote", I18n.revision); tip: I18n.tr("Endnote am Ende des Textes", I18n.revision); onClicked: { view.doc.insertEndnote(); view.back() } }
+                RibbonSeparator {}
+                ToolButton { objectName: "textCrossReference"; iconName: "link_multiple"; text: I18n.tr("Querverweis", I18n.revision); tip: I18n.tr("Auf eine Überschrift, Textmarke oder Fußnote verweisen (»siehe Seite 4«)", I18n.revision); onClicked: view.doc.insertCrossReference() }
+                Item { Layout.fillWidth: true }
+            }
+
+            // Sendungen: Serienbrief (seit Beta 5)
+            Bar {
+                objectName: "textRibbonBar_mailings"
+                visible: view.ribbon === "mailings"
+                ToolButton { objectName: "textMergeChoose"; iconName: "people_list"; text: I18n.tr("Empfänger wählen", I18n.revision); tip: I18n.tr("Excel-Mappe oder CSV-Datei mit den Empfängern", I18n.revision); onClicked: view.doc.chooseMergeSource() }
+                ToolButton { id: fieldButton; objectName: "textMergeInsertField"; iconName: "text_field"; text: I18n.tr("Feld einfügen", I18n.revision); enabled: view.ready && view.doc.mergeFields.length > 0; onClicked: fieldMenu.popup(fieldButton, 0, fieldButton.height + 4) }
+                ToolButton { objectName: "textMergeLetters"; iconName: "mail_multiple"; text: I18n.tr("Briefe erstellen", I18n.revision); tip: I18n.tr("Ein neues Dokument mit einem Brief je Empfänger", I18n.revision); enabled: view.ready && view.doc.mergeCount > 0 && !view.doc.mergeBusy; onClicked: view.doc.createLetters() }
+                RibbonSeparator {}
+                ToolButton { objectName: "textMergePanelToggle"; iconName: "panel_right"; text: I18n.tr("Serienbrief", I18n.revision); tip: I18n.tr("Schritte des Serienbriefs rechts zeigen", I18n.revision); toggle: true; checked: view.panel === "merge"; onClicked: view.doc.showPanel("merge") }
+                Item { Layout.fillWidth: true }
+            }
+
             // Überprüfen
             Bar {
                 objectName: "textRibbonBar_review"
                 visible: view.ribbon === "review"
-                ToolButton { objectName: "textSpelling"; iconName: "text_proofing_tools"; text: I18n.tr("Rechtschreibung prüfen", I18n.revision); tip: I18n.tr("Falsch geschriebene Wörter rot unterstreichen", I18n.revision); toggle: true; checked: view.ready && view.doc.spelling; onClicked: { view.doc.toggle("spelling"); view.back() } }
+                ToolButton { objectName: "textSpelling"; iconName: "text_proofing_tools"; text: I18n.tr("Rechtschreibung", I18n.revision); tip: I18n.tr("Falsch geschriebene Wörter rot unterstreichen", I18n.revision); toggle: true; checked: view.ready && view.doc.spelling; onClicked: { view.doc.toggle("spelling"); view.back() } }
                 RibbonSeparator {}
-                ToolButton { objectName: "textTrack"; iconName: "edit"; text: I18n.tr("Änderungen nachverfolgen", I18n.revision); tip: I18n.tr("Änderungen farbig markieren, statt sie gleich zu übernehmen", I18n.revision); toggle: true; checked: view.ready && view.doc.trackChanges; onClicked: { view.doc.toggle("trackChanges"); view.back() } }
+                ToolButton { objectName: "textReviewComment"; iconName: "comment_add"; text: I18n.tr(view.roomy ? "Neuer Kommentar" : "", I18n.revision); tip: I18n.tr("Kommentar zur Auswahl", I18n.revision); onClicked: view.doc.requestComment() }
+                ToolButton { objectName: "textReviewComments"; iconName: "comment_multiple"; text: I18n.tr(view.roomy ? "Kommentare" : "", I18n.revision); tip: I18n.tr("Alle Kommentare rechts zeigen", I18n.revision); toggle: true; checked: view.panel === "comments"; onClicked: view.doc.showPanel("comments") }
                 RibbonSeparator {}
-                ToolButton { iconName: "search"; text: I18n.tr("Suchen und ersetzen", I18n.revision); onClicked: findBar.show() }
+                ToolButton { objectName: "textTrack"; iconName: "edit"; text: I18n.tr("Nachverfolgen", I18n.revision); tip: I18n.tr("Änderungen nachverfolgen: farbig markieren, statt sie gleich zu übernehmen", I18n.revision); toggle: true; checked: view.ready && view.doc.trackChanges; onClicked: { view.doc.toggle("trackChanges"); view.back() } }
+                ToolButton { objectName: "textShowChanges"; iconName: "eye"; tip: I18n.tr("Markierte Änderungen im Text zeigen oder ausblenden", I18n.revision); toggle: true; checked: view.ready && view.doc.showChanges; onClicked: { view.doc.toggleShowChanges(); view.back() } }
+                ToolButton { iconName: "arrow_previous"; tip: I18n.tr("Vorherige Änderung", I18n.revision); onClicked: { view.doc.previousChange(); view.back() } }
+                ToolButton { iconName: "arrow_next"; tip: I18n.tr("Nächste Änderung", I18n.revision); onClicked: { view.doc.nextChange(); view.back() } }
+                ToolButton { id: acceptButton; objectName: "textAccept"; iconName: "checkmark"; text: I18n.tr("Annehmen", I18n.revision); onClicked: acceptMenu.popup(acceptButton, 0, acceptButton.height + 4) }
+                ToolButton { id: rejectButton; objectName: "textReject"; iconName: "dismiss"; text: I18n.tr("Ablehnen", I18n.revision); onClicked: rejectMenu.popup(rejectButton, 0, rejectButton.height + 4) }
+                ToolButton { objectName: "textReviewChanges"; iconName: "document_edit"; text: I18n.tr(view.roomy ? "Änderungen" : "", I18n.revision); tip: I18n.tr("Alle Änderungen rechts zeigen", I18n.revision); toggle: true; checked: view.panel === "changes"; onClicked: view.doc.showPanel("changes") }
+                RibbonSeparator {}
+                ToolButton { objectName: "textCompare"; iconName: "branch_compare"; text: I18n.tr("Vergleichen", I18n.revision); tip: I18n.tr("Mit einer anderen Fassung vergleichen – Unterschiede erscheinen als Änderungen", I18n.revision); onClicked: view.doc.compareWith() }
                 Item { Layout.fillWidth: true }
+                PIconButton { iconName: "search"; tip: I18n.tr("Suchen und ersetzen (Strg+F)", I18n.revision); enabled: view.ready; onClicked: findBar.show() }
             }
 
             // Ansicht
@@ -284,7 +346,10 @@ FocusScope {
                 ToolButton { iconName: "zoom_in"; tip: I18n.tr("Vergrößern", I18n.revision); onClicked: view.doc.zoomStep(1) }
                 RibbonSeparator {}
                 ToolButton { objectName: "textMarks"; iconName: "text_paragraph"; text: I18n.tr("Formatierungszeichen", I18n.revision); tip: I18n.tr("Absatzmarken, Leerzeichen und Tabulatoren zeigen", I18n.revision); toggle: true; checked: view.ready && view.doc.marks; onClicked: { view.doc.toggle("marks"); view.back() } }
-                ToolButton { iconName: "panel_right"; text: I18n.tr("Formatvorlagen", I18n.revision); toggle: true; enabled: true; checked: view.doc !== null && view.doc.sidebar; onClicked: view.doc.toggleSidebar() }
+                ToolButton { iconName: "panel_right"; text: I18n.tr("Formatvorlagen", I18n.revision); toggle: true; enabled: true; checked: view.panel === "styles"; onClicked: view.doc.showPanel("styles") }
+                RibbonSeparator {}
+                ToolButton { objectName: "textReading"; iconName: "book_open"; text: I18n.tr("Lesemodus", I18n.revision); tip: I18n.tr("Nur lesen – ohne Menüband und Seitenleiste (Esc beendet)", I18n.revision); onClicked: view.startReading() }
+                ToolButton { objectName: "textEyeCare"; iconName: "eye_lines"; text: I18n.tr("Augenschutz", I18n.revision); tip: I18n.tr("Seiten in sanftem Grün statt grellem Weiß – angenehmer bei langem Lesen", I18n.revision); toggle: true; enabled: true; checked: view.eyeCare; onClicked: view.eyeCare = !view.eyeCare }
                 Item { Layout.fillWidth: true }
             }
         }
@@ -313,7 +378,9 @@ FocusScope {
                     caretColor: "#000000"
                     selectionColor: Theme.dark ? "#5A4CA0E0" : "#4D0078D4"
                     accentColor: Theme.dark ? "#4CA0E0" : "#0F6CBD"
-                    onContextMenuRequested: (x, y) => textMenu.popup(canvas, x, y)
+                    readOnly: view.reading
+                    tintColor: view.eyeCare ? "#D7EDD1" : "transparent"  // Augenschutz: Weiß wird zu sanftem Grün
+                    onContextMenuRequested: (x, y) => { if (!view.reading) textMenu.popup(canvas, x, y) }
                 }
 
                 PScrollBar {
@@ -412,6 +479,33 @@ FocusScope {
                     }
                 }
 
+                // Lesemodus: oben rechts beenden (wie Esc)
+                Rectangle {
+                    objectName: "textReadingBar"
+                    visible: view.reading
+                    anchors.right: vbar.left
+                    anchors.top: parent.top
+                    anchors.rightMargin: 16
+                    anchors.topMargin: 12
+                    width: readingRow.implicitWidth + 16
+                    height: readingRow.implicitHeight + 12
+                    radius: Metrics.radiusOverlay
+                    color: Theme.flyout
+                    border.color: Theme.flyoutStroke
+                    PShadow { radius: Metrics.radiusOverlay }
+                    RowLayout {
+                        id: readingRow
+                        anchors.centerIn: parent
+                        spacing: 4
+                        PIcon { name: "book_open"; color: Theme.textSecondary }
+                        PText { text: I18n.tr("Lesemodus", I18n.revision); tone: "secondary"; Layout.rightMargin: 6 }
+                        PIconButton { iconName: "zoom_out"; tip: I18n.tr("Verkleinern", I18n.revision); onClicked: view.doc.zoomStep(-1) }
+                        PIconButton { iconName: "zoom_in"; tip: I18n.tr("Vergrößern", I18n.revision); onClicked: view.doc.zoomStep(1) }
+                        PIconButton { iconName: "eye_lines"; tip: I18n.tr("Augenschutz", I18n.revision); toggle: true; checked: view.eyeCare; onClicked: view.eyeCare = !view.eyeCare }
+                        PButton { objectName: "textReadingExit"; kind: "accent"; text: I18n.tr("Bearbeiten", I18n.revision); tip: I18n.tr("Lesemodus beenden (Esc)", I18n.revision); onClicked: view.stopReading() }
+                    }
+                }
+
                 // Textkern startet bzw. speichert
                 PProgressBar {
                     anchors.left: parent.left
@@ -427,7 +521,7 @@ FocusScope {
                 objectName: "textSidebar"
                 Layout.fillHeight: true
                 Layout.preferredWidth: Metrics.readerLeftPanelWidth
-                visible: view.doc !== null && view.doc.sidebar
+                visible: view.doc !== null && view.doc.sidebar && !view.reading
                 color: Theme.layer
                 Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
                 // Kopf wie bei den Seitenleisten der PDFs (Titel, Schließen, Trennlinie)
@@ -436,10 +530,12 @@ FocusScope {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 1
-                    title: I18n.tr("Formatvorlagen", I18n.revision)
+                    title: I18n.tr(view.panelTitles[view.panel] || "", I18n.revision)
                     onCloseRequested: { view.doc.toggleSidebar(); view.back() }
                 }
                 ColumnLayout {
+                    objectName: "textStylesPanel"
+                    visible: view.panel === "styles"
                     anchors.top: sidebarHeader.bottom
                     anchors.left: parent.left
                     anchors.right: parent.right
@@ -486,6 +582,35 @@ FocusScope {
                     }
                     Item { Layout.fillHeight: true }
                 }
+                TextCommentsPanel {
+                    visible: view.panel === "comments"
+                    anchors.top: sidebarHeader.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 1
+                    doc: view.doc
+                    onDone: view.back()
+                }
+                TextChangesPanel {
+                    visible: view.panel === "changes"
+                    anchors.top: sidebarHeader.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 1
+                    doc: view.doc
+                }
+                TextMergePanel {
+                    visible: view.panel === "merge"
+                    anchors.top: sidebarHeader.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 1
+                    doc: view.doc
+                    onDone: view.back()
+                }
             }
 
             // Streifen mit den Inhalten der Seitenleiste – wie bei PDFs
@@ -493,16 +618,20 @@ FocusScope {
                 objectName: "textSideRail"
                 Layout.fillHeight: true
                 Layout.preferredWidth: Metrics.readerRailWidth
-                current: view.doc !== null && view.doc.sidebar ? "styles" : ""
+                visible: !view.reading
+                current: view.panel
                 accentColor: view.kindColor
                 items: [
                     { key: "styles", icon: "text_edit_style", tip: "Formatvorlagen", name: "textRailStyles" },
-                    { key: "search", icon: "search", tip: "Suchen und ersetzen (Strg+F)", name: "textRailSearch" }
+                    { key: "comments", icon: "comment_multiple", tip: "Kommentare", name: "textRailComments" },
+                    { key: "changes", icon: "document_edit", tip: "Änderungen", name: "textRailChanges" },
+                    { key: "merge", icon: "mail_multiple", tip: "Serienbrief", name: "textRailMerge" },
+                    { key: "search", icon: "search", tip: "Suchen und ersetzen (Strg+F)", name: "textRailSearch", separator: true }
                 ]
                 onSelected: (key) => {
                     if (!view.doc) return
-                    if (key === "styles") { view.doc.toggleSidebar(); view.back() }
-                    else findBar.show()
+                    if (key === "search") findBar.show()
+                    else { view.doc.showPanel(key); view.back() }
                 }
             }
 
@@ -561,6 +690,30 @@ FocusScope {
         }
     }
     PMenu {
+        id: acceptMenu
+        objectName: "textAcceptMenu"
+        PMenuItem { text: I18n.tr("Diese Änderung annehmen", I18n.revision); iconName: "checkmark"; onTriggered: { view.doc.acceptCurrentChange(); view.back() } }
+        PMenuItem { objectName: "textAcceptAll"; text: I18n.tr("Alle Änderungen annehmen", I18n.revision); iconName: "checkmark_circle"; onTriggered: { view.doc.acceptAllChanges(); view.back() } }
+    }
+    PMenu {
+        id: rejectMenu
+        objectName: "textRejectMenu"
+        PMenuItem { text: I18n.tr("Diese Änderung ablehnen", I18n.revision); iconName: "dismiss"; onTriggered: { view.doc.rejectCurrentChange(); view.back() } }
+        PMenuItem { text: I18n.tr("Alle Änderungen ablehnen", I18n.revision); iconName: "dismiss_circle"; onTriggered: { view.doc.rejectAllChanges(); view.back() } }
+    }
+    PMenu {
+        id: fieldMenu
+        objectName: "textFieldMenu"
+        Repeater {
+            model: view.doc ? view.doc.mergeFields : []
+            PMenuItem {
+                required property string modelData
+                text: I18n.tr("«" + modelData + "»", I18n.revision)
+                onTriggered: { view.doc.insertMergeField(modelData); view.back() }
+            }
+        }
+    }
+    PMenu {
         id: marginMenu
         objectName: "textMarginMenu"
         PMenuItem { text: I18n.tr("Normal (2,5 cm)", I18n.revision); onTriggered: { view.doc.setMargins("normal"); view.back() } }
@@ -576,6 +729,7 @@ FocusScope {
         PMenuItem { text: I18n.tr("Einfügen", I18n.revision); hint: I18n.tr("Strg+V", I18n.revision); iconName: "clipboard_paste"; onTriggered: view.doc.paste() }
         PMenuItem { text: I18n.tr("Nur den Text einfügen", I18n.revision); hint: I18n.tr("Strg+Umschalt+V", I18n.revision); iconName: "clipboard_paste"; onTriggered: view.doc.pastePlain() }
         PMenuItem { text: I18n.tr("Alles auswählen", I18n.revision); hint: I18n.tr("Strg+A", I18n.revision); iconName: "select_all_on"; onTriggered: view.doc.selectAll() }
+        PMenuItem { objectName: "textContextComment"; text: I18n.tr("Neuer Kommentar", I18n.revision); iconName: "comment_add"; onTriggered: view.doc.requestComment() }
     }
 
     // Tastenkürzel (Strg+C/X/V/Z/Y/A, Formate und Bewegen nimmt der Zeichenbereich selbst)
@@ -587,4 +741,5 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
     Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
     Shortcut { sequences: ["Escape"]; enabled: view.active && findBar.visible; onActivated: findBar.hide() }
+    Shortcut { sequences: ["Escape"]; enabled: view.active && view.reading && !findBar.visible; onActivated: view.stopReading() }
 }

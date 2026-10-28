@@ -34,6 +34,33 @@ SAVE_FILTER = (
     "OpenDocument-Tabelle (*.ods);;CSV (Trennzeichen-getrennt) (*.csv)"
 )
 SAVE_SUFFIXES = (".xlsx", ".xlsm", ".xls", ".ods", ".csv")
+CONDITION_RULES = {  # Regel: (Titel, Text, Felder)
+    "greater": ("Größer als", "Zellen hervorheben, deren Wert größer ist als:", 1),
+    "less": ("Kleiner als", "Zellen hervorheben, deren Wert kleiner ist als:", 1),
+    "between": ("Zwischen", "Zellen hervorheben, deren Wert zwischen diesen Werten liegt:", 2),
+    "equal": ("Gleich", "Zellen hervorheben, deren Wert gleich ist:", 1),
+    "contains": ("Text enthält", "Zellen hervorheben, die diesen Text enthalten:", 1),
+    "duplicate": ("Doppelte Werte", "Werte hervorheben, die in der Auswahl mehrfach vorkommen.", 0),
+    "unique": ("Eindeutige Werte", "Werte hervorheben, die in der Auswahl nur einmal vorkommen.", 0),
+    "top": ("Obere Werte", "Die größten Werte der Auswahl hervorheben – wie viele?", 1),
+    "bottom": ("Untere Werte", "Die kleinsten Werte der Auswahl hervorheben – wie viele?", 1),
+    "above": ("Über dem Durchschnitt", "Werte über dem Durchschnitt der Auswahl hervorheben.", 0),
+    "below": ("Unter dem Durchschnitt", "Werte unter dem Durchschnitt der Auswahl hervorheben.", 0),
+}
+CONDITION_STYLES = [{"key": "red", "label": "Hellrote Füllung, dunkelrote Schrift"},
+                    {"key": "yellow", "label": "Gelbe Füllung, dunkelgelbe Schrift"},
+                    {"key": "green", "label": "Grüne Füllung, dunkelgrüne Schrift"}]
+VALIDATION_KINDS = [{"key": "any", "label": "Jeder Wert"}, {"key": "list", "label": "Liste"}, {"key": "whole", "label": "Ganze Zahl"},
+                    {"key": "decimal", "label": "Dezimalzahl"}, {"key": "date", "label": "Datum"}, {"key": "textlen", "label": "Textlänge"}]
+VALIDATION_OPERATORS = [{"key": "between", "label": "zwischen"}, {"key": "not_between", "label": "nicht zwischen"},
+                        {"key": "equal", "label": "gleich"}, {"key": "not_equal", "label": "ungleich"},
+                        {"key": "greater", "label": "größer als"}, {"key": "less", "label": "kleiner als"},
+                        {"key": "greater_equal", "label": "größer oder gleich"}, {"key": "less_equal", "label": "kleiner oder gleich"}]
+PIVOT_FUNCTIONS = [{"key": "sum", "label": "Summe"}, {"key": "count", "label": "Anzahl"}, {"key": "average", "label": "Mittelwert"},
+                   {"key": "max", "label": "Maximum"}, {"key": "min", "label": "Minimum"}]
+SEPARATORS = [{"key": ";", "label": "Semikolon ( ; )"}, {"key": ",", "label": "Komma ( , )"}, {"key": "tab", "label": "Tabulator"},
+              {"key": " ", "label": "Leerzeichen"}, {"key": "other", "label": "Anderes Zeichen"}]
+WORKBOOK_FILTER = "Tabellen (*.xlsx *.xlsm *.xls *.ods *.csv);;Alle Dateien (*)"
 FORMAT_KEYS = ("bold", "italic", "underline", "strike", "font", "size", "color", "background", "halign", "valign", "wrap")
 
 
@@ -72,6 +99,11 @@ class SheetController(Observable):
     revisionChanged, revision = prop(int, "revision", 0)  # Raster neu zeichnen
     layoutRevisionChanged, layoutRevision = prop(int, "layoutRevision", 0)  # Größen/Aufbau neu
     csvChanged, csv = prop(bool, "csv", False)
+    sheetProtectedChanged, sheetProtected = prop(bool, "sheetProtected", False)  # aktives Blatt geschützt
+    bookProtectedChanged, bookProtected = prop(bool, "bookProtected", False)  # Aufbau der Mappe geschützt
+    encryptedChanged, encrypted = prop(bool, "encrypted", False)  # Kennwort zum Öffnen gesetzt
+    crosshairChanged, crosshair = prop(bool, "crosshair", False)  # Lese-Kreuz: Zeile und Spalte der Zelle hervorheben
+    validationChanged, validation = prop(dict, "validation", {})  # Datenüberprüfung der aktiven Zelle
 
     contentChanged = Signal()
     editRequested = Signal(str)  # Bearbeiten beginnen (mit diesem Text, »« = bisheriger Inhalt)
@@ -208,6 +240,7 @@ class SheetController(Observable):
         def failed(_exc: BaseException) -> None:
             self.busy = False
             self.refresh(layout=True)
+            self._call("state", {}, self._apply_state, quiet=True)  # z. B. abgelehnte Eingabe: wieder »gespeichert«
 
         self._call(command, args, done, failed)
 
@@ -231,8 +264,17 @@ class SheetController(Observable):
             self.dirty = bool(state["modified"])
             if was != self.dirty:
                 self.reader.tab_changed(self)
+        if "book" in state:
+            self.bookProtected = bool(state["book"])
+        if "encrypted" in state:
+            self.encrypted = bool(state["encrypted"])
+        self._update_protection()
         self.undoText = str(state.get("undo") or "") if "undo" in state else self.undoText
         self.redoText = str(state.get("redo") or "") if "redo" in state else self.redoText
+
+    def _update_protection(self) -> None:
+        sheets = self.sheets
+        self.sheetProtected = bool(0 <= self.activeSheet < len(sheets) and sheets[self.activeSheet].get("protected"))
 
     # Laden ---------------------------------------------------------------------------------------------------------
     def _load_layout(self, then: Callable[[], None] | None = None, failed: Callable[[BaseException], None] | None = None) -> None:
@@ -422,6 +464,7 @@ class SheetController(Observable):
             self.formatKind = str(data.get("formatKind") or "standard")
             merged = data.get("merged") or [row, col, row, col]
             self.merged = merged[0] != merged[2] or merged[1] != merged[3]
+            self.validation = dict(data.get("validation") or {})
 
         self._call("cell", {"row": row, "col": col}, done, quiet=True)
 
@@ -505,7 +548,7 @@ class SheetController(Observable):
             self.revision += 1
             self.contentChanged.emit()
             self._mark_dirty()
-            self._change("input", {"row": row, "col": col, "text": text})
+            self._change("input", {"row": row, "col": col, "text": text}, then=self._input_done)
         if dr or dc:
             r0, c0, r1, c1 = self.selection
             if (r0, c0) != (r1, c1) and not (self.layout().merge_at.get((r0, c0)) == (r0, c0, r1, c1)):
@@ -531,6 +574,15 @@ class SheetController(Observable):
                 self._load_cell()
                 return
             self.move(dr, dc, False)
+
+    def _input_done(self, result: dict) -> None:
+        if result.get("warning"):  # Datenüberprüfung »nur warnen«: die Eingabe bleibt
+            self.app.notify("reader", "warning", str(result["warning"]), title="Datenüberprüfung", auto_hide=8000)
+
+    @Slot(str)
+    def chooseListItem(self, text: str) -> None:  # noqa: N802
+        """Auswahlliste der Datenüberprüfung: Eintrag in die aktive Zelle."""
+        self.commit(text, 0, 0)
 
     def _mark_dirty(self) -> None:
         """Sofort »ungespeichert« – nicht erst mit der Antwort des Kerns (Schließen direkt nach der Eingabe fragt sonst
@@ -913,6 +965,7 @@ class SheetController(Observable):
         if not 0 <= index < len(self.sheets) or index == self.activeSheet:
             return
         self.activeSheet = index
+        self._update_protection()
         layout = self.layouts.get(index)
         self.freeze = list(layout.freeze) if layout else [0, 0]
         self.filterOn = bool(layout and layout.filter)
@@ -971,6 +1024,402 @@ class SheetController(Observable):
             self.activateSheet(target)
 
         self._change("move_sheet", {"sheet": index, "to": target}, then=then)
+
+    # Formulare (Pivot, Datenüberprüfung, Regeln, Schutz …) ------------------------------------------------------------
+    def _form(self, title: str, fields: list[dict], primary: str, *, message: str = "", secondary: str = "",
+              width: int = 480) -> tuple[str, dict]:
+        """Formular »sheet_form«: Antwort und Werte je ``key`` (nicht geänderte Felder mit ihrem Anfangswert)."""
+        answer, data = self.app.dialogs.ask("sheet_form", title, message, primary=primary, secondary=secondary,
+                                            data={"fields": fields}, width=width)
+        values = {field["key"]: field.get("value") for field in fields if field.get("key")}
+        values.update({key: value for key, value in (data or {}).items() if key != "fields"})
+        return answer, values
+
+    def _table_info(self, then: Callable[[dict], None]) -> None:
+        """Tabelle um die Auswahl (Spaltennamen, Zahlenspalten, Kopfzeile) – dann ``then``."""
+        def done(info: dict) -> None:
+            if not info.get("fields"):
+                self.app.set_status("Hier ist keine Tabelle – bitte eine Zelle in den Daten wählen.", "warning")
+                return
+            then(info)
+
+        self._call("table_info", {"range": self.selection}, done)
+
+    def _activate_new(self, result: dict, index: int | None = None) -> None:
+        target = result.get("sheet", index if index is not None else len(self.sheets) - 1)
+        self.activeSheet = -1
+        self.activateSheet(int(target))
+
+    # Bedingte Formatierung
+    @Slot(str)
+    def conditional(self, rule: str) -> None:
+        """Regel für die Auswahl: Hervorheben (greater, less, between, equal, contains, duplicate, unique), obere/untere
+        Werte (top, bottom), über/unter dem Durchschnitt (above, below) oder Datenbalken (bar_blue, bar_green, bar_red)."""
+        args = {"range": self.selection, "rule": rule}
+        if rule.startswith("bar_"):
+            self._change("conditional", args, status="Datenbalken eingefügt.")
+            return
+        if rule not in CONDITION_RULES:
+            return
+        title, text, count = CONDITION_RULES[rule]
+        fields: list[dict] = []
+        if count:
+            number = rule in ("top", "bottom")
+            fields.append({"key": "value1", "type": "text", "label": "Anzahl" if number else ("Von" if count == 2 else "Wert"),
+                           "value": "10" if number else "", "required": True,
+                           "placeholder": "z. B. 1000 oder Köln" if rule in ("equal", "contains") else "z. B. 1000"})
+        if count == 2:
+            fields.append({"key": "value2", "type": "text", "label": "Bis", "value": "", "required": True, "placeholder": "z. B. 5000"})
+        fields.append({"key": "style", "type": "choice", "label": "Format", "value": "red", "options": CONDITION_STYLES})
+        answer, values = self._form(title, fields, "Übernehmen", message=text)
+        if answer != "primary":
+            return
+        args.update({key: values.get(key) for key in ("value1", "value2", "style") if values.get(key) not in (None, "")})
+        self._change("conditional", args, status="Regel angelegt.")
+
+    @Slot(str)
+    def clearConditional(self, scope: str) -> None:  # noqa: N802
+        """Regeln löschen: »selection« (die die Auswahl berühren) oder »sheet« (alle des Blatts)."""
+        def then(result: dict) -> None:
+            removed = int(result.get("removed") or 0)
+            self.app.set_status(f"{removed} Regel(n) gelöscht." if removed else "Hier gibt es keine Regeln.", "success" if removed else "info")
+
+        self._change("clear_conditional", {"range": self.selection} if scope == "selection" else {}, then=then)
+
+    # Datenüberprüfung
+    @Slot()
+    def validationDialog(self) -> None:  # noqa: N802
+        """Erlaubte Eingaben für die Auswahl festlegen (Liste, Zahlen, Datum, Textlänge) – wie »Datenüberprüfung«."""
+        current = dict(self.validation or {})
+        numeric = ["whole", "decimal", "date", "textlen"]
+        fields = [
+            {"key": "kind", "type": "choice", "label": "Zulassen", "value": current.get("kind", "list"), "options": VALIDATION_KINDS},
+            {"key": "items", "type": "text", "label": "Einträge (mit ; getrennt)", "value": "; ".join(current.get("items") or []),
+             "placeholder": "z. B. offen; in Arbeit; erledigt", "required": True, "show": {"key": "kind", "is": ["list"]}},
+            {"key": "operator", "type": "choice", "label": "Daten", "value": current.get("operator", "between"),
+             "options": VALIDATION_OPERATORS, "show": {"key": "kind", "is": numeric}},
+            {"key": "value1", "type": "text", "label": "Wert (bei »zwischen«: von)", "value": current.get("value1", ""), "required": True,
+             "placeholder": "z. B. 0 oder 01.01.2026", "show": {"key": "kind", "is": numeric}},
+            {"key": "value2", "type": "text", "label": "Bis", "value": current.get("value2", ""), "required": True, "placeholder": "z. B. 100",
+             "show": [{"key": "kind", "is": numeric}, {"key": "operator", "is": ["between", "not_between"]}]},
+            {"key": "message", "type": "text", "label": "Meldung bei falscher Eingabe (optional)", "value": current.get("message", ""),
+             "placeholder": "z. B. Bitte einen Status aus der Liste wählen.", "show": {"key": "kind", "is": ["list"] + numeric}},
+            {"key": "strict", "type": "check", "label": "Falsche Eingaben ablehnen (sonst nur warnen)", "value": current.get("strict", True),
+             "show": {"key": "kind", "is": ["list"] + numeric}},
+        ]
+        answer, values = self._form("Datenüberprüfung", fields, "Übernehmen", message="Welche Eingaben sind in den ausgewählten Zellen erlaubt?")
+        if answer != "primary":
+            return
+        kind = str(values.get("kind") or "any")
+        args = {"range": self.selection, "kind": kind, "operator": values.get("operator") or "between",
+                "value1": str(values.get("value1") or ""), "value2": str(values.get("value2") or ""),
+                "message": str(values.get("message") or ""), "strict": bool(values.get("strict", True)),
+                "items": [item.strip() for item in str(values.get("items") or "").split(";") if item.strip()]}
+        self._change("validation", args, status="Prüfung entfernt." if kind == "any" else "Datenüberprüfung festgelegt.",
+                     then=lambda _result: self._load_cell())
+
+    # Pivot-Tabelle
+    @Slot()
+    def pivotDialog(self) -> None:  # noqa: N802
+        """Pivot-Tabelle aus der Tabelle um die Auswahl auf einem neuen Blatt."""
+        def ask(info: dict) -> None:
+            names = list(info["fields"])
+            numeric = list(info.get("numeric") or [])
+            options = [{"key": str(index), "label": name} for index, name in enumerate(names)]
+            text_columns = [index for index, flag in enumerate(numeric) if not flag] or [0]
+            number_columns = [index for index, flag in enumerate(numeric) if flag]
+            data_default = number_columns[-1] if number_columns else len(names) - 1
+            fields = [
+                {"key": "rows", "type": "choice", "label": "Zeilen", "value": str(text_columns[0]), "options": options},
+                {"key": "cols", "type": "choice", "label": "Spalten (optional)", "value": "",
+                 "options": [{"key": "", "label": "(keine)"}] + options},
+                {"key": "data", "type": "choice", "label": "Werte", "value": str(data_default), "options": options},
+                {"key": "function", "type": "choice", "label": "Berechnen als", "value": "sum" if number_columns else "count",
+                 "options": PIVOT_FUNCTIONS},
+                {"type": "note", "label": f"Quelle: {info.get('rows', 0)} Zeilen in {self._range_name(info['range'])}. "
+                                          "Die Pivot-Tabelle kommt auf ein neues Blatt."},
+            ]
+            answer, values = self._form("Pivot-Tabelle einfügen", fields, "Einfügen")
+            if answer != "primary":
+                return
+            rows = [int(values["rows"])]
+            cols = [int(values["cols"])] if str(values.get("cols") or "") not in ("", str(rows[0])) else []
+            self._change("pivot", {"range": info["range"], "rows": rows, "cols": cols, "data": int(values["data"]),
+                                   "function": values.get("function") or "sum"},
+                         layout=True, status="Pivot-Tabelle eingefügt.", then=self._activate_new)
+
+        self._table_info(ask)
+
+    @Slot()
+    def refreshPivots(self) -> None:  # noqa: N802
+        def then(result: dict) -> None:
+            count = int(result.get("count") or 0)
+            self.app.set_status(f"{count} Pivot-Tabelle(n) aktualisiert." if count else "Diese Mappe hat keine Pivot-Tabellen.",
+                                "success" if count else "info")
+
+        self._change("pivot_refresh", {}, layout=True, then=then)
+
+    def _range_name(self, area: list) -> str:
+        r0, c0, r1, c1 = (int(value) for value in area)
+        return f"{calc.cell_name(r0, c0)}:{calc.cell_name(r1, c1)}"
+
+    # Duplikate, Text in Spalten, Blitzvorschau
+    @Slot()
+    def removeDuplicates(self) -> None:  # noqa: N802
+        def ask(info: dict) -> None:
+            options = [{"key": str(index), "label": name} for index, name in enumerate(info["fields"])]
+            fields = [
+                {"type": "note", "label": "Zeilen, die in den angehakten Spalten gleich sind, werden entfernt – die erste bleibt."},
+                {"key": "columns", "type": "checks", "label": "Spalten vergleichen", "value": [option["key"] for option in options],
+                 "options": options, "required": True},
+                {"key": "header", "type": "check", "label": "Erste Zeile ist die Überschrift", "value": bool(info.get("header"))},
+            ]
+            answer, values = self._form("Duplikate entfernen", fields, "Entfernen")
+            if answer != "primary":
+                return
+
+            def then(result: dict) -> None:
+                removed, remaining = int(result.get("removed") or 0), int(result.get("remaining") or 0)
+                if result.get("range"):
+                    area = result["range"]
+                    self.selectRange(area[0], area[1], area[2], area[3])
+                self.app.notify("reader", "success" if removed else "info",
+                                f"{removed} doppelte Zeile(n) entfernt, {remaining} eindeutige bleiben." if removed
+                                else f"Keine Duplikate gefunden – alle {remaining} Zeilen sind eindeutig.",
+                                title="Duplikate entfernen", auto_hide=8000)
+
+            self._change("duplicates", {"range": info["range"], "columns": [int(key) for key in values.get("columns") or []],
+                                        "header": bool(values.get("header"))}, layout=True, then=then)
+
+        self._table_info(ask)
+
+    @Slot()
+    def textToColumns(self) -> None:  # noqa: N802
+        """Texte der ausgewählten Spalte an einem Trennzeichen auf Spalten rechts daneben verteilen."""
+        def ask(info: dict) -> None:
+            samples = [str(sample) for sample in info.get("samples") or [] if str(sample)]
+            if not samples:
+                self.app.set_status("Die ausgewählte Spalte enthält keinen Text.", "warning")
+                return
+            guess = next((key for key in (";", "tab", ",") if any((key if key != "tab" else "\t") in sample for sample in samples)), " ")
+            fields = [
+                {"key": "separator", "type": "choice", "label": "Trennzeichen", "value": guess, "options": SEPARATORS},
+                {"key": "custom", "type": "text", "label": "Zeichen", "value": "", "required": True, "placeholder": "z. B. | oder -",
+                 "show": {"key": "separator", "is": ["other"]}},
+                {"key": "preview", "type": "preview", "label": "Vorschau", "samples": samples[:6], "source": "separator", "custom": "custom"},
+            ]
+            rows = info.get("rows") or [0, 0]
+            answer, values = self._form("Text in Spalten", fields, "Aufteilen",
+                                        message=f"Spalte {calc.column_name(int(info['col']))}, Zeilen {int(rows[0]) + 1} bis {int(rows[1]) + 1}: "
+                                                "die Teile kommen in die Spalten rechts daneben.")
+            if answer != "primary":
+                return
+            separator = values.get("separator") or ";"
+            if separator == "other":
+                separator = str(values.get("custom") or "")[:1] or ";"
+            area = [int(rows[0]), int(info["col"]), int(rows[1]), int(info["col"])]
+            self._split_columns(area, separator, False)
+
+        self._call("column_texts", {"range": self.selection}, ask)
+
+    def _split_columns(self, area: list, separator: str, force: bool) -> None:
+        def then(result: dict) -> None:
+            if "overwrite" in result:
+                if self.app.dialogs.confirm("Daten überschreiben?", f"In den Spalten rechts stehen schon {result['overwrite']} Werte. "
+                                            "Sie werden durch die Teile ersetzt (mit »Rückgängig« wiederherstellbar).", "Überschreiben"):
+                    self._split_columns(area, separator, True)
+                return
+            if result.get("range"):
+                target = result["range"]
+                self.selectRange(target[0], target[1], target[2], target[3])
+            self.app.set_status("Text auf Spalten verteilt.", "success")
+
+        self._change("text_to_columns", {"range": area, "separator": separator, "force": force}, layout=True, then=then)
+
+    @Slot()
+    def flashFill(self) -> None:  # noqa: N802
+        """Blitzvorschau (Strg+E): aus den Beispielen in der Spalte der aktiven Zelle die übrigen Zeilen ausfüllen."""
+        from .flashfill import NoPattern, flash_fill
+
+        col = self.cursorCol
+
+        def done(data: dict) -> None:
+            area = data.get("range") or [0, 0, 0, 0]
+            if not area[1] <= col <= area[3]:
+                self.app.set_status("Für die Blitzvorschau ein Beispiel direkt neben die Daten tippen.", "warning")
+                return
+            try:
+                texts = flash_fill([list(row) for row in data.get("rows") or []], col - area[1])
+            except NoPattern:
+                self.app.notify("reader", "info", "Kein Muster erkannt. Bitte in die Spalte ein oder zwei Beispiele mehr tippen "
+                                "und dann erneut Strg+E drücken.", title="Blitzvorschau", auto_hide=8000)
+                return
+            count = sum(1 for text in texts if text is not None)
+            if not count:
+                self.app.set_status("Die Spalte ist schon ausgefüllt.", "info")
+                return
+            self._mark_dirty()
+            self._change("set_texts", {"row": area[0], "col": col, "texts": texts, "title": "Blitzvorschau"}, layout=True,
+                         status=f"Blitzvorschau: {count} Zelle(n) ausgefüllt.")
+
+        self._call("region_texts", {"range": [self.cursorRow, col, self.cursorRow, col]}, done)
+
+    # Blätter und Mappen teilen und zusammenführen
+    @Slot()
+    def splitSheet(self) -> None:  # noqa: N802
+        """Tabelle nach den Werten einer Spalte auf neue Blätter verteilen."""
+        def ask(info: dict) -> None:
+            options = [{"key": str(index), "label": name} for index, name in enumerate(info["fields"])]
+            start = self.cursorCol - int(info["range"][1])
+            fields = [
+                {"key": "col", "type": "choice", "label": "Je Wert dieser Spalte ein Blatt", "options": options,
+                 "value": str(start if 0 <= start < len(options) else 0)},
+                {"type": "note", "label": "Jedes neue Blatt bekommt die Überschrift und die Zeilen mit seinem Wert. Das Blatt selbst bleibt, wie es ist."},
+            ]
+            answer, values = self._form("Blatt teilen", fields, "Teilen")
+            if answer != "primary":
+                return
+
+            def then(result: dict) -> None:
+                created = list(result.get("created") or [])
+                self.app.notify("reader", "success", f"{len(created)} Blätter angelegt: {', '.join(created[:8])}{' …' if len(created) > 8 else ''}",
+                                title="Blatt teilen", auto_hide=8000)
+
+            self._change("split_sheet", {"range": info["range"], "col": int(values.get("col") or 0)}, then=then)
+
+        self._table_info(ask)
+
+    @Slot()
+    def mergeSheets(self) -> None:  # noqa: N802
+        """Blätter untereinander auf ein neues Blatt »Zusammengeführt«."""
+        if len(self.sheets) < 2:
+            self.app.set_status("Die Mappe hat nur ein Blatt. Weitere Blätter holt »Mappe anfügen« aus anderen Dateien.", "info")
+            return
+        options = [{"key": str(index), "label": sheet["name"]} for index, sheet in enumerate(self.sheets)]
+        fields = [
+            {"key": "sheets", "type": "checks", "label": "Blätter", "value": [option["key"] for option in options], "options": options,
+             "required": True, "minimum": 2},
+            {"key": "header", "type": "check", "label": "Gleiche Überschrift: nur einmal oben übernehmen", "value": True},
+        ]
+        answer, values = self._form("Blätter zusammenführen", fields, "Zusammenführen")
+        if answer != "primary":
+            return
+        chosen = sorted(int(key) for key in values.get("sheets") or [])
+        self._change("merge_sheets", {"sheets": chosen, "header": bool(values.get("header"))},
+                     status="Blätter zusammengeführt.", then=lambda result: self._activate_new(result))
+
+    @Slot()
+    def importBook(self) -> None:  # noqa: N802
+        """Alle Blätter anderer Mappen hinten anfügen (Mappen zusammenführen)."""
+        from .. import files
+
+        paths = files.open_files("Mappen anfügen", self.app.initial_dir("reader", self.reader.source_dir), WORKBOOK_FILTER)
+        paths = [path for path in paths if path and Path(path).resolve() != Path(self.path or ".").resolve()]
+        if not paths:
+            return
+        created: list[str] = []
+
+        def next_book(result: dict | None = None) -> None:
+            if result:
+                created.extend(result.get("created") or [])
+            if paths:
+                self._change("import_book", {"path": str(Path(paths.pop(0)).resolve())}, then=next_book)
+                return
+            self.app.notify("reader", "success", f"{len(created)} Blätter angefügt.", title="Mappen zusammenführen", auto_hide=8000)
+            if created:
+                self._activate_new({}, len(self.sheets) - len(created))
+
+        next_book()
+
+    @Slot()
+    def exportSheets(self) -> None:  # noqa: N802
+        """Jedes Blatt als eigene Mappe speichern (Mappe teilen)."""
+        from .. import files
+
+        folder = files.pick_folder("Ordner für die einzelnen Blätter", str(Path(self.path).parent) if self.path else
+                                   self.app.initial_dir("reader", self.reader.source_dir))
+        if not folder:
+            return
+        suffix = Path(self.path).suffix.lower() if self.path and Path(self.path).suffix.lower() in (".xlsx", ".xlsm", ".xls", ".ods") else ".xlsx"
+        self.app.set_status("Blätter werden gespeichert …", "busy")
+
+        def done(result: dict) -> None:
+            written = list(result.get("files") or [])
+            self.app.notify("reader", "success", f"{len(written)} Dateien gespeichert in »{Path(folder).name}«.", title="Mappe teilen",
+                            auto_hide=10000, actions=[("Ordner öffnen", lambda: files.open_path(folder))])
+
+        self._call("export_sheets", {"folder": str(Path(folder).resolve()), "stem": Path(self.name or "Mappe").stem, "suffix": suffix}, done)
+
+    # Schutz
+    def _protect_fields(self, on: bool, what: str) -> list[dict]:
+        if not on:
+            return [{"key": "password", "type": "password", "label": "Kennwort", "value": ""},
+                    {"type": "note", "label": f"Leer lassen, wenn {what} ohne Kennwort geschützt wurde."}]
+        return [{"key": "password", "type": "password", "label": "Kennwort (optional)", "value": ""},
+                {"key": "repeat", "type": "password", "label": "Kennwort wiederholen", "value": "", "confirm": "password"},
+                {"type": "note", "label": "Ohne Kennwort kann jeder den Schutz aufheben. Ein vergessenes Kennwort lässt sich nicht wiederherstellen."}]
+
+    @Slot()
+    def protectSheet(self) -> None:  # noqa: N802
+        """Aktives Blatt schützen bzw. den Schutz aufheben. Freigegebene Zellen bleiben bearbeitbar."""
+        on = not self.sheetProtected
+        fields = self._protect_fields(on, "das Blatt")
+        if on:
+            fields.append({"type": "note", "label": "Zellen, die vorher mit »Zellen freigeben« freigegeben wurden, lassen sich weiter ausfüllen."})
+        answer, values = self._form("Blatt schützen" if on else "Blattschutz aufheben", fields, "Schützen" if on else "Aufheben")
+        if answer != "primary":
+            return
+        self._change("protect", {"target": "sheet", "password": str(values.get("password") or ""), "on": on},
+                     status="Blatt geschützt." if on else "Blattschutz aufgehoben.")
+
+    @Slot()
+    def protectBook(self) -> None:  # noqa: N802
+        """Aufbau der Mappe schützen (Blätter einfügen, löschen, umbenennen, verschieben) bzw. freigeben."""
+        on = not self.bookProtected
+        fields = self._protect_fields(on, "die Mappe")
+        answer, values = self._form("Mappe schützen" if on else "Mappenschutz aufheben", fields, "Schützen" if on else "Aufheben",
+                                    message="Blätter lassen sich dann nicht mehr einfügen, löschen, umbenennen oder verschieben." if on else "")
+        if answer != "primary":
+            return
+        self._change("protect", {"target": "book", "password": str(values.get("password") or ""), "on": on},
+                     status="Mappe geschützt." if on else "Mappenschutz aufgehoben.")
+
+    @Slot()
+    def encrypt(self) -> None:
+        """Kennwort zum Öffnen der Datei setzen, ändern oder entfernen – gilt ab dem nächsten Speichern."""
+        fields = [{"key": "password", "type": "password", "label": "Kennwort", "value": "", "required": True},
+                  {"key": "repeat", "type": "password", "label": "Kennwort wiederholen", "value": "", "confirm": "password"},
+                  {"type": "note", "label": "Die Datei lässt sich danach nur mit diesem Kennwort öffnen (auch in Excel). "
+                                            "Ein vergessenes Kennwort lässt sich nicht wiederherstellen."}]
+        if self.path and Path(self.path).suffix.lower() in (".csv", ".xls"):
+            fields.append({"type": "note", "label": "Verschlüsseln geht nur als Excel-Arbeitsmappe (.xlsx) oder OpenDocument (.ods) – "
+                                                    "beim Speichern bitte eines davon wählen."})
+        answer, values = self._form("Mit Kennwort verschlüsseln", fields, "Verschlüsseln",
+                                    secondary="Kennwort entfernen" if self.encrypted else "")
+        if answer not in ("primary", "secondary"):
+            return
+        password = str(values.get("password") or "") if answer == "primary" else ""
+        if answer == "primary" and not password:
+            return
+        self.password = password or None
+        self._mark_dirty()
+        self._change("encrypt", {"password": password},
+                     status="Kennwort gesetzt – es gilt ab dem nächsten Speichern." if password else "Kennwort entfernt – gilt ab dem nächsten Speichern.")
+
+    @Slot(bool)
+    def lockCells(self, locked: bool) -> None:  # noqa: N802
+        """Zellen der Auswahl sperren bzw. freigeben (bei geschütztem Blatt bleiben freigegebene bearbeitbar)."""
+        if self.sheetProtected:
+            self.app.set_status("Erst den Blattschutz aufheben, dann Zellen freigeben oder sperren.", "warning")
+            return
+        self._change("lock", {"range": self.selection, "locked": bool(locked)},
+                     status="Zellen gesperrt." if locked else "Zellen freigegeben – sie bleiben bei geschütztem Blatt bearbeitbar.")
+
+    # Lese-Kreuz
+    @Slot()
+    def toggleCrosshair(self) -> None:  # noqa: N802
+        self.crosshair = not self.crosshair
+        self.revision += 1
 
     # Rückgängig, Zoom --------------------------------------------------------------------------------------------------
     @Slot()
