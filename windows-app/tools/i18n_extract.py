@@ -45,6 +45,7 @@ def ui_text(value: str) -> bool:
 
 
 ENGLISH_WORDS = {
+    "CreateWindowExW", "RegisterClassW", "NovadeskTextkern",
     "Item", "Text", "Rectangle", "Image", "None", "True", "False", "Arial", "Helvetica", "Times", "Courier", "Calibri", "Segoe", "Windows", "Qt",
     "PDF", "OCR", "Excel", "Word", "PowerPoint", "Office", "Tesseract", "Mica", "Microsoft", "English", "Deutsch", "Light", "Dark",
     "Aptos", "Cambria", "Georgia", "Tahoma", "Verdana", "Carlito", "Caladea", "Header", "Icon", "Scripts", "SheetGrid",

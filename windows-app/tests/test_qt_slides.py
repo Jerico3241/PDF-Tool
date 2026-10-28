@@ -190,3 +190,24 @@ def test_existing_presentation_opens_for_editing(ui_app, tmp_path: Path) -> None
     assert reader.current.slideCount >= 1
     items = [reader.tabs.items()[index] for index in range(len(reader.tabs.items()))]
     assert any(item.get("kind") == "praesentation" for item in items)
+
+
+@needs_text
+def test_kernel_in_libreoffice_main_thread(tmp_path: Path, monkeypatch) -> None:
+    """Unter Windows läuft der Kern im Hauptthread von LibreOffice (sonst hängt das Laden einer Präsentation); unter
+    Linux lässt sich derselbe Weg einschalten: Präsentation laden, Folie anfügen, warten (settle) und speichern."""
+    from tools.text import engine, kernel
+
+    monkeypatch.setenv(kernel.MAIN_THREAD_VARIABLE, "1")
+    monkeypatch.setattr(engine, "profile_dir", lambda: tmp_path / "profil")
+    core = engine.Engine()
+    try:
+        core.start()
+        deck = core.call("open", path="", kind="praesentation")["doc"]
+        core.call("uno", doc=deck, command=".uno:InsertPage")
+        core.call("settle", doc=deck)
+        assert core.call("parts", doc=deck)["count"] == 2
+        core.call("save", doc=deck, path=str(tmp_path / "zwei.pptx"))
+        assert "ppt/slides/slide2.xml" in zipfile.ZipFile(tmp_path / "zwei.pptx").namelist()
+    finally:
+        core.stop()
