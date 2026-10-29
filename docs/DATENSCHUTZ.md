@@ -1,7 +1,7 @@
 # Datenschutz
 
-Alle Dateien werden vollständig lokal auf dem PC verarbeitet; es wird nichts hochgeladen. Die einzige
-Verbindung ins Internet ist die Update-Prüfung (siehe unten). PDF Tool schreibt Einstellungen, die Kundenakten
+Alle Dateien werden vollständig lokal auf dem PC verarbeitet; es wird nichts hochgeladen. Ins Internet
+verbindet sich Novadesk nur für die Update-Prüfung und – nur auf Wunsch – für den Download des KI-Modells (siehe unten). PDF Tool schreibt Einstellungen, die Kundenakten
 (`kundenakten.json`), die Vertragsstände (`contract-history\`), den aktuellen Stapel (`stapel.json`)
 und die technischen Protokolle `pdf-repair.log` und `stapel.log` in den Datenordner. Auch die
 Stapelverarbeitung, der Vertragsvergleich und die erweiterte PDF-Wiederherstellung arbeiten
@@ -33,6 +33,11 @@ vor dem Überschreiben einer PDF eine Kopie des vorherigen Stands in
 `%LOCALAPPDATA%\PDF-Tool-Editor\Sicherungen` (je Datei höchstens 3, nach 7 Tagen entfernt). Diese
 Ordner gehören weder zur Sicherung noch zum Support-Paket. Protokolle enthalten keine Texte aus PDFs;
 PDF-JavaScript wird nie ausgeführt.
+
+**KI-Assistent (optional, seit 3.2):** Nur wenn der Benutzer es ausdrücklich startet, lädt Novadesk das
+KI-Modell einmalig von Hugging Face herunter (geprüft mit SHA-256) und speichert es in
+`%LOCALAPPDATA%\PDF-Tool-KI`. Danach läuft das Modell vollständig lokal (nur `127.0.0.1`); Fragen und
+Dokumentinhalte verlassen den PC nie.
 
 **Updates (seit 2.7.2):** PDF Tool fragt die Releases des offiziellen Repositories bei GitHub ab –
 automatisch höchstens einmal täglich (abschaltbar unter Einstellungen → Updates) oder mit „Nach

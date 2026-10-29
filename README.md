@@ -30,8 +30,13 @@ Animationen); die Fachlogik ist in Python geschrieben. Unterstützt werden Windo
 
 ## Datenschutz
 
-Dateien werden lokal verarbeitet – keine Cloud, keine Uploads. Die einzige Internetverbindung ist
-die abschaltbare Update-Prüfung bei GitHub. Einzelheiten: [docs/DATENSCHUTZ.md](docs/DATENSCHUTZ.md).
+Dateien werden lokal verarbeitet – keine Cloud, keine Uploads. Ins Internet geht nur die abschaltbare
+Update-Prüfung bei GitHub und, nur auf Wunsch, der Download des KI-Modells. Einzelheiten: [docs/DATENSCHUTZ.md](docs/DATENSCHUTZ.md).
+
+## Code-Signierung
+
+Setup und Startprogramm werden in GitHub Actions aus diesem Repository gebaut und signiert:
+[Code signing policy](docs/CODE-SIGNING.md).
 
 ## Installation
 
