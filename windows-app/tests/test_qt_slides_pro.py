@@ -108,10 +108,24 @@ def test_master_view_and_slide_pictures(ui_app) -> None:
     h = ui_app
     h.app.dialogs.shutdown()
     doc = _new_slides(h)
-    doc.newSlide()
-    assert wait_until(lambda: doc.slideCount == 2, 20)
     doc.applyDesign("nacht")
     _settle(doc)
+
+    def dark_thumb(part: int) -> None:
+        pictures: list = []
+        doc.request_thumb(part, 160, 90, pictures.append, lambda exc: pictures.append(exc))
+        assert wait_until(lambda: bool(pictures), 20)
+        data = pictures[0]
+        assert isinstance(data, bytes) and len(data) == 160 * 90 * 4
+        image = QImage(data, 160, 90, 160 * 4, QImage.Format.Format_ARGB32_Premultiplied)
+        for x, y in ((80, 60), (4, 4), (155, 85)):
+            color = image.pixelColor(x, y)
+            assert color.lightness() < 120, f"Folie {part + 1} ist bei {x},{y} hell ({color.name()}) – Notizenseite statt Folie?"
+
+    # Gleich nach »Neue Folie« steht die Notizenansicht noch auf Folie 1 – das Bild muss trotzdem die Folie sein
+    doc.newSlide()
+    assert wait_until(lambda: doc.slideCount == 2 and doc.slideIndex == 1, 20)
+    dark_thumb(0)
     view = h.item("slidesView")
     doc.toggleMaster()
     assert wait_until(lambda: doc.masterMode and doc.slideCount >= 1 and doc.slideNames and doc.slideNames[0] != "Folie 1", 20), doc.slideNames
@@ -124,14 +138,7 @@ def test_master_view_and_slide_pictures(ui_app) -> None:
     # Folie 1 ist nicht die gezeigte: ihr Bild muss den dunklen Hintergrund des Designs zeigen
     doc.goSlide(1)
     assert wait_until(lambda: doc.slideIndex == 1, 20)
-    pictures: list = []
-    doc.request_thumb(0, 160, 90, pictures.append, lambda exc: pictures.append(exc))
-    assert wait_until(lambda: bool(pictures), 20)
-    data = pictures[0]
-    assert isinstance(data, bytes) and len(data) == 160 * 90 * 4
-    image = QImage(data, 160, 90, 160 * 4, QImage.Format.Format_ARGB32_Premultiplied)
-    middle = image.pixelColor(80, 60)
-    assert middle.lightness() < 120, f"Folie 1 ist hell ({middle.name()}) – Notizenseite statt Folie?"
+    dark_thumb(0)
 
 
 @needs_text
@@ -212,6 +219,14 @@ def test_export_slides_as_pictures(ui_app, tmp_path: Path) -> None:
     assert wait_until(lambda: doc.slideCount == 2, 20)
     folder = tmp_path / "Bilder"
     folder.mkdir()
+    asked: list = []
+    ask = h.app.dialogs.ask
+
+    def recording(*args, **kwargs):
+        asked.append(kwargs)
+        return ask(*args, **kwargs)
+
+    h.app.dialogs.ask = recording
     dialogs.AUTO_ANSWER = "primary"
     files.RESPONSES = [str(folder)]
     try:
@@ -220,6 +235,9 @@ def test_export_slides_as_pictures(ui_app, tmp_path: Path) -> None:
     finally:
         dialogs.AUTO_ANSWER = None
         files.RESPONSES = None
+        h.app.dialogs.ask = ask
+    # »Abbrechen« bringt das Formular selbst mit – ein zweites als »secondary« stand doppelt da
+    assert asked and not asked[0].get("secondary")
     pictures = sorted(folder.iterdir())
     assert [path.name[-12:] for path in pictures] == ["Folie 01.png", "Folie 02.png"]
     image = QImage(str(pictures[0]))
@@ -329,3 +347,33 @@ def test_new_documents_from_templates(ui_app, tmp_path: Path) -> None:
     deck = make("projektvorstellung")
     assert deck.kind == "praesentation" and deck.name == "Projekt1.pptx" and deck.slideCount == 5
     assert make("rechnung").name == "Rechnung2.xlsx"
+
+
+@needs_text
+def test_second_presentation_fits_and_flyouts_close(ui_app) -> None:
+    """Eine zweite Präsentation passt sich wie die erste an die Ansicht an (blieb bei 100 %); Esc und ein anderer
+    Reiter schließen das Flyout »Designs« (es blieb über den anderen Reitern stehen)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    h = ui_app
+    h.app.dialogs.shutdown()
+    reader = h.runtime.singletons["Reader"]
+    first = _new_slides(h)
+    reader.newSlides()
+    assert wait_until(lambda: reader.current is not first and getattr(reader.current, "ready", False), 120)
+    pump(1.0)
+    second = reader.current
+    assert second.fitting and second.zoom == first.zoom and second.zoom < 100, (first.zoom, second.zoom)
+    view = h.item("slidesView")
+    flyout = view.findChild(QObject, "slidesDesignFlyout")
+    view.setProperty("ribbon", "design")
+    pump(0.3)
+    flyout.open()
+    assert wait_until(lambda: flyout.property("opened"), 5)
+    QTest.keyClick(h.window, Qt.Key.Key_Escape)
+    assert wait_until(lambda: not flyout.property("visible"), 5)
+    flyout.open()
+    assert wait_until(lambda: flyout.property("opened"), 5)
+    view.setProperty("ribbon", "transitions")
+    assert wait_until(lambda: not flyout.property("visible"), 5)

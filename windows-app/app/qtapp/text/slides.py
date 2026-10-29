@@ -924,7 +924,7 @@ class SlidesController(TextController):
         self._render_all(width, height, "png", each, then, weight=0.3)
 
     def _form(self, title: str, fields: list[dict], primary: str) -> tuple[str, dict]:
-        answer, data = self.app.dialogs.ask("sheet_form", title, "", primary=primary, secondary="Abbrechen",
+        answer, data = self.app.dialogs.ask("sheet_form", title, "", primary=primary,
                                             data={"fields": fields}, width=460)
         values = {field["key"]: field.get("value") for field in fields if field.get("key")}
         values.update({key: value for key, value in (data or {}).items() if key != "fields"})

@@ -425,8 +425,23 @@ class Kernel:
         if not (0 < pw <= 4096 and 0 < ph <= 4096):
             raise KernelError("Ungültige Kachelgröße.")
         buffer = (C.c_ubyte * (pw * ph * 4))()
-        doc.cls.paintPartTile(doc.pointer, C.cast(buffer, P), int(args["part"]), int(args.get("mode", 0)), pw, ph,
-                              int(args.get("x", 0)), int(args.get("y", 0)), int(args["w"]), int(args["h"]))
+        part = int(args["part"])
+        # Mit der Ansicht für Folienbilder malen und sie vorher auf die Folie stellen: paintPartTile nimmt sonst
+        # die erste Ansicht, die schon auf dieser Folie steht – nach »Neue Folie« war das die Notizenansicht
+        # (sie zeigt noch die alte Folie), und die Folienleiste zeigte eine Notizenseite
+        before = None
+        if doc.thumb_view is not None:
+            before = doc.cls.getView(doc.pointer)
+            if before != doc.thumb_view:
+                doc.cls.setView(doc.pointer, doc.thumb_view)
+            if doc.cls.getPart(doc.pointer) != part:
+                doc.cls.setPart(doc.pointer, part)
+        try:
+            doc.cls.paintPartTile(doc.pointer, C.cast(buffer, P), part, int(args.get("mode", 0)), pw, ph,
+                                  int(args.get("x", 0)), int(args.get("y", 0)), int(args["w"]), int(args["h"]))
+        finally:
+            if before is not None and before != doc.thumb_view:
+                doc.cls.setView(doc.pointer, before)
         return bytes(buffer)
 
     def cmd_tile(self, args):

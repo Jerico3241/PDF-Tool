@@ -28,8 +28,12 @@ FocusScope {
     readonly property var transition: doc !== null && doc.slideIndex < doc.transitions.length ? doc.transitions[doc.slideIndex] : ({ kind: "keiner", duration: 1, advance: 0 })
     function seconds(value) { return String(value).replace(".", ",") }
 
-    onDocChanged: if (doc) Qt.callLater(function() { canvas.forceActiveFocus() })
+    // Auch beim Wechsel zwischen zwei Präsentationen anpassen: die Ansicht bleibt dieselbe, die neue Präsentation
+    // war schon fertig geladen, bevor sie hier ankam (sonst blieb sie bei 100 %)
+    onDocChanged: if (doc) Qt.callLater(function() { view.fitSlide(); canvas.forceActiveFocus() })
     function back() { canvas.forceActiveFocus() }
+    // Ein anderer Reiter schließt die Flyouts des alten (sie hängen an dessen Knöpfen und blieben sonst stehen)
+    onRibbonChanged: { colorFlyout.close(); designFlyout.close(); backgroundFlyout.close() }
 
     // Die Folie füllt die Ansicht: beim Laden, bei neuer Fenstergröße und nach »An die Ansicht anpassen«
     function fitSlide() { if (view.doc) view.doc.fitSlide(canvas.width, canvas.height) }
@@ -931,6 +935,7 @@ FocusScope {
         width: 232
         implicitHeight: contentHeight + topPadding + bottomPadding
         closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        focus: true  // sonst kommt Esc beim Folienbild an statt beim Flyout
         onClosed: view.back()
         background: Rectangle {
             color: Theme.flyout
@@ -969,6 +974,7 @@ FocusScope {
         implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding
         implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding
         closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        focus: true  // sonst kommt Esc beim Folienbild an statt beim Flyout
         onClosed: view.back()
         background: Rectangle {
             color: Theme.flyout
@@ -1051,6 +1057,7 @@ FocusScope {
         width: 232
         implicitHeight: contentHeight + topPadding + bottomPadding
         closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        focus: true  // sonst kommt Esc beim Folienbild an statt beim Flyout
         onClosed: view.back()
         background: Rectangle {
             color: Theme.flyout

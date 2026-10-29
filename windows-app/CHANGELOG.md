@@ -18,7 +18,8 @@ Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.6.md).
 - Vorlagen: Flat-ODF in `app/vorlagen/` aus `scripts/make_office_templates.py`, Seite »Vorlagen« der Startseite,
   `Reader.newFromTemplate`.
 - Behoben: Wechsel Text → Tabelle gab der PDF-Ansicht kurz die Tabelle (`ReaderPage.doc`); Kacheln für eine
-  geschlossene Textansicht.
+  geschlossene Textansicht; `cmd_thumb` malt mit der Ansicht für Folienbilder (sonst nach »Neue Folie« mit der
+  Notizenansicht); eine zweite Präsentation passt sich beim Wechsel an; Esc und Reiterwechsel schließen die Flyouts.
 - `build.py probe_text` prüft Design, Übergang, Master, Video, Folienbilder und die Vorlagen.
 
 # Novadesk 5.0.0-beta.5
