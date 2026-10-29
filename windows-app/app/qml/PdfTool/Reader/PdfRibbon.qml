@@ -404,6 +404,8 @@ Rectangle {
         id: convertMenu
         PMenuItem { text: I18n.tr("In Word umwandeln (.docx) …", I18n.revision); iconName: "document"; onTriggered: convertMenu.afterClose = function() { root.run("toWord") } }
         PMenuItem { text: I18n.tr("In Excel umwandeln (.xlsx) …", I18n.revision); iconName: "document_table"; onTriggered: convertMenu.afterClose = function() { root.run("toExcel") } }
+        PMenuItem { text: I18n.tr("In PowerPoint umwandeln (.pptx) …", I18n.revision); iconName: "slide_settings"; onTriggered: convertMenu.afterClose = function() { root.run("toPowerPoint") } }
+        PMenuItem { text: I18n.tr("Als Webseite speichern (.html) …", I18n.revision); iconName: "local_language"; onTriggered: convertMenu.afterClose = function() { root.run("toHtml") } }
         PMenuItem { text: I18n.tr("Als Text speichern (.txt) …", I18n.revision); iconName: "text_bullet_list_ltr"; onTriggered: convertMenu.afterClose = function() { root.run("toText") } }
         PMenuItem { text: I18n.tr("Seiten als PNG exportieren (150 dpi)", I18n.revision); iconName: "arrow_export"; onTriggered: convertMenu.afterClose = function() { root.run("png150") } }
         PMenuItem { text: I18n.tr("Seiten als JPEG exportieren (150 dpi)", I18n.revision); iconName: "arrow_export"; onTriggered: convertMenu.afterClose = function() { root.run("jpeg150") } }

@@ -1513,7 +1513,9 @@ class SheetController(Observable):
             self.app.notify("reader", "error", message, title="Nicht gespeichert")
             self._finish_save(False)
 
-        self._call("save", args, done, failed, quiet=True)
+        from ..versions import before_save
+
+        before_save(self.app, target, self.path, lambda: self._call("save", args, done, failed, quiet=True))
 
     def save_and_wait(self, timeout: float = 600.0) -> bool:
         """Beim Beenden: speichern und warten, bis es fertig ist (``True`` = gespeichert)."""
@@ -1547,6 +1549,20 @@ class SheetController(Observable):
         if target and Path(target).suffix.lower() not in SAVE_SUFFIXES:
             target += ".xlsx"
         return target
+
+    def version_marker(self) -> int:
+        return self.revision
+
+    def version_suffix(self) -> str:
+        suffix = Path(self.path).suffix.lower() if self.path else ""
+        return suffix if suffix in SAVE_SUFFIXES else ".xlsx"
+
+    def write_version(self, target: str, done: Callable[[bool], None]) -> None:
+        """Backup-Center: eine Kopie des ungespeicherten Stands schreiben – das Dokument bleibt ungespeichert."""
+        if not self.doc:
+            done(False)
+            return
+        self._call("save", {"path": str(Path(target).resolve()), "copy": True}, lambda _result: done(True), lambda _exc: done(False), quiet=True)
 
     @Slot()
     def saveNow(self) -> None:  # noqa: N802

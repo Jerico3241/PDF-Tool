@@ -245,6 +245,7 @@ FocusScope {
                 ToolButton { iconName: "save"; text: I18n.tr("Speichern", I18n.revision); onClicked: view.doc.saveNow() }
                 ToolButton { objectName: "textSaveAs"; iconName: "save"; text: I18n.tr("Speichern unter …", I18n.revision); onClicked: view.doc.saveAs() }
                 ToolButton { iconName: "document_pdf"; text: I18n.tr("Als PDF speichern …", I18n.revision); onClicked: view.doc.exportPdf() }
+                ToolButton { objectName: "textExportImages"; iconName: "image"; text: I18n.tr("Als Bild speichern …", I18n.revision); onClicked: view.doc.exportPageImages() }
                 ToolButton { iconName: "print"; text: I18n.tr("Drucken", I18n.revision); onClicked: view.doc.printText() }
                 RibbonSeparator {}
                 ToolButton { iconName: "mail"; text: I18n.tr("Per E-Mail senden", I18n.revision); onClicked: Reader.sendByMail() }

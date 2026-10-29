@@ -2,6 +2,24 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.7
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.7.md).
+
+- Neues Werkzeug »Umwandeln« (`tools/convert/`, `qtapp/convert.py`, `ConvertPage.qml`): Umwandeln über
+  LibreOffice (`office.convert_file`, Filtertabellen in `jobs.py`) und Pillow, Zusammenfügen und Teilen mit
+  pikepdf, Drucken (`qtapp/convertprint.py`), Umbenennen nach Muster in zwei Schritten mit Rückgängig
+  (`naming.py`). PDF → pptx über `impress_pdf_import`, PDF → HTML (`convert.to_html`), HEIC über pi-heif.
+- Backup-Center (`backup/versions.py`, `qtapp/versions.py`, `VersionsPage.qml`): Fassungen vor dem Speichern
+  (PDF über `save(keep=…)`, Office über `before_save`), automatische Sicherung über `write_version` der
+  Dokument-Controller (Office: Kopie ohne `TakeOwnership` bzw. `copy`), Aufräumen nach Anzahl und Alter.
+- »Dateien reparieren« (`tools/file_repair/`): ZIP-Formate aus den lokalen Köpfen neu verpacken, abgeschnittene
+  XML-Teile schließen, LibreOffice speichert neu; Bilder mit `LOAD_TRUNCATED_IMAGES`; Text/CSV-Kodierung.
+  Liste, Namen (`numbered(…, suffix)`) und Arbeitsprozess bleiben die der PDF-Reparatur.
+- Texte: »Als Bild speichern …« (`qtapp/text/document.py exportPageImages`, `convert/pageimages.py`).
+- Tastenkürzel Strg+7 (Umwandeln) und Strg+8 (Backup-Center); »Alle Werkzeuge« zeigt sechs Werkzeuge in zwei
+  Reihen.
+
 # Novadesk 5.0.0-beta.6
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.6.md).

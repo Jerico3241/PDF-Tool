@@ -27,8 +27,8 @@ from pikepdf import Array, Dictionary, Name
 
 from .errors import EditorError
 
-EXTENSIONS = (".jpg", ".jpeg", ".jpe", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp")
-FILTER = "Bilder (*.jpg *.jpeg *.png *.bmp *.gif *.tif *.tiff *.webp);;Alle Dateien (*.*)"
+EXTENSIONS = (".jpg", ".jpeg", ".jpe", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".heic", ".heif", ".avif")  # HEIC: pi-heif, seit 5.0 Beta 7
+FILTER = "Bilder (*.jpg *.jpeg *.png *.bmp *.gif *.tif *.tiff *.webp *.heic *.heif *.avif);;Alle Dateien (*.*)"
 PAGE_SIZES = {  # Punkte (1/72 Zoll), Hochformat
     "a4": (595.276, 841.89),
     "letter": (612.0, 792.0),
@@ -117,6 +117,13 @@ class _Frame:
 
 def _frames(path: Path) -> list[_Frame]:
     from PIL import Image, UnidentifiedImageError
+
+    if path.suffix.lower() in (".heic", ".heif"):
+        try:
+            import pi_heif  # HEIC/HEIF (Fotos vom iPhone) – nur lesen
+        except ImportError:
+            raise ImageError(f"»{path.name}«: HEIC-Bilder kann diese Installation nicht lesen.") from None
+        pi_heif.register_heif_opener()
 
     try:
         raw = path.read_bytes()

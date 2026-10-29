@@ -35,7 +35,8 @@ und `app/tools/` (ohne Oberflächencode):
   kurzen Wiederholungen), sicher lesen, Schema-Versionen (`NewerSchema`), `JsonFolderStore` (je
   Datensatz eine Datei; beschädigte oder neuere Dateien werden übersprungen und gemeldet).
 - `backup/` – Sicherung (`archive.py`), Wiederherstellung beim Start mit Journal und Rückabwicklung
-  (`restore.py`), automatische Sicherung und Aufbewahrung (`policy.py`).
+  (`restore.py`), automatische Sicherung und Aufbewahrung (`policy.py`), Versionen geöffneter Dokumente für das
+  Backup-Center (`versions.py`, seit 5.0 Beta 7: Ablage je Dokument, eindeutige Namen, Aufbewahrung nach Anzahl und Tagen).
 - `diagnostics/` – Systeminformationen, Datenprüfung, Bereinigung, Support-Paket, Protokoll
   `pdf-tool.log` (`applog.py`), Aufräumen eigener temporärer Dateien.
 - `tools/pdf_repair/` – Analyse und Reparatur (`engine.py`), Arbeitsprozess (`process.py`, auch
@@ -43,7 +44,11 @@ und `app/tools/` (ohne Oberflächencode):
   PDFs (`batch.py`: Zustände `ItemState`, Namensregel `NameMode` AUTO/MANUAL, Windows-Namensprüfung,
   Konflikte und Nummerierung, Reservierung beim Start – keine eigene Engine, nur Reihenfolge und
   Namen), Texte und Angaben für die Anzeige (`presentation.py`), erweiterte Wiederherstellung
-  (`recovery/`).
+  (`recovery/`). Seit 5.0 Beta 7 auch andere Dateiarten über `tools/file_repair/` (Office-Dateien als ZIP neu
+  packen und mit LibreOffice neu speichern, alte Office-Formate, Bilder mit Pillow, Text/CSV bereinigen).
+- `tools/convert/` (seit 5.0 Beta 7) – Umwandeln ohne Oberfläche: Dateiarten und Ziele (`formats.py`), eine Datei
+  umwandeln, teilen oder eine Liste zusammenfügen (`jobs.py`), Seiten als Bild (`pageimages.py`), Umbenennen mit Muster
+  und Rückgängig (`naming.py`). Oberfläche: `qtapp/convert.py` (`Convert`), Drucken vieler Dateien `qtapp/convertprint.py`.
 - `tools/pdf_actions/` (seit 4.0) – Stapel-Aktionen ohne Oberfläche: Schritte, feste Reihenfolge und
   gespeicherte Einstellungen (`actions.py`, ohne Kennwort), eine Datei bearbeiten (`runner.py`) – nur mit den
   Funktionen des PDF Editors, keine eigene PDF-Verarbeitung. Oberfläche: `qtapp/actions.py` (`Actions`).
@@ -79,9 +84,11 @@ Modul `PdfTool.Backend`:
 | `Preview` | `contracts.preview.PreviewController` | Vorschau (Seitenbilder über `image://preview/…`) |
 | `Batch` | `contracts.batch.BatchController` | Stapel |
 | `Comparison` | `contracts.comparison.ComparisonController` | Vertragsvergleich |
-| `Repair` | `repair.RepairController` | PDF reparieren |
+| `Repair` | `repair.RepairController` | Dateien reparieren (PDF, Office, Bilder, Text/CSV) |
 | `Reader` | `reader.controller.ReaderController` | PDF Reader & Editor: Tabs, Öffnen, »Zuletzt geöffnet«, Seitenleisten; `Reader.current` ist der `DocumentController` des aktiven Tabs (Seitenbilder über `image://pdfpage/…`) |
 | `Updates` | `updates.UpdatesController` | Updates (vor der Installation: Sicherung) |
+| `Convert` | `convert.ConvertController` | Umwandeln (viele Dateien: umwandeln, zusammenfügen, teilen, drucken, umbenennen) |
+| `Versions` | `versions.VersionsController` | Backup-Center: automatische Versionen geöffneter Dokumente, öffnen, als Kopie speichern, wiederherstellen |
 | `Backup` | `backups.BackupController` | Einstellungen → Sicherung & Wiederherstellung |
 | `Diagnose` | `diagnose.DiagnoseController` | Einstellungen → Diagnose |
 | `Assistant` | `assistant.AssistantController` | KI-Assistent (optional): Einstellungen, Einrichten und Download des Modells, Gespräch zum aktuellen Dokument (`conversationModel`) für die Seitenleiste im Reader |

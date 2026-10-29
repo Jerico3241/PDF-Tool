@@ -182,9 +182,11 @@ def validate(data: bytes, password: str | None, expected: Structure) -> int:
     return len(indexes)
 
 
-def save(document: EditorDocument, target: str | os.PathLike, *, backup_dir: Path | None = None, force: bool = False) -> SaveResult:
+def save(document: EditorDocument, target: str | os.PathLike, *, backup_dir: Path | None = None, force: bool = False,
+         keep=None) -> SaveResult:
     """Dokument nach ``target`` speichern (Original oder neue Datei). ``force`` überschreibt auch
-    eine zwischenzeitlich von außen veränderte Datei (nur nach ausdrücklicher Rückfrage)."""
+    eine zwischenzeitlich von außen veränderte Datei (nur nach ausdrücklicher Rückfrage). ``keep(pfad)`` (seit 5.0
+    Beta 7, Backup-Center) legt den bisherigen Stand statt in ``backup_dir`` als Fassung ab."""
     target = Path(target)
     same_file = document.path is not None and _same(document.path, target)
     if same_file and not force and document.stamp is not None:
@@ -200,7 +202,9 @@ def save(document: EditorDocument, target: str | os.PathLike, *, backup_dir: Pat
             _write_temp(handle, data)
         digest = hashlib.sha256(data).hexdigest()
         _verify_temp(temp, digest)
-        if same_file and target.exists() and backup_dir is not None:
+        if same_file and target.exists() and keep is not None:
+            backup = _backup_step(target, None, keep)
+        elif same_file and target.exists() and backup_dir is not None:
             backup = _backup_step(target, backup_dir)
         _replace_step(temp, target)
     except BaseException:
@@ -290,9 +294,9 @@ def _write_error(exc: OSError, phase: str) -> SaveFailed:
     return SaveFailed(f"Die Datei konnte nicht geschrieben werden ({exc.strerror or 'Ein-/Ausgabefehler'}). {UNCHANGED}", kind=TEMP_WRITE_FAILED, phase=phase, save_as=True, backend=FILESYSTEM, error=exc)
 
 
-def _backup_step(target: Path, backup_dir: Path) -> Path:
+def _backup_step(target: Path, backup_dir: Path | None, keep=None) -> Path | None:
     try:
-        return _backup(target, backup_dir)
+        return keep(target) if keep is not None else _backup(target, backup_dir)
     except OSError as exc:
         if getattr(exc, "winerror", None) in (32, 33):
             raise SaveFailed(LOCKED_TEXT, kind=FILE_LOCKED, phase="backup", save_as=True, backend=FILESYSTEM, error=exc) from exc

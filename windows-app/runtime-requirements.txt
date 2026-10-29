@@ -17,6 +17,8 @@
 # aiohttp). Zwei Prüfsummen bei cryptography: abi3-Wheels für Python 3.11+ und 3.9+.
 # Videos und Töne in Präsentationen (seit 5.0 Beta 6): PySide6-Addons (LGPL-3.0) in derselben Version wie Essentials –
 # davon bleibt nur Qt Multimedia mit FFmpeg (LGPL-2.1+) für Abspielen und »Als Video speichern« (qtruntime.py).
+# HEIC-Fotos (seit 5.0 Beta 7): pi-heif (BSD-3-Clause, mit libheif und libde265 unter LGPL-3.0) – nur lesen, ohne
+# Encoder (anders als pillow-heif kein x265). AVIF und WEBP kann Pillow selbst.
 asn1crypto==1.5.1 --hash=sha256:db4e40728b728508912cbb3d44f19ce188f218e9eba635821bb4b68564f8fd67
 cffi==2.1.1 --hash=sha256:1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d
 charset-normalizer==3.5.2 --hash=sha256:78456a747de8dc58360ffa581f30a002baf5aa28cb262536545e91f113ed7639
@@ -28,6 +30,7 @@ numpy==2.5.4 --hash=sha256:8b4d2fd2d34e5f8c9235ee787de5631a37a28402b15cb80814df9
 openpyxl==3.1.5 --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2
 packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
 pandas==2.3.3 --hash=sha256:f8bfc0e12dc78f777f323f55c58649591b2cd0c43534e8355c51d3fede5f4dee
+pi-heif==1.4.0 --hash=sha256:7692b50e0305170502fdd0657b31818e724f9630629bdbc05a91b10a7979d786
 pikepdf==10.17.0 --hash=sha256:8fe0aca0174cec0dfd8e367e4b663db029cd13fbdb13faf087e4f2d4955ee16d
 pillow==12.3.0 --hash=sha256:1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8
 pypdf==6.21.1 --hash=sha256:553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b

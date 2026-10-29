@@ -537,10 +537,11 @@ def test_edit_text_block_natively_with_the_editor_and_save(reader_app, tmp_path:
     assert "4712" in text and "4711" not in text
     with pikepdf.open(path) as saved:
         assert len(saved.pages) == 1
-    # Sicherung des vorherigen Stands liegt im (Test-)Ordner des Editors
-    from tools.pdf_editor import recovery
+    # Der vorherige Stand liegt als Fassung im Backup-Center (seit 5.0 Beta 7; Test-Ordner des Editors)
+    from backup import versions
 
-    assert any(recovery.backups_dir().rglob("*.pdf"))
+    document = versions.store().document(versions.key_of(path))
+    assert document is not None and digest(document.versions[0].path) == before
 
 
 def test_add_text_note_ink_shapes_and_undo_redo(reader_app, tmp_path: Path) -> None:

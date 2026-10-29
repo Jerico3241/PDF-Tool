@@ -14,6 +14,13 @@ import winsys
 EXCEL_FILTER = "Excel (*.xlsx *.xlsm *.xls);;Alle Dateien (*.*)"
 IMAGE_FILTER = "Bilder (*.png *.jpg *.jpeg *.webp);;Alle Dateien (*.*)"
 PDF_FILTER = "PDF (*.pdf);;Alle Dateien (*.*)"
+# »Dateien reparieren« (seit 5.0 Beta 7): PDFs, Office-Dateien, Bilder, Text/CSV
+REPAIR_FILTER = (
+    "Alle reparierbaren Dateien (*.pdf *.docx *.docm *.dotx *.xlsx *.xlsm *.xltx *.pptx *.pptm *.potx *.odt *.ods *.odp *.ott *.ots *.otp "
+    "*.doc *.xls *.ppt *.rtf *.jpg *.jpeg *.png *.gif *.bmp *.tif *.tiff *.webp *.txt *.csv);;"
+    "PDF (*.pdf);;Office (*.docx *.docm *.dotx *.xlsx *.xlsm *.xltx *.pptx *.pptm *.potx *.odt *.ods *.odp *.ott *.ots *.otp *.doc *.xls *.ppt *.rtf);;"
+    "Bilder (*.jpg *.jpeg *.png *.gif *.bmp *.tif *.tiff *.webp);;Text und CSV (*.txt *.csv);;Alle Dateien (*.*)"
+)
 # Öffnen in Novadesk (seit 5.0): PDFs und Office-Dateien zum Ansehen – je Dateiart auch einzeln wählbar
 OPEN_FILTER = (
     "Alle unterstützten Dateien (*.pdf *.docx *.doc *.docm *.odt *.rtf *.xlsx *.xls *.xlsm *.ods *.csv *.pptx *.ppt *.pptm *.odp);;"

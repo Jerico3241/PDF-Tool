@@ -444,7 +444,7 @@ def test_96_install_waits_for_running_repair(start, server, tmp_path):
     settle(h, "ready")
     pdf = samples.healthy(tmp_path / "gross.pdf", pages=40)
     h.repair.add([str(pdf)])
-    assert "PDF-Reparatur" in h.app.running_work()  # Analyse läuft im Arbeitsprozess
+    assert "Dateireparatur" in h.app.running_work()  # Analyse läuft im Arbeitsprozess
     u(h).installNow()
     assert u(h).state == "ready" and not updates.LAUNCHES and not h.app.closing
     assert u(h).workHint.startswith("Es läuft noch eine Verarbeitung. Bitte warten Sie, bis diese abgeschlossen ist, oder brechen Sie sie ab.")

@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
-from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR, TOOLS, tool_for_page
+from tools.registry import ACTIONS, CONTRACTS, CONVERT, READER, REPAIR, TOOLS, VERSIONS, tool_for_page
 from updater.semver import Version
 
 import winsys
@@ -30,9 +30,9 @@ from .timers import Timers
 HOME = "home"
 SETTINGS = "settings"
 PAGES = (HOME, *(page for tool in TOOLS for page in tool.pages), SETTINGS)
-SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key, ACTIONS.key)  # Strg+1 … Strg+6
+SHORTCUT_TARGETS = (HOME, CONTRACTS.key, REPAIR.key, SETTINGS, READER.key, ACTIONS.key, CONVERT.key, VERSIONS.key)  # Strg+1 … Strg+8
 # Mit eigenem Tab neben ⌂ Start: diese Werkzeuge und die Einstellungen. Der Reader zeigt seine Dokumente als Tabs.
-TAB_KEYS = (ACTIONS.key, CONTRACTS.key, REPAIR.key, SETTINGS)
+TAB_KEYS = (ACTIONS.key, CONVERT.key, VERSIONS.key, CONTRACTS.key, REPAIR.key, SETTINGS)
 HOME_HINT = "Strg+N  Neu   ·   Strg+O  Öffnen"
 SAVE_DELAY = 800
 ABOUT_TEXT = (
@@ -47,10 +47,10 @@ HOME_STEPS = (
     "Auf der Startseite ein Werkzeug wählen. Geöffnete Werkzeuge und PDFs stehen oben als Tabs; ⌂ führt zurück zur Startseite.",
     "»PDF Reader & Editor« öffnet PDFs zum Lesen, Bearbeiten, Organisieren und Kommentieren (Strg+5).",
     "»Vertragsübersichten« erstellt aus einer Excel-Liste eine PDF (Strg+2).",
-    "»PDF reparieren« analysiert beschädigte PDF-Dateien und überträgt lesbare Inhalte in eine neue PDF (Strg+3).",
+    "»Dateien reparieren« analysiert beschädigte PDFs, Office-Dateien, Bilder und Texte und rettet lesbare Inhalte in eine neue Datei (Strg+3).",
 )
 HOME_NOTES = (
-    "Eine Datei kann auch direkt in das Fenster gezogen werden: Auf der Startseite öffnet eine PDF den »PDF Reader & Editor«, eine Excel-Liste »Vertragsübersichten«; auf der Seite »PDF reparieren« wird eine PDF zur Reparatur hinzugefügt.",
+    "Eine Datei kann auch direkt in das Fenster gezogen werden: Auf der Startseite öffnet eine PDF den »PDF Reader & Editor«, eine Excel-Liste »Vertragsübersichten«; auf der Seite »Dateien reparieren« wird die Datei zur Reparatur hinzugefügt.",
     "Design, Akzentfarbe, Mica und Animationen stehen unter »Einstellungen« (Zahnrad oben rechts, Strg+4).",
     "Alle Dateien werden lokal verarbeitet; es wird nichts hochgeladen.",
 )

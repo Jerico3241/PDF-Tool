@@ -8,8 +8,10 @@ def build_tools(runtime) -> None:
     """Controller der Werkzeuge anlegen und als QML-Singletons eintragen."""
     from .contracts.tool import ContractsTool
     from .actions import ActionsTool
+    from .convert import ConvertTool
     from .reader.controller import ReaderTool
     from .repair import RepairTool
+    from .versions import VersionsTool
 
     app = runtime.app
     contracts = ContractsTool(app, runtime.cfg)
@@ -39,4 +41,11 @@ def build_tools(runtime) -> None:
     batch_actions = ActionsTool(app, runtime.cfg)
     runtime.actions = batch_actions
     runtime.singletons["Actions"] = batch_actions.controller
+    converter = ConvertTool(app, runtime.cfg)
+    runtime.convert = converter
+    runtime.singletons["Convert"] = converter.controller
+    keeper = VersionsTool(app, runtime.cfg)
+    runtime.versions = keeper
+    runtime.singletons["Versions"] = keeper.controller
+    keeper.controller.start()
     contracts.start()

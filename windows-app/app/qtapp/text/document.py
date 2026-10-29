@@ -177,6 +177,7 @@ class TextController(Observable):
         self.app = reader.app
         self.service = service
         self.ident = ident
+        self._edits = 0
         self.sourcePath = ""  # wie ein PDF-Dokument ohne umgewandelte Quelle
         self.panels: dict = {}
         self.currentPage = 0
@@ -269,6 +270,7 @@ class TextController(Observable):
         if self._closed or doc != self.doc or generation != self.generation:
             return
         if kind == INVALIDATE_TILES:
+            self._edits += 1  # Backup-Center: seit der letzten automatischen Fassung verändert?
             rect = _rect(payload) if payload.strip() != "EMPTY" else []
             if rect:
                 self.tilesInvalidated.emit(*rect)
@@ -1061,7 +1063,9 @@ class TextController(Observable):
             self.app.notify("reader", "error", message, title="Nicht gespeichert")
             self._finish_save(False)
 
-        self._call("save", {"path": str(Path(target).resolve()), "options": "TakeOwnership"}, done, failed, quiet=True)
+        from ..versions import before_save
+
+        before_save(self.app, target, self.path, lambda: self._call("save", {"path": str(Path(target).resolve()), "options": "TakeOwnership"}, done, failed, quiet=True))
 
     def save_and_wait(self, timeout: float = 600.0) -> bool:
         """Beim Beenden: speichern und warten, bis es fertig ist (``True`` = gespeichert)."""
@@ -1096,6 +1100,20 @@ class TextController(Observable):
         if target and Path(target).suffix.lower() not in self.SAVE_SUFFIXES:
             target += default
         return target
+
+    def version_marker(self) -> int:
+        return self._edits
+
+    def version_suffix(self) -> str:
+        suffix = Path(self.path).suffix.lower() if self.path else ""
+        return suffix if suffix in self.SAVE_SUFFIXES else (".odp" if ".odp" in self.SAVE_SUFFIXES else ".odt")
+
+    def write_version(self, target: str, done: Callable[[bool], None]) -> None:
+        """Backup-Center: eine Kopie des ungespeicherten Stands schreiben – das Dokument bleibt ungespeichert."""
+        if not self.doc:
+            done(False)
+            return
+        self._call("save", {"path": str(Path(target).resolve())}, lambda _result: done(True), lambda _exc: done(False), quiet=True)
 
     @Slot()
     def saveNow(self) -> None:  # noqa: N802
@@ -1138,6 +1156,66 @@ class TextController(Observable):
                             actions=[("Öffnen", lambda: self.reader.open_paths([target]))])
 
         self._call("export", {"path": str(Path(target).resolve()), "format": "pdf"}, done)
+
+    @Slot()
+    def exportPageImages(self) -> None:  # noqa: N802
+        """Text als Bild (seit 5.0 Beta 7): jede Seite ein Bild oder alle Seiten untereinander als ein langes Bild – über
+        eine PDF im Arbeitsordner, damit das Bild genau wie der Ausdruck aussieht."""
+        from .. import files
+
+        fields = [
+            {"key": "layout", "type": "choice", "label": "Bilder", "value": "pages",
+             "options": [{"key": "pages", "label": "Jede Seite ein Bild"}, {"key": "long", "label": "Ein langes Bild mit allen Seiten"}]},
+            {"key": "format", "type": "choice", "label": "Dateiformat", "value": "png",
+             "options": [{"key": "png", "label": "PNG (verlustfrei)"}, {"key": "jpg", "label": "JPEG (kleinere Dateien)"}]},
+            {"key": "dpi", "type": "choice", "label": "Auflösung", "value": "150",
+             "options": [{"key": "96", "label": "Bildschirm (96 dpi)"}, {"key": "150", "label": "Standard (150 dpi)"}, {"key": "300", "label": "Druck (300 dpi)"}]},
+        ]
+        answer, data = self.app.dialogs.ask("sheet_form", "Als Bild speichern", "", primary="Weiter", data={"fields": fields}, width=460)
+        if answer != "primary":
+            return
+        values = {field["key"]: field.get("value") for field in fields}
+        values.update({key: value for key, value in (data or {}).items() if key != "fields"})
+        folder = files.pick_folder("Ordner für die Bilder", self.app.initial_dir("reader", str(Path(self.path).parent) if self.path else ""))
+        if not folder:
+            return
+        suffix = "jpg" if values.get("format") == "jpg" else "png"
+        dpi = int(values.get("dpi") or 150) if str(values.get("dpi") or "") in ("96", "150", "300") else 150
+        long = values.get("layout") == "long"
+        work = Path(tempfile.mkdtemp(prefix="novadesk-bild-"))
+        pdf = work / "seiten.pdf"
+        stem = Path(self.name or "Dokument").stem
+        self.app.set_status("Bilder werden erstellt …", "busy")
+
+        def cleanup() -> None:
+            import shutil
+
+            shutil.rmtree(work, ignore_errors=True)
+
+        def written(paths: list) -> None:
+            cleanup()
+            self.app.remember_dir("reader", folder)
+            count = len(paths)
+            self.app.set_status(f"Gespeichert: {count} {'Bild' if count == 1 else 'Bilder'}", "success")
+            first = paths[0] if paths else folder
+            self.app.notify("reader", "success", f"{count} {'Bild' if count == 1 else 'Bilder'} gespeichert in »{Path(folder).name}«.",
+                            title="Als Bild gespeichert", auto_hide=10000,
+                            actions=[("Öffnen", lambda: files.open_path(first)), ("Ordner öffnen", lambda: files.open_path(folder))])
+
+        def broken(exc: BaseException, _details: str = "") -> None:
+            cleanup()
+            self.app.set_status("Nicht gespeichert", "error")
+            from tools.pdf_editor.errors import EditorError
+
+            message = str(exc) if isinstance(exc, (EditorError, text.TextError)) and str(exc) else "Die Bilder ließen sich nicht erstellen."
+            self.app.notify("reader", "error", message, title="Als Bild speichern")
+
+        def exported(_result) -> None:
+            from tools.convert import pageimages
+
+            self.app.worker.run(lambda: pageimages.write(pdf, Path(folder), stem, suffix, dpi, long), written, broken)
+
+        self._call("export", {"path": str(pdf), "format": "pdf"}, exported, lambda exc: broken(exc), quiet=True)
 
     @Slot()
     def printText(self) -> None:  # noqa: N802

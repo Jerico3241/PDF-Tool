@@ -190,6 +190,7 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/xlrd/__init__.py",
     "runtime/Lib/site-packages/reportlab/__init__.py",
     "runtime/Lib/site-packages/PIL/__init__.py",
+    "runtime/Lib/site-packages/pi_heif/__init__.py",  # HEIC-Fotos (seit 5.0 Beta 7)
     "runtime/Lib/site-packages/pikepdf/__init__.py",
     "runtime/Lib/site-packages/packaging/__init__.py",
     "runtime/Lib/site-packages/pypdfium2/__init__.py",

@@ -32,6 +32,10 @@ from typing import Callable, Iterable
 
 from .models import Condition, PdfAnalysis, PdfRepairResult, RepairMode, RepairStatus
 
+# Dateiarten (seit 5.0 Beta 7 auch Office, Bilder, Text/CSV – ``tools.file_repair``; hier nur die Endungen)
+SUPPORTED = (".pdf", ".docx", ".docm", ".dotx", ".xlsx", ".xlsm", ".xltx", ".pptx", ".pptm", ".potx", ".odt", ".ods", ".odp", ".ott", ".ots", ".otp",
+             ".doc", ".xls", ".ppt", ".rtf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp", ".txt", ".csv")
+
 DEFAULT_SUFFIX = "_repariert"
 FORBIDDEN_CHARS = '<>:"/\\|?*'
 RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)), *(f"LPT{n}" for n in range(1, 10))}
@@ -69,7 +73,7 @@ class Phase(str, Enum):
 
 
 # Fortschrittsmeldungen der Engine (``models.STAGES``) → Schritt
-_REPAIR_STAGES = {"trim", "rewrite", "write", "pages", "lenient", "raw_scan", "xref_rebuild", "trailer_rebuild", "page_tree_rebuild", "normalize", "raster", "streams_rescue"}
+_REPAIR_STAGES = {"zip_scan", "zip_rebuild", "office_resave", "image_resave", "text_cleanup", "trim", "rewrite", "write", "pages", "lenient", "raw_scan", "xref_rebuild", "trailer_rebuild", "page_tree_rebuild", "normalize", "raster", "streams_rescue"}
 
 
 def phase_of(kind: str, stage: str) -> Phase:
@@ -93,11 +97,11 @@ REPAIRABLE_CONDITIONS = (Condition.REPAIRABLE, Condition.DAMAGED, Condition.RAW_
 # --- Dateinamen ---------------------------------------------------------------------------
 
 
-def strip_pdf(text: str) -> str:
-    """Eingabe des Benutzers → Name ohne Endung (».pdf« wird immer selbst ergänzt)."""
+def strip_pdf(text: str, suffix: str = ".pdf") -> str:
+    """Eingabe des Benutzers → Name ohne Endung (die Endung – ».pdf«, ».docx« … – wird immer selbst ergänzt)."""
     value = str(text or "").strip()
-    while value.lower().endswith(".pdf"):
-        value = value[:-4].rstrip()
+    while suffix and value.lower().endswith(suffix):
+        value = value[: -len(suffix)].rstrip()
     return value
 
 
@@ -131,9 +135,20 @@ def auto_base(source: Path, append: bool, suffix: str = DEFAULT_SUFFIX) -> str:
     return f"{source.stem}{suffix}" if append else source.stem
 
 
-def numbered(base: str, number: int) -> str:
-    """``0`` → »Name.pdf«, ``1`` → »Name (1).pdf«, ``2`` → »Name (2).pdf« …"""
-    return f"{base}.pdf" if number <= 0 else f"{base} ({number}).pdf"
+def numbered(base: str, number: int, suffix: str = ".pdf") -> str:
+    """``0`` → »Name.pdf«, ``1`` → »Name (1).pdf«, ``2`` → »Name (2).pdf« … (``suffix``: Endung der Ausgabe)"""
+    return f"{base}{suffix}" if number <= 0 else f"{base} ({number}){suffix}"
+
+
+def output_suffix(source: Path) -> str:
+    """Endung der reparierten Datei: die des Originals (seit 5.0 Beta 7 nicht nur ».pdf«)."""
+    suffix = Path(source).suffix.lower()
+    return suffix if suffix in SUPPORTED else ".pdf"
+
+
+def supported(path: str | Path) -> bool:
+    """PDF oder eine Dateiart, die ``tools.file_repair`` repariert."""
+    return Path(path).suffix.lower() in SUPPORTED
 
 
 def folder_key(folder: Path) -> str:
@@ -210,7 +225,11 @@ class BatchItem:
 
     @property
     def name_error(self) -> str:
-        return name_error(strip_pdf(self.name_input)) if self.name_input is not None else ""
+        return name_error(strip_pdf(self.name_input, self.suffix)) if self.name_input is not None else ""
+
+    @property
+    def suffix(self) -> str:
+        return output_suffix(self.path)
 
     def base(self, append: bool, suffix: str) -> str:
         return self.manual_base if self.name_mode is NameMode.MANUAL else auto_base(self.path, append, suffix)
@@ -252,7 +271,7 @@ class RepairBatch:
         result = AddResult()
         for raw in paths:
             path = Path(raw)
-            if not str(raw).lower().endswith(".pdf"):
+            if not supported(raw):
                 result.rejected.append(path.name or str(raw))
                 continue
             key = path_key(path)
@@ -333,7 +352,7 @@ class RepairBatch:
             source = item.path.name.casefold() if folder_key(item.path.parent) == fkey else None
             number = 0
             while True:
-                name = numbered(base, number)
+                name = numbered(base, number, item.suffix)
                 folded = name.casefold()
                 if folded not in used and folded not in existing[fkey] and folded != source:
                     break

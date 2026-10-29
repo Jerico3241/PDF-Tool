@@ -1,4 +1,5 @@
-"""PDF umwandeln (seit 4.0 Beta 6): in Text (.txt), Word (.docx) und Excel (.xlsx) – in neue Dateien, nie über bestehende.
+"""PDF umwandeln (seit 4.0 Beta 6): in Text (.txt), Word (.docx) und Excel (.xlsx), seit 5.0 Beta 7 auch in eine Webseite
+(.html) und in PowerPoint (.pptx) – in neue Dateien, nie über bestehende.
 
 Grundlage ist der Text von PDFium mit Lage, Schriftgröße und Schriftstärke je Zeichen. Daraus entstehen Zeilen (Zeichen
 auf gleicher Höhe), Absätze (Zeilen mit üblichem Abstand und gleicher Schrift) und Überschriften (deutlich größer als
@@ -6,8 +7,10 @@ der Fließtext). Word bekommt Absätze, Überschriften, Fettdruck und Seitenumbr
 Texterkennung) kommen als Bild hinein. Excel bekommt je Seite ein Blatt: Zeilen werden Tabellenzeilen, große Lücken
 trennen Zellen, Zellen mit ähnlicher Lage teilen sich eine Spalte, Zahlen (auch »1.234,56« und »12 %«) werden Zahlen.
 
-Das .docx schreibt Novadesk selbst (WordprocessingML, nur die Standardbibliothek), das .xlsx mit openpyxl. Die
-Berechtigung »Kopieren« der Datei gilt auch hier.
+Das .docx schreibt Novadesk selbst (WordprocessingML, nur die Standardbibliothek), das .xlsx mit openpyxl. Die Webseite
+ist eine einzige Datei (Bilder als data-URI eingebettet) mit denselben Absätzen, Überschriften und Tabellen wie Word. Das
+.pptx entsteht im mitgelieferten LibreOffice (PDF-Import von Impress): je Seite eine Folie mit bearbeitbaren Textfeldern
+und Formen. Die Berechtigung »Kopieren« der Datei gilt auch hier.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from . import render
 from .document import EditorDocument
 from .errors import ReadOnlyDocument, SaveFailed, UnsupportedEdit
 
-FORMATS = {"txt": ".txt", "docx": ".docx", "xlsx": ".xlsx"}
+FORMATS = {"txt": ".txt", "docx": ".docx", "xlsx": ".xlsx", "html": ".html", "pptx": ".pptx"}
 MAX_PAGES = 2000
 
 
@@ -205,10 +208,12 @@ class Result:
 
 
 def convert(document: EditorDocument, target: str | os.PathLike, fmt: str, pages=None, *, progress=None, cancelled=None) -> Result:
-    """Seiten ``pages`` (alle, wenn leer) als ``fmt`` (txt, docx, xlsx) nach ``target`` schreiben."""
+    """Seiten ``pages`` (alle, wenn leer) als ``fmt`` (txt, docx, xlsx, html, pptx) nach ``target`` schreiben."""
     if fmt not in FORMATS:
         raise UnsupportedEdit("Unbekanntes Format.")
     chosen = _check(document, pages)
+    if fmt == "pptx":
+        return _to_pptx(document, Path(target), chosen, cancelled)
     layouts: list[PageLayout] = []
     for done, index in enumerate(chosen):
         if cancelled is not None and cancelled():
@@ -222,9 +227,124 @@ def convert(document: EditorDocument, target: str | os.PathLike, fmt: str, pages
     elif fmt == "docx":
         images = {index: _page_jpeg(document, index) for index in empty}
         data = to_docx(layouts, [images.get(index) for index in chosen], title=document.path.stem if getattr(document, "path", None) else "")
+    elif fmt == "html":
+        images = {index: _page_jpeg(document, index) for index in empty}
+        title = document.path.stem if getattr(document, "path", None) else (document.name or "")
+        data = to_html(layouts, [images.get(index) for index in chosen], title=title).encode("utf-8")
     else:
         data = to_xlsx(layouts, chosen)
     return Result(_write(Path(target), data), len(chosen), empty)
+
+
+def _to_pptx(document: EditorDocument, target: Path, chosen: list[int], cancelled) -> Result:
+    """PowerPoint über den PDF-Import von LibreOffice Impress: die gewählten Seiten als eigene PDF, dann umwandeln."""
+    import tempfile
+
+    import pikepdf
+
+    from . import office
+
+    if target.exists():
+        raise SaveFailed("Es gibt bereits eine Datei mit diesem Namen.")
+    work = Path(tempfile.mkdtemp(prefix="novadesk-pptx-"))
+    try:
+        data = document.serialize(keep_encryption=False)
+        if len(chosen) != document.page_count:
+            with pikepdf.open(io.BytesIO(data)) as source, pikepdf.new() as part:
+                for index in chosen:
+                    part.pages.append(source.pages[index])
+                buffer = io.BytesIO()
+                part.save(buffer)
+                data = buffer.getvalue()
+        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", target.stem)[:80] or "Dokument"
+        source = work / f"{name}.pdf"
+        source.write_bytes(data)
+        if cancelled is not None and cancelled():
+            raise UnsupportedEdit("Abgebrochen.")
+        produced = work / f"{name}.pptx"
+        try:
+            office.convert_file(source, produced, "pptx", infilter="impress_pdf_import")
+        except office.OfficeError as exc:
+            raise SaveFailed(str(exc)) from exc
+        _write(target, produced.read_bytes())
+    finally:
+        import shutil
+
+        shutil.rmtree(work, ignore_errors=True)
+    return Result(target, len(chosen), [])
+
+
+# Webseite ------------------------------------------------------------------------------------------------------------
+
+_HTML_STYLE = """
+body { font-family: "Segoe UI", Calibri, Arial, sans-serif; line-height: 1.5; color: #1b1b1b; background: #f3f3f3; margin: 0; }
+main { max-width: 52rem; margin: 0 auto; padding: 2rem 1rem; }
+section.page { background: #fff; padding: 2.5rem 3rem; margin: 0 0 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+h1 { font-size: 1.8rem; margin: 1.2rem 0 .6rem; } h2 { font-size: 1.3rem; margin: 1rem 0 .5rem; }
+p { margin: 0 0 .7rem; } table { border-collapse: collapse; margin: .5rem 0 1rem; } td { border: 1px solid #bfbfbf; padding: .2rem .5rem; vertical-align: top; }
+img { max-width: 100%; height: auto; display: block; } .number { color: #6b6b6b; font-size: .8rem; text-align: right; margin-top: 1rem; }
+@media (prefers-color-scheme: dark) { body { background: #202020; color: #e8e8e8; } section.page { background: #2b2b2b; } td { border-color: #555; } }
+@media print { body { background: #fff; } section.page { box-shadow: none; page-break-after: always; padding: 0; } }
+"""
+
+
+def _html_text(value: str) -> str:
+    return escape(_CONTROL.sub("", value), {'"': "&quot;"})
+
+
+def to_html(layouts: list[PageLayout], images: list[tuple[bytes, float, float] | None], title: str = "") -> str:
+    """Eine Webseite in einer Datei: je PDF-Seite ein Abschnitt mit Absätzen, Überschriften und Tabellen; Seiten ohne
+    Text als eingebettetes Bild."""
+    import base64
+
+    body = _body_size(layouts)
+    parts: list[str] = []
+    for number, layout in enumerate(layouts):
+        parts.append(f'<section class="page" id="seite-{number + 1}">')
+        image = images[number] if number < len(images) else None
+        if image is not None and not layout.lines:
+            data = base64.b64encode(image[0]).decode("ascii")
+            parts.append(f'<img src="data:image/jpeg;base64,{data}" alt="Seite {number + 1}" width="{round(image[1])}" height="{round(image[2])}">')
+        blocks = paragraphs(layout, body)
+        position = 0
+        while position < len(blocks):
+            if blocks[position].row is not None:
+                end = position
+                while end < len(blocks) and blocks[end].row is not None:
+                    end += 1
+                rows = blocks[position:end]
+                starts = columns([row.row for row in rows])
+                parts.append("<table>")
+                for row in rows:
+                    grid = [""] * len(starts)
+                    for text, left in row.row:
+                        column = max(i for i, start in enumerate(starts) if start <= left + 0.01)
+                        while column < len(starts) - 1 and grid[column]:
+                            column += 1
+                        grid[column] = (grid[column] + " " + text).strip()
+                    tag = "b" if row.bold else ""
+                    cells_html = "".join(f"<td>{f'<{tag}>' if tag and text else ''}{_html_text(text)}{f'</{tag}>' if tag and text else ''}</td>" for text in grid)
+                    parts.append(f"<tr>{cells_html}</tr>")
+                parts.append("</table>")
+                position = end
+                continue
+            paragraph = blocks[position]
+            position += 1
+            text = _html_text(paragraph.text)
+            if paragraph.style == "Heading1":
+                parts.append(f"<h1>{text}</h1>")
+            elif paragraph.style == "Heading2":
+                parts.append(f"<h2>{text}</h2>")
+            elif paragraph.bold:
+                parts.append(f"<p><b>{text}</b></p>")
+            else:
+                parts.append(f"<p>{text}</p>")
+        parts.append(f'<div class="number">Seite {number + 1}</div></section>')
+    heading = _html_text(title) or "Dokument"
+    return ('<!DOCTYPE html>\n<html lang="de">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+            f'<meta name="generator" content="Novadesk">\n<title>{heading}</title>\n<style>{_HTML_STYLE}</style>\n</head>\n'
+            f'<body>\n<main>\n' + "\n".join(parts) + '\n</main>\n</body>\n</html>\n')
 
 
 def to_text(layouts: list[PageLayout]) -> str:

@@ -807,8 +807,8 @@ class ReaderController(Observable):
         name = Path(path).name
         answer, _data = self.app.dialogs.ask(
             "confirm", "Dieses Dokument scheint beschädigt zu sein.",
-            f"»{name}« lässt sich nicht öffnen. »PDF reparieren« kann lesbare Inhalte in eine neue Datei übertragen – das Original bleibt unverändert. Danach lässt sich die reparierte Datei hier öffnen.",
-            primary="Mit »PDF reparieren« öffnen", close="Abbrechen",
+            f"»{name}« lässt sich nicht öffnen. »Dateien reparieren« kann lesbare Inhalte in eine neue Datei übertragen – das Original bleibt unverändert. Danach lässt sich die reparierte Datei hier öffnen.",
+            primary="Mit »Dateien reparieren« öffnen", close="Abbrechen",
         )
         if answer == "primary":
             repair = getattr(self.app, "repair_tool", None)

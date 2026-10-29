@@ -204,7 +204,7 @@ class EditorDocument:
         _inspect(pdf, report)
         document = cls(pdf, data, path=path, name=name, password=password, stamp=stamp, report=report)
         if rendered != pages:
-            document.read_only_reason = "Die Seitenstruktur dieses PDFs ist fehlerhaft. Bitte zuerst »PDF reparieren« verwenden."
+            document.read_only_reason = "Die Seitenstruktur dieses PDFs ist fehlerhaft. Bitte zuerst »Dateien reparieren« verwenden."
             report.repaired = True
         return document
 

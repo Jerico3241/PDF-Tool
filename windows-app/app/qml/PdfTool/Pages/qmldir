@@ -17,3 +17,5 @@ BatchPage 1.0 BatchPage.qml
 RepairPage 1.0 RepairPage.qml
 RepairItem 1.0 RepairItem.qml
 ActionsPage 1.0 ActionsPage.qml
+ConvertPage 1.0 ConvertPage.qml
+VersionsPage 1.0 VersionsPage.qml
