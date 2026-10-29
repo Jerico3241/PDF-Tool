@@ -36,11 +36,12 @@ BEGIN
     BEGIN
         BLOCK "040704b0"
         BEGIN
-            VALUE "CompanyName", "Jerico"
+            VALUE "Comments", "Startprogramm von Novadesk (Open Source, GPL-3.0): https://github.com/Jerico3241/PDF-Tool"
+            VALUE "CompanyName", "Jerico3241"
             VALUE "FileDescription", "Novadesk"
             VALUE "FileVersion", PDFTOOL_VERSION_STR
             VALUE "InternalName", "PDF-Tool"
-            VALUE "LegalCopyright", "Jerico"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Jerico3241, GPL-3.0"
             VALUE "OriginalFilename", "PDF-Tool.exe"
             VALUE "ProductName", "Novadesk"
             VALUE "ProductVersion", PDFTOOL_VERSION_STR
