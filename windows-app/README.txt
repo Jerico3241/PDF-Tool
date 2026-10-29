@@ -2,7 +2,7 @@ Novadesk für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 5.0.0-beta.5
+Version 5.0.0-beta.6
 
 Novadesk (bis Version 4.0 „PDF Tool“) ist ein Office für Windows: Texte,
 Tabellen, Präsentationen und PDFs an einem Ort, alles lokal auf diesem PC.
@@ -41,7 +41,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“, bis Version 4.0
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-5.0.0-beta.5.exe
+PDF-Tool-Setup-5.0.0-beta.6.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -55,6 +55,23 @@ Präsentationen und zum Bearbeiten von Texten und Tabellen. Eine eigene Python-I
 Microsoft Office, qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme
 sind nicht nötig. Das Sprachmodell des KI-Assistenten ist nicht enthalten –
 Novadesk lädt es nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 5.0 Beta 6 – Präsentationen wie ein Profi und Vorlagen
+------------------------------------------------------------------------
+Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
+Version bleibt 4.0.0.
+- Präsentationen: neuer Reiter „Entwurf“ mit Designs (Farben, Schriften,
+  Hintergrund für alle Folien) und Hintergrundfarbe je Folie.
+- Folienmaster: Was dort steht, erscheint auf allen Folien.
+- Neuer Reiter „Übergänge“: Überblenden, Schieben, Wischen, Überdecken,
+  Durch Schwarz; Dauer, weiter beim Klicken oder nach einer Zeit, für
+  alle Folien übernehmen. Die Übergänge laufen beim Präsentieren.
+- Video und Ton auf Folien einfügen; sie spielen beim Präsentieren.
+- Exportieren: Folien als Bilder (PNG oder JPG) und die Präsentation
+  als Video (MP4).
+- Vorlagen auf der Startseite: Lebenslauf, Geschäftsbrief, Bericht,
+  Protokoll, Rechnung (rechnet selbst), Budget und Projektvorstellung.
 
 
 Neu in Version 5.0 Beta 5 – mehr für Texte und Tabellen
@@ -544,7 +561,7 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.5 (Kanal „Beta“): von
+Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.6 (Kanal „Beta“): von
 selbst beim Start oder mit einem Klick, ohne Setup-Assistent. Die Ordner
 bleiben dieselben; Startmenü und Desktop zeigen danach „Novadesk“ statt
 „PDF Tool“. Alle Daten und Einstellungen bleiben erhalten. Das Setup ist

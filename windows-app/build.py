@@ -52,6 +52,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -148,6 +149,9 @@ OFFICE = PAYLOAD / "office"  # passt zu tools/pdf_editor/office.py (BUNDLED_DIR)
 # Sprachen bleiben weg, ebenso die Java-Erweiterungen (Wiki-Publisher, Solver). Keine Datei wird verändert.
 OFFICE_LANGUAGES = ("de", "en")
 OFFICE_REMOVE_EXTENSIONS = ("wiki-publisher", "nlpsolver")
+# Das Abspielwerk von LibreOffice (seit 5.0 Beta 6): Videos und Töne spielt Novadesk selbst (Qt Multimedia). Mit ihm
+# öffnete LibreOffice für jedes Video auf einer Folie einen eigenen Spieler – das hielt das Zeichnen sekundenlang auf
+OFFICE_REMOVE_PROGRAM = ("avmediawin.dll",)
 # Startprogramm PDF-Tool.exe (Symbol und Name von Novadesk in »Öffnen mit«, bei den Standard-Apps und im Startmenü)
 LAUNCHER_SOURCE = ROOT / "installer" / "launcher"
 LAUNCHER = PAYLOAD / "PDF-Tool.exe"
@@ -205,6 +209,9 @@ REQUIRED_PAYLOAD = [
     "runtime/Lib/site-packages/PySide6/QtQuickControls2.pyd",
     "runtime/Lib/site-packages/PySide6/QtSvg.pyd",
     "runtime/Lib/site-packages/PySide6/QtNetwork.pyd",
+    "runtime/Lib/site-packages/PySide6/QtMultimedia.pyd",
+    "runtime/Lib/site-packages/PySide6/plugins/multimedia/ffmpegmediaplugin.dll",
+    "runtime/Lib/site-packages/PySide6/qml/QtMultimedia/qmldir",
     "runtime/Lib/site-packages/PySide6/plugins/tls/qschannelbackend.dll",
     "runtime/Lib/site-packages/PySide6/Qt6Core.dll",
     "runtime/Lib/site-packages/PySide6/Qt6Quick.dll",
@@ -229,6 +236,9 @@ REQUIRED_PAYLOAD = [
     "app/handoff.py",
     "app/i18n/__init__.py",
     "app/i18n/en.json",
+    "app/vorlagen/lebenslauf.fodt",
+    "app/vorlagen/rechnung.fods",
+    "app/vorlagen/projektvorstellung.fodp",
     "app/qtapp/language.py",
     "app/qtapp/application.py",
     "app/qtapp/background.py",
@@ -604,7 +614,7 @@ def prepare_office(target: Path, search: list[Path]) -> None:
     root = soffice[0].parent.parent
     shutil.copytree(root, target, ignore=shutil.ignore_patterns("*.msi"))
     saved = prune_office(target)
-    log(f"  andere Sprachen und Java-Erweiterungen weggelassen: {saved / 1e6:.0f} MB")
+    log(f"  andere Sprachen, Java-Erweiterungen und Abspielwerk weggelassen: {saved / 1e6:.0f} MB")
     program = target / "program"
     binaries = [path for path in program.iterdir() if path.suffix.lower() in (".exe", ".dll", ".bin")]
     needed = qtruntime.dependency_closure(binaries, [program, *search])
@@ -658,7 +668,8 @@ def _keep_language(code: str) -> bool:
 
 
 def prune_office(target: Path) -> int:
-    """Andere Sprachen und Java-Erweiterungen aus dem entpackten LibreOffice entfernen; gibt die gesparten Bytes zurück."""
+    """Andere Sprachen, Java-Erweiterungen und das Abspielwerk aus dem entpackten LibreOffice entfernen; gibt die gesparten
+    Bytes zurück."""
     removed: list[Path] = []
     resource = target / "program" / "resource"
     if resource.is_dir():
@@ -678,6 +689,7 @@ def prune_office(target: Path) -> int:
                 removed.append(path)
             elif path.name in OFFICE_REMOVE_EXTENSIONS:
                 removed.append(path)
+    removed += [target / "program" / name for name in OFFICE_REMOVE_PROGRAM if (target / "program" / name).is_file()]
     readmes = target / "readmes"
     if readmes.is_dir():
         removed += [path for path in readmes.glob("readme_*") if not _keep_language(_office_language(path.name))]
@@ -789,6 +801,13 @@ def _blank_odp(path: Path) -> None:
         archive.writestr("META-INF/manifest.xml", manifest, zipfile.ZIP_DEFLATED)
 
 
+def _png(path: Path) -> None:
+    """Kleines Vorschaubild für das Probevideo."""
+    from PIL import Image
+
+    Image.new("RGB", (64, 36), "#203040").save(path)
+
+
 def _windows_of(pid: int) -> str:
     """Windows: Fenster eines Prozesses (Klasse und Titel) – zeigt, ob ein Dialog den Kern aufhält."""
     if os.name != "nt" or not pid:
@@ -864,8 +883,40 @@ def probe_text(program: Path) -> None:
         if len(folie) != 160 * 90 * 4 or not any(folie):
             fail("Probe des Textkerns fehlgeschlagen: die Folie ließ sich nicht zeichnen")
         call("notes", doc=deck, part=0)
+        # Seit Beta 6: Design für alle Folien, Übergang, Folienmaster hin und zurück, ein eingebettetes Video – ohne
+        # Abspielwerk von LibreOffice darf das Zeichnen danach nicht hängen – und Folienbilder wie beim Vorführen
+        def folien(name: str, *values):
+            return call("macro", doc=deck, module="Folien", name=name, values=[str(value) for value in values])
+
+        folien("DesignAnwenden", "1F4E79", "2E75B6", "Segoe UI", "FFFFFF", "Segoe UI", "DDEBF7", "FFC000", "leiste")
+        folien("UebergangSetzen", "blenden", "1", "", "-1")
+        call("uno", doc=deck, command=".uno:SlideMasterPage", wait=1.5)
+        master = call("parts", doc=deck)
+        call("uno", doc=deck, command=".uno:CloseMasterView", wait=1.5)
+        if int(call("parts", doc=deck).get("count") or 0) != 2 or int(master.get("count") or 0) < 1:
+            fail(f"Probe des Textkerns fehlgeschlagen: Folienmaster ({master.get('count')} Master) bzw. zurück zu den Folien")
+        clip = work / "probe.mp4"
+        clip.write_bytes(b"\x00\x00\x00\x18ftypisom" + bytes(64))
+        poster = work / "vorschau.png"
+        _png(poster)
+        started = time.monotonic()
+        folien("MedienEinfuegen", clip.as_uri(), "video", 640, 360, "video/mp4", 1, poster.as_uri())
+        call("tile", doc=deck, pw=256, ph=256, x=0, y=0, w=slides["width"], h=slides["width"])
+        if time.monotonic() - started > 8:
+            fail(f"Probe des Textkerns fehlgeschlagen: Video einfügen und zeichnen dauerte {time.monotonic() - started:.0f} s")
+        if not any(fields.split("\x1f")[0] == "1" for fields in folien("Medien")):
+            fail("Probe des Textkerns fehlgeschlagen: das Video fehlt auf der zweiten Folie")
+        pictures = work / "folien"
+        pictures.mkdir()
+        folien("FolienBilder", pictures.as_uri(), 320, 180, "png", 0, 1)
+        if not (pictures / "folie-1.png").is_file() or not (pictures / "folie-2.png").is_file():
+            fail("Probe des Textkerns fehlgeschlagen: Folienbilder (wie beim Vorführen) fehlen")
         call("save", doc=deck, path=str(deck_target))
         call("close", doc=deck)
+        # Vorlagen (seit Beta 6): Texte und die Präsentation öffnen sich im Textkern
+        for template in sorted((APP / "vorlagen").glob("*.fod[tp]")):
+            opened = call("open", path=str(template), kind="praesentation" if template.suffix == ".fodp" else "text")
+            call("close", doc=opened["doc"])
         doc = call("open", path="")["doc"]
         call("text", doc=doc, text="Novadesk Textprobe äöü")
         call("settle", doc=doc)
@@ -898,7 +949,11 @@ def probe_text(program: Path) -> None:
     slide_names = zipfile.ZipFile(deck_target).namelist() if deck_target.is_file() else []
     if "ppt/slides/slide2.xml" not in slide_names:
         fail("Probe des Textkerns fehlgeschlagen: die gespeicherte .pptx hat keine zweite Folie")
-    log("  Probe: Textkern (tippen, Formel, Diagramm, Verzeichnis, zeichnen, .docx und .pptx speichern)")
+    first_slide = zipfile.ZipFile(deck_target).read("ppt/slides/slide1.xml").decode("utf-8")
+    if not any(name.startswith("ppt/media/") and name.endswith(".mp4") for name in slide_names) or "transition" not in first_slide:
+        fail("Probe des Textkerns fehlgeschlagen: Video oder Übergang fehlen in der gespeicherten .pptx")
+    log("  Probe: Textkern (tippen, Formel, Diagramm, Verzeichnis, zeichnen, .docx und .pptx speichern, Design, Master, "
+        "Übergang, Video, Folienbilder, Vorlagen)")
     remove(work)
 
 

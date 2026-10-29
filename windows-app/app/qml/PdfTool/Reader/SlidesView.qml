@@ -22,9 +22,18 @@ FocusScope {
     readonly property var fonts: ["Calibri", "Aptos", "Arial", "Segoe UI", "Cambria", "Times New Roman", "Georgia", "Verdana", "Tahoma", "Courier New", "Liberation Sans", "Liberation Serif"]
     readonly property var sizes: ["8", "9", "10", "12", "14", "16", "18", "20", "24", "28", "32", "36", "40", "44", "54", "72"]
     readonly property var swatches: ["#000000", "#404040", "#7F7F7F", "#C00000", "#FF0000", "#ED7D31", "#FFC000", "#00B050", "#0070C0", "#002060", "#7030A0", "#1F4E79"]
+    // Seit 5.0 Beta 6: Hintergrundfarben, Übergang der gezeigten Folie, Folienmaster
+    readonly property var backgrounds: ["#FFFFFF", "#F2F2F2", "#FAF6EE", "#F3F8F1", "#DDEBF7", "#FFF4E5", "#1F4E79", "#2E5E2B", "#3A1F5D", "#1B1B1F", "#C00000", "#000000"]
+    readonly property bool master: doc !== null && doc.masterMode
+    readonly property var transition: doc !== null && doc.slideIndex < doc.transitions.length ? doc.transitions[doc.slideIndex] : ({ kind: "keiner", duration: 1, advance: 0 })
+    function seconds(value) { return String(value).replace(".", ",") }
 
-    onDocChanged: if (doc) Qt.callLater(function() { canvas.forceActiveFocus() })
+    // Auch beim Wechsel zwischen zwei Präsentationen anpassen: die Ansicht bleibt dieselbe, die neue Präsentation
+    // war schon fertig geladen, bevor sie hier ankam (sonst blieb sie bei 100 %)
+    onDocChanged: if (doc) Qt.callLater(function() { view.fitSlide(); canvas.forceActiveFocus() })
     function back() { canvas.forceActiveFocus() }
+    // Ein anderer Reiter schließt die Flyouts des alten (sie hängen an dessen Knöpfen und blieben sonst stehen)
+    onRibbonChanged: { colorFlyout.close(); designFlyout.close(); backgroundFlyout.close() }
 
     // Die Folie füllt die Ansicht: beim Laden, bei neuer Fenstergröße und nach »An die Ansicht anpassen«
     function fitSlide() { if (view.doc) view.doc.fitSlide(canvas.width, canvas.height) }
@@ -70,7 +79,8 @@ FocusScope {
                 Repeater {
                     model: [
                         { key: "file", label: "Datei" }, { key: "start", label: "Start" }, { key: "insert", label: "Einfügen" },
-                        { key: "design", label: "Entwurf" }, { key: "review", label: "Überprüfen" }, { key: "view", label: "Ansicht" }
+                        { key: "design", label: "Entwurf" }, { key: "transitions", label: "Übergänge" }, { key: "review", label: "Überprüfen" },
+                        { key: "view", label: "Ansicht" }
                     ]
                     RibbonTab {
                         required property var modelData
@@ -119,7 +129,7 @@ FocusScope {
                     iconName: "play"
                     text: I18n.tr("Präsentieren", I18n.revision)
                     tip: I18n.tr("Vollbild ab dieser Folie" + Shortcuts.hints["reader.present"], I18n.revision)
-                    enabled: view.ready
+                    enabled: view.ready && !view.master
                     onClicked: view.doc.present()
                 }
                 PButton {
@@ -156,8 +166,8 @@ FocusScope {
                 ToolButton { objectName: "slidesCut"; iconName: "cut"; tip: I18n.tr("Ausschneiden (Strg+X)", I18n.revision); enabled: view.ready && view.doc.canCopy; onClicked: { view.doc.cut(); view.back() } }
                 ToolButton { objectName: "slidesCopy"; iconName: "copy"; tip: I18n.tr("Kopieren (Strg+C)", I18n.revision); enabled: view.ready && view.doc.canCopy; onClicked: { view.doc.copy(); view.back() } }
                 RibbonSeparator {}
-                ToolButton { objectName: "slidesNew"; iconName: "document_add"; text: I18n.tr("Neue Folie", I18n.revision); tip: I18n.tr("Folie hinter der gezeigten einfügen", I18n.revision); onClicked: { view.doc.newSlide(); view.back() } }
-                ToolButton { id: layoutButton; objectName: "slidesLayout"; iconName: "layout_column_two"; text: I18n.tr("Layout", I18n.revision); onClicked: layoutMenu.popup(layoutButton, 0, layoutButton.height + 4) }
+                ToolButton { objectName: "slidesNew"; iconName: "document_add"; text: I18n.tr("Neue Folie", I18n.revision); tip: I18n.tr("Folie hinter der gezeigten einfügen", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.newSlide(); view.back() } }
+                ToolButton { id: layoutButton; objectName: "slidesLayout"; iconName: "layout_column_two"; text: I18n.tr("Layout", I18n.revision); enabled: view.ready && !view.master; onClicked: layoutMenu.popup(layoutButton, 0, layoutButton.height + 4) }
                 RibbonSeparator {}
                 PComboBox {
                     objectName: "slidesFont"
@@ -231,6 +241,15 @@ FocusScope {
                 ToolButton { iconName: "save"; text: I18n.tr("Speichern", I18n.revision); onClicked: view.doc.saveNow() }
                 ToolButton { objectName: "slidesSaveAs"; iconName: "save"; text: I18n.tr("Speichern unter …", I18n.revision); onClicked: view.doc.saveAs() }
                 ToolButton { iconName: "document_pdf"; text: I18n.tr("Als PDF speichern …", I18n.revision); onClicked: view.doc.exportPdf() }
+                ToolButton {
+                    id: exportButton
+                    objectName: "slidesExport"
+                    iconName: "arrow_export"
+                    text: I18n.tr("Exportieren", I18n.revision)
+                    tip: I18n.tr("Folien als Bilder oder die Präsentation als Video speichern", I18n.revision)
+                    enabled: view.ready && !view.doc.exporting && !view.master
+                    onClicked: exportMenu.popup(exportButton, 0, exportButton.height + 4)
+                }
                 ToolButton { iconName: "print"; text: I18n.tr("Drucken", I18n.revision); onClicked: view.doc.printText() }
                 RibbonSeparator {}
                 ToolButton { iconName: "mail"; text: I18n.tr("Per E-Mail senden", I18n.revision); onClicked: Reader.sendByMail() }
@@ -243,12 +262,15 @@ FocusScope {
             Bar {
                 objectName: "slidesRibbonBar_insert"
                 visible: view.ribbon === "insert"
-                ToolButton { iconName: "document_add"; text: I18n.tr("Neue Folie", I18n.revision); onClicked: { view.doc.newSlide(); view.back() } }
+                ToolButton { iconName: "document_add"; text: I18n.tr("Neue Folie", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.newSlide(); view.back() } }
                 RibbonSeparator {}
                 ToolButton { objectName: "slidesInsertText"; iconName: "textbox"; text: I18n.tr("Textfeld", I18n.revision); tip: I18n.tr("Textfeld auf der Folie aufziehen", I18n.revision); onClicked: { view.doc.insertShape("text"); view.back() } }
                 ToolButton { objectName: "slidesInsertImage"; iconName: "image_add"; text: I18n.tr("Bild", I18n.revision); onClicked: { view.doc.insertImage(); view.back() } }
                 ToolButton { id: insertShapeButton; iconName: "shapes"; text: I18n.tr("Formen", I18n.revision); onClicked: shapeMenu.popup(insertShapeButton, 0, insertShapeButton.height + 4) }
                 ToolButton { id: insertTableButton; objectName: "slidesInsertTable"; iconName: "table_simple"; text: I18n.tr("Tabelle", I18n.revision); onClicked: tableMenu.popup(insertTableButton, 0, insertTableButton.height + 4) }
+                RibbonSeparator {}
+                ToolButton { objectName: "slidesInsertVideo"; iconName: "video"; text: I18n.tr("Video", I18n.revision); tip: I18n.tr("Video aus einer Datei einfügen – es spielt beim Präsentieren", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.insertMedia("video"); view.back() } }
+                ToolButton { objectName: "slidesInsertAudio"; iconName: "music_note_2"; text: I18n.tr("Ton", I18n.revision); tip: I18n.tr("Musik oder Sprache aus einer Datei einfügen – spielt beim Präsentieren", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.insertMedia("ton"); view.back() } }
                 Item { Layout.fillWidth: true }
             }
 
@@ -256,13 +278,93 @@ FocusScope {
             Bar {
                 objectName: "slidesRibbonBar_design"
                 visible: view.ribbon === "design"
-                ToolButton { id: designLayoutButton; objectName: "slidesDesignLayout"; iconName: "layout_column_two"; text: I18n.tr("Layout", I18n.revision); onClicked: layoutMenu.popup(designLayoutButton, 0, designLayoutButton.height + 4) }
+                ToolButton {
+                    id: designButton
+                    objectName: "slidesDesigns"
+                    iconName: "design_ideas"
+                    text: I18n.tr("Designs", I18n.revision)
+                    tip: I18n.tr("Farben, Schriften und Hintergrund für alle Folien", I18n.revision)
+                    toggle: true
+                    checked: designFlyout.opened
+                    onClicked: designFlyout.opened ? designFlyout.close() : designFlyout.open()
+                }
+                ToolButton {
+                    id: backgroundButton
+                    objectName: "slidesBackground"
+                    iconName: "color_background"
+                    text: I18n.tr("Hintergrund", I18n.revision)
+                    tip: I18n.tr("Hintergrundfarbe dieser Folie", I18n.revision)
+                    enabled: view.ready && !view.master
+                    toggle: true
+                    checked: backgroundFlyout.opened
+                    onClicked: backgroundFlyout.opened ? backgroundFlyout.close() : backgroundFlyout.open()
+                }
+                ToolButton {
+                    objectName: "slidesMaster"
+                    iconName: "slide_settings"
+                    text: I18n.tr("Folienmaster", I18n.revision)
+                    tip: I18n.tr("Folienmaster bearbeiten: Was dort steht, erscheint auf allen Folien", I18n.revision)
+                    toggle: true
+                    checked: view.master
+                    onClicked: { view.doc.toggleMaster(); view.back() }
+                }
                 RibbonSeparator {}
-                ToolButton { objectName: "slidesDuplicate"; iconName: "copy"; text: I18n.tr("Folie duplizieren", I18n.revision); onClicked: { view.doc.duplicateSlide(); view.back() } }
-                ToolButton { objectName: "slidesDelete"; iconName: "delete"; text: I18n.tr("Folie löschen", I18n.revision); onClicked: { view.doc.deleteSlide(); view.back() } }
+                ToolButton { id: designLayoutButton; objectName: "slidesDesignLayout"; iconName: "layout_column_two"; text: I18n.tr("Layout", I18n.revision); enabled: view.ready && !view.master; onClicked: layoutMenu.popup(designLayoutButton, 0, designLayoutButton.height + 4) }
                 RibbonSeparator {}
-                ToolButton { objectName: "slidesMoveUp"; iconName: "chevron_up"; text: I18n.tr("Nach vorn", I18n.revision); tip: I18n.tr("Folie eine Stelle nach vorn schieben", I18n.revision); enabled: view.ready && view.doc.slideIndex > 0; onClicked: { view.doc.moveSlide(-1); view.back() } }
-                ToolButton { objectName: "slidesMoveDown"; iconName: "chevron_down"; text: I18n.tr("Nach hinten", I18n.revision); tip: I18n.tr("Folie eine Stelle nach hinten schieben", I18n.revision); enabled: view.ready && view.doc.slideIndex < view.doc.slideCount - 1; onClicked: { view.doc.moveSlide(1); view.back() } }
+                ToolButton { objectName: "slidesDuplicate"; iconName: "copy"; tip: I18n.tr("Folie duplizieren", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.duplicateSlide(); view.back() } }
+                ToolButton { objectName: "slidesDelete"; iconName: "delete"; tip: I18n.tr("Folie löschen", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.deleteSlide(); view.back() } }
+                ToolButton { objectName: "slidesMoveUp"; iconName: "chevron_up"; tip: I18n.tr("Folie eine Stelle nach vorn schieben", I18n.revision); enabled: view.ready && !view.master && view.doc.slideIndex > 0; onClicked: { view.doc.moveSlide(-1); view.back() } }
+                ToolButton { objectName: "slidesMoveDown"; iconName: "chevron_down"; tip: I18n.tr("Folie eine Stelle nach hinten schieben", I18n.revision); enabled: view.ready && !view.master && view.doc.slideIndex < view.doc.slideCount - 1; onClicked: { view.doc.moveSlide(1); view.back() } }
+                Item { Layout.fillWidth: true }
+            }
+
+            // Übergänge (seit 5.0 Beta 6): Art, Dauer und »weiter« der gezeigten Folie
+            Bar {
+                objectName: "slidesRibbonBar_transitions"
+                visible: view.ribbon === "transitions"
+                Repeater {
+                    model: view.doc ? view.doc.transitionList() : []
+                    ToolButton {
+                        required property var modelData
+                        objectName: "slidesTransition_" + modelData.key
+                        iconName: modelData.icon
+                        text: I18n.tr(modelData.label, I18n.revision)
+                        toggle: true
+                        checked: view.transition.kind === modelData.key || (modelData.key === "blenden" && view.transition.kind === "andere")
+                        enabled: view.ready && !view.master
+                        onClicked: { view.doc.setTransition(modelData.key); view.back() }
+                    }
+                }
+                RibbonSeparator {}
+                PComboBox {
+                    objectName: "slidesTransitionDuration"
+                    preferredWidth: 92
+                    label: I18n.tr("Dauer des Übergangs", I18n.revision)
+                    tip: I18n.tr("Dauer des Übergangs", I18n.revision)
+                    enabled: view.ready && !view.master && view.transition.kind !== "keiner"
+                    readonly property string value: view.seconds(view.transition.duration)
+                    model: view.doc ? view.doc.durationList() : []
+                    currentIndex: model.indexOf(value)
+                    displayText: I18n.tr(value + " s", I18n.revision)
+                    onActivated: (index) => { view.doc.setTransitionDuration(model[index]); view.back() }
+                }
+                PComboBox {
+                    objectName: "slidesAdvance"
+                    preferredWidth: 168
+                    label: I18n.tr("Weiter zur nächsten Folie", I18n.revision)
+                    tip: I18n.tr("Weiter zur nächsten Folie: beim Klicken oder nach einer Zeit", I18n.revision)
+                    enabled: view.ready && !view.master
+                    textRole: "label"
+                    model: view.doc ? view.doc.advanceList() : []
+                    currentIndex: {
+                        for (var i = 0; i < model.length; ++i) if (model[i].value === Math.round(view.transition.advance)) return i
+                        return -1
+                    }
+                    displayText: currentIndex >= 0 ? I18n.tr(model[currentIndex].label, I18n.revision) : I18n.tr("Nach " + view.seconds(view.transition.advance) + " Sekunden", I18n.revision)
+                    onActivated: (index) => { view.doc.setAdvance(model[index].value); view.back() }
+                }
+                RibbonSeparator {}
+                ToolButton { objectName: "slidesTransitionAll"; iconName: "checkmark_circle"; text: I18n.tr("Für alle Folien", I18n.revision); tip: I18n.tr("Übergang und Zeit dieser Folie für alle Folien übernehmen", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.transitionToAll(); view.back() } }
                 Item { Layout.fillWidth: true }
             }
 
@@ -290,6 +392,35 @@ FocusScope {
                 RibbonSeparator {}
                 ToolButton { objectName: "slidesPresentFromStart"; iconName: "play"; text: I18n.tr("Von der ersten Folie", I18n.revision); onClicked: view.doc.presentFromStart() }
                 Item { Layout.fillWidth: true }
+            }
+        }
+
+        // Folienmaster (seit 5.0 Beta 6): Hinweis und zurück zu den Folien
+        Rectangle {
+            objectName: "slidesMasterBar"
+            Layout.fillWidth: true
+            implicitHeight: 40
+            visible: view.master
+            color: Theme.layer
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
+            Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 3; color: view.kindColor }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 12
+                spacing: 10
+                PIcon { name: "slide_settings"; color: view.kindColor }
+                PText {
+                    Layout.fillWidth: true
+                    text: I18n.tr("Folienmaster: Was Sie hier ändern, erscheint auf allen Folien mit diesem Master.", I18n.revision)
+                    elide: Text.ElideRight
+                }
+                PButton {
+                    objectName: "slidesMasterClose"
+                    kind: "primary"
+                    text: I18n.tr("Masteransicht schließen", I18n.revision)
+                    onClicked: { view.doc.toggleMaster(); view.back() }
+                }
             }
         }
 
@@ -420,6 +551,37 @@ FocusScope {
                             }
                         }
 
+                        // Export als Bilder oder Video (seit 5.0 Beta 6)
+                        Rectangle {
+                            objectName: "slidesExportBar"
+                            visible: view.doc !== null && view.doc.exporting
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 18
+                            width: 360
+                            height: exportRow.implicitHeight + 20
+                            radius: Metrics.radiusOverlay
+                            color: Theme.flyout
+                            border.color: Theme.flyoutStroke
+                            PShadow { radius: Metrics.radiusOverlay }
+                            ColumnLayout {
+                                id: exportRow
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                anchors.leftMargin: 14
+                                spacing: 6
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    PText {
+                                        Layout.fillWidth: true
+                                        text: I18n.tr(view.doc ? "Export läuft … " + Math.round(view.doc.exportProgress * 100) + " %" : "", I18n.revision)
+                                    }
+                                    PButton { objectName: "slidesExportCancel"; text: I18n.tr("Abbrechen", I18n.revision); onClicked: view.doc.cancelExport() }
+                                }
+                                PProgressBar { Layout.fillWidth: true; value: view.doc ? view.doc.exportProgress : 0 }
+                            }
+                        }
+
                         // Textkern startet bzw. speichert
                         PProgressBar {
                             anchors.left: parent.left
@@ -441,7 +603,7 @@ FocusScope {
                             id: notesBox
                             objectName: "slidesNotesBox"
                             anchors.centerIn: parent
-                            width: Math.min(parent.width - 32, Math.max(320, canvas.contentWidth))
+                            width: Math.min(parent.width - 32, Math.max(320, canvas ? canvas.contentWidth : 0))
                             height: parent.height - 14
                             radius: Metrics.radiusControl
                             color: Theme.layer
@@ -491,7 +653,7 @@ FocusScope {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 1
-                    title: I18n.tr(view.doc && view.doc.panel === "layouts" ? "Layouts" : "Folien", I18n.revision)
+                    title: I18n.tr(view.doc && view.doc.panel === "layouts" ? "Layouts" : (view.master ? "Folienmaster" : "Folien"), I18n.revision)
                     onCloseRequested: { view.doc.togglePanel(view.doc.panel); view.back() }
                 }
 
@@ -611,21 +773,133 @@ FocusScope {
         visibility: view.doc !== null && view.doc.presenting ? Window.FullScreen : Window.Hidden
         color: "#000000"
         title: I18n.tr(view.doc ? view.doc.name : "", I18n.revision)
-        onVisibleChanged: if (visible) showItem.forceActiveFocus()
+        onVisibleChanged: {
+            if (visible) {
+                showStage.backPart = -1
+                showItem.forceActiveFocus()
+                showStage.begin()
+            }
+        }
         FocusScope {
             id: showItem
             anchors.fill: parent
             focus: true
-            SlideImage {
-                objectName: "slidesShowImage"
+            // Die Folie mit Übergang (seit 5.0 Beta 6): hinten die zuletzt gezeigte, vorn die neue – sobald ihr Bild da
+            // ist, läuft der Übergang der neuen Folie (Überblenden, durch Schwarz, Schieben, Wischen, Überdecken)
+            Item {
+                id: showStage
+                objectName: "slidesShowStage"
                 anchors.centerIn: parent
                 readonly property real ratio: view.doc && view.doc.docHeight > 0 ? view.doc.docWidth / view.doc.docHeight : 16 / 9
+                readonly property bool running: showAnimation.running
+                property int backPart: -1
                 width: Math.min(parent.width, parent.height * ratio)
                 height: Math.round(width / ratio)
-                controller: view.doc
-                part: view.doc ? view.doc.presentIndex : 0
-                revision: view.doc ? view.doc.slideRevision : 0
-                pixelRatio: Screen.devicePixelRatio
+                clip: true
+
+                function begin() {
+                    if (!view.doc || !view.doc.presenting) return
+                    var index = view.doc.presentIndex
+                    if (!frontImage.current || frontImage.part !== index || backPart === index) return
+                    showAnimation.stop()
+                    if (backPart < 0) { finish(); return }
+                    var entry = index < view.doc.transitions.length ? view.doc.transitions[index] : null
+                    var kind = entry ? entry.kind : "keiner"
+                    if (kind === "andere") kind = "blenden"
+                    if (kind === "keiner" || !Motion.enabled) { finish(); return }
+                    showAnimation.kind = kind
+                    showAnimation.sign = view.doc.presentForward ? 1 : -1
+                    showAnimation.length = Math.max(100, Math.min(5000, (entry.duration || 1) * 1000))
+                    showAnimation.restart()
+                }
+                function finish() {
+                    showAnimation.stop()
+                    frontLayer.x = 0
+                    frontLayer.width = showStage.width
+                    frontLayer.opacity = 1
+                    backImage.x = 0
+                    blackCover.opacity = 0
+                    backPart = view.doc ? view.doc.presentIndex : -1
+                }
+
+                // Die Bilder der Folien malt der Textkern zu Beginn wie beim Vorführen (ohne leere Platzhalter)
+                Image {
+                    id: backImage
+                    width: showStage.width
+                    height: showStage.height
+                    source: view.doc && showStage.backPart >= 0 && showStage.backPart < view.doc.showFrames.length ? view.doc.showFrames[showStage.backPart] : ""
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: true
+                }
+                Item {
+                    id: frontLayer
+                    width: showStage.width
+                    height: showStage.height
+                    clip: true
+                    Image {
+                        id: frontImage
+                        objectName: "slidesShowImage"
+                        readonly property int part: view.doc ? view.doc.presentIndex : 0
+                        // Das Bild der gezeigten Folie ist da: dann läuft ihr Übergang
+                        readonly property bool current: status === Image.Ready && String(source) !== ""
+                        width: showStage.width
+                        height: showStage.height
+                        source: view.doc && part < view.doc.showFrames.length ? view.doc.showFrames[part] : ""
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
+                        onCurrentChanged: Qt.callLater(showStage.begin)
+                        onSourceChanged: Qt.callLater(showStage.begin)
+                    }
+                }
+                Rectangle { id: blackCover; anchors.fill: parent; color: "#000000"; opacity: 0 }
+
+                // Videos und Töne der gezeigten Folie (eigene Datei: Qt Multimedia lädt nur, wenn es da ist)
+                Loader {
+                    id: showMedia
+                    objectName: "slidesShowMedia"
+                    anchors.fill: parent
+                    active: view.doc !== null && view.doc.presenting && !showStage.running && showStage.backPart === view.doc.presentIndex
+                    source: Qt.resolvedUrl("SlideShowMedia.qml")
+                    onLoaded: item.doc = Qt.binding(function() { return view.doc })
+                }
+
+                SequentialAnimation {
+                    id: showAnimation
+                    property string kind: "blenden"
+                    property int sign: 1
+                    property int length: 1000
+                    ScriptAction {
+                        script: {
+                            var w = showStage.width
+                            frontLayer.opacity = showAnimation.kind === "blenden" ? 0 : (showAnimation.kind === "schwarz" ? 0 : 1)
+                            frontLayer.x = showAnimation.kind === "schieben" || showAnimation.kind === "aufdecken" ? showAnimation.sign * w : 0
+                            frontLayer.width = showAnimation.kind === "wischen" ? 0 : w
+                        }
+                    }
+                    ParallelAnimation {
+                        NumberAnimation { target: frontLayer; property: "opacity"; to: 1; duration: showAnimation.kind === "blenden" ? showAnimation.length : 0 }
+                        NumberAnimation { target: frontLayer; property: "x"; to: 0; duration: showAnimation.kind === "schieben" || showAnimation.kind === "aufdecken" ? showAnimation.length : 0; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: backImage; property: "x"; to: showAnimation.kind === "schieben" ? -showAnimation.sign * showStage.width : 0; duration: showAnimation.kind === "schieben" ? showAnimation.length : 0; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: frontLayer; property: "width"; to: showStage.width; duration: showAnimation.kind === "wischen" ? showAnimation.length : 0; easing.type: Easing.InOutQuad }
+                        SequentialAnimation {
+                            NumberAnimation { target: blackCover; property: "opacity"; from: 0; to: showAnimation.kind === "schwarz" ? 1 : 0; duration: showAnimation.kind === "schwarz" ? showAnimation.length / 2 : 0 }
+                            ScriptAction { script: if (showAnimation.kind === "schwarz") frontLayer.opacity = 1 }
+                            NumberAnimation { target: blackCover; property: "opacity"; to: 0; duration: showAnimation.kind === "schwarz" ? showAnimation.length / 2 : 0 }
+                        }
+                    }
+                    ScriptAction { script: showStage.finish() }
+                }
+            }
+
+            // Von selbst weiter, wenn die Folie eine Zeit hat (Reiter »Übergänge«)
+            Timer {
+                id: advanceTimer
+                readonly property var entry: view.doc && view.doc.presentIndex < view.doc.transitions.length ? view.doc.transitions[view.doc.presentIndex] : null
+                interval: entry ? Math.max(500, entry.advance * 1000) : 1000
+                running: showWindow.visible && entry !== null && entry.advance > 0 && !showStage.running && showStage.backPart === view.doc.presentIndex
+                onTriggered: view.doc.presentStep(1)
             }
             PText {
                 objectName: "slidesShowCounter"
@@ -661,6 +935,7 @@ FocusScope {
         width: 232
         implicitHeight: contentHeight + topPadding + bottomPadding
         closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        focus: true  // sonst kommt Esc beim Folienbild an statt beim Flyout
         onClosed: view.back()
         background: Rectangle {
             color: Theme.flyout
@@ -688,6 +963,135 @@ FocusScope {
             }
             PButton { text: I18n.tr("Automatisch", I18n.revision); kind: "subtle"; onClicked: { view.doc.setFontColor(""); colorFlyout.close() } }
         }
+    }
+    // Designs (seit 5.0 Beta 6): je Kachel Hintergrund, Akzent und »Aa« in Schrift und Farbe des Titels
+    T.Popup {
+        id: designFlyout
+        objectName: "slidesDesignFlyout"
+        parent: designButton
+        y: designButton.height + 4
+        padding: 12
+        implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding
+        implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        focus: true  // sonst kommt Esc beim Folienbild an statt beim Flyout
+        onClosed: view.back()
+        background: Rectangle {
+            color: Theme.flyout
+            border.color: Theme.flyoutStroke
+            radius: Metrics.radiusOverlay
+            PShadow { radius: Metrics.radiusOverlay }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            PText { text: I18n.tr("Design für alle Folien", I18n.revision); textStyle: "caption"; tone: "secondary" }
+            Grid {
+                columns: 4
+                spacing: 8
+                Repeater {
+                    model: view.doc ? view.doc.designList() : []
+                    Item {
+                        id: tile
+                        required property var modelData
+                        objectName: "slidesDesign_" + modelData.key
+                        width: 128
+                        height: 72 + 22
+                        Rectangle {
+                            id: preview
+                            width: parent.width
+                            height: 72
+                            radius: 4
+                            clip: true
+                            border.width: tileArea.containsMouse ? 2 : 1
+                            border.color: tileArea.containsMouse ? view.kindColor : Theme.controlStroke
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0; color: tile.modelData.background[0] }
+                                GradientStop { position: 1; color: tile.modelData.background[1] !== "" ? tile.modelData.background[1] : tile.modelData.background[0] }
+                            }
+                            Rectangle { visible: tile.modelData.shape === "leiste"; x: 1; y: 1; width: 4; height: parent.height - 2; color: tile.modelData.accent }
+                            Rectangle { visible: tile.modelData.shape === "band"; x: 1; y: 1; width: parent.width - 2; height: 3; color: tile.modelData.accent }
+                            Rectangle { visible: tile.modelData.shape === "linie"; x: 10; y: parent.height - 10; width: parent.width - 20; height: 2; color: tile.modelData.accent }
+                            Rectangle { visible: tile.modelData.shape === "ecke"; x: parent.width - 21; y: 1; width: 20; height: 3; color: tile.modelData.accent }
+                            Rectangle { visible: tile.modelData.shape === "ecke"; x: parent.width - 4; y: 1; width: 3; height: 16; color: tile.modelData.accent }
+                            Text {
+                                x: 14
+                                y: 14
+                                text: I18n.tr("Aa", I18n.revision)
+                                color: tile.modelData.title
+                                font.family: tile.modelData.font
+                                font.pixelSize: 22
+                                font.weight: Font.DemiBold
+                            }
+                            Rectangle { x: 14; y: 46; width: 54; height: 3; radius: 1; color: tile.modelData.text; opacity: 0.8 }
+                            Rectangle { x: 14; y: 53; width: 38; height: 3; radius: 1; color: tile.modelData.text; opacity: 0.8 }
+                        }
+                        PText {
+                            anchors.top: preview.bottom
+                            anchors.topMargin: 4
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: I18n.tr(tile.modelData.label, I18n.revision)
+                            textStyle: "caption"
+                        }
+                        MouseArea {
+                            id: tileArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { view.doc.applyDesign(tile.modelData.key); designFlyout.close() }
+                        }
+                        PToolTip { visible: tileArea.containsMouse; text: I18n.tr("Design »" + tile.modelData.label + "« für alle Folien", I18n.revision) }
+                    }
+                }
+            }
+        }
+    }
+
+    // Hintergrund der gezeigten Folie (oder aller Folien)
+    T.Popup {
+        id: backgroundFlyout
+        objectName: "slidesBackgroundFlyout"
+        parent: backgroundButton
+        y: backgroundButton.height + 4
+        padding: 12
+        width: 232
+        implicitHeight: contentHeight + topPadding + bottomPadding
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        focus: true  // sonst kommt Esc beim Folienbild an statt beim Flyout
+        onClosed: view.back()
+        background: Rectangle {
+            color: Theme.flyout
+            border.color: Theme.flyoutStroke
+            radius: Metrics.radiusOverlay
+            PShadow { radius: Metrics.radiusOverlay }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            PText { text: I18n.tr("Hintergrund", I18n.revision); textStyle: "caption"; tone: "secondary" }
+            Flow {
+                Layout.fillWidth: true
+                spacing: 2
+                Repeater {
+                    model: view.backgrounds
+                    PSwatch {
+                        required property var modelData
+                        objectName: "slidesBackground_" + modelData.slice(1)
+                        size: 32
+                        swatchColor: modelData
+                        tip: I18n.tr(modelData, I18n.revision)
+                        onClicked: { view.doc.setBackground(modelData, everySlide.checked); backgroundFlyout.close() }
+                    }
+                }
+            }
+            PCheckBox { id: everySlide; objectName: "slidesBackgroundAll"; text: I18n.tr("Für alle Folien", I18n.revision) }
+            PButton { objectName: "slidesBackgroundReset"; text: I18n.tr("Wie im Design", I18n.revision); kind: "subtle"; onClicked: { view.doc.setBackground("", everySlide.checked); backgroundFlyout.close() } }
+        }
+    }
+    PMenu {
+        id: exportMenu
+        objectName: "slidesExportMenu"
+        PMenuItem { objectName: "slidesExportImages"; text: I18n.tr("Folien als Bilder …", I18n.revision); iconName: "image_multiple"; onTriggered: view.doc.exportImages() }
+        PMenuItem { objectName: "slidesExportVideo"; text: I18n.tr("Als Video …", I18n.revision); iconName: "filmstrip_play"; onTriggered: view.doc.exportVideo() }
     }
     PMenu {
         id: layoutMenu
@@ -742,9 +1146,9 @@ FocusScope {
             bottomPadding: 4
             contentItem: Rectangle { implicitWidth: 200; implicitHeight: 1; color: Theme.divider }
         }
-        PMenuItem { text: I18n.tr("Neue Folie", I18n.revision); iconName: "document_add"; onTriggered: view.doc.newSlide() }
-        PMenuItem { text: I18n.tr("Folie duplizieren", I18n.revision); iconName: "copy"; onTriggered: view.doc.duplicateSlide() }
-        PMenuItem { text: I18n.tr("Folie löschen", I18n.revision); iconName: "delete"; onTriggered: view.doc.deleteSlide() }
+        PMenuItem { text: I18n.tr("Neue Folie", I18n.revision); iconName: "document_add"; enabled: !view.master; onTriggered: view.doc.newSlide() }
+        PMenuItem { text: I18n.tr("Folie duplizieren", I18n.revision); iconName: "copy"; enabled: !view.master; onTriggered: view.doc.duplicateSlide() }
+        PMenuItem { text: I18n.tr("Folie löschen", I18n.revision); iconName: "delete"; enabled: !view.master; onTriggered: view.doc.deleteSlide() }
     }
 
     // Tastenkürzel (Strg+C/X/V/Z/Y/A, Formate und Bewegen nimmt der Zeichenbereich selbst)
@@ -755,6 +1159,6 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active; onActivated: view.doc.zoomStep(-1) }
     Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
     Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
-    Shortcut { sequences: Shortcuts.keys["reader.present"] || []; enabled: view.active && !view.doc.presenting; onActivated: view.doc.present() }
+    Shortcut { sequences: Shortcuts.keys["reader.present"] || []; enabled: view.active && !view.doc.presenting && !view.master; onActivated: view.doc.present() }
     Shortcut { sequences: ["Escape"]; enabled: view.active && findBar.visible; onActivated: findBar.hide() }
 }

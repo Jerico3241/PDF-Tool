@@ -2,6 +2,26 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.6
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.6.md).
+
+- Präsentationen (Basic-Modul »Novadesk.Folien« in `tools/text/macros.py`): `DesignAnwenden`,
+  `FolienHintergrund`, `UebergangSetzen`/`Uebergaenge`, `MedienEinfuegen` (Größe, Lage, Vorschaubild und
+  MIME-Typ vor `MediaURL` – sonst blockiert der avmedia-Spieler von LibreOffice je Ansicht ~10 s) und
+  `FolienBilder` (GraphicExportFilter, ohne leere Platzhalter) für Vorführung und Export.
+- Textkern: eigene Ansicht für Vorschaubilder nach der Notizenansicht (`paintPartTile` malte sonst Notizseiten),
+  Masteransicht über `mode: 1`; unter Windows wartet die nächste Anfrage nach `uno` mit `wait`.
+- Vorführen zeigt Folienbilder mit Übergängen; Video und Ton über Qt Multimedia (`SlideShowMedia.qml`),
+  Export als Video über `QMediaRecorder`/`QVideoFrameInput` (`qtapp/text/video.py`).
+- Setup: PySide6-Addons nur mit Qt Multimedia und FFmpeg (~22 MB); `avmediawin.dll` von LibreOffice entfällt.
+- Vorlagen: Flat-ODF in `app/vorlagen/` aus `scripts/make_office_templates.py`, Seite »Vorlagen« der Startseite,
+  `Reader.newFromTemplate`.
+- Behoben: Wechsel Text → Tabelle gab der PDF-Ansicht kurz die Tabelle (`ReaderPage.doc`); Kacheln für eine
+  geschlossene Textansicht; `cmd_thumb` malt mit der Ansicht für Folienbilder (sonst nach »Neue Folie« mit der
+  Notizenansicht); eine zweite Präsentation passt sich beim Wechsel an; Esc und Reiterwechsel schließen die Flyouts.
+- `build.py probe_text` prüft Design, Übergang, Master, Video, Folienbilder und die Vorlagen.
+
 # Novadesk 5.0.0-beta.5
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.5.md).

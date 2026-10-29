@@ -613,9 +613,10 @@ class TextController(Observable):
 
     # Hilfsmakros (seit 5.0 Beta 5) -------------------------------------------------------------------------------------
     def macro(self, name: str, values: list | None = None, done: Callable[[list], None] | None = None,
-              failed: Callable | None = None) -> None:
+              failed: Callable | None = None, module: str = "Text") -> None:
         """Makro der Bibliothek »Novadesk« im Textkern (``tools/text/macros.py``) für diesen Text."""
-        self._call("macro", {"name": name, "values": [str(value) for value in values or []]}, done, failed, priority=INPUT)
+        self._call("macro", {"name": name, "module": module, "values": [str(value) for value in values or []]}, done, failed,
+                   priority=INPUT)
 
     def _later(self, callback: Callable[[], None]) -> None:
         """Dialog erst nach der Antwort des Kerns zeigen – nicht mitten in ihrer Zustellung."""

@@ -50,6 +50,25 @@ CONTRACT_LISTS = (".xlsx", ".xlsm", ".xls")  # Startseite: Excel-Listen gehören
 SHEET_SUFFIXES = (".xlsx", ".xlsm", ".xls", ".ods", ".csv")  # Tabellen zum Bearbeiten (seit 5.0 Beta 2)
 TEXT_SUFFIXES = (".docx", ".doc", ".odt", ".rtf")  # Texte zum Bearbeiten (seit 5.0 Beta 3)
 SLIDE_SUFFIXES = (".pptx", ".ppt", ".odp")  # Präsentationen zum Bearbeiten (seit 5.0 Beta 4)
+# Vorlagen (seit 5.0 Beta 6, ``scripts/make_office_templates.py``): OpenDocument in einer Datei, gespeichert wird im
+# Format von ``suffix``. ``name`` ergibt den Namen des neuen Dokuments (»Rechnung1.xlsx«)
+TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "vorlagen"
+OFFICE_TEMPLATES = (
+    {"key": "lebenslauf", "title": "Lebenslauf", "name": "Lebenslauf", "kind": "text", "file": "lebenslauf.fodt", "suffix": ".docx",
+     "description": "Klar gegliedert: Profil, Stationen, Ausbildung, Kenntnisse"},
+    {"key": "geschaeftsbrief", "title": "Geschäftsbrief", "name": "Brief", "kind": "text", "file": "geschaeftsbrief.fodt",
+     "suffix": ".docx", "description": "Nach DIN 5008, mit Fußzeile für Bank und Kontakt"},
+    {"key": "bericht", "title": "Bericht", "name": "Bericht", "kind": "text", "file": "bericht.fodt", "suffix": ".docx",
+     "description": "Zusammenfassung, Ergebnisse mit Kennzahlen, Empfehlung"},
+    {"key": "protokoll", "title": "Besprechungsprotokoll", "name": "Protokoll", "kind": "text", "file": "protokoll.fodt",
+     "suffix": ".docx", "description": "Rahmen, Tagesordnung, Ergebnisse und Aufgaben"},
+    {"key": "rechnung", "title": "Rechnung", "name": "Rechnung", "kind": "tabelle", "file": "rechnung.fods", "suffix": ".xlsx",
+     "description": "Rechnet Netto, Umsatzsteuer und Gesamtbetrag selbst"},
+    {"key": "budget", "title": "Haushaltsbudget", "name": "Budget", "kind": "tabelle", "file": "budget.fods", "suffix": ".xlsx",
+     "description": "Einnahmen und Ausgaben, geplant und tatsächlich"},
+    {"key": "projektvorstellung", "title": "Projektvorstellung", "name": "Projekt", "kind": "praesentation",
+     "file": "projektvorstellung.fodp", "suffix": ".pptx", "description": "Fünf Folien: Ausgangslage, Ziele, Zeitplan, nächste Schritte"},
+)
 SESSION_KEY = "reader_sitzung"  # PDFs der letzten Sitzung – nur mit der Einstellung, nur Pfade und Seiten
 UPDATE_SESSION_KEY = "reader_sitzung_update"  # einmal: nach einem automatischen Update die PDFs wieder öffnen
 # Schnellwerkzeuge der Startseite: Aktion (DocumentController.runAction; »merge«: PDFs anhängen), Titel,
@@ -148,6 +167,7 @@ class ReaderController(Observable):
         self._text = None  # Textkern (``TextService``) – erst mit dem ersten Text
         self._texts_made = 0  # neue Texte: »Dokument1«, »Dokument2« …
         self._slides_made = 0  # neue Präsentationen: »Präsentation1«, »Präsentation2« …
+        self._templates_made: dict[str, int] = {}  # aus Vorlagen: »Rechnung1«, »Rechnung2« …
         recent = cfg.get("reader_zuletzt")
         self._recent_paths = [str(p) for p in recent if isinstance(p, str)][:RECENT_LIMIT] if isinstance(recent, list) else []
         # Wann zuletzt geöffnet (Startseite »Zuletzt verwendet«); Einträge aus älteren Versionen haben keine Zeit
@@ -290,6 +310,7 @@ class ReaderController(Observable):
     toolColors = Property(list, _tool_colors, notify=_constant)
     fontFamilies = Property(list, _font_families, notify=_constant)
     quickTools = Property(list, _quick_tools, notify=_constant)  # Schnellwerkzeuge (Reader, »Alle Werkzeuge«)
+    officeTemplates = Property(list, lambda self: [dict(entry) for entry in OFFICE_TEMPLATES], notify=_constant)  # Seite »Vorlagen«
     startTools = Property(list, _start_tools, notify=_constant)  # Schnellwerkzeuge oben auf der Startseite
 
     # Öffnen -----------------------------------------------------------------------------------------------
@@ -480,6 +501,28 @@ class ReaderController(Observable):
         self._open_sheet("", name=f"Mappe{self._sheets_made}.xlsx")
 
     @Slot(str)
+    def newFromTemplate(self, key: str) -> None:  # noqa: N802
+        """Neues Dokument aus einer Vorlage (Seite »Vorlagen«, seit 5.0 Beta 6): öffnet sich wie neu und noch nicht
+        gespeichert, z. B. »Rechnung1.xlsx«; Speichern fragt nach Ort und Namen."""
+        entry = next((entry for entry in OFFICE_TEMPLATES if entry["key"] == key), None)
+        if entry is None:
+            return
+        source = TEMPLATE_DIR / entry["file"]
+        if office.libreoffice() is None or not source.is_file():
+            self.app.notify("reader", "warning", "Für Vorlagen fehlt der Office-Teil von Novadesk. Bitte Novadesk neu installieren.", title=entry["title"])
+            return
+        if len(self._docs) >= TAB_LIMIT:
+            self.app.notify("reader", "warning", f"Höchstens {TAB_LIMIT} Dokumente gleichzeitig – bitte erst ein Dokument schließen.", title="Zu viele Dokumente")
+            return
+        number = self._templates_made.get(key, 0) + 1
+        self._templates_made[key] = number
+        name = f"{entry['name']}{number}{entry['suffix']}"
+        if entry["kind"] == "tabelle":
+            self._open_sheet(str(source), name=name, untitled=True, changed=False)
+        else:
+            self._open_text(str(source), name=name, kind=entry["kind"], untitled=True, changed=False)
+
+    @Slot(str)
     def newOffice(self, kind: str) -> None:  # noqa: N802
         """»Neuer Text« bzw. »Neue Präsentation«: beide öffnen sich neu und leer in Novadesk (Texte seit Beta 3,
         Präsentationen seit Beta 4)."""
@@ -500,8 +543,9 @@ class ReaderController(Observable):
         self.openExternal(path)
 
     def _open_text(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                   password: str | None = None, kind: str = "text", untitled: bool = False) -> None:
-        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True, kind=kind, untitled=untitled)
+                   password: str | None = None, kind: str = "text", untitled: bool = False, changed: bool = True) -> None:
+        self._open_sheet(path, then=then, background=background, name=name, password=password, text=True, kind=kind,
+                         untitled=untitled, changed=changed)
 
     def open_text_copy(self, path: str, name: str, then: Callable | None = None) -> None:
         """Text aus einer vorbereiteten Datei als neues, noch nicht gespeichertes Dokument öffnen (Serienbrief): Speichern
@@ -514,9 +558,11 @@ class ReaderController(Observable):
         self._open_text(path, name=name, then=then, untitled=True)
 
     def _open_sheet(self, path: str, *, then: Callable | None = None, background: bool = False, name: str = "",
-                    password: str | None = None, text: bool = False, kind: str = "text", untitled: bool = False) -> None:
+                    password: str | None = None, text: bool = False, kind: str = "text", untitled: bool = False,
+                    changed: bool = True) -> None:
         """Tabelle (bzw. mit ``text`` einen Text oder eine Präsentation) zum Bearbeiten in einem eigenen Tab öffnen;
-        ``path`` leer: neu. ``untitled``: aus ``path`` laden, aber als neues Dokument mit dem Namen ``name``."""
+        ``path`` leer: neu. ``untitled``: aus ``path`` laden, aber als neues Dokument mit dem Namen ``name`` (mit
+        ``changed`` als geändert – eine Vorlage, die niemand ändert, fragt beim Schließen nicht)."""
         from ..sheet.document import SheetController
         from ..text.document import TextController
         from ..text.slides import SlidesController
@@ -549,7 +595,7 @@ class ReaderController(Observable):
             self.opening = max(0, self.opening - 1)
             self._forget_opening(path)
             if untitled:
-                controller.path, controller.name, controller.dirty = "", name, True
+                controller.path, controller.name, controller.dirty = "", name, changed
             self._docs[ident] = controller
             controller.panels = {"left": "", "right": "", "organize": False}
             self.tabs.set_items([*self.tabs.items(), self._tab_item(controller)])
