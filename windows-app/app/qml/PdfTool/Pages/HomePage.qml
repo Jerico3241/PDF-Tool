@@ -169,6 +169,83 @@ Item {
         PFocusRing { visible: kindCard.visualFocus; radius_: Metrics.radiusControl + 2 }
     }
 
+    // Karte einer Vorlage (seit 5.0 Beta 6): oben das Vorschaubild (Anfang der ersten Seite bzw. die erste Folie), darunter
+    // Dateiart, Name und Beschreibung
+    component TemplateCard: T.AbstractButton {
+        id: templateCard
+        property var entry: ({})
+        implicitWidth: 232
+        implicitHeight: 262
+        hoverEnabled: true
+        focusPolicy: Qt.StrongFocus
+        Accessible.role: Accessible.Button
+        Accessible.name: I18n.tr(entry.title || "", I18n.revision)
+        Accessible.description: I18n.tr(entry.description || "", I18n.revision)
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        contentItem: Item {}
+        background: Rectangle {
+            radius: Metrics.radiusControl + 2
+            color: templateCard.pressed ? Theme.controlPressed : (templateCard.hovered ? Theme.controlHover : Theme.surface)
+            border.width: 1
+            border.color: templateCard.hovered ? Theme.controlEdge : Theme.border
+        }
+        Rectangle {
+            id: previewBox
+            x: 8
+            y: 8
+            width: parent.width - 16
+            height: 150
+            radius: Metrics.radiusControl
+            color: Theme.layer
+            clip: true
+            Image {
+                objectName: "templatePreview"
+                anchors.fill: parent
+                anchors.margins: templateCard.entry.kind === "praesentation" ? 0 : 1
+                source: templateCard.entry.key ? Qt.resolvedUrl("../../images/vorlagen/" + templateCard.entry.key + ".png") : ""
+                fillMode: templateCard.entry.kind === "praesentation" ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+                verticalAlignment: Image.AlignTop
+                smooth: true
+                mipmap: true
+                asynchronous: true
+                Accessible.ignored: true
+            }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.width: 1; border.color: Theme.divider }
+        }
+        ColumnLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: previewBox.bottom
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+            anchors.topMargin: 10
+            spacing: 2
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                Image {
+                    Layout.preferredWidth: 16
+                    Layout.preferredHeight: 16
+                    source: FileKinds.image(templateCard.entry.kind || "", 16)
+                    sourceSize: Qt.size(16, 16)
+                    Accessible.ignored: true
+                }
+                PText { Layout.fillWidth: true; text: I18n.tr(templateCard.entry.title || "", I18n.revision); textStyle: "bodyStrong"; elide: Text.ElideRight }
+            }
+            PText {
+                Layout.fillWidth: true
+                text: I18n.tr(templateCard.entry.description || "", I18n.revision)
+                textStyle: "caption"
+                tone: "secondary"
+                wrap: true
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+        }
+        PFocusRing { visible: templateCard.visualFocus; radius_: Metrics.radiusControl + 2 }
+    }
+
     // Schaltfläche der Schnellwerkzeuge oben auf der Startseite: Rahmen, Symbol, Name (wie im Design)
     component StartTool: T.AbstractButton {
         id: startTool
@@ -505,6 +582,7 @@ Item {
                 PMenuItem { objectName: "homeNewSheet"; text: I18n.tr("Neue Tabelle", I18n.revision); hint: I18n.tr(Shortcuts.labels["app.new"] || "", I18n.revision); imageSource: FileKinds.image("tabelle", 16); onTriggered: newMenu.afterClose = function() { page.createNew("tabelle") } }
                 PMenuItem { objectName: "homeNewText"; text: I18n.tr("Neuer Text", I18n.revision); imageSource: FileKinds.image("text", 16); onTriggered: newMenu.afterClose = function() { page.createNew("text") } }
                 PMenuItem { objectName: "homeNewPresentation"; text: I18n.tr("Neue Präsentation", I18n.revision); imageSource: FileKinds.image("praesentation", 16); onTriggered: newMenu.afterClose = function() { page.createNew("praesentation") } }
+                PMenuItem { objectName: "homeNewTemplate"; text: I18n.tr("Aus Vorlage …", I18n.revision); iconName: "book_template"; onTriggered: newMenu.afterClose = function() { App.showHomeSection("templates") } }
                 PMenuItem { objectName: "homeNewImages"; text: I18n.tr("PDF aus Bildern", I18n.revision); imageSource: FileKinds.image("pdf", 16); onTriggered: newMenu.afterClose = function() { Reader.imagesToPdf() } }
             }
 
@@ -530,7 +608,7 @@ Item {
                 }
             }
             NavHeading { text: I18n.tr("Mehr", I18n.revision) }
-            NavItem { objectName: "navTemplates"; Layout.fillWidth: true; text: I18n.tr("Vorlagen", I18n.revision); iconName: "library"; onClicked: App.openTool("templates") }
+            NavItem { objectName: "navTemplates"; Layout.fillWidth: true; text: I18n.tr("Vorlagen", I18n.revision); iconName: "library"; selected: page.section === "templates"; onClicked: App.showHomeSection("templates") }
             NavItem { objectName: "navTools"; Layout.fillWidth: true; text: I18n.tr("Alle Werkzeuge", I18n.revision); iconName: "toolbox"; selected: page.section === "tools"; onClicked: App.showHomeSection("tools") }
             NavItem { objectName: "navContracts"; Layout.fillWidth: true; text: I18n.tr("Übersichten-Ersteller", I18n.revision); iconName: "document_table"; onClicked: App.openTool("contracts") }
         }
@@ -922,6 +1000,101 @@ Item {
                 }
             }
 
+        }
+
+        // Vorlagen (seit 5.0 Beta 6): neue Texte, Tabellen und Präsentationen aus einer Vorlage ------------------------
+        ColumnLayout {
+            id: templatesSection
+            objectName: "homeTemplates"
+            Layout.fillWidth: true
+            spacing: 0
+            visible: page.section === "templates"
+            property string kindFilter: ""
+            readonly property var entries: kindFilter === "" ? Reader.officeTemplates
+                                                             : Reader.officeTemplates.filter(function(entry) { return entry.kind === kindFilter })
+            PText {
+                objectName: "homeTemplatesTitle"
+                Layout.fillWidth: true
+                text: I18n.tr("Vorlagen", I18n.revision)
+                textStyle: "title"
+                Accessible.role: Accessible.Heading
+            }
+            PText {
+                Layout.fillWidth: true
+                Layout.topMargin: Metrics.s4
+                text: I18n.tr("Ein Klick legt ein neues Dokument an. Die Felder in [eckigen Klammern] ersetzen Sie durch Ihre Angaben.", I18n.revision)
+                tone: "secondary"
+                wrap: true
+            }
+            Flow {
+                objectName: "homeTemplatesKinds"
+                Layout.fillWidth: true
+                Layout.topMargin: Metrics.s16
+                Layout.bottomMargin: Metrics.s12
+                spacing: Metrics.s4
+                Repeater {
+                    model: [
+                        { key: "", label: "Alle" },
+                        { key: "text", label: "Texte" },
+                        { key: "tabelle", label: "Tabellen" },
+                        { key: "praesentation", label: "Präsentationen" }
+                    ]
+                    PButton {
+                        required property var modelData
+                        objectName: "homeTemplatesKind_" + (modelData.key || "alle")
+                        kind: "subtle"
+                        toggle: true
+                        checked: templatesSection.kindFilter === modelData.key
+                        text: I18n.tr(modelData.label, I18n.revision)
+                        onClicked: templatesSection.kindFilter = modelData.key
+                    }
+                }
+            }
+            // Karten gleich breit auf ganzen Pixeln, so viele nebeneinander, wie hineinpassen (mindestens 200 px breit)
+            Item {
+                Layout.fillWidth: true
+                implicitHeight: templateGrid.implicitHeight
+                GridLayout {
+                    id: templateGrid
+                    objectName: "homeTemplateGrid"
+                    readonly property int available: Math.floor(parent.width)
+                    width: available
+                    columns: Math.max(1, Math.min(4, Math.floor((available + columnSpacing) / (200 + columnSpacing))))
+                    readonly property int cardWidth: Math.floor((available - (columns - 1) * columnSpacing) / columns)
+                    columnSpacing: Metrics.s12
+                    rowSpacing: Metrics.s12
+                    Repeater {
+                        model: templatesSection.entries
+                        TemplateCard {
+                            required property var modelData
+                            objectName: "homeTemplate_" + modelData.key
+                            Layout.preferredWidth: templateGrid.cardWidth
+                            entry: modelData
+                            onClicked: Reader.newFromTemplate(modelData.key)
+                        }
+                    }
+                }
+            }
+            // Die Vorlagen der Vertragsübersichten bleiben, wo sie waren
+            RowLayout {
+                objectName: "homeTemplatesContracts"
+                Layout.fillWidth: true
+                Layout.topMargin: Metrics.s20
+                spacing: Metrics.s8
+                PIcon { name: "document_table"; color: Theme.textSecondary }
+                PText {
+                    Layout.fillWidth: true
+                    text: I18n.tr("Vorlagen für Vertragsübersichten verwalten Sie im Übersichten-Ersteller.", I18n.revision)
+                    tone: "secondary"
+                    wrap: true
+                }
+                PButton {
+                    objectName: "homeTemplatesContractsOpen"
+                    kind: "subtle"
+                    text: I18n.tr("Übersichten-Vorlagen öffnen", I18n.revision)
+                    onClicked: App.openTool("templates")
+                }
+            }
         }
 
         // Alle Werkzeuge: Werkzeuge mit Schnellwerkzeugen und die Ablagefläche --------------------------------------

@@ -100,6 +100,7 @@ def main() -> int:
     check(importlib.util.find_spec("tkinter") is None, "tkinter gehört nicht mehr zur Laufzeit (Qt-Oberfläche)")
     import PySide6
     from PySide6 import QtCore, QtGui, QtNetwork, QtPrintSupport, QtQml, QtQuick, QtQuickControls2, QtSvg, QtWidgets  # noqa: F401
+    from PySide6 import QtMultimedia  # noqa: F401 - Videos und Töne in Präsentationen (seit 5.0 Beta 6)
     import comtypes.client  # noqa: F401 - Scannen (WIA)
     import asn1crypto.cms  # noqa: F401 - digitale Signatur (CMS)
     from cryptography.hazmat.primitives.serialization import pkcs12  # noqa: F401 - digitale Signatur (.pfx)
@@ -829,7 +830,33 @@ def ui_probe(qt_application, full: bool) -> None:
         shown["reader_note"] = any(item.get("contents") == "Smoke-Test" for item in current.annotations) if current is not None else False
         controller.closeCurrent()
 
+    def media() -> None:
+        # Videos und Töne (seit 5.0 Beta 6): Qt Multimedia mit FFmpeg in der Laufzeit – QML-Modul laden und ein kurzes
+        # Video schreiben wie »Als Video speichern«
+        from PySide6.QtCore import QSize, QUrl
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtQml import QQmlComponent
+
+        from qtapp.text import video
+
+        component = QQmlComponent(engine_qml)
+        component.setData(b"import QtQuick\nimport QtMultimedia\nItem { MediaPlayer {} VideoOutput {} }", QUrl())
+        shown["media_qml"] = component.isReady() or component.errorString()
+        shown["media_codec"] = video.available()
+        frames = []
+        for color in ("#1f4e79", "#ffc000"):
+            image = QImage(640, 360, QImage.Format.Format_RGB32)
+            image.fill(QColor(color))
+            frames.append(video.Slide(image, 0.6, "blenden"))
+        target = Path(tempfile.mkdtemp(prefix="novadesk-video-")) / "Probe.mp4"
+        writer = video.VideoWriter(str(target), frames, QSize(640, 360))
+        writer.finished.connect(lambda path: shown.__setitem__("media_video", Path(path).stat().st_size))
+        writer.failed.connect(lambda message: shown.__setitem__("media_video", message or "abgebrochen"))
+        shown["media_writer"] = writer
+        writer.start()
+
     def finish() -> None:
+        shown.pop("media_writer", None)
         shown["customers_after"] = app.currentPage
         shown["messages"] = list(qt_application.MESSAGES)
         shown["closed"] = app.requestClose()
@@ -840,7 +867,7 @@ def ui_probe(qt_application, full: bool) -> None:
         first, tools, views, records_off, records_on, open_customers,
         reader, until("PDF öffnen", opened), reader_edit, until("Kommentar", lambda: opened() and controller.current.dirty),
         reader_save, until("Speichern", reader_saved), reader_close, until("erneut öffnen", lambda: opened() and bool(controller.current.annotations)),
-        reader_check, finish,
+        reader_check, media, until("Video schreiben", lambda: "media_video" in shown, 60), finish,
     ] if full else [first, finish]
     QTimer.singleShot(2500, lambda: step(actions))
     QTimer.singleShot(120000, qt.quit)  # Sicherheitsnetz
@@ -866,6 +893,10 @@ def ui_probe(qt_application, full: bool) -> None:
         check(shown.get("reader") == "reader" and shown.get("reader_again") == "reader" and shown.get("reader_pages") == 2, f"PDF Reader: Seite {shown.get('reader')}/{shown.get('reader_again')}, {shown.get('reader_pages')} Seiten geöffnet")
         check(shown.get("reader_dirty") is True and shown.get("reader_saved") is True and not shown.get("reader_error"), f"PDF Reader: Speichern fehlgeschlagen – {shown.get('reader_error')!r}")
         check(shown.get("reader_closed") is True and shown.get("reader_reopened") == 2 and shown.get("reader_note") is True, "PDF Reader: Änderung nach Schließen und erneutem Öffnen nicht vorhanden")
+        check(shown.get("media_qml") is True, f"Qt Multimedia (QML) fehlt: {shown.get('media_qml')}")
+        check(shown.get("media_codec") is True, "Qt Multimedia: kein Videoformat zum Schreiben (FFmpeg fehlt?)")
+        check(isinstance(shown.get("media_video"), int) and shown["media_video"] > 1000, f"Als Video speichern: {shown.get('media_video')!r}")
+        print(f"Video: QML geladen, Probevideo {shown['media_video'] // 1024} KB")
     config = Path(os.environ["UE_DATA_DIR"]) / "gui-config.json"
     check(config.is_file() and isinstance(json.loads(config.read_text(encoding="utf-8")), dict), "Einstellungen wurden beim Beenden nicht gespeichert")
     print(f"Oberfläche: Fenster sichtbar, {'Werkzeuge und Ansichten geprüft, ' if full else ''}beendet nach {time.monotonic() - started:.1f} s")

@@ -28,6 +28,8 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | PySide6-Essentials (Qt for Python) | 6.11.2 | LGPL-3.0-only (alternativ GPL-2.0/GPL-3.0 oder kommerziell) | Oberfläche (Qt Quick/QML), Dateiauswahl, Zwischenablage | https://doc.qt.io/qtforpython-6/ · https://code.qt.io/cgit/pyside/pyside-setup.git/tag/?h=v6.11.2 |
 | ↳ shiboken6 | 6.11.2 | LGPL-3.0-only (alternativ GPL-2.0/GPL-3.0 oder kommerziell) | Python-Bindung von PySide6 | https://pypi.org/project/shiboken6/6.11.2/ |
 | ↳ Qt (in PySide6 enthalten: QtCore, QtGui, QtWidgets, QtNetwork, QtOpenGL, QtQml, QtQuick, Qt Quick Controls (nur Stil »Basic«), Qt Quick Templates, Layouts, Shapes, QtSvg, QtPrintSupport; Plugins qwindows, qoffscreen, qico, qjpeg, qsvg, qwebp, qsvgicon, qschannelbackend) | 6.11.2 | LGPL-3.0-only | Oberfläche; Qt Network mit TLS über Windows-Schannel für die Update-Prüfung (seit 2.7.2, keine zusätzliche Bibliothek); Qt Print Support für den Druckdialog von Windows im PDF Reader (seit 3.0.0) | https://download.qt.io/official_releases/qt/6.11/ |
+| PySide6-Addons (Qt for Python), davon nur Qt Multimedia | 6.11.2 | LGPL-3.0-only (alternativ GPL-2.0/GPL-3.0 oder kommerziell) | Videos und Töne in Präsentationen abspielen, »Als Video speichern« (seit 5.0.0-beta.6): QtMultimedia, Qt Multimedia Quick, QML-Modul QtMultimedia, Plugin ffmpegmediaplugin | https://pypi.org/project/PySide6-Addons/6.11.2/ · https://download.qt.io/official_releases/qt/6.11/ |
+| ↳ FFmpeg (in PySide6-Addons enthalten: avcodec-61, avformat-61, avutil-59, swresample-5, swscale-8) | 7.1 | LGPL-2.1-or-later | Videos lesen und schreiben (Qt Multimedia) | https://ffmpeg.org · https://code.qt.io/cgit/qt/qtmultimedia.git/ |
 | ↳ Bibliotheken von Qt (u. a. libjpeg-turbo, libwebp, PCRE2, HarfBuzz, FreeType, double-conversion, zlib) | – | BSD-artig / MIT / IJG / FTL / Zlib | Bildformate, Textdarstellung | https://doc.qt.io/qt-6/licenses-used-in-qt.html |
 | pikepdf | 10.17.0 | MPL-2.0 | PDF reparieren (Analyse, Neuaufbau); PDF Reader & Editor (Struktur, Bearbeiten, Speichern) | https://github.com/pikepdf/pikepdf |
 | ↳ qpdf (in pikepdf enthalten) | 12.4.1 | Apache-2.0 | PDF-Engine 1 | https://github.com/qpdf/qpdf |
@@ -182,7 +184,8 @@ eigener Code von PDF Tool; das Ergebnis wird mit qpdf (pikepdf) normalisiert und
 
 - **PySide6, shiboken6 und Qt (LGPL-3.0):** Seit 2.7.0 ist die Oberfläche eine Qt-Quick-Anwendung
   mit PySide6. PDF Tool verwendet die unveränderten Original-Wheels von PyPI
-  (`PySide6_Essentials-6.11.2`, `shiboken6-6.11.2`, Prüfsummen in `runtime-requirements.txt`) unter
+  (`PySide6_Essentials-6.11.2`, `shiboken6-6.11.2`, seit 5.0.0-beta.6 `PySide6_Addons-6.11.2` für Qt
+  Multimedia; Prüfsummen in `runtime-requirements.txt`) unter
   der LGPL-3.0. Qt und PySide6 werden dynamisch geladen: Die Bibliotheken liegen als eigene Dateien
   im Programmordner (`runtime\Lib\site-packages\PySide6\`, `…\shiboken6\`) und lassen sich durch
   eigene, kompatible Fassungen ersetzen; PDF Tool schränkt das weder technisch noch vertraglich ein
@@ -194,6 +197,12 @@ eigener Code von PDF Tool; das Ergebnis wird mit qpdf (pikepdf) normalisiert und
   **Verträglichkeit:** PDF Tool steht laut Projektinhaber unter **GPL-3.0-or-later**; die LGPL-3.0
   von Qt/PySide6 ist damit vereinbar. Qt-Module unter reiner GPL (z. B. Qt Charts, Qt Data
   Visualization) oder kommerzieller Lizenz werden nicht verwendet.
+- **FFmpeg (LGPL-2.1-or-later):** Qt Multimedia bringt FFmpeg als eigene DLLs mit (`avcodec-61.dll`,
+  `avformat-61.dll`, `avutil-59.dll`, `swresample-5.dll`, `swscale-8.dll` in `runtime\Lib\site-packages\PySide6\`),
+  unverändert aus dem Wheel `PySide6_Addons-6.11.2`, dynamisch geladen und durch eigene, kompatible Fassungen
+  ersetzbar. Qt liefert FFmpeg als LGPL-Build (laut Qt-Meldung »FFmpeg … LGPL version 2.1 or later«). Quellen
+  und Lizenzen nennt https://doc.qt.io/qt-6/licenses-used-in-qt.html; den Quellcode von FFmpeg gibt es unter
+  https://ffmpeg.org/download.html, den Lizenztext unter https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 - **pikepdf (MPL-2.0):** PDF Tool verwendet pikepdf unverändert. Der Quellcode genau dieser
   Version ist unter https://github.com/pikepdf/pikepdf/tree/v10.15.0 und
   https://pypi.org/project/pikepdf/10.15.0/#files erhältlich.
@@ -225,7 +234,7 @@ deren Quellcode; sie verpflichtet nicht zur Offenlegung des Quellcodes von PDF T
   kein Bestandteil des App-Brandings.
 - **Schriften der Oberfläche** (Segoe UI Variable, Segoe UI) werden nicht mitgeliefert, sondern aus
   Windows verwendet.
-- **Symbole der Oberfläche** (seit 2.7.0): 266 SVG-Symbole aus **Fluent UI System Icons** von
+- **Symbole der Oberfläche** (seit 2.7.0): 279 SVG-Symbole aus **Fluent UI System Icons** von
   Microsoft (Paket `@fluentui/svg-icons` 1.1.343, https://github.com/microsoft/fluentui-system-icons),
   unverändert unter `windows-app/app/qml/icons/`, im Setup als Teil der QML-Ressource. Lizenz: MIT.
 

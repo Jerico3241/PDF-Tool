@@ -8,7 +8,8 @@ was Novadesk zur Laufzeit lädt:
   (auch indirekt, z. B. QtQml → QtNetwork) lädt. QtPrintSupport (seit 3.0.0) druckt aus dem PDF
   Reader; der Druck unter Windows steckt in ``Qt6PrintSupport.dll`` selbst (kein Plugin).
 * Qt-Plugins: ``PLUGINS`` – Fensterplattform, Bildformate (ICO für das Fenstersymbol, JPEG/WebP/SVG
-  für Logos und Symbole), TLS über Schannel (HTTPS für die Update-Prüfung, seit 2.7.2).
+  für Logos und Symbole), TLS über Schannel (HTTPS für die Update-Prüfung, seit 2.7.2), FFmpeg für
+  Videos und Töne (Qt Multimedia aus PySide6-Addons, seit 5.0 Beta 6).
 * QML-Module: ``QML_MODULES`` – ermittelt mit ``qmlimportscanner``; von Qt Quick Controls nur der
   Stil »Basic«, den die App fest einstellt.
 * DLLs: alle, die diese Dateien laut Importtabelle (auch verzögert geladen) brauchen – transitiv.
@@ -25,7 +26,8 @@ import struct
 import sys
 from pathlib import Path
 
-PYTHON_MODULES = ("QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtOpenGL", "QtQml", "QtQuick", "QtQuickControls2", "QtSvg", "QtPrintSupport")
+PYTHON_MODULES = ("QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtOpenGL", "QtQml", "QtQuick", "QtQuickControls2", "QtSvg", "QtPrintSupport",
+                  "QtMultimedia")
 PLUGINS = (
     "platforms/qwindows.dll",
     "platforms/qoffscreen.dll",  # Prüfungen ohne Bildschirm (Laufzeittest)
@@ -35,6 +37,7 @@ PLUGINS = (
     "imageformats/qwebp.dll",
     "iconengines/qsvgicon.dll",
     "tls/qschannelbackend.dll",  # HTTPS für Updates (Zertifikate prüft Windows selbst)
+    "multimedia/ffmpegmediaplugin.dll",  # Videos und Töne (seit 5.0 Beta 6, PySide6-Addons); holt die FFmpeg-DLLs mit
 )
 # QML-Module (Ordner unter PySide6/qml); bei Qt Quick Controls nur Basic und die gemeinsamen Teile
 QML_MODULES = (
@@ -50,6 +53,7 @@ QML_MODULES = (
     "QtQuick/Shapes",
     "QtQuick/Templates",
     "QtQuick/Window",
+    "QtMultimedia",  # Videos und Töne beim Vorführen (seit 5.0 Beta 6)
 )
 QML_ROOT_FILES = ("builtins.qmltypes", "jsroot.qmltypes")
 # Ordner des PySide6-Pakets, die zur Laufzeit nicht gebraucht werden

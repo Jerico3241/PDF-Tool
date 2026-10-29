@@ -15,6 +15,8 @@
 # Digitale Signatur (seit 4.0 Beta 6): cryptography (Apache-2.0/BSD) mit cffi (MIT) für Zertifikate, PKCS#12 und das
 # Prüfen von Signaturen, asn1crypto (MIT, reines Python) für das CMS-Paket. Bewusst ohne pyHanko (bräuchte lxml und
 # aiohttp). Zwei Prüfsummen bei cryptography: abi3-Wheels für Python 3.11+ und 3.9+.
+# Videos und Töne in Präsentationen (seit 5.0 Beta 6): PySide6-Addons (LGPL-3.0) in derselben Version wie Essentials –
+# davon bleibt nur Qt Multimedia mit FFmpeg (LGPL-2.1+) für Abspielen und »Als Video speichern« (qtruntime.py).
 asn1crypto==1.5.1 --hash=sha256:db4e40728b728508912cbb3d44f19ce188f218e9eba635821bb4b68564f8fd67
 cffi==2.1.1 --hash=sha256:1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d
 charset-normalizer==3.5.2 --hash=sha256:78456a747de8dc58360ffa581f30a002baf5aa28cb262536545e91f113ed7639
@@ -30,6 +32,7 @@ pikepdf==10.17.0 --hash=sha256:8fe0aca0174cec0dfd8e367e4b663db029cd13fbdb13faf08
 pillow==12.3.0 --hash=sha256:1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8
 pypdf==6.21.1 --hash=sha256:553e2d42f5bb3bb2a785a7d3de8ef90bb7df74b5413eff5a7b4388007ea9254b
 pypdfium2==5.14.0 --hash=sha256:149fd5c6397b8df8bf7911a93506eff0be874f877afe7ac936cf5d37d21a6a06
+PySide6-Addons==6.11.2 --hash=sha256:f449ea4431da20e7b86752cca8d166f93434516fe417f981c27e5f8e1b554407
 PySide6-Essentials==6.11.2 --hash=sha256:c8a29def77032773a30879f7f24415b5395ad08592d147c170824ef4c735dfc1
 python-dateutil==2.9.0.post0 --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
 pytz==2026.5 --hash=sha256:e658af3757f9e26a9d25dd2aff38335acd92bc9104f890a894b2c1ba28311b03

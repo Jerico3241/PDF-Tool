@@ -109,7 +109,7 @@ class VideoWriter(QObject):
         self._done = False
         self._failed = False
         self._session = QMediaCaptureSession(self)
-        self._input = QVideoFrameInput(self)
+        self._input = QVideoFrameInput(self)  # Bildrate aus den Zeitstempeln der Bilder (Qt meldet »frameRate 0«)
         self._session.setVideoFrameInput(self._input)
         self._recorder = QMediaRecorder(self)
         self._session.setRecorder(self._recorder)
