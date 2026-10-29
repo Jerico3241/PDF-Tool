@@ -39,7 +39,8 @@ Wine laufen: ISCC=/pfad/zu/ISCC.exe setzen.
 Signieren (sobald ein Code-Signing-Zertifikat vorhanden ist): Umgebungsvariable
 SIGN_COMMAND setzen, z. B.
   SIGN_COMMAND=signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /a "{file}"
-Der Befehl wird nach dem Bau auf die Setup-Datei angewendet.
+Der Befehl wird auf das Startprogramm PDF-Tool.exe und nach dem Bau auf die Setup-Datei angewendet.
+In GitHub Actions kommt er aus dem Repository-Secret SIGN_COMMAND (leer: unsigniert).
 """
 
 from __future__ import annotations
@@ -1045,6 +1046,7 @@ def prepare_payload(version: str, compile_pyc: bool) -> None:
     shutil.copy2(ROOT.parent / "LICENSE", PAYLOAD / "LICENSE")  # GPL-3.0 von Novadesk, ohne Zustimmungsseite im Setup
     (PAYLOAD / "VERSION").write_text(version + "\n", encoding="utf-8")
     build_launcher(LAUNCHER, version)
+    sign(LAUNCHER)  # das eigene Startprogramm wie das Setup signieren (sobald ein Zertifikat da ist)
     prepare_ocr(OCR)
     prepare_ai(AI, [runtime, site / "PySide6"])
     prepare_office(OFFICE, [runtime, site / "PySide6"])
@@ -1174,13 +1176,14 @@ def validate(setup: Path, version: str) -> None:
         fail(f"Unerwarteter Dateiname: {setup.name}")
 
 
-def sign(setup: Path) -> None:
+def sign(path: Path) -> None:
+    """``path`` mit ``SIGN_COMMAND`` signieren (Startprogramm PDF-Tool.exe und Setup) – ohne Zertifikat nur ein Hinweis."""
     command = os.environ.get("SIGN_COMMAND")
     if not command:
-        log("Hinweis: nicht signiert (SIGN_COMMAND ist nicht gesetzt).")
+        log(f"Hinweis: {path.name} nicht signiert (SIGN_COMMAND ist nicht gesetzt).")
         return
-    args = [part.replace("{file}", str(setup)) for part in shlex.split(command, posix=(os.name != "nt"))]
-    log("Signiere …")
+    args = [part.replace("{file}", str(path)) for part in shlex.split(command, posix=(os.name != "nt"))]
+    log(f"Signiere {path.name} …")
     subprocess.check_call(args)
 
 

@@ -201,6 +201,8 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: 2. Setup bauen
+        env:
+          SIGN_COMMAND: ${{ secrets.SIGN_COMMAND }}  # Code-Signing, sobald ein Zertifikat eingerichtet ist
         run: python windows-app/build.py
 
       - name: Release-Dateien prüfen (Namen, Version, Prüfsumme gehört zum Setup, Release Notes)
