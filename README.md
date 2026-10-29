@@ -37,8 +37,7 @@ Update-Prüfung bei GitHub und, nur auf Wunsch, der Download des KI-Modells. Ein
 
 `PDF-Tool-Setup-<Version>.exe` aus den [GitHub Releases](https://github.com/Jerico3241/PDF-Tool/releases)
 herunterladen und ausführen. Python und alle Pakete sind enthalten; Administratorrechte sind nicht
-nötig. Danach meldet PDF Tool neue Versionen selbst (Einstellungen → Updates). Setup und Startprogramm
-werden in GitHub Actions aus diesem Repository gebaut: [Code signing policy](docs/CODE-SIGNING.md).
+nötig. Danach meldet PDF Tool neue Versionen selbst (Einstellungen → Updates).
 
 Stable ist der Standard. Beta ist für Nutzer gedacht, die neue Versionen vor der allgemeinen
 Veröffentlichung testen möchten – Beta-Releases können Fehler enthalten und sind nicht vollständig

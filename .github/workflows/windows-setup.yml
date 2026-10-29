@@ -202,8 +202,28 @@ jobs:
 
       - name: 2. Setup bauen
         env:
-          SIGN_COMMAND: ${{ secrets.SIGN_COMMAND }}  # Code-Signing, sobald ein Zertifikat eingerichtet ist
+          SIGN_COMMAND: ${{ secrets.SIGN_COMMAND }}  # Code-Signing, falls je ein Zertifikat eingerichtet wird (leer: unsigniert)
         run: python windows-app/build.py
+
+      - name: Virenprüfung (Microsoft Defender – alle Dateien des Programms und das Setup)
+        timeout-minutes: 30
+        shell: pwsh
+        run: |
+          # Kein Setup ohne Prüfung: findet Defender etwas oder lässt sich nicht prüfen, bricht der Bau ab.
+          $mp = Join-Path $env:ProgramFiles "Windows Defender\MpCmdRun.exe"
+          if (-not (Test-Path $mp)) { throw "Microsoft Defender (MpCmdRun.exe) fehlt auf dem Runner – keine Virenprüfung möglich." }
+          & $mp -SignatureUpdate | Out-Host
+          $version = (Get-MpComputerStatus).AntivirusSignatureVersion
+          Write-Host "Defender-Signaturen: $version"
+          $ziele = @((Resolve-Path windows-app/build/payload).Path) + @(Get-ChildItem windows-app/dist/*.exe | ForEach-Object FullName)
+          foreach ($ziel in $ziele) {
+            Write-Host "Prüfe $ziel …"
+            & $mp -Scan -ScanType 3 -File $ziel -DisableRemediation | Out-Host
+            $code = $LASTEXITCODE
+            if ($code -eq 2) { throw "Defender hat in $ziel eine Bedrohung gefunden – siehe oben. Kein Setup mit Fund." }
+            if ($code -ne 0) { throw "Virenprüfung von $ziel nicht möglich (MpCmdRun Exitcode $code)." }
+          }
+          "### Virenprüfung`n- Microsoft Defender, Signaturen ${version}: keine Bedrohung im Programmordner und im Setup" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Release-Dateien prüfen (Namen, Version, Prüfsumme gehört zum Setup, Release Notes)
         run: python windows-app/release_check.py windows-app/dist
