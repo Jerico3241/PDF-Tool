@@ -4,7 +4,7 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
-// »PDF reparieren« (eine oder mehrere PDFs): PDFs wählen oder hineinziehen → jede
+// »Dateien reparieren« (eine oder mehrere Dateien; seit 5.0 Beta 7 auch Office, Bilder, Text/CSV): Dateien wählen oder hineinziehen → jede
 // wird für sich analysiert → Liste mit Zustand, Diagnose und geplantem Ausgabenamen → »PDF
 // reparieren« bzw. »Alle reparieren« (nacheinander) mit Fortschritt je Datei und gesamt →
 // Ergebnis je Datei und Zusammenfassung. Die Zeilen sind virtualisiert (auch 100 PDFs bleiben
@@ -69,7 +69,7 @@ Item {
                     spacing: 16
                     PRadioButton {
                         objectName: "repairOutOriginal"
-                        text: I18n.tr("Neben der Original-PDF", I18n.revision)
+                        text: I18n.tr("Neben dem Original", I18n.revision)
                         checked: Repair.outMode === Repair.texts.outOriginal
                         enabled: !Repair.running
                         onClicked: Repair.setOutMode(Repair.texts.outOriginal)
@@ -89,7 +89,7 @@ Item {
                     value: Repair.outLabel
                     valueTone: Repair.outMissing ? "warning" : ""
                     fullPath: Repair.outPath
-                    PButton { iconName: "folder_open"; text: I18n.tr("Durchsuchen", I18n.revision); tip: I18n.tr("Ordner für reparierte PDFs wählen", I18n.revision); enabled: !Repair.running; onClicked: Repair.pickOutDir() }
+                    PButton { iconName: "folder_open"; text: I18n.tr("Durchsuchen", I18n.revision); tip: I18n.tr("Ordner für reparierte Dateien wählen", I18n.revision); enabled: !Repair.running; onClicked: Repair.pickOutDir() }
                 }
                 Rectangle { Layout.fillWidth: true; Layout.topMargin: 4; Layout.bottomMargin: 4; height: 1; color: Theme.divider }
                 // Namensregel: »_repariert« anhängen (Standard: ein) und Zusatz
@@ -160,7 +160,7 @@ Item {
                     minimumWidth: 180
                     iconName: "wrench"
                     text: I18n.tr(Repair.primaryText, I18n.revision)
-                    tip: I18n.tr((Repair.single ? "PDF reparieren" : "Alle beschädigten PDFs nacheinander reparieren") + Shortcuts.hints["app.primary"], I18n.revision)
+                    tip: I18n.tr((Repair.single ? Repair.primaryText : "Alle beschädigten Dateien nacheinander reparieren") + Shortcuts.hints["app.primary"], I18n.revision)
                     enabled: Repair.canStart
                     onClicked: Repair.startRepair()
                 }
@@ -221,13 +221,13 @@ Item {
                             readonly property bool alone: Repair.summary.single === true
                             readonly property bool saved: Repair.summary.hasOutput === true
                             // Eine Datei: wie bis 2.7.0
-                            PButton { objectName: "repairOpen"; visible: parent.alone; kind: "accent"; iconName: "window_new"; text: I18n.tr("Öffnen", I18n.revision); tip: I18n.tr("Reparierte PDF öffnen", I18n.revision); enabled: parent.saved; onClicked: Repair.openResultFile() }
+                            PButton { objectName: "repairOpen"; visible: parent.alone; kind: "accent"; iconName: "window_new"; text: I18n.tr("Öffnen", I18n.revision); tip: I18n.tr("Reparierte Datei öffnen", I18n.revision); enabled: parent.saved; onClicked: Repair.openResultFile() }
                             PButton { visible: parent.alone; iconName: "folder_open"; text: I18n.tr("Ordner öffnen", I18n.revision); enabled: parent.saved; onClicked: Repair.openResultFolder() }
                             PButton { visible: parent.alone; iconName: "copy"; text: I18n.tr("Pfad kopieren", I18n.revision); enabled: parent.saved; onClicked: Repair.copyResultPath() }
                             // Mehrere PDFs
                             PButton { objectName: "repairOpenFolder"; visible: !parent.alone; kind: "accent"; iconName: "folder_open"; text: I18n.tr("Ausgabeordner öffnen", I18n.revision); enabled: parent.saved; onClicked: Repair.openResultFolder() }
                             PButton { objectName: "repairResultRetry"; visible: Repair.canRetry; iconName: "arrow_clockwise"; text: I18n.tr("Fehlgeschlagene erneut versuchen", I18n.revision); onClicked: Repair.retryFailed() }
-                            PButton { objectName: "repairAgain"; iconName: "add"; text: I18n.tr("Weitere PDFs reparieren", I18n.revision); tip: I18n.tr("Liste leeren und neue PDFs wählen", I18n.revision); enabled: !Repair.busy; onClicked: Repair.reset() }
+                            PButton { objectName: "repairAgain"; iconName: "add"; text: I18n.tr("Weitere Dateien reparieren", I18n.revision); tip: I18n.tr("Liste leeren und neue Dateien wählen", I18n.revision); enabled: !Repair.busy; onClicked: Repair.reset() }
                         }
                         PInfoBar { Layout.fillWidth: true; notice: Notices.area("repair_result_info"); topMargin: 4 }
                     }
@@ -240,11 +240,11 @@ Item {
         id: listPage
         objectName: "repairList"
         anchors.fill: parent
-        title: I18n.tr("PDF reparieren", I18n.revision)
-        subtitle: I18n.tr("Beschädigte PDF-Dateien analysieren und lesbare Inhalte in neue PDFs übertragen – eine oder mehrere auf einmal.", I18n.revision)
+        title: I18n.tr("Dateien reparieren", I18n.revision)
+        subtitle: I18n.tr("Beschädigte PDFs, Office-Dateien, Bilder und Texte analysieren und lesbare Inhalte retten – eine oder mehrere auf einmal.", I18n.revision)
         model: Repair.items
         Accessible.role: Accessible.List
-        Accessible.name: I18n.tr("PDF-Dateien", I18n.revision)
+        Accessible.name: I18n.tr("Dateien", I18n.revision)
 
         // Neue Dateien blenden ein, entfernte aus; die übrigen rücken weich nach
         add: Transition {
@@ -290,8 +290,8 @@ Item {
                         objectName: "repairPick"
                         kind: "accent"
                         iconName: "folder_open"
-                        text: I18n.tr("PDFs auswählen", I18n.revision)
-                        tip: I18n.tr("Eine oder mehrere PDFs auswählen" + Shortcuts.hints["app.open"], I18n.revision)
+                        text: I18n.tr("Dateien auswählen", I18n.revision)
+                        tip: I18n.tr("Eine oder mehrere Dateien auswählen" + Shortcuts.hints["app.open"], I18n.revision)
                         onClicked: Repair.pick()
                     }
                 ]
@@ -307,8 +307,8 @@ Item {
                     id: addButton
                     objectName: "repairAdd"
                     iconName: "add"
-                    text: I18n.tr("PDFs hinzufügen", I18n.revision)
-                    tip: I18n.tr("Weitere PDFs zur Liste hinzufügen" + Shortcuts.hints["app.open"] + " – auch per Ziehen und Ablegen", I18n.revision)
+                    text: I18n.tr("Dateien hinzufügen", I18n.revision)
+                    tip: I18n.tr("Weitere Dateien zur Liste hinzufügen" + Shortcuts.hints["app.open"] + " – auch per Ziehen und Ablegen", I18n.revision)
                     onClicked: Repair.pick()
                 }
                 PButton {

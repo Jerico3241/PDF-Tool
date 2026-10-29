@@ -70,6 +70,8 @@ T.Popup {
             { text: "Seiten als JPEG exportieren (150 dpi)", icon: "arrow_export", run: "jpeg150" },
             { name: "readerMenuToWord", text: "In Word umwandeln (.docx) …", icon: "document", run: "toWord" },
             { name: "readerMenuToExcel", text: "In Excel umwandeln (.xlsx) …", icon: "document_table", run: "toExcel" },
+            { name: "readerMenuToPowerPoint", text: "In PowerPoint umwandeln (.pptx) …", icon: "slide_settings", run: "toPowerPoint" },
+            { name: "readerMenuToHtml", text: "Als Webseite speichern (.html) …", icon: "local_language", run: "toHtml" },
             { name: "readerMenuToText", text: "Als Text speichern (.txt) …", icon: "text_bullet_list_ltr", run: "toText" },
             { name: "readerMenuOfficeToPdf", text: "Word, Excel oder PowerPoint in PDF umwandeln …", icon: "document_pdf", run: "officeToPdf" } ] },
         { title: "Ansicht und Vergleichen", items: [
@@ -112,6 +114,8 @@ T.Popup {
         case "toWord": d.convertDocument("docx"); break
         case "toExcel": d.convertDocument("xlsx"); break
         case "toText": d.convertDocument("txt"); break
+        case "toPowerPoint": d.convertDocument("pptx"); break
+        case "toHtml": d.convertDocument("html"); break
         case "officeToPdf": Reader.officeToPdf(); break
         }
     }

@@ -79,11 +79,11 @@ def test_name_rule_with_and_without_switch() -> None:
 def test_add_skips_duplicates_non_pdfs_and_missing_files(tmp_path: Path) -> None:
     a = pdf(tmp_path / "a.pdf")
     b = pdf(tmp_path / "Unterordner" / "b.pdf")
-    (tmp_path / "notiz.txt").write_text("x")
+    (tmp_path / "notiz.xyz").write_text("x")
     liste = RepairBatch()
-    erstes = liste.add([a, b, tmp_path / "notiz.txt", tmp_path / "fehlt.pdf"])
+    erstes = liste.add([a, b, tmp_path / "notiz.xyz", tmp_path / "fehlt.pdf"])
     assert [item.name for item in erstes.added] == ["a.pdf", "b.pdf"]
-    assert erstes.rejected == ["notiz.txt"] and erstes.missing == ["fehlt.pdf"]
+    assert erstes.rejected == ["notiz.xyz"] and erstes.missing == ["fehlt.pdf"]
     assert erstes.added[0].size == a.stat().st_size and erstes.added[0].state is ItemState.PENDING
     # Dieselbe Datei noch einmal – auch über einen anderen Pfad-Weg – wird nicht doppelt aufgenommen
     zweites = liste.add([a, tmp_path / "Unterordner" / ".." / "a.pdf", str(b)])
@@ -263,7 +263,7 @@ def test_overview_counts_states_not_texts(tmp_path: Path) -> None:
         ),
         ([ItemState.FAILED, ItemState.FAILED], 0, ("error", "Reparatur abgeschlossen", ["2 fehlgeschlagen"])),
         ([ItemState.REPAIRED] * 3 + [ItemState.CANCELLED], 6, ("warning", "Reparatur abgebrochen", ["3 erfolgreich repariert", "1 abgebrochen", "6 nicht gestartet"])),
-        ([ItemState.SKIPPED], 0, ("info", "Keine PDF repariert", ["1 übersprungen"])),
+        ([ItemState.SKIPPED], 0, ("info", "Keine Datei repariert", ["1 übersprungen"])),
     ],
 )
 def test_run_summary(zustaende, nicht_gestartet, erwartet) -> None:

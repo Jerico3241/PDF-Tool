@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .batch import DEFAULT_SUFFIX as SUFFIX
-from .batch import folder_key, names_in, numbered
+from .batch import folder_key, names_in, numbered, output_suffix
 
 TEMP_PREFIX = "pdf-tool-reparatur-"
 STALE_SECONDS = 24 * 3600
@@ -202,6 +202,9 @@ def _run(conn, kind: str, request: dict) -> None:
     try:
         from . import engine
         from .models import RepairMode
+
+        if Path(str(request.get("path", ""))).suffix.lower() != ".pdf":
+            from tools.file_repair import engine  # noqa: F811 - Office-Dateien, Bilder, Text/CSV (seit 5.0 Beta 7)
 
         def progress(stage: str, fraction: float | None = None) -> None:
             conn.send(("progress", stage, fraction))
@@ -538,9 +541,10 @@ def next_output(source: Path, folder: Path | None = None, base: str | None = Non
     base = base or f"{source.stem}{SUFFIX}"
     existing = names_in(folder)
     number = 0
-    while _taken(folder / numbered(base, number), source, set(), existing):
+    suffix = output_suffix(source)
+    while _taken(folder / numbered(base, number, suffix), source, set(), existing):
         number += 1
-    return folder / numbered(base, number)
+    return folder / numbered(base, number, suffix)
 
 
 def deliver(
@@ -564,8 +568,9 @@ def deliver(
     folder.mkdir(parents=True, exist_ok=True)
     existing = names_in(folder)
     number = max(0, start)
+    suffix = output_suffix(source)
     while True:
-        target = folder / numbered(base, number)
+        target = folder / numbered(base, number, suffix)
         number += 1
         if _taken(target, source, reserved, existing):
             continue

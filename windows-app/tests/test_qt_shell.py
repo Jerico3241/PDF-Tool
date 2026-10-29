@@ -21,7 +21,7 @@ from conftest import _prepare, neustart, pump, wait_until
 
 import appstate
 from qtapp.app import window_title
-from tools.registry import ACTIONS, CONTRACTS, READER, REPAIR
+from tools.registry import ACTIONS, CONTRACTS, CONVERT, READER, REPAIR, VERSIONS
 
 
 def test_start_and_version(app) -> None:
@@ -76,9 +76,9 @@ def test_navigation_all_pages_and_rapid_switching(app) -> None:
 
 def test_start_page_shows_tool_cards(app) -> None:
     tools = app.app.tools
-    assert [tool["key"] for tool in tools] == [READER.key, ACTIONS.key, CONTRACTS.key, REPAIR.key]
-    assert [tool["title"] for tool in tools] == ["PDF Reader & Editor", "Stapel-Aktionen", "Vertragsübersichten", "PDF reparieren"]
-    assert [tool["shortcut"] for tool in tools] == ["Strg+5", "Strg+6", "Strg+2", "Strg+3"]
+    assert [tool["key"] for tool in tools] == [READER.key, CONVERT.key, ACTIONS.key, CONTRACTS.key, REPAIR.key, VERSIONS.key]
+    assert [tool["title"] for tool in tools] == ["PDF Reader & Editor", "Umwandeln", "Stapel-Aktionen", "Vertragsübersichten", "Dateien reparieren", "Backup-Center"]
+    assert [tool["shortcut"] for tool in tools] == ["Strg+5", "Strg+7", "Strg+6", "Strg+2", "Strg+3", "Strg+8"]
 
 
 def _szene(item) -> tuple[float, float, float, float]:
@@ -117,7 +117,7 @@ def _ganze_woerter(werkzeug) -> None:
         assert breitestes <= text.width(), (name, text.property("text"), breitestes, text.width())
 
 
-WERKZEUGE = ("toolCard_reader", "toolCard_actions", "toolCard_contracts", "toolCard_repair")  # Reihenfolge wie auf der Startseite
+WERKZEUGE = ("toolCard_reader", "toolCard_convert", "toolCard_actions", "toolCard_contracts", "toolCard_repair", "toolCard_versions")  # Reihenfolge wie auf der Startseite
 
 
 def _pruefe_startseite(h) -> tuple[bool, int]:
@@ -181,8 +181,8 @@ def _alle(wurzel) -> list:
 # Fenstergrößen (geräteunabhängige Pixel) und erwarteter Aufbau: (Werkzeuge und Ablagefläche nebeneinander,
 # Spalten der Werkzeuge – vier Werkzeuge stehen zwei mal zwei). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
 # bei 150 %.
-GROESSEN = (((1920, 1080), (True, 2)), ((2560, 1440), (True, 2)), ((1366, 768), (True, 2)), ((1280, 720), (True, 2)),
-            ((1093, 614), (False, 2)), ((900, 700), (False, 2)), ((760, 700), (False, 1)))  # seit 5.0 neben der Navigation (240 px)
+GROESSEN = (((1920, 1080), (True, 3)), ((2560, 1440), (True, 3)), ((1366, 768), (True, 3)), ((1280, 720), (True, 2)),
+            ((1093, 614), (False, 3)), ((900, 700), (False, 2)), ((760, 700), (False, 1)))  # seit 5.0 neben der Navigation (240 px)
 
 
 @pytest.mark.parametrize("groesse,aufbau", GROESSEN)
@@ -245,7 +245,7 @@ def test_start_page_is_symmetric_at_every_scale(skalierung: str) -> None:
 
 def test_start_page_footer_stays_aligned_with_longer_text(ui_app) -> None:
     h = ui_app
-    for groesse, aufbau in (((1366, 768), (True, 2)), ((900, 700), (False, 2))):
+    for groesse, aufbau in (((1366, 768), (True, 3)), ((900, 700), (False, 2))):
         h.window.resize(*groesse)
         pump(0.4)
         werkzeuge = [h.item(name) for name in WERKZEUGE]
@@ -265,7 +265,7 @@ def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(u
     h = ui_app
     h.window.resize(1366, 768)
     pump(0.4)
-    assert _pruefe_startseite(h) == (True, 2)
+    assert _pruefe_startseite(h) == (True, 3)  # sechs Werkzeuge: zwei Reihen zu drei
     werkzeug = h.item(WERKZEUGE[0])
     kuerzel = werkzeug.property("shortcut")
     werkzeug.setProperty("shortcut", "Strg+Umschalt+Alt+Feststelltaste+Rollen+Pause+Druck+F12")  # Fußzeile breiter als die halbe Karte (auch mit Segoe UI)
@@ -275,7 +275,7 @@ def test_start_page_puts_tools_below_each_other_when_their_footer_does_not_fit(u
     assert rest >= 12  # Innenabstand rechts bleibt frei
     werkzeug.setProperty("shortcut", kuerzel)
     pump(0.4)
-    assert _pruefe_startseite(h) == (True, 2)
+    assert _pruefe_startseite(h) == (True, 3)
 
 
 def test_start_page_tools_open_their_tool(app) -> None:
@@ -283,7 +283,7 @@ def test_start_page_tools_open_their_tool(app) -> None:
     PDF – einen leeren Reader gibt es nicht."""
     from qtapp import files
 
-    for name, page in (("toolCard_contracts", "create"), ("toolCard_repair", "repair")):
+    for name, page in (("toolCard_contracts", "create"), ("toolCard_repair", "repair"), ("toolCard_convert", "convert"), ("toolCard_versions", "versions")):
         app.navigate("home", 0.4)
         app.app.showHomeSection("tools")  # seit 5.0 unter »Alle Werkzeuge«
         pump(0.3)
@@ -295,7 +295,7 @@ def test_start_page_tools_open_their_tool(app) -> None:
     app.app.showHomeSection("tools")
     pump(0.3)
     karten = [app.item(name) for name in WERKZEUGE]
-    assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 4
+    assert [karte.findChild(QObject, "toolOpen").property("text") for karte in karten] == ["Öffnen"] * 6
     files.RESPONSES.append([])  # Dateiauswahl: abbrechen
     item = app.item("toolCard_reader")
     QTest.mouseClick(app.window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint())
@@ -387,13 +387,13 @@ def test_status_hint_follows_the_tool(app) -> None:
     app.navigate("batch")
     assert "Stapel" in app.app.hint or "Excel-Dateien" in app.app.hint
     app.navigate("repair")
-    assert app.app.hint.startswith("Strg+O  PDFs auswählen")  # eine oder mehrere PDFs
+    assert app.app.hint.startswith("Strg+O  Dateien auswählen")  # eine oder mehrere Dateien
 
 
 def test_help_follows_the_open_view(app) -> None:
     from qtapp import dialogs
 
-    for page, title in (("home", "Kurzanleitung – Novadesk"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – PDF reparieren")):
+    for page, title in (("home", "Kurzanleitung – Novadesk"), ("reader", "Kurzanleitung – PDF Reader & Editor"), ("create", "Kurzanleitung – Vertragsübersichten"), ("repair", "Kurzanleitung – Dateien reparieren")):
         app.navigate(page, 0.15)
         app.app.showHelp()
         assert app.app.dialogs.history[-1]["title"] == title

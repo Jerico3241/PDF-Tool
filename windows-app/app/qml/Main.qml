@@ -26,7 +26,7 @@ ApplicationWindow {
         objectName: "shell"
         anchors.fill: parent
         focus: true
-        pages.order: ["home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "actions", "settings"]
+        pages.order: ["home", "reader", "create", "layout", "preview", "templates", "rules", "batch", "comparison", "customers", "repair", "actions", "convert", "versions", "settings"]
         pages.components: ({
             "home": homePage,
             "reader": readerPage,
@@ -40,6 +40,8 @@ ApplicationWindow {
             "customers": customersPage,
             "repair": repairPage,
             "actions": actionsPage,
+            "convert": convertPage,
+            "versions": versionsPage,
             "settings": settingsPage
         })
     }
@@ -55,5 +57,7 @@ ApplicationWindow {
     Component { id: customersPage; CustomersPage {} }
     Component { id: repairPage; RepairPage {} }
     Component { id: actionsPage; ActionsPage {} }
+    Component { id: convertPage; ConvertPage {} }
+    Component { id: versionsPage; VersionsPage {} }
     Component { id: settingsPage; SettingsPage { onThemeRequested: (apply) => shell.changeTheme(apply) } }
 }

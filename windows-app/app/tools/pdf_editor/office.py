@@ -212,9 +212,34 @@ def _csv_filter(source: Path) -> list[str]:
     return [f"--infilter=Text - txt - csv (StarCalc):{options}"] if options else []
 
 
-def _libreoffice_export(executable: Path | None, source: Path, target: Path) -> None:
+def convert_file(source: str | os.PathLike, target: str | os.PathLike, convert_to: str, *, infilter: str = "") -> Path:
+    """``source`` mit LibreOffice in ein anderes Format nach ``target`` (neue Datei): ``convert_to`` wie bei
+    ``soffice --convert-to`` (»docx«, »pptx«, »html:HTML (StarWriter)« …), ``infilter`` für den Import (»impress_pdf_import«:
+    eine PDF als Präsentation mit bearbeitbaren Textfeldern). Nur mit LibreOffice – Microsoft Office kann das nicht."""
+    source, target = Path(source), Path(target)
+    if not source.is_file():
+        raise OfficeError("Die Datei gibt es nicht mehr.")
+    if target.exists():
+        raise OfficeError("Es gibt bereits eine Datei mit diesem Namen.")
+    if encrypted(source):
+        raise OfficeError("Die Datei ist mit einem Kennwort geschützt. Bitte zuerst in Novadesk öffnen und ohne Kennwort speichern.")
+    executable = libreoffice()
+    if executable is None:
+        raise OfficeError("Zum Umwandeln fehlt LibreOffice. Bitte Novadesk neu installieren.")
+    if TEST_BACKEND is not None:
+        TEST_BACKEND(convert_to, source, target)
+    else:
+        _libreoffice_export(executable, source.resolve(), target.resolve(), convert_to, infilter)
+    if not target.is_file() or target.stat().st_size == 0:
+        raise OfficeError("LibreOffice hat keine Datei erstellt.")
+    return target
+
+
+def _libreoffice_export(executable: Path | None, source: Path, target: Path, convert_to: str = "pdf", infilter: str = "") -> None:
     if executable is None:
         raise OfficeError(missing_text(kind_of(source) or "word"))
+    extension = convert_to.split(":", 1)[0]
+    filters = [f"--infilter={infilter}"] if infilter else _csv_filter(source)
     profile = profile_dir()
     with _LOCK:
         profile.parent.mkdir(parents=True, exist_ok=True)
@@ -223,7 +248,7 @@ def _libreoffice_export(executable: Path | None, source: Path, target: Path) -> 
             command = [
                 str(executable), "--headless", "--invisible", "--nologo", "--norestore", "--nodefault", "--nolockcheck",
                 "--nofirststartwizard", f"-env:UserInstallation={profile.as_uri()}",
-                *_csv_filter(source), "--convert-to", "pdf", "--outdir", str(work), str(source),
+                *filters, "--convert-to", convert_to, "--outdir", str(work), str(source),
             ]
             environment = {**os.environ, "SAL_USE_VCLPLUGIN": "svp"} if os.name != "nt" else None
             process = subprocess.Popen(command, cwd=str(work), env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=_flags())
@@ -232,9 +257,9 @@ def _libreoffice_export(executable: Path | None, source: Path, target: Path) -> 
             except subprocess.TimeoutExpired:
                 _stop(process)
                 raise OfficeError("LibreOffice hat die Datei nicht rechtzeitig umgewandelt (länger als 5 Minuten).") from None
-            produced = work / f"{source.stem}.pdf"
+            produced = work / f"{source.stem}.{extension}"
             if not produced.is_file():
-                found = sorted(work.glob("*.pdf"))
+                found = sorted(work.glob(f"*.{extension}"))
                 produced = found[0] if len(found) == 1 else produced
             if not produced.is_file() or produced.stat().st_size == 0:
                 detail = (errors or output or b"").decode("utf-8", "replace").strip().splitlines()

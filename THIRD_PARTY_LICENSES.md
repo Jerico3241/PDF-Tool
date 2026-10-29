@@ -57,6 +57,7 @@ Die vollständigen Lizenztexte liegen im installierten Programm neben dem jeweil
 | ReportLab | 4.5.1 | BSD-3-Clause (enthält Schriften: Bitstream Vera, DarkGarden unter GPL mit Font-Ausnahme) | PDF erzeugen, Rettungsmodus | https://www.reportlab.com |
 | charset-normalizer | 3.5.2 | MIT | von ReportLab benötigt | https://github.com/jawah/charset_normalizer |
 | Pillow | 12.3.0 | MIT-CMU (enthält brotli, FreeType, HarfBuzz, lcms2, libavif, libjpeg-turbo, libpng, libwebp, OpenJPEG, libtiff, xz, zlib-ng mit ihren Lizenzen) | Bilder, Symbole, Rettungsmodus | https://python-pillow.github.io |
+| pi-heif | 1.4.0 | BSD-3-Clause (enthält libheif und libde265 unter LGPL-3.0, als eigene DLLs) | HEIC-Fotos lesen (Umwandeln, PDF aus Bildern) | https://github.com/bigcat88/pillow_heif |
 
 Nicht mitgeliefert: lxml (von pikepdf nur für XMP-Metadaten benötigt – PDF Tool schreibt
 Metadaten unverändert und braucht es nicht), qpdf- oder Ghostscript-Programme, Kommandozeilen-

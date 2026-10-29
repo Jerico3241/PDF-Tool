@@ -76,8 +76,8 @@ jobs:
             dateien: objects objects_v31 edit_v31 reader_motion ocr convert
           - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen, digitale Signatur, Tabellen, Texte, Präsentationen
             dateien: protect comfort assistant assistant_v40 reader_v40 signing sheet sheet_data text text_review slides
-          - gruppe: Präsentationen Profi und Office-Vorlagen
-            dateien: slides_pro
+          - gruppe: Präsentationen Profi, Office-Vorlagen, Umwandeln (viele Dateien), Backup-Center
+            dateien: slides_pro umwandeln backup_center
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:
@@ -94,7 +94,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.21.1 xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 PySide6-Addons==6.11.2 fonttools==4.67.0 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.21.1 xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 PySide6-Addons==6.11.2 fonttools==4.67.0 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1 pi-heif==1.4.0
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
@@ -158,7 +158,7 @@ jobs:
         # lxml (von pikepdf mitinstalliert) gehört nicht zur Laufzeit der App – die Tests laufen ohne, wie das Setup
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.21.1 xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 PySide6-Addons==6.11.2 fonttools==4.67.0 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1
+          python -m pip install --disable-pip-version-check pillow pytest pandas openpyxl reportlab xlrd pypdf==6.21.1 xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 PySide6-Addons==6.11.2 fonttools==4.67.0 comtypes==1.4.17 cryptography==50.0.2 asn1crypto==1.5.1 pi-heif==1.4.0
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m pip uninstall --disable-pip-version-check -y lxml
 
@@ -166,7 +166,7 @@ jobs:
         run: python -m pytest windows-app/tests/test_core.py windows-app/tests/test_excel_bold.py windows-app/tests/test_richtext.py windows-app/tests/test_migration.py windows-app/tests/test_customers.py windows-app/tests/test_batch.py windows-app/tests/test_history.py windows-app/tests/test_releases.py windows-app/tests/test_updater.py windows-app/tests/test_mail.py windows-app/tests/test_assistant.py windows-app/tests/test_ended_contracts.py -q -p no:cacheprovider
 
       - name: 1. Tests (Vorlagen 2.0, Regelwerk 2.0 samt PDF-Pipeline, Sicherung und Wiederherstellung, Diagnose und Support-Paket)
-        run: python -m pytest windows-app/tests/test_templates.py windows-app/tests/test_rules.py windows-app/tests/test_rules_pipeline.py windows-app/tests/test_backup.py windows-app/tests/test_diagnostics.py -v -p no:cacheprovider
+        run: python -m pytest windows-app/tests/test_templates.py windows-app/tests/test_rules.py windows-app/tests/test_rules_pipeline.py windows-app/tests/test_backup.py windows-app/tests/test_versions.py windows-app/tests/test_diagnostics.py -v -p no:cacheprovider
 
       - name: 1. Tests (Updater mit lokalem Testserver – Download, SHA-256, Abbruch, Offline, Zeitlimits, Weiterleitungen, Cache, Hilfsprozess)
         timeout-minutes: 10 # normal unter einer Minute; ein hängender Test bricht früh ab
@@ -189,7 +189,7 @@ jobs:
         run: python -m pytest windows-app/tests/test_editor_pdfa.py windows-app/tests/test_editor_imagepdf.py windows-app/tests/test_pdf_actions.py windows-app/tests/test_compare.py windows-app/tests/test_digsig.py windows-app/tests/test_convert.py windows-app/tests/test_i18n.py windows-app/tests/test_text_merge.py windows-app/tests/test_sheet_flashfill.py -q -rs -p no:cacheprovider
 
       - name: 1. Tests (PDF reparieren – Engine, Arbeitsprozess, Schadensfälle, erweiterte Wiederherstellung)
-        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py -q -p no:cacheprovider
+        run: python -m pytest windows-app/tests/test_pdf_repair.py windows-app/tests/test_pdf_recovery.py windows-app/tests/test_pdf_repair_batch.py windows-app/tests/test_file_repair.py -q -rs -p no:cacheprovider
 
       - name: Inno Setup 6 bereitstellen
         shell: pwsh

@@ -17,8 +17,8 @@ CONTRACTS = ToolInfo(
 )
 REPAIR = ToolInfo(
     key="repair",
-    title="PDF reparieren",
-    description="Analysiert beschädigte PDF-Dateien und versucht, lesbare Inhalte wiederherzustellen.",
+    title="Dateien reparieren",
+    description="Analysiert beschädigte PDFs, Office-Dateien und Bilder und stellt lesbare Inhalte wieder her.",
     icon="wrench",
     pages=("repair",),
     shortcut="Strg+3",
@@ -39,7 +39,23 @@ ACTIONS = ToolInfo(
     pages=("actions",),
     shortcut="Strg+6",
 )
-TOOLS: tuple[ToolInfo, ...] = (READER, ACTIONS, CONTRACTS, REPAIR)
+CONVERT = ToolInfo(
+    key="convert",
+    title="Umwandeln",
+    description="Viele Dateien jeder Art umwandeln, zusammenfügen, teilen, drucken oder umbenennen.",
+    icon="arrow_swap",
+    pages=("convert",),
+    shortcut="Strg+7",
+)
+VERSIONS = ToolInfo(
+    key="versions",
+    title="Backup-Center",
+    description="Automatische Sicherungen und frühere Fassungen Ihrer Dokumente wiederherstellen.",
+    icon="history",
+    pages=("versions",),
+    shortcut="Strg+8",
+)
+TOOLS: tuple[ToolInfo, ...] = (READER, CONVERT, ACTIONS, CONTRACTS, REPAIR, VERSIONS)
 
 
 def tool_for_page(page: str) -> ToolInfo | None:

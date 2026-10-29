@@ -521,13 +521,13 @@ def test_output_folder_mode_without_folder_asks_for_one(repair_app, tmp_path: Pa
     notice = h.app.notices.get("repair_info")
     assert notice.shown and "Ausgabeordner" in notice.message and not h.repair.jobs
     h.repair.setOutMode(OUT_ORIGINAL)
-    assert not h.repair.outMissing and h.repair.outLabel == "Neben der Original-PDF"
+    assert not h.repair.outMissing and h.repair.outLabel == "Neben dem Original"
 
 
 def test_non_pdf_is_rejected(repair_app, tmp_path: Path) -> None:
     h = repair_app
-    text = samples.not_pdf(tmp_path / "notiz.txt")
-    assert h.app.dragEnter([text.as_uri()]) is False  # in »PDF reparieren« nur PDF-Dateien
+    text = samples.not_pdf(tmp_path / "notiz.xyz")
+    assert h.app.dragEnter([text.as_uri()]) is False  # nur Dateiarten, die sich reparieren lassen
     h.app.dragLeave()
     h.app.drop([text.as_uri()])
     notice = h.app.notices.get("repair_drop_info")
@@ -606,7 +606,7 @@ def test_drop_several_files_once_each_and_reject_non_pdfs(repair_app, tmp_path: 
     h = repair_app
     a = beschaedigt(tmp_path / "A.pdf")
     b = samples.healthy(tmp_path / "B.pdf")
-    note = samples.not_pdf(tmp_path / "Notiz.txt")
+    note = samples.not_pdf(tmp_path / "Notiz.xyz")
     uris = [a.as_uri(), b.as_uri(), a.as_uri(), note.as_uri()]
     assert h.app.dragEnter(uris) is True  # mindestens eine PDF
     assert h.repair.dropHighlight
@@ -615,7 +615,7 @@ def test_drop_several_files_once_each_and_reject_non_pdfs(repair_app, tmp_path: 
     assert not h.repair.dropHighlight
     assert [item.name for item in h.repair.batch.items] == ["A.pdf", "B.pdf"]  # doppelte Datei nur einmal
     notice = h.app.notices.get("repair_drop_info")
-    assert notice.shown and "Notiz.txt" in notice.message and "Bereits in der Liste: A.pdf" in notice.message
+    assert notice.shown and "Notiz.xyz" in notice.message and "Bereits in der Liste: A.pdf" in notice.message
     # Dieselben Dateien noch einmal ablegen: nichts Neues, nur der Hinweis
     h.app.drop([a.as_uri(), b.as_uri()])
     pump(0.2)
@@ -1075,3 +1075,49 @@ def test_missing_switch_setting_defaults_to_on(repair_app, config_file: Path) ->
     neu = Harness(ui=False)
     h.holder["current"] = neu
     assert neu.repair.appendSuffix and neu.repair.suffix == "_repariert"
+
+
+# --- 5.0 Beta 7: andere Dateiarten -----------------------------------------------------------------------
+
+
+def test_office_image_and_csv_files_are_repaired_next_to_the_original(repair_app, tmp_path: Path) -> None:
+    """Word-Datei ohne Inhaltsverzeichnis, abgeschnittenes Foto und CSV mit gemischter Kodierung: in einer Liste mit
+    einer PDF analysiert und repariert; jede Ausgabe behält ihre Endung, das Original bleibt."""
+    import io
+    import zipfile
+
+    from PIL import Image
+
+    h = repair_app
+    docx = tmp_path / "Angebot.docx"
+    with zipfile.ZipFile(docx, "w", zipfile.ZIP_DEFLATED) as out:
+        out.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+        out.writestr("word/document.xml", "<w:document xmlns:w='urn:w'><w:body>" + "<w:p><w:r><w:t>Zeile</w:t></w:r></w:p>" * 50 + "</w:body></w:document>")
+    data = docx.read_bytes()
+    docx.write_bytes(data[: data.find(b"PK\x01\x02")])
+    buffer = io.BytesIO()
+    Image.effect_noise((400, 300), 60).convert("RGB").save(buffer, "JPEG")
+    photo = tmp_path / "Foto.jpg"
+    photo.write_bytes(buffer.getvalue()[: len(buffer.getvalue()) * 2 // 3])
+    csv = tmp_path / "Kunden.csv"
+    csv.write_bytes("Name;Ort\r\n".encode() + "Müller;Köln\r\n".encode("cp1252"))
+    pdf = beschaedigt(tmp_path / "Vertrag.pdf")
+    before = inhalte([docx, photo, csv, pdf])
+    hinzufuegen(h, [docx, photo, csv, pdf])
+    wait_idle(h)
+    rows = {item.name: zeile(h, item) for item in h.repair.batch.items}
+    assert rows["Angebot.docx"]["suffix"] == ".docx" and not rows["Angebot.docx"]["isPdf"] and rows["Vertrag.pdf"]["isPdf"]
+    assert rows["Angebot.docx"]["outputName"] == "Angebot_repariert.docx" and rows["Foto.jpg"]["outputName"] == "Foto_repariert.jpg"
+    assert any(fact["label"] == "Dateiart" and fact["value"] == "Word-Dokument" for fact in rows["Angebot.docx"]["facts"])
+    assert h.repair.overview.startswith("4 Dateien")
+    assert h.repair.canStart
+    repair(h)
+    assert (tmp_path / "Angebot_repariert.docx").is_file() and (tmp_path / "Foto_repariert.jpg").is_file()
+    assert (tmp_path / "Kunden_repariert.csv").read_bytes()[3:].decode("utf-8") == "Name;Ort\r\nMüller;Köln\r\n"
+    assert (tmp_path / "Vertrag_repariert.pdf").is_file()
+    assert inhalte([docx, photo, csv, pdf]) == before
+    states = {item.name: item.state.value for item in h.repair.batch.items}
+    assert states["Kunden.csv"] == "repaired" and states["Foto.jpg"] == "partially_recovered"
+    with zipfile.ZipFile(tmp_path / "Angebot_repariert.docx") as out:
+        assert out.testzip() is None
+    assert not h.messages()

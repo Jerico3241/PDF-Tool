@@ -1142,7 +1142,9 @@ Item {
                             x: Math.floor((available - width) / 2)
                             width: columns * toolWidth + (columns - 1) * columnSpacing
                             height: implicitHeight
-                            columns: toolsCard.width >= Metrics.homeToolsInRowFrom && Math.floor((available - 3 * columnSpacing) / 4) >= toolMinimum ? 4 : (Math.floor((available - columnSpacing) / 2) >= toolMinimum ? 2 : 1)
+                            // in einer Reihe höchstens vier, gleichmäßig verteilt (sechs Werkzeuge: zwei Reihen zu drei)
+                            readonly property int rowCount: Math.min(4, Math.ceil(App.tools.length / Math.ceil(App.tools.length / 4)))
+                            columns: toolsCard.width >= Metrics.homeToolsInRowFrom && Math.floor((available - (rowCount - 1) * columnSpacing) / rowCount) >= toolMinimum ? rowCount : (Math.floor((available - columnSpacing) / 2) >= toolMinimum ? 2 : 1)
                             columnSpacing: Metrics.s8
                             rowSpacing: Metrics.s4
                             Repeater {

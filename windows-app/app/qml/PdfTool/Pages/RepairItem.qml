@@ -49,6 +49,8 @@ Item {
     required property string resultTitle
     required property string resultText
     required property var resultActions
+    required property string suffix
+    required property bool isPdf
 
     property real columnX: 0
     property real columnWidth: width
@@ -131,7 +133,7 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 12
-                PIcon { name: "document_pdf"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
+                PIcon { name: row.isPdf ? "document_pdf" : "document"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
@@ -268,7 +270,7 @@ Item {
                     enabled: !row.busy && !row.inRun
                     onTextEdited: Repair.setOutputName(row.key, text)
                 }
-                PText { text: I18n.tr(".pdf", I18n.revision); tone: "secondary" }
+                PText { text: I18n.tr(row.suffix, I18n.revision); tone: "secondary" }
                 PIconButton {
                     objectName: "repairOutputReset"
                     visible: row.nameManual || row.nameError !== ""
@@ -322,8 +324,8 @@ Item {
                     objectName: "repairItemStart"
                     visible: !row.single && row.canRepair
                     iconName: "wrench"
-                    text: I18n.tr(row.repairText === "PDF reparieren" ? "Nur diese Datei reparieren" : row.repairText, I18n.revision)
-                    tip: I18n.tr("Nur diese PDF reparieren", I18n.revision)
+                    text: I18n.tr(row.repairText === "PDF reparieren" || row.repairText === "Datei reparieren" ? "Nur diese Datei reparieren" : row.repairText, I18n.revision)
+                    tip: I18n.tr("Nur diese Datei reparieren", I18n.revision)
                     onClicked: Repair.repairItem(row.key)
                 }
                 PButton {
@@ -335,9 +337,9 @@ Item {
                     onClicked: Repair.rescueItem(row.key)
                 }
                 PButton { objectName: "repairItemAnalyze"; visible: row.canAnalyze; iconName: "arrow_clockwise"; text: I18n.tr("Erneut prüfen", I18n.revision); onClicked: Repair.analyzeAgain(row.key) }
-                PButton { objectName: "repairItemOpen"; visible: !row.single && row.hasOutput; iconName: "window_new"; text: I18n.tr("Öffnen", I18n.revision); tip: I18n.tr("Reparierte PDF öffnen", I18n.revision); onClicked: Repair.openItemOutput(row.key) }
+                PButton { objectName: "repairItemOpen"; visible: !row.single && row.hasOutput; iconName: "window_new"; text: I18n.tr("Öffnen", I18n.revision); tip: I18n.tr("Reparierte Datei öffnen", I18n.revision); onClicked: Repair.openItemOutput(row.key) }
                 PButton { visible: !row.single && row.hasOutput; iconName: "folder_open"; text: I18n.tr("Ordner öffnen", I18n.revision); onClicked: Repair.openItemFolder(row.key) }
-                PButton { visible: !row.single && row.hasOutput; iconName: "copy"; text: I18n.tr("Pfad kopieren", I18n.revision); tip: I18n.tr("Pfad der reparierten PDF kopieren", I18n.revision); onClicked: Repair.copyItemOutput(row.key) }
+                PButton { visible: !row.single && row.hasOutput; iconName: "copy"; text: I18n.tr("Pfad kopieren", I18n.revision); tip: I18n.tr("Pfad der reparierten Datei kopieren", I18n.revision); onClicked: Repair.copyItemOutput(row.key) }
                 PButton {
                     objectName: "repairItemDetails"
                     kind: "subtle"
@@ -400,7 +402,7 @@ Item {
                 Layout.topMargin: 4
                 spacing: 8
                 PText { text: I18n.tr(row.path, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
-                PIconButton { iconName: "copy"; tip: I18n.tr("Pfad der PDF kopieren", I18n.revision); onClicked: Repair.copyItemPath(row.key) }
+                PIconButton { iconName: "copy"; tip: I18n.tr("Pfad der Datei kopieren", I18n.revision); onClicked: Repair.copyItemPath(row.key) }
             }
         }
     }

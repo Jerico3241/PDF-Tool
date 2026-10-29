@@ -1,4 +1,5 @@
-"""Werkzeug »PDF reparieren« (in QML: ``Repair``) – für eine oder mehrere PDFs.
+"""Werkzeug »Dateien reparieren« (in QML: ``Repair``) – für eine oder mehrere PDFs, seit 5.0 Beta 7 auch Office-Dateien,
+Bilder und Text/CSV (``tools.file_repair``; Liste, Namen und Arbeitsprozess wie bei PDFs).
 
 Ablauf: PDFs wählen (Dialog mit Mehrfachauswahl) oder hineinziehen → jede Datei wird für sich
 analysiert → Liste mit Zustand, Diagnose und geplantem Ausgabenamen → »PDF reparieren« (eine
@@ -40,9 +41,10 @@ from tools.pdf_repair.batch import (
     result_state,
     strip_pdf,
     suffix_error,
+    supported,
 )
 from tools.pdf_repair.models import STAGES, Condition, PdfAnalysis, PdfRepairResult, RepairMode, RepairStatus
-from tools.pdf_repair.presentation import OUT_FOLDER, OUT_ORIGINAL, RepairLog, is_pdf, size_text
+from tools.pdf_repair.presentation import OUT_FOLDER, OUT_ORIGINAL, RepairLog, size_text
 from tools.registry import REPAIR
 
 from . import files
@@ -60,7 +62,7 @@ ROLES = (
     "key", "name", "path", "sizeText", "state", "stateText", "tone", "message", "busy", "phaseText", "progress",
     "outputBase", "outputName", "outputFolder", "numbered", "nameManual", "nameError", "needsPassword", "canRepair",
     "repairText", "signatures", "rescue", "hasOutput", "facts", "details", "resultFacts", "warnings", "inRun", "canAnalyze",
-    "diagSeverity", "diagTitle", "diagText", "resultSeverity", "resultTitle", "resultText", "resultActions",
+    "diagSeverity", "diagTitle", "diagText", "resultSeverity", "resultTitle", "resultText", "resultActions", "suffix", "isPdf",
 )
 
 
@@ -85,7 +87,7 @@ class RepairController(Observable):
     canRetryChanged, canRetry = prop(bool, "canRetry", False)
     # Ausgabe
     outModeChanged, outMode = prop(str, "outMode", OUT_ORIGINAL)
-    outLabelChanged, outLabel = prop(str, "outLabel", "Neben der Original-PDF")
+    outLabelChanged, outLabel = prop(str, "outLabel", "Neben dem Original")
     outPathChanged, outPath = prop(str, "outPath", "")
     outMissingChanged, outMissing = prop(bool, "outMissing", False)
     appendSuffixChanged, appendSuffix = prop(bool, "appendSuffix", True)
@@ -172,27 +174,27 @@ class RepairController(Observable):
     @Slot()
     def pick(self) -> None:
         start = self.source_dir if self.source_dir and Path(self.source_dir).is_dir() else str(desktop_dir())
-        paths = files.open_files("PDFs zum Reparieren wählen", start, files.PDF_FILTER)
+        paths = files.open_files("Dateien zum Reparieren wählen", start, files.REPAIR_FILTER)
         if paths:
             self.add(paths)
 
     @Slot(str)
     def use(self, path: str) -> None:
-        """Eine PDF hinzufügen (z. B. aus »Öffnen mit«)."""
+        """Eine Datei hinzufügen (z. B. aus »Öffnen mit« oder dem Reader)."""
         self.add([path])
 
     def add(self, paths: list[str]) -> list[BatchItem]:
         result = self.batch.add(paths)
         notes = []
         if result.rejected:
-            notes.append(f"Keine PDF: {', '.join(result.rejected[:3])}" + (" …" if len(result.rejected) > 3 else "") + ".")
+            notes.append(f"Nicht reparierbar: {', '.join(result.rejected[:3])}" + (" …" if len(result.rejected) > 3 else "") + ".")
         if result.duplicates:
             notes.append(f"Bereits in der Liste: {', '.join(result.duplicates[:3])}" + (" …" if len(result.duplicates) > 3 else "") + ".")
         if result.missing:
             notes.append(f"Nicht vorhanden: {', '.join(result.missing[:3])}" + (" …" if len(result.missing) > 3 else "") + ".")
         if notes:
             severity = "warning" if result.added else ("info" if result.duplicates and not result.rejected and not result.missing else "warning")
-            self.app.notify("repair_drop_info", severity, " ".join(notes), title="Nicht alle Dateien übernommen" if result.added else "Keine neue PDF")
+            self.app.notify("repair_drop_info", severity, " ".join(notes), title="Nicht alle Dateien übernommen" if result.added else "Keine neue Datei")
         else:
             self.app.hide_notice("repair_drop_info")
         if result.added:
@@ -205,7 +207,7 @@ class RepairController(Observable):
         return result.added
 
     def accepts(self, dropped: list[str]) -> bool:
-        return any(is_pdf(f) for f in dropped)
+        return any(supported(f) for f in dropped)
 
     def drag_enter(self, accepted: bool) -> None:
         if accepted:
@@ -216,8 +218,8 @@ class RepairController(Observable):
 
     def drop(self, dropped: list[str]) -> None:
         self.drag_leave()
-        if not any(is_pdf(f) for f in dropped):
-            self.app.notify("repair_drop_info", "warning", "Bitte PDF-Dateien in das Fenster ziehen (Dateiendung .pdf).", title="Keine PDF")
+        if not any(supported(f) for f in dropped):
+            self.app.notify("repair_drop_info", "warning", "Bitte PDFs, Office-Dateien, Bilder oder Text/CSV in das Fenster ziehen.", title="Keine reparierbare Datei")
             return
         self.add(dropped)
 
@@ -228,7 +230,7 @@ class RepairController(Observable):
         if item is None:
             return
         if item.state is ItemState.REPAIRING:
-            self.app.notify("repair_info", "warning", "Diese PDF wird gerade repariert. Bitte abbrechen oder warten.")
+            self.app.notify("repair_info", "warning", "Diese Datei wird gerade repariert. Bitte abbrechen oder warten.")
             return
         self._stop_job(key)
         if key in self.queue:
@@ -256,11 +258,11 @@ class RepairController(Observable):
 
     @Slot()
     def reset(self) -> None:
-        """»Weitere PDFs reparieren«: Liste leeren, Ausgabeort und Einstellungen bleiben."""
+        """»Weitere Dateien reparieren«: Liste leeren, Ausgabeort und Einstellungen bleiben."""
         if self.busy:
             return
         self.removeAll()
-        self.app.set_status("Bereit für die nächsten PDFs.", "neutral")
+        self.app.set_status("Bereit für die nächsten Dateien.", "neutral")
         self.focusRequested.emit("pick")
 
     # Passwort ---------------------------------------------------------------------------------------
@@ -311,11 +313,11 @@ class RepairController(Observable):
 
     @Slot(str, str)
     def setOutputName(self, key: str, text: str) -> None:  # noqa: N802
-        """Eigener Ausgabename (ohne ».pdf«; die Endung wird ergänzt)."""
+        """Eigener Ausgabename (ohne Endung; ».pdf«, ».docx« … wird ergänzt)."""
         item = self.batch.get(key)
         if item is None or item.output is not None or item.reserved:
             return
-        base = strip_pdf(text)
+        base = strip_pdf(text, item.suffix)
         if name_error(base):
             item.name_input = text  # angezeigt, aber nicht verwendet
         else:
@@ -385,7 +387,7 @@ class RepairController(Observable):
             self.app.notify("repair_info", "warning", "Es läuft bereits eine Reparatur. Bitte warten oder abbrechen.")
             return
         if not items:
-            self.app.notify("repair_info", "info", "Keine PDF zu reparieren: Alle Dateien sind repariert, ohne Fehler, verschlüsselt oder nicht wiederherstellbar.")
+            self.app.notify("repair_info", "info", "Keine Datei zu reparieren: Alle Dateien sind repariert, ohne Fehler, verschlüsselt oder nicht wiederherstellbar.")
             return
         for item in items:
             if item.state is ItemState.ENCRYPTED:
@@ -721,7 +723,7 @@ class RepairController(Observable):
         elif alone is not None and alone.state is ItemState.ENCRYPTED:
             self.app.set_status("Passwort fehlt oder ist falsch.", "error")
         elif alone is not None:
-            self.app.set_status("PDF konnte nicht repariert werden.", "error")
+            self.app.set_status(("PDF" if alone.suffix == ".pdf" else "Datei") + " konnte nicht repariert werden.", "error")
         else:
             self.app.set_status(f"{title}: {message}", presentation.SEVERITY_STATUS.get(severity, "info"))
         self.revealRequested.emit("result")
@@ -796,7 +798,7 @@ class RepairController(Observable):
     @Slot()
     def pickOutDir(self) -> None:  # noqa: N802
         start = self.out_dir if self.out_dir and Path(self.out_dir).is_dir() else (self.source_dir or str(desktop_dir()))
-        path = files.pick_folder("Ordner für reparierte PDFs", start)
+        path = files.pick_folder("Ordner für reparierte Dateien", start)
         if path:
             self.out_dir = path
             if self.outMode != OUT_FOLDER:
@@ -846,14 +848,15 @@ class RepairController(Observable):
         elif folder_mode:
             self.outLabel, self.outPath = Path(self.out_dir).name or self.out_dir, self.out_dir
         else:
-            self.outLabel, self.outPath = "Neben der Original-PDF", ""
+            self.outLabel, self.outPath = "Neben dem Original", ""
         stem = self.batch.items[0].path.stem if self.batch.items else "Rechnung"
-        self.namingExample = f"{stem}.pdf → {stem}{self.suffix}.pdf" if self.appendSuffix else f"{stem}.pdf → {stem}.pdf"
+        ext = self.batch.items[0].suffix if self.batch.items else ".pdf"
+        self.namingExample = f"{stem}{ext} → {stem}{self.suffix}{ext}" if self.appendSuffix else f"{stem}{ext} → {stem}{ext}"
         current = self.current
         if current is not None and current.planned is not None:
             self.outName = f"Ausgabe: {(current.output or current.planned).name}"
         else:
-            example = f"<Name>{self.suffix}.pdf" if self.appendSuffix else "<Name>.pdf"
+            example = f"<Name>{self.suffix}.<Endung>" if self.appendSuffix else "<Name>.<Endung>"
             self.outName = f"Ausgabe: {example} – die Originaldatei wird nie überschrieben."
         # Start
         if self.single:
@@ -894,9 +897,9 @@ class RepairController(Observable):
         facts = presentation.analysis_facts(analysis) if analysis is not None else presentation.checking_facts(item.size)
         details = presentation.analysis_details(analysis) if analysis is not None else []
         result = item.result
-        base = item.name_input if item.name_input is not None else (strip_pdf(item.output.name) if item.output else item.base(self.appendSuffix, self.suffix))
+        base = item.name_input if item.name_input is not None else (strip_pdf(item.output.name, item.suffix) if item.output else item.base(self.appendSuffix, self.suffix))
         planned = item.output or item.planned
-        expected = f"{item.base(self.appendSuffix, self.suffix)}.pdf"
+        expected = f"{item.base(self.appendSuffix, self.suffix)}{item.suffix}"
         phase = presentation.PHASE_TEXT.get(item.phase, "") if item.phase else ""
         if item.busy and item.stage:
             phase = f"{phase} · {STAGES.get(item.stage, '')}".strip(" ·")
@@ -912,6 +915,8 @@ class RepairController(Observable):
                 message = outcome[2]
         return {
             "key": item.key,
+            "suffix": item.suffix,
+            "isPdf": item.suffix == ".pdf",
             "name": item.name,
             "path": str(item.path),
             "sizeText": size_text(item.size),
@@ -995,7 +1000,7 @@ class RepairTool:
         pass
 
     def show_help(self, page: str) -> None:
-        self.app.show_steps("Kurzanleitung – PDF reparieren", presentation.HELP_STEPS, presentation.HELP_NOTES)
+        self.app.show_steps("Kurzanleitung – Dateien reparieren", presentation.HELP_STEPS, presentation.HELP_NOTES)
 
     def hint(self, page: str) -> str:
         return presentation.HINT
@@ -1032,7 +1037,7 @@ class RepairTool:
         return True
 
     def running_work(self) -> str:
-        return "PDF-Reparatur" if self.controller.busy or self.controller.running else ""
+        return "Dateireparatur" if self.controller.busy or self.controller.running else ""
 
     def close(self) -> None:
         self.controller.close()

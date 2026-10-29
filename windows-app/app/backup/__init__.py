@@ -16,4 +16,7 @@ Regelwerke. Nie: Excel- oder PDF-Dateien, Logos, Protokolle oder andere Sicherun
   Bereich, mit Rückabwicklung bei jedem Fehler und nach einem Abbruch.
 * ``policy``: automatische Sicherungen (höchstens einmal am Tag, nur bei Änderungen),
   Aufbewahrung (manuelle Sicherungen werden nie gelöscht) und Status.
+* ``versions`` (seit 5.0 Beta 7, Backup-Center): frühere Fassungen der Dokumente selbst – vor jedem Überschreiben
+  und automatisch in festen Abständen, solange ungespeicherte Änderungen offen sind. Getrennt von den Sicherungen
+  oben: Dokumente kommen nie in eine ``.pdtbackup``.
 """

@@ -9,6 +9,7 @@ berücksichtigt); umgerechnet wird hier mit der Seitengeometrie.
 from __future__ import annotations
 
 import math
+import os
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -1044,7 +1045,11 @@ class Session:
         same = self.document.path is not None and save._same(self.document.path, path)  # noqa: SLF001
         if same and not self.document.dirty and not force and path.is_file():
             return {"path": str(path), "size": 0, "backup": "", "name": self.document.name, "checked": 0, "unchanged": True}
-        result = save.save(self.document, path, backup_dir=recovery.backups_dir(), force=force)
+        from backup import versions
+
+        keeper = versions.store()
+        keep = keeper.remember if keeper.settings.enabled else None  # Backup-Center: der bisherige Stand als Fassung
+        result = save.save(self.document, path, backup_dir=recovery.backups_dir(), force=force, keep=keep)
         if self.recovery is not None:
             self.recovery.discard()
             self.recovery = None
@@ -1063,6 +1068,19 @@ class Session:
         if self.recovered_from is not None:
             recovery.discard_session(self.recovered_from)  # durch die neue Sitzung ersetzt
             self.recovered_from = None
+        return True
+
+    def write_version(self, target: str) -> bool:
+        """Backup-Center: den ungespeicherten Stand als Fassung nach ``target`` schreiben (das Dokument bleibt ungespeichert)."""
+        if self.closed:
+            return False
+        path = Path(target)
+        temp = path.with_name(path.name + ".tmp")
+        try:
+            temp.write_bytes(self.document.serialize(keep_encryption=True))
+            os.replace(temp, path)
+        finally:
+            temp.unlink(missing_ok=True)
         return True
 
     def discard_recovery(self) -> None:

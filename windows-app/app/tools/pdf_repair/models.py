@@ -53,6 +53,11 @@ class Method(str, Enum):
     RAW_REBUILD = "raw_rebuild"  # Stufe 5: Objekte aus den Rohdaten, neue xref, neuer Trailer
     PAGE_TREE_REBUILD = "page_tree_rebuild"  # Stufe 5 mit neu aufgebautem Seitenbaum
     RASTER = "raster"  # Rettungsmodus: Seiten als Bilder
+    # Andere Dateiarten (seit 5.0 Beta 7, ``tools.file_repair``)
+    ZIP_REBUILD = "zip_rebuild"  # Office-Datei: Teile aus dem ZIP-Archiv gerettet und neu verpackt
+    OFFICE_RESAVE = "office_resave"  # von LibreOffice geöffnet und neu gespeichert
+    IMAGE_RESAVE = "image_resave"  # Bild: lesbarer Teil neu gespeichert
+    TEXT_CLEANUP = "text_cleanup"  # Text/CSV: Zeichenkodierung, Steuerzeichen und Zeilenenden bereinigt
 
 
 @dataclass
@@ -176,5 +181,10 @@ STAGES = {
     "raster": "Seiten werden als Bilder gerettet …",
     "streams_rescue": "Beschädigte Datenströme werden gerettet …",
     "validate": "Reparierte Datei wird geprüft …",
+    "zip_scan": "Teile der Datei werden gesucht …",
+    "zip_rebuild": "Datei wird neu verpackt …",
+    "office_resave": "LibreOffice speichert die Datei neu …",
+    "image_resave": "Lesbarer Teil des Bildes wird gespeichert …",
+    "text_cleanup": "Zeichen und Zeilenenden werden bereinigt …",
     "finish": "Ausgabe wird gespeichert …",
 }

@@ -291,7 +291,7 @@ class DocumentController(Observable):
             notes.append(state["readOnly"])
             kind = "warning"
         if state.get("repaired"):
-            notes.append("Beim Öffnen wurden kleine Strukturfehler ausgeglichen. Beim Speichern entsteht eine bereinigte Datei; bei Problemen hilft »PDF reparieren«.")
+            notes.append("Beim Öffnen wurden kleine Strukturfehler ausgeglichen. Beim Speichern entsteht eine bereinigte Datei; bei Problemen hilft »Dateien reparieren«.")
         if state.get("xfa"):
             notes.append("Das PDF enthält ein XFA-Formular. Novadesk zeigt und bearbeitet nur den AcroForm-Teil.")
         if state.get("javascript"):
@@ -2108,7 +2108,8 @@ class DocumentController(Observable):
 
     @Slot(str)
     def convertDocument(self, fmt: str) -> None:  # noqa: N802
-        """In Word (.docx), Excel (.xlsx) oder Text (.txt) umwandeln: neue Datei neben dem PDF, danach öffnen oder zeigen."""
+        """In Word (.docx), Excel (.xlsx), PowerPoint (.pptx), eine Webseite (.html) oder Text (.txt) umwandeln: neue Datei
+        neben dem PDF, danach öffnen oder zeigen."""
         from tools.pdf_editor import convert
 
         if fmt not in convert.FORMATS:
@@ -2116,7 +2117,7 @@ class DocumentController(Observable):
         if not (self.permissions or {}).get("copy", True):
             self.app.notify("reader", "warning", "Die Berechtigungen dieses PDFs erlauben keinen Export von Inhalten.", title="Nicht möglich")
             return
-        label = {"docx": "Word", "xlsx": "Excel", "txt": "Text"}[fmt]
+        label = {"docx": "Word", "xlsx": "Excel", "txt": "Text", "pptx": "PowerPoint", "html": "Webseite"}[fmt]
         target = self.reader.pick_save_file(self._stem() + convert.FORMATS[fmt], f"Als {label} speichern")
         if not target:
             return
@@ -3089,6 +3090,20 @@ class DocumentController(Observable):
             self.app.notify("reader", "error", message, title="Speichern nicht möglich", actions=[("Speichern unter …", self.saveDocumentAs)])
             return
         self.report(exc, self._failure_details or "".join(traceback.format_exception(exc)))  # unerwartet: Traceback in fehler.log
+
+    def version_marker(self) -> int:
+        return self.revision
+
+    def version_suffix(self) -> str:
+        return ".pdf"
+
+    def write_version(self, target: str, done: Callable[[bool], None]) -> None:
+        """Backup-Center: den ungespeicherten Stand als Fassung schreiben – im Hintergrund, ohne Hinweise."""
+        def failed(exc: BaseException) -> None:
+            _log("save").info("Automatische Fassung nicht geschrieben: %s", type(exc).__name__)
+            done(False)
+
+        self.run(lambda session: session.write_version(target), lambda ok: done(bool(ok)), refresh=False, priority=BACKGROUND, failed=failed, key="version")
 
     @Slot()
     def saveDocument(self) -> None:  # noqa: N802

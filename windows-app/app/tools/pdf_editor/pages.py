@@ -370,7 +370,7 @@ def open_source(path: str | os.PathLike, password: str | None = None) -> pikepdf
     except pikepdf.PasswordError as exc:
         raise PasswordRequired(wrong=bool(password)) from exc
     except (pikepdf.PdfError, ValueError, RuntimeError) as exc:
-        raise EditorError(f"»{Path(path).name}« lässt sich nicht öffnen – sie ist vermutlich beschädigt. »PDF reparieren« kann helfen.") from exc
+        raise EditorError(f"»{Path(path).name}« lässt sich nicht öffnen – sie ist vermutlich beschädigt. »Dateien reparieren« kann helfen.") from exc
     if source.is_encrypted and not getattr(source, "owner_password_matched", False) and not source.allow.extract:
         source.close()
         raise ReadOnlyDocument(f"Die Berechtigungen von »{Path(path).name}« erlauben nicht, Seiten zu übernehmen.")

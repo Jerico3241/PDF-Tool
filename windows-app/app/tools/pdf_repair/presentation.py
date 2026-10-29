@@ -1,4 +1,7 @@
-"""Texte und Angaben des Werkzeugs »PDF reparieren« – unabhängig von der Oberfläche.
+"""Texte und Angaben des Werkzeugs »Dateien reparieren« – unabhängig von der Oberfläche.
+
+Für PDFs bleiben die Texte wie bis 5.0 Beta 6 (»PDF reparieren« …); für andere Dateiarten (``tools.file_repair``)
+gelten allgemeine Texte (»Datei reparieren« …).
 
 Aus Analyse und Ergebnis entstehen hier die Zeilen, Hinweise und Beschriftungen, die die
 Oberfläche zeigt. Die Entscheidungen fallen anhand der Statusklassen (``Condition``,
@@ -14,7 +17,7 @@ from pathlib import Path
 from .batch import ItemState, Phase, RepairBatch
 from .models import Condition, Method, PdfAnalysis, PdfRepairResult, RepairStatus
 
-HINT = "Strg+O  PDFs auswählen   ·   Strg+Enter  Reparieren"
+HINT = "Strg+O  Dateien auswählen   ·   Strg+Enter  Reparieren"
 PRIVACY = "Die Verarbeitung erfolgt vollständig lokal auf diesem PC. Keine Datei wird hochgeladen."
 LOG_FILE = "pdf-repair.log"
 LOG_LIMIT = 1_000_000  # Byte, danach wird das Protokoll einmal rotiert
@@ -22,15 +25,16 @@ OUT_ORIGINAL = "original"
 OUT_FOLDER = "ordner"
 OUT_NAME_EMPTY = "Ausgabe: <Name>_repariert.pdf – die Originaldatei wird nie überschrieben."
 HELP_STEPS = (
-    "Eine oder mehrere PDFs wählen (Strg+O) oder in das Fenster ziehen – jede wird sofort für sich analysiert.",
+    "Eine oder mehrere Dateien wählen (Strg+O) oder in das Fenster ziehen – PDFs, Word-, Excel- und PowerPoint-Dateien, OpenDocument, Bilder, Text und CSV. Jede wird sofort für sich analysiert.",
     "Die Analyse je Datei lesen: Keine Fehler, reparierbare Probleme, schwer beschädigt, erweiterte Wiederherstellung möglich oder verschlüsselt.",
     "Verschlüsselte PDFs einzeln mit ihrem Passwort entsperren.",
     "Ausgabe festlegen: neben dem Original oder in einem Ordner, »„repariert“ an Dateinamen anhängen« ein oder aus; Namen einzelner Dateien lassen sich ändern.",
-    "»PDF reparieren« bzw. »Alle reparieren« (Strg+Enter) – die Dateien werden nacheinander repariert; »Abbrechen« hält den Vorgang an.",
+    "»PDF reparieren« (bzw. »Datei reparieren«) oder »Alle reparieren« (Strg+Enter) – die Dateien werden nacheinander repariert; »Abbrechen« hält den Vorgang an.",
     "Das Ergebnis je Datei öffnen, den Ausgabeordner anzeigen oder Fehlgeschlagene erneut versuchen.",
 )
 HELP_NOTES = (
-    "Die Originaldateien werden nie verändert, umbenannt oder überschrieben. Standardname: »<Name>_repariert.pdf«; gibt es den Namen schon, wird nummeriert: »<Name>_repariert (1).pdf« …",
+    "Die Originaldateien werden nie verändert, umbenannt oder überschrieben. Standardname: »<Name>_repariert.pdf« (bzw. .docx, .jpg …); gibt es den Namen schon, wird nummeriert: »<Name>_repariert (1).pdf« …",
+    "Office-Dateien: Novadesk liest die Teile der Datei auch ohne Inhaltsverzeichnis, übernimmt abgeschnittene Teile bis zur Bruchstelle und lässt LibreOffice neu speichern. Bilder: der lesbare Teil wird gerettet. Text und CSV: Umlaute, Steuerzeichen und Zeilenenden werden bereinigt.",
     "Nicht jede Datei lässt sich vollständig wiederherstellen; teilweise gerettete Dateien werden deutlich gekennzeichnet.",
     "Öffnet keine PDF-Engine die Datei, sucht Novadesk die noch vorhandenen PDF-Objekte direkt in der Datei und baut Querverweise, Trailer und Seitenbaum neu auf (»PDF-Struktur rekonstruieren«).",
     "Fremde Daten vor oder nach der PDF (z. B. ein E-Mail-Kopf) werden entfernt und im Ergebnis genannt. Von beschädigten Datenströmen wird der lesbare Teil übernommen; das Ergebnis heißt dann »teilweise wiederhergestellt«.",
@@ -49,6 +53,23 @@ CONDITION_TEXT = {
     ),
     Condition.UNREADABLE: ("error", "Keine Reparatur möglich", "Die Datei lässt sich mit keiner der eingebauten Engines lesen."),
     Condition.ENCRYPTED: ("info", "Die PDF ist verschlüsselt", "Zum Öffnen wird ein Passwort benötigt."),
+}
+FILE_CONDITION_TEXT = {
+    Condition.HEALTHY: ("success", "Keine Fehler gefunden", "Die Datei scheint in Ordnung zu sein. Eine Reparatur ist nicht nötig."),
+    Condition.REPAIRABLE: ("warning", "Reparierbare Probleme erkannt", "Novadesk hat Fehler gefunden, die sich voraussichtlich reparieren lassen."),
+    Condition.DAMAGED: ("warning", "Schwer beschädigt", "Teile der Datei können nicht gelesen werden. Novadesk rettet so viel wie möglich."),
+    Condition.RAW_RECOVERABLE: ("warning", "Erweiterte Wiederherstellung möglich", "Novadesk versucht, die noch vorhandenen Inhalte wiederherzustellen."),
+    Condition.UNREADABLE: ("error", "Keine Reparatur möglich", "In der Datei ist nichts Lesbares mehr gefunden worden."),
+    Condition.ENCRYPTED: ("info", "Die Datei ist verschlüsselt", "Zum Öffnen wird ein Passwort benötigt."),
+}
+KIND_NAMES = {
+    ".docx": "Word-Dokument", ".docm": "Word-Dokument", ".dotx": "Word-Vorlage", ".doc": "Word-Dokument (alt)", ".rtf": "RTF-Text",
+    ".xlsx": "Excel-Tabelle", ".xlsm": "Excel-Tabelle", ".xltx": "Excel-Vorlage", ".xls": "Excel-Tabelle (alt)",
+    ".pptx": "PowerPoint-Präsentation", ".pptm": "PowerPoint-Präsentation", ".potx": "PowerPoint-Vorlage", ".ppt": "PowerPoint-Präsentation (alt)",
+    ".odt": "OpenDocument-Text", ".ods": "OpenDocument-Tabelle", ".odp": "OpenDocument-Präsentation",
+    ".ott": "OpenDocument-Vorlage", ".ots": "OpenDocument-Vorlage", ".otp": "OpenDocument-Vorlage",
+    ".jpg": "JPEG-Bild", ".jpeg": "JPEG-Bild", ".png": "PNG-Bild", ".gif": "GIF-Bild", ".bmp": "BMP-Bild", ".tif": "TIFF-Bild", ".tiff": "TIFF-Bild",
+    ".webp": "WebP-Bild", ".txt": "Text", ".csv": "CSV-Tabelle",
 }
 STATUS_TONE = {"success": "success", "warning": "caution", "error": "critical", "info": "", "neutral": ""}
 SEVERITY_STATUS = {"success": "success", "warning": "warning", "error": "error"}
@@ -126,7 +147,7 @@ class RepairLog:
 # Analyse --------------------------------------------------------------------------------------
 def condition_text(analysis: PdfAnalysis) -> tuple[str, str, str]:
     """(Schweregrad, Titel, Meldung) für den Zustand einer Analyse."""
-    severity, title, message = CONDITION_TEXT[analysis.condition]
+    severity, title, message = (CONDITION_TEXT if is_pdf(analysis.path) else FILE_CONDITION_TEXT)[analysis.condition]
     if analysis.condition is Condition.ENCRYPTED and analysis.password_rejected:
         severity, message = "error", "Das Passwort ist falsch. Bitte erneut eingeben."
     elif analysis.condition is Condition.UNREADABLE and analysis.error:
@@ -152,7 +173,10 @@ def analysis_facts(analysis: PdfAnalysis) -> list[dict]:
         facts.append(fact("Seiten", text))
     if analysis.pdf_version:
         facts.append(fact("PDF-Version", analysis.pdf_version))
-    facts.append(fact("Verschlüsselt", "ja" if analysis.encrypted else "nein"))
+    if is_pdf(analysis.path):
+        facts.append(fact("Verschlüsselt", "ja" if analysis.encrypted else "nein"))
+    else:
+        facts.insert(1, fact("Dateiart", KIND_NAMES.get(Path(analysis.path).suffix.lower(), Path(analysis.path).suffix.lstrip(".").upper())))
     if analysis.signatures:
         facts.append(fact("Digitale Signaturen", f"{analysis.signatures} – eine Reparatur kann sie ungültig machen", "caution"))
     facts.append(fact("Status", title, STATUS_TONE.get(severity, "")))
@@ -188,6 +212,8 @@ def repair_label(analysis: PdfAnalysis | None) -> str:
         return "Trotzdem neu aufbauen"
     if analysis is not None and analysis.condition is Condition.RAW_RECOVERABLE:
         return "PDF-Struktur rekonstruieren"
+    if analysis is not None and not is_pdf(analysis.path):
+        return "Datei reparieren"
     return "PDF reparieren"
 
 
@@ -204,6 +230,8 @@ def analysis_log(analysis: PdfAnalysis) -> list[str]:
 def result_summary(result: PdfRepairResult, analysis: PdfAnalysis | None, output: Path | None) -> tuple[str, str, str]:
     """(Schweregrad, Titel, Meldung) für das Ergebnis einer Reparatur."""
     status = result.status
+    if not is_pdf(result.input_path):
+        return _file_summary(result, analysis, output)
     if status is RepairStatus.REPAIRED and output is not None:
         if analysis is not None and analysis.condition is Condition.HEALTHY:
             return "success", "PDF wurde neu aufgebaut.", "Die PDF wurde neu aufgebaut, geprüft und gespeichert."
@@ -216,6 +244,17 @@ def result_summary(result: PdfRepairResult, analysis: PdfAnalysis | None, output
     if status is RepairStatus.ENCRYPTED:
         return "error", "PDF konnte nicht repariert werden.", result.error or "Das Passwort fehlt oder ist falsch."
     return "error", "PDF konnte nicht repariert werden.", result.error or "Es konnte keine lesbare PDF erzeugt werden."
+
+
+def _file_summary(result: PdfRepairResult, analysis: PdfAnalysis | None, output: Path | None) -> tuple[str, str, str]:
+    if result.status is RepairStatus.REPAIRED and output is not None:
+        if analysis is not None and analysis.condition is Condition.HEALTHY:
+            return "success", "Datei wurde neu aufgebaut.", "Die Datei wurde neu geschrieben, geprüft und gespeichert."
+        return "success", "Datei wurde repariert.", "Die reparierte Datei wurde geprüft und gespeichert."
+    if result.status is RepairStatus.PARTIALLY_RECOVERED and output is not None:
+        first = result.warnings[0] if result.warnings else "Nicht alle Inhalte konnten wiederhergestellt werden."
+        return "warning", "Datei teilweise wiederhergestellt", first
+    return "error", "Datei konnte nicht repariert werden.", result.error or "Es konnte keine lesbare Datei erzeugt werden."
 
 
 def result_facts(result: PdfRepairResult, output: Path | None) -> list[dict]:
@@ -266,9 +305,9 @@ def result_log(result: PdfRepairResult) -> list[str]:
 # Mehrere PDFs ------------------------------------------------------------------------------------
 # Zustand einer Datei der Liste → (Beschriftung, Ton); Ton: success, caution, critical, muted oder leer
 
-EMPTY_TITLE = "PDF-Dateien hier ablegen"
-EMPTY_TEXT = "oder PDFs auswählen – eine oder mehrere. Jede Datei wird einzeln geprüft; die Originaldateien werden nie verändert."
-NAMING_HINT = "Eine vorhandene Datei – auch das Original – wird nie überschrieben. Gibt es den Namen schon, wird nummeriert: »Name (1).pdf«."
+EMPTY_TITLE = "Dateien hier ablegen"
+EMPTY_TEXT = "oder Dateien auswählen – PDFs, Office-Dateien, Bilder, Text und CSV, eine oder mehrere. Jede Datei wird einzeln geprüft; die Originaldateien werden nie verändert."
+NAMING_HINT = "Eine vorhandene Datei – auch das Original – wird nie überschrieben. Gibt es den Namen schon, wird nummeriert: »Name (1)«."
 PHASE_TEXT = {Phase.ANALYSIS: "Analyse", Phase.REPAIR: "Reparatur", Phase.VALIDATION: "Validierung", Phase.DONE: "Fertig"}
 STATE_TEXT = {
     ItemState.PENDING: ("Wartet auf Prüfung", "muted"),
@@ -326,7 +365,10 @@ def batch_overview(liste: RepairBatch) -> tuple[str, str]:
         ("abgebrochen", lambda i: i.state is ItemState.CANCELLED),
         ("übersprungen", lambda i: i.state is ItemState.SKIPPED),
     ]
-    parts = [f"{total} PDF" + ("s" if total != 1 else "")]
+    if all(is_pdf(item.path) for item in liste.items):
+        parts = [f"{total} PDF" + ("s" if total != 1 else "")]
+    else:
+        parts = [f"{total} Datei" + ("en" if total != 1 else "")]
     for label, test in groups:
         number = sum(1 for item in liste.items if test(item))
         if number:
@@ -361,5 +403,5 @@ def run_summary(states: list[ItemState], not_started: int = 0) -> tuple[str, str
     if counts.get(ItemState.PARTIALLY_RECOVERED):
         return "warning", "Reparatur abgeschlossen", lines
     if not counts.get(ItemState.REPAIRED):
-        return "info", "Keine PDF repariert", lines  # z. B. alle übersprungen
+        return "info", "Keine Datei repariert", lines  # z. B. alle übersprungen
     return "success", "Reparatur abgeschlossen", lines
