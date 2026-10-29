@@ -38,8 +38,9 @@ FEATURE_NO_TILED_ANNOTATIONS = 1 << 3  # Kommentare zeigt Novadesk selbst (Seite
 CALLBACK_DOCUMENT_PASSWORD = 20
 SETTEXTSELECTION_RESET = 2
 EXT_TEXTINPUT, EXT_TEXTINPUT_END = 0, 2
-# Hilfsmakros (Bibliothek »Novadesk«, Modul »Text«; siehe tools/text/macros.py): Werte getrennt durch das Zeichen 30
-MACRO_LIBRARY = "Novadesk.Text"
+# Hilfsmakros (Bibliothek »Novadesk«, Module »Text« und »Folien«; siehe tools/text/macros.py): Werte getrennt durch das Zeichen 30
+MACRO_LIBRARY = "Novadesk"
+MACRO_MODULES = ("Text", "Folien")
 MACRO_SEPARATOR = "\x1e"
 # Ereignisse, die Novadesk braucht (die übrigen bleiben im Kern)
 EVENTS = {
@@ -233,6 +234,8 @@ class Document:
         self.callback = None
         self.notes_view = None  # zweite Ansicht im Notizen-Modus (Präsentationen: Notizen unter der Folie)
         self.notes_callback = None
+        self.thumb_view = None  # dritte Ansicht nur für Folienbilder (siehe cmd_notes)
+        self.thumb_callback = None
 
 
 class Kernel:
@@ -396,6 +399,15 @@ class Kernel:
             doc.cls.initializeForRendering(doc.pointer, b"{}")
             doc.cls.setPartMode(doc.pointer, 1)
             doc.notes_view = view
+            # Bilder anderer Folien (paintPartTile) malt LibreOffice mit der zuletzt angelegten Ansicht, die nicht
+            # gerade Text bearbeitet – ohne diese dritte Ansicht wäre das die Notizenansicht: Folienleiste und
+            # Vorführen zeigten dann Notizenseiten
+            thumbs = doc.cls.createView(doc.pointer)
+            doc.cls.setView(doc.pointer, thumbs)
+            doc.thumb_callback = CALLBACK(lambda _kind, _payload, _data: None)
+            doc.cls.registerCallback(doc.pointer, doc.thumb_callback, None)
+            doc.cls.initializeForRendering(doc.pointer, b"{}")
+            doc.thumb_view = thumbs
             doc.cls.setView(doc.pointer, main)
         part = int(args.get("part", doc.cls.getPart(doc.pointer)))
         # Über ``doc`` umschalten, damit auch das Fenster der Notizenansicht das aktive ist: sonst misst LibreOffice
@@ -458,6 +470,10 @@ class Kernel:
         text = json.dumps(values) if isinstance(values, (dict, list)) else (values or None)
         doc.cls.postUnoCommand(doc.pointer, str(args["command"]).encode("utf-8"), text.encode("utf-8") if text else None,
                                bool(args.get("notify", False)))
+        if args.get("wait"):
+            # LibreOffice führt den Befehl später aus – im Fenster, das dann das aktive ist. Wechselt die Ansicht (Folienmaster),
+            # darf bis dahin kein Befehl der Notizenansicht dazwischenkommen
+            self.settle(limit=float(args["wait"]))
         return True
 
     def cmd_select(self, args):
@@ -504,7 +520,8 @@ class Kernel:
         Antworten heraus (über zwei Dateien im Arbeitsordner des Kerns)."""
         self.doc(args)
         name = str(args.get("name") or "")
-        if not name.isidentifier():
+        module = str(args.get("module") or "Text")
+        if not name.isidentifier() or module not in MACRO_MODULES:
             raise KernelError("Unbekanntes Makro.", "makro")
         inbox, outbox = os.path.abspath("makro-ein.txt"), os.path.abspath("makro-aus.txt")
         with open(inbox, "w", encoding="utf-8", newline="") as handle:
@@ -513,7 +530,7 @@ class Kernel:
             os.remove(outbox)
         except OSError:
             pass
-        ok = self.kc.runMacro(self.kit, f'macro:///{MACRO_LIBRARY}.{name}("{file_url(inbox)}","{file_url(outbox)}")'.encode("utf-8"))
+        ok = self.kc.runMacro(self.kit, f'macro:///{MACRO_LIBRARY}.{module}.{name}("{file_url(inbox)}","{file_url(outbox)}")'.encode("utf-8"))
         try:
             with open(outbox, encoding="utf-8", newline="") as handle:
                 answer = handle.read().split(MACRO_SEPARATOR)
@@ -738,6 +755,7 @@ class MainThreadLoop:
         self.busy = False
         self.pending = None
         self.settle = None
+        self.after = 0.0  # nach »uno« mit »wait«: so lange vor dem nächsten Befehl warten (wie Kernel.settle)
 
     def read(self):
         """Lese-Thread: Verbindung annehmen, dann jeden Befehl einreihen und den Hauptthread wecken."""
@@ -760,13 +778,14 @@ class MainThreadLoop:
         sys.stdout.flush()
         os._exit(0)
 
-    def settled(self, request):
+    def settled(self, request, limit=None):
         """Warten, bis LibreOffice die eingereihten Tasten und Klicks verarbeitet hat (wie ``Kernel.settle``) – ohne den
         Hauptthread anzuhalten: Bis dahin läuft LibreOffice weiter, ``tick`` prüft beim nächsten Mal wieder."""
         now = time.monotonic()
         if self.settle is None:
             args = request.get("args") or {}
-            limit = float(args.get("limit", 2.0)) if request.get("cmd") == "settle" else 2.0
+            if limit is None:
+                limit = float(args.get("limit", 2.0)) if request.get("cmd") == "settle" else 2.0
             # Mindestens 0,1 s: LibreOffice arbeitet eingereihte Befehle erst ab, wenn der Kern ihm den Thread lässt
             self.settle = (now + 0.1, now + limit)
             self.arm(True)
@@ -804,12 +823,19 @@ class MainThreadLoop:
                 request = self.pending
                 if request is None:
                     self.finish()
+                if self.after:
+                    # Ein »uno« mit »wait« lief: LibreOffice führt ihn erst jetzt aus, im dann aktiven Fenster
+                    if not self.settled(request, self.after):
+                        return worked
+                    self.after = 0.0
                 if request.get("cmd") in SETTLING and not self.settled(request):
                     return worked
                 self.pending = None
                 worked = True
                 if not handle(self.kernel, request, self.link.send):
                     self.finish()
+                if request.get("cmd") == "uno" and (request.get("args") or {}).get("wait"):
+                    self.after = float(request["args"]["wait"])
         finally:
             self.busy = False
 

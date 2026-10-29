@@ -75,6 +75,7 @@ Item {
         if (key === "home") return homeTab
         if (key === "settings") return settingsButton
         if (key.indexOf("doc:") === 0) {
+            if (!Reader.tabs) return null  // beim Beenden
             var index = Reader.tabs.indexOf(key.substring(4))
             return index >= 0 ? docs.itemAtIndex(index) : null
         }

@@ -148,6 +148,9 @@ OFFICE = PAYLOAD / "office"  # passt zu tools/pdf_editor/office.py (BUNDLED_DIR)
 # Sprachen bleiben weg, ebenso die Java-Erweiterungen (Wiki-Publisher, Solver). Keine Datei wird verändert.
 OFFICE_LANGUAGES = ("de", "en")
 OFFICE_REMOVE_EXTENSIONS = ("wiki-publisher", "nlpsolver")
+# Das Abspielwerk von LibreOffice (seit 5.0 Beta 6): Videos und Töne spielt Novadesk selbst (Qt Multimedia). Mit ihm
+# öffnete LibreOffice für jedes Video auf einer Folie einen eigenen Spieler – das hielt das Zeichnen sekundenlang auf
+OFFICE_REMOVE_PROGRAM = ("avmediawin.dll",)
 # Startprogramm PDF-Tool.exe (Symbol und Name von Novadesk in »Öffnen mit«, bei den Standard-Apps und im Startmenü)
 LAUNCHER_SOURCE = ROOT / "installer" / "launcher"
 LAUNCHER = PAYLOAD / "PDF-Tool.exe"
@@ -604,7 +607,7 @@ def prepare_office(target: Path, search: list[Path]) -> None:
     root = soffice[0].parent.parent
     shutil.copytree(root, target, ignore=shutil.ignore_patterns("*.msi"))
     saved = prune_office(target)
-    log(f"  andere Sprachen und Java-Erweiterungen weggelassen: {saved / 1e6:.0f} MB")
+    log(f"  andere Sprachen, Java-Erweiterungen und Abspielwerk weggelassen: {saved / 1e6:.0f} MB")
     program = target / "program"
     binaries = [path for path in program.iterdir() if path.suffix.lower() in (".exe", ".dll", ".bin")]
     needed = qtruntime.dependency_closure(binaries, [program, *search])
@@ -658,7 +661,8 @@ def _keep_language(code: str) -> bool:
 
 
 def prune_office(target: Path) -> int:
-    """Andere Sprachen und Java-Erweiterungen aus dem entpackten LibreOffice entfernen; gibt die gesparten Bytes zurück."""
+    """Andere Sprachen, Java-Erweiterungen und das Abspielwerk aus dem entpackten LibreOffice entfernen; gibt die gesparten
+    Bytes zurück."""
     removed: list[Path] = []
     resource = target / "program" / "resource"
     if resource.is_dir():
@@ -678,6 +682,7 @@ def prune_office(target: Path) -> int:
                 removed.append(path)
             elif path.name in OFFICE_REMOVE_EXTENSIONS:
                 removed.append(path)
+    removed += [target / "program" / name for name in OFFICE_REMOVE_PROGRAM if (target / "program" / name).is_file()]
     readmes = target / "readmes"
     if readmes.is_dir():
         removed += [path for path in readmes.glob("readme_*") if not _keep_language(_office_language(path.name))]

@@ -144,7 +144,7 @@ class TextCanvas(QQuickPaintedItem):
         self._extent_changed()
 
     def _connections(self, controller) -> list:
-        return [
+        connections = [
             (controller.tilesInvalidated, self._invalidate),
             (controller.zoomChanged, self._zoom_changed),
             (controller.docWidthChanged, self._extent_changed),
@@ -156,8 +156,11 @@ class TextCanvas(QQuickPaintedItem):
             (controller.graphicChanged, self.update),
             (controller.caretMoved, self.ensureCaretVisible),
             (controller.readyChanged, self._extent_changed),
-            (controller.commentsChanged, self.update),
         ]
+        # Kommentare haben nur Texte – die Notizen einer Präsentation nicht (sonst hing dort kein Signal)
+        if hasattr(controller, "commentsChanged"):
+            connections.append((controller.commentsChanged, self.update))
+        return connections
 
     controller = Property(QObject, _get_controller, _set_controller, notify=controllerChanged)
 
