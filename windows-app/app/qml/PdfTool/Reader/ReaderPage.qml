@@ -20,7 +20,9 @@ FocusScope {
     readonly property bool textShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "text"
     readonly property bool slidesShown: Reader.current !== null && Reader.current !== undefined && Reader.current.kind === "praesentation"
     readonly property bool officeShown: sheetShown || textShown || slidesShown
-    readonly property var doc: officeShown ? null : Reader.current
+    // Direkt aus Reader.current (nicht über officeShown): beim Wechsel Text → Tabelle war officeShown kurz falsch
+    // (textShown schon aus, sheetShown noch nicht an) und die PDF-Ansicht bekam die Tabelle
+    readonly property var doc: Reader.current && ["tabelle", "text", "praesentation"].indexOf(Reader.current.kind) < 0 ? Reader.current : null
     readonly property bool narrow: width < Metrics.readerNarrowFrom
     readonly property bool active: App.currentPage === "reader" && !Dialogs.open && !officeShown
     readonly property bool editing: doc !== null && doc !== undefined

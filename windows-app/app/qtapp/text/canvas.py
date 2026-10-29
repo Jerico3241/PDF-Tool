@@ -14,6 +14,7 @@ import time
 from PySide6.QtCore import Property, QObject, QPointF, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QCursor, QImage, QPainter, QPainterPath
 from PySide6.QtQuick import QQuickItem, QQuickPaintedItem
+from shiboken6 import isValid
 
 from .document import MOD_ALT, MOD_CTRL, MOD_SHIFT
 
@@ -373,7 +374,8 @@ class TextCanvas(QQuickPaintedItem):
             args = {"pw": pixels, "ph": pixels, "x": key[0] * size, "y": key[1] * size, "w": size, "h": size}
 
             def done(data: bytes, key=key, version=version, grid=grid, pixels=pixels, owner=controller) -> None:
-                if owner is not self._controller or grid != self._grid:
+                # Die Kachel kann ankommen, wenn der Tab schon zu ist (die Ansicht ist dann gelöscht)
+                if not isValid(self) or owner is not self._controller or grid != self._grid:
                     return
                 self._pending.discard(key)
                 if len(data) == pixels * pixels * 4:
@@ -390,7 +392,7 @@ class TextCanvas(QQuickPaintedItem):
                 self._request_visible()
 
             def failed(_exc, key=key, grid=grid, owner=controller) -> None:
-                if owner is self._controller and grid == self._grid:
+                if isValid(self) and owner is self._controller and grid == self._grid:
                     self._pending.discard(key)
 
             controller.request_tile(args, done, failed)
