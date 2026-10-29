@@ -33,16 +33,12 @@ Animationen); die Fachlogik ist in Python geschrieben. Unterstützt werden Windo
 Dateien werden lokal verarbeitet – keine Cloud, keine Uploads. Ins Internet geht nur die abschaltbare
 Update-Prüfung bei GitHub und, nur auf Wunsch, der Download des KI-Modells. Einzelheiten: [docs/DATENSCHUTZ.md](docs/DATENSCHUTZ.md).
 
-## Code-Signierung
-
-Setup und Startprogramm werden in GitHub Actions aus diesem Repository gebaut und signiert:
-[Code signing policy](docs/CODE-SIGNING.md).
-
 ## Installation
 
 `PDF-Tool-Setup-<Version>.exe` aus den [GitHub Releases](https://github.com/Jerico3241/PDF-Tool/releases)
 herunterladen und ausführen. Python und alle Pakete sind enthalten; Administratorrechte sind nicht
-nötig. Danach meldet PDF Tool neue Versionen selbst (Einstellungen → Updates).
+nötig. Danach meldet PDF Tool neue Versionen selbst (Einstellungen → Updates). Setup und Startprogramm
+werden in GitHub Actions aus diesem Repository gebaut: [Code signing policy](docs/CODE-SIGNING.md).
 
 Stable ist der Standard. Beta ist für Nutzer gedacht, die neue Versionen vor der allgemeinen
 Veröffentlichung testen möchten – Beta-Releases können Fehler enthalten und sind nicht vollständig
