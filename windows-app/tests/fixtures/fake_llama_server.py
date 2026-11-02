@@ -39,8 +39,13 @@ def answer_for(messages: list[dict]) -> str:
     """Feste Antwort je Art der Anfrage – mit den Seiten der mitgeschickten Auszüge."""
     content = str((messages[-1] if messages else {}).get("content") or "")
     system = str((messages[0] if messages else {}).get("content") or "")
+    if system.startswith("Du bist ein Übersetzer") and "etwa [1]" in system:  # nebeneinander: Nummern bleiben
+        return "\n\n".join(re.sub(r"^\[(\d+)\]\s*", r"[\1] [EN] ", part) for part in content.split("\n\n"))
     if system.startswith("Du bist ein Übersetzer"):  # Übersetzen: erkennbar markiert, Absätze bleiben
         return "\n\n".join(f"[EN] {part}" for part in content.split("\n\n"))
+    extra = _beta8(system, content)
+    if extra is not None:
+        return extra
     sources = re.findall(r"\[Datei (\d+) »[^«]*«, Seite (\d+)\]", content)
     if sources:  # mehrere PDFs: Quelle mit Datei und Seite
         cited = "; ".join(f"Datei {file}, S. {page}" for file, page in sources[:2])
@@ -58,6 +63,40 @@ def answer_for(messages: list[dict]) -> str:
     if MODE == "slow":
         return " ".join(["Wort"] * 400)
     return f"Laut Dokument beträgt die Kündigungsfrist drei Monate (S. {first}). Weitere Angaben stehen auf Seite {last}."
+
+
+def _beta8(system: str, content: str) -> str | None:
+    """Antworten für die KI-Werkzeuge von 5.0 Beta 8 – fest und erkennbar, damit Tests den Ablauf prüfen können."""
+    if "bearbeitest den Text des Benutzers" in system:  # Schreibhilfe: umschreiben, kürzen, Ton …
+        text = content.split("<<<\n", 1)[-1].rsplit("\n>>>", 1)[0]
+        return f"Hier ist der überarbeitete Text:\n\n[NEU] {text}"
+    if "du schreibst texte" in system.lower():
+        return "Sehr geehrte Damen und Herren,\n\nvielen Dank für Ihre Anfrage. [Name]"
+    if system.startswith("Du bist ein Korrektor"):
+        return content.replace("fehler", "Fehler").replace("Er gehen", "Er geht")
+    if "Präsentationshilfe" in system:
+        match = re.search(r"genau (\d+) Inhaltsfolien", content, re.IGNORECASE)
+        count = int(match.group(1)) if match else 3
+        lines = ["Gern, hier die Gliederung:", "TITEL: Testpräsentation", "UNTERTITEL: Erstellt von der Attrappe"]
+        for number in range(1, count + 1):
+            lines += [f"FOLIE: Thema {number}", f"- Punkt {number}.1", f"- **Punkt** {number}.2", f"NOTIZ: Notiz zu Folie {number}."]
+        return "\n".join(lines)
+    if "wertest Tabellen aus" in system:
+        if "Novadesk schlägt dafür ein" in content:
+            return "Das Diagramm vergleicht die Werte der Spalten je Zeile."
+        sums = re.findall(r"»([^«]+)« \(Zahlen[^)]*\): Summe ([0-9.,]+)", content)
+        first = f"Die Summe von »{sums[0][0]}« beträgt {sums[0][1]}." if sums else "Keine Zahlen."
+        return f"- {first}\n- Auffällig ist der größte Wert."
+    if "PDF-Formular" in system:
+        fields = dict((label.strip().lower(), number) for number, label in re.findall(r"^(\d+): ([^(\[]+?)\s*(?:\[|\()", content, re.MULTILINE))
+        data = content.split("Angaben des Benutzers:\n<<<\n", 1)[-1]
+        result = {}
+        for label, value in re.findall(r"^([^:\n]+):\s*(.+)$", data, re.MULTILINE):
+            number = fields.get(label.strip().lower())
+            if number:
+                result[number] = True if value.strip().lower() == "ja" else value.strip()
+        return json.dumps(result, ensure_ascii=False)
+    return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -98,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw or b"{}")
         if LOG:
             with _LOG_LOCK, open(LOG, "a", encoding="utf-8") as handle:
-                handle.write(json.dumps({"messages": body.get("messages"), "max_tokens": body.get("max_tokens"), "stream": body.get("stream"), "options": body.get("chat_template_kwargs")}, ensure_ascii=False) + "\n")
+                handle.write(json.dumps({"messages": body.get("messages"), "max_tokens": body.get("max_tokens"), "stream": body.get("stream"), "options": body.get("chat_template_kwargs"), "format": body.get("response_format")}, ensure_ascii=False) + "\n")
         if MODE == "context":
             self._json(400, {"error": {"code": 400, "message": "the request exceeds the available context size, try increasing it", "type": "exceed_context_size_error"}})
             return

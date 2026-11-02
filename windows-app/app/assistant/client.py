@@ -68,7 +68,8 @@ def health(endpoint: Endpoint, timeout: float = 2.0) -> str:
 class Chat:
     """Eine Anfrage an das Modell; ``run()`` blockiert (Arbeitsthread), ``cancel()`` aus jedem Thread."""
 
-    def __init__(self, endpoint: Endpoint, messages: list[dict], *, max_tokens: int, temperature: float = TEMPERATURE) -> None:
+    def __init__(self, endpoint: Endpoint, messages: list[dict], *, max_tokens: int, temperature: float = TEMPERATURE,
+                 json_schema: dict | None = None) -> None:
         self.endpoint = endpoint
         self.body = {
             "messages": messages,
@@ -81,6 +82,8 @@ class Chat:
             "chat_template_kwargs": {"enable_thinking": False},
             "timings_per_token": False,
         }
+        if json_schema is not None:  # seit 5.0 Beta 8: Antwort als JSON nach diesem Schema (llama-server erzwingt es)
+            self.body["response_format"] = {"type": "json_object", "schema": json_schema}
         self._cancelled = threading.Event()
         self._lock = threading.Lock()
         self._connection: http.client.HTTPConnection | None = None

@@ -137,6 +137,7 @@ FocusScope {
                 RibbonTab { objectName: "ribbon_data"; key: "data"; text: "Daten"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 RibbonTab { objectName: "ribbon_review"; key: "review"; text: "Überprüfen"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 RibbonTab { objectName: "ribbon_view"; key: "view"; text: "Ansicht"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
+                RibbonTab { objectName: "ribbon_ai"; key: "ai"; text: "KI"; current: view.ribbon; kindColor: view.kindColor; onClicked: view.ribbon = key }
                 Item { Layout.fillWidth: true }
                 PIconButton {
                     objectName: "sheetSave"
@@ -450,6 +451,17 @@ FocusScope {
                 ToolButton { id: printAreaButton; objectName: "sheetPrintArea"; iconName: "print_add"; text: I18n.tr("Druckbereich", I18n.revision); tip: I18n.tr("Nur die Auswahl drucken bzw. wieder alles", I18n.revision); onClicked: printAreaMenu.popup(printAreaButton, 0, printAreaButton.height + 4) }
                 Item { Layout.fillWidth: true }
             }
+
+            // KI (seit Beta 8)
+            AiRibbon {
+                objectName: "sheetRibbonBar_ai"
+                visible: view.ribbon === "ai"
+                kind: "tabelle"
+                ready: view.sheet !== null && view.sheet.ready
+                kindColor: view.kindColor
+                panelOpen: view.sheet !== null && view.sheet.aiPanel
+                onPanelToggled: if (view.sheet) view.sheet.toggleAiPanel()
+            }
         }
 
         // Formelzeile ----------------------------------------------------------------------------------------------
@@ -553,6 +565,10 @@ FocusScope {
         }
 
         // Raster mit Editor, Diagrammen und Bildlaufleisten --------------------------------------------------------
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
         Item {
             id: gridArea
             Layout.fillWidth: true
@@ -888,6 +904,33 @@ FocusScope {
                 anchors.top: parent.top
                 indeterminate: true
                 visible: view.sheet !== null && (view.sheet.busy || !view.sheet.ready)
+            }
+        }
+            // KI-Assistent rechts (seit Beta 8)
+            Rectangle {
+                objectName: "sheetAssistantPanel"
+                Layout.fillHeight: true
+                Layout.preferredWidth: Metrics.readerLeftPanelWidth
+                visible: view.sheet !== null && view.sheet.aiPanel && Assistant.enabled
+                color: Theme.layer
+                Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
+                PanelHeader {
+                    id: aiHeader
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 1
+                    title: I18n.tr("KI-Assistent", I18n.revision)
+                    onCloseRequested: { view.sheet.toggleAiPanel(); grid.forceActiveFocus() }
+                }
+                Loader {
+                    active: parent.visible
+                    anchors.top: aiHeader.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 1
+                    sourceComponent: AssistantPanel { doc: view.sheet }
+                }
             }
         }
 

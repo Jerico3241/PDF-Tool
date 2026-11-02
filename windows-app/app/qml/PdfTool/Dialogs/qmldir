@@ -34,3 +34,7 @@ CrossReferenceContent 1.0 CrossReferenceContent.qml
 FormulaContent 1.0 FormulaContent.qml
 ChartContent 1.0 ChartContent.qml
 SheetFormContent 1.0 SheetFormContent.qml
+AiWriteContent 1.0 AiWriteContent.qml
+AiSlidesContent 1.0 AiSlidesContent.qml
+AiFormContent 1.0 AiFormContent.qml
+AiFormReviewContent 1.0 AiFormReviewContent.qml

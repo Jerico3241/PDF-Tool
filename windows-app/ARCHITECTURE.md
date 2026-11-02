@@ -60,7 +60,11 @@ und `app/tools/` (ohne Oberflächencode):
 - `assistant/` (seit 3.2, optional) – KI-Assistent ohne Oberfläche: Modellkatalog mit Quelle, Revision und
   SHA-256 (`catalog.py`), Ablage in `%LOCALAPPDATA%\PDF-Tool-KI` (`store.py`), Abschnitte, BM25-Suche und
   Seitenangaben (`text.py`), Anweisungen an das Modell (`prompts.py`), der lokale KI-Prozess llama-server
-  (`runtime.py`: 127.0.0.1, zufälliger Schlüssel, Job-Objekt) und gestreamte Anfragen (`client.py`).
+  (`runtime.py`: 127.0.0.1, zufälliger Schlüssel, Job-Objekt) und gestreamte Anfragen (`client.py`, auf Wunsch
+  mit JSON-Schema). Seit 5.0 Beta 8 die KI-Werkzeuge: Schreibhilfe und Grammatik (`writing.py`), Übersetzung
+  nebeneinander (`bilingual.py`), Präsentation aus Thema oder Dokument (`slidegen.py`), Tabellen auswerten
+  mit selbst gerechneten Kennzahlen und Diagrammregel (`tables.py`), PDF-Formulare ausfüllen (`formfill.py`);
+  `prompts.Scope` passt Fragen und Zusammenfassungen an Texte, Präsentationen und Tabellen an.
 - `tools/registry.py` – welche Werkzeuge es gibt und welche Seiten zu ihnen gehören.
 
 Regeln: kein `import PySide6` und keine Oberfläche im Kern; Texte, die die Oberfläche zeigt,
@@ -91,7 +95,7 @@ Modul `PdfTool.Backend`:
 | `Versions` | `versions.VersionsController` | Backup-Center: automatische Versionen geöffneter Dokumente, öffnen, als Kopie speichern, wiederherstellen |
 | `Backup` | `backups.BackupController` | Einstellungen → Sicherung & Wiederherstellung |
 | `Diagnose` | `diagnose.DiagnoseController` | Einstellungen → Diagnose |
-| `Assistant` | `assistant.AssistantController` | KI-Assistent (optional): Einstellungen, Einrichten und Download des Modells, Gespräch zum aktuellen Dokument (`conversationModel`) für die Seitenleiste im Reader |
+| `Assistant` | `assistant.AssistantController` | KI-Assistent (optional): Einstellungen, Einrichten und Download des Modells, Gespräch zum aktuellen Dokument (`conversationModel`) für die Seitenleiste im Reader; seit 5.0 Beta 8 mit den KI-Werkzeugen aus `aitools.AiTools` (Reiter »KI« in `AiRibbon.qml`) für PDFs, Texte, Präsentationen und Tabellen |
 
 - **Properties** entstehen mit `base.prop()` (Wert + Änderungssignal, nur echte Änderungen
   melden); Python-Code kann mit `observe()` darauf hören.
@@ -340,7 +344,8 @@ Laufzeit, Inno-Setup-Attrappe). Tests erreichen nie das echte GitHub – außer 
   `test_qt_forms_v31.py`, `test_qt_ocr.py`, `test_qt_protect.py`, `test_qt_comfort.py` (Oberfläche mit Maus
   und Tastatur), `tests/test_mail.py` (Per E-Mail senden ohne E-Mail-Programm); Messung:
   `tests/bench_editor.py`.
-- KI-Assistent: `tests/test_assistant.py` (ohne Oberfläche) und `tests/test_qt_assistant.py` – statt
+- KI-Assistent: `tests/test_assistant.py`, `tests/test_assistant_b8.py` (ohne Oberfläche) und
+  `tests/test_qt_assistant.py`, `tests/test_qt_assistant_v40.py`, `tests/test_qt_assistant_b8.py` – statt
   llama-server die Attrappe `tests/fixtures/fake_llama_server.py`, statt Hugging Face ein lokaler Testserver;
   nie ein echtes Modell, nie Internet.
 - Datenmigration: `tests/test_config_migration.py` lädt Einstellungen älterer Versionen

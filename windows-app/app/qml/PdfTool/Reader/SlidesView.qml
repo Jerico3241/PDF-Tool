@@ -80,7 +80,7 @@ FocusScope {
                     model: [
                         { key: "file", label: "Datei" }, { key: "start", label: "Start" }, { key: "insert", label: "Einfügen" },
                         { key: "design", label: "Entwurf" }, { key: "transitions", label: "Übergänge" }, { key: "review", label: "Überprüfen" },
-                        { key: "view", label: "Ansicht" }
+                        { key: "view", label: "Ansicht" }, { key: "ai", label: "KI" }
                     ]
                     RibbonTab {
                         required property var modelData
@@ -393,6 +393,17 @@ FocusScope {
                 ToolButton { objectName: "slidesPresentFromStart"; iconName: "play"; text: I18n.tr("Von der ersten Folie", I18n.revision); onClicked: view.doc.presentFromStart() }
                 Item { Layout.fillWidth: true }
             }
+
+            // KI (seit Beta 8)
+            AiRibbon {
+                objectName: "slidesRibbonBar_ai"
+                visible: view.ribbon === "ai"
+                kind: "praesentation"
+                ready: view.ready
+                kindColor: view.kindColor
+                panelOpen: view.doc !== null && view.doc.panel === "assistant"
+                onPanelToggled: if (view.doc) view.doc.togglePanel("assistant")
+            }
         }
 
         // Folienmaster (seit 5.0 Beta 6): Hinweis und zurück zu den Folien
@@ -653,7 +664,7 @@ FocusScope {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 1
-                    title: I18n.tr(view.doc && view.doc.panel === "layouts" ? "Layouts" : (view.master ? "Folienmaster" : "Folien"), I18n.revision)
+                    title: I18n.tr(view.doc && view.doc.panel === "layouts" ? "Layouts" : view.doc && view.doc.panel === "assistant" ? "KI-Assistent" : (view.master ? "Folienmaster" : "Folien"), I18n.revision)
                     onCloseRequested: { view.doc.togglePanel(view.doc.panel); view.back() }
                 }
 
@@ -716,6 +727,19 @@ FocusScope {
                     }
                 }
 
+                // KI-Assistent (seit Beta 8)
+                Loader {
+                    objectName: "slidesAssistantPanel"
+                    active: view.doc !== null && view.doc.panel === "assistant" && Assistant.enabled
+                    visible: active
+                    anchors.top: panelHeader.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 1
+                    sourceComponent: AssistantPanel { doc: view.doc }
+                }
+
                 // Layouts
                 ColumnLayout {
                     visible: view.doc !== null && view.doc.panel === "layouts"
@@ -754,6 +778,7 @@ FocusScope {
                     { key: "slides", icon: "document_one_page_multiple", tip: "Folien", name: "slidesRailSlides" },
                     { key: "layouts", icon: "document_bullet_list", tip: "Layouts", name: "slidesRailLayouts" },
                     { key: "notes", icon: "comment", tip: "Notizen ein- oder ausblenden", name: "slidesRailNotes" },
+                    { key: "assistant", icon: "sparkle", tip: "KI-Assistent", name: "slidesRailAssistant" },
                     { key: "search", icon: "search", tip: "Suchen und ersetzen (Strg+F)", name: "slidesRailSearch", separator: true }
                 ]
                 onSelected: (key) => {

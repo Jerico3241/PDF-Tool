@@ -431,6 +431,88 @@ Fehler:
     Melden(sAus, Error$)
 End Sub
 
+' KI-Assistent (seit 5.0 Beta 8): Absätze des Textes (auch aus Tabellen), höchstens so viele Zeichen wie verlangt
+Sub Absaetze(sEin As String, sAus As String)
+    Dim aWerte As Variant, oEnum As Object, oTeil As Object, aAus() As String, n As Long, nZeichen As Long, nMax As Long
+    Dim aZellen As Variant, i As Integer, s As String
+    On Error GoTo Fehler
+    aWerte = Lesen(sEin)
+    nMax = CLng(Zahl(Wert(aWerte, 0)))
+    If nMax <= 0 Then nMax = 200000
+    ReDim aAus(0)
+    aAus(0) = "ok"
+    n = 0
+    nZeichen = 0
+    oEnum = ThisComponent.Text.createEnumeration()
+    Do While oEnum.hasMoreElements() And nZeichen < nMax
+        oTeil = oEnum.nextElement()
+        If oTeil.supportsService("com.sun.star.text.Paragraph") Then
+            s = oTeil.getString()
+            If Len(Trim(s)) > 0 Then
+                n = n + 1
+                ReDim Preserve aAus(n)
+                aAus(n) = s
+                nZeichen = nZeichen + Len(s)
+            End If
+        ElseIf oTeil.supportsService("com.sun.star.text.TextTable") Then
+            aZellen = oTeil.getCellNames()
+            For i = 0 To UBound(aZellen)
+                s = oTeil.getCellByName(aZellen(i)).getString()
+                If Len(Trim(s)) > 0 And nZeichen < nMax Then
+                    n = n + 1
+                    ReDim Preserve aAus(n)
+                    aAus(n) = s
+                    nZeichen = nZeichen + Len(s)
+                End If
+            Next i
+        End If
+    Loop
+    Schreiben(sAus, aAus())
+    Exit Sub
+Fehler:
+    Melden(sAus, Error$)
+End Sub
+
+' KI-Assistent: Text vor der Schreibmarke (für »Text schreiben lassen«, damit der neue Text anschließt)
+Sub VorDerMarke(sEin As String, sAus As String)
+    Dim oMarke As Object, oCursor As Object, nZeichen As Integer
+    On Error GoTo Fehler
+    nZeichen = CInt(Zahl(Wert(Lesen(sEin), 0)))
+    If nZeichen <= 0 Or nZeichen > 4000 Then nZeichen = 1500
+    oMarke = Schreibmarke()
+    oCursor = oMarke.Text.createTextCursorByRange(oMarke.Start)
+    oCursor.goLeft(nZeichen, True)
+    Schreiben(sAus, Array("ok", oCursor.getString()))
+    Exit Sub
+Fehler:
+    Schreiben(sAus, Array("ok", ""))
+End Sub
+
+' KI-Assistent: eine Stelle genau so suchen und ersetzen (Grammatik prüfen) – Antwort »ok« und 1 (ersetzt) oder 0
+Sub ErsetzenEinmal(sEin As String, sAus As String)
+    Dim aWerte As Variant, oDoc As Object, oSuche As Object, oFund As Object
+    On Error GoTo Fehler
+    aWerte = Lesen(sEin)
+    oDoc = ThisComponent
+    oSuche = oDoc.createSearchDescriptor()
+    oSuche.SearchString = Wert(aWerte, 0)
+    oSuche.SearchCaseSensitive = True
+    oSuche.SearchRegularExpression = False
+    oFund = oDoc.findFirst(oSuche)
+    If IsNull(oFund) Then
+        Schreiben(sAus, Array("ok", "0"))
+        Exit Sub
+    End If
+    oDoc.UndoManager.enterUndoContext("Korrektur übernehmen")
+    oFund.setString(Wert(aWerte, 1))
+    oDoc.UndoManager.leaveUndoContext()
+    oDoc.CurrentController.select(oFund)
+    Schreiben(sAus, Array("ok", "1"))
+    Exit Sub
+Fehler:
+    Melden(sAus, Error$)
+End Sub
+
 ' Als geändert markieren (Serienbrief: das neue Dokument soll beim Schließen nach dem Speichern fragen)
 Sub Geaendert(sEin As String, sAus As String)
     On Error GoTo Fehler

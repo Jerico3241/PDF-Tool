@@ -103,7 +103,8 @@ Rectangle {
             Repeater {
                 model: [
                     { key: "file", label: "Datei" }, { key: "start", label: "Start" }, { key: "comment", label: "Kommentieren" },
-                    { key: "edit", label: "Bearbeiten" }, { key: "pages", label: "Seiten" }, { key: "view", label: "Ansicht" }
+                    { key: "edit", label: "Bearbeiten" }, { key: "pages", label: "Seiten" }, { key: "view", label: "Ansicht" },
+                    { key: "ai", label: "KI" }
                 ]
                 RibbonTab {
                     required property var modelData
@@ -366,6 +367,17 @@ Rectangle {
                 ToolButton { objectName: "readerMenuSpeech"; iconName: "speaker_2"; tip: I18n.tr((Speech.active ? "Vorlesen beenden" : "Vorlesen") + Shortcuts.hints["reader.speech"], I18n.revision); toggle: true; checked: Speech.active; onClicked: Speech.toggle() }
                 ToolButton { objectName: "readerNightMode"; iconName: "weather_moon"; tip: I18n.tr("Nachtmodus (Seiten dunkel)", I18n.revision); toggle: true; checked: Reader.nightMode; enabled: true; onClicked: Reader.setNightMode(!Reader.nightMode) }
                 Item { Layout.fillWidth: true }
+            }
+
+            // KI (seit 5.0 Beta 8): Zusammenfassen, Übersetzen, Formular ausfüllen, Präsentation erstellen
+            AiRibbon {
+                objectName: "readerRibbonBar_ai"
+                visible: root.ribbon === "ai"
+                kind: "pdf"
+                ready: root.ready
+                kindColor: root.kindColor
+                panelOpen: Reader.rightPanel === "assistant"
+                onPanelToggled: root.toggleRight("assistant")
             }
         }
     }
