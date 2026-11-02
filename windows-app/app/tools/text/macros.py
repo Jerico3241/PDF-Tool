@@ -506,7 +506,8 @@ Sub ErsetzenEinmal(sEin As String, sAus As String)
     oDoc.UndoManager.enterUndoContext("Korrektur übernehmen")
     oFund.setString(Wert(aWerte, 1))
     oDoc.UndoManager.leaveUndoContext()
-    oDoc.CurrentController.select(oFund)
+    ' Schreibmarke hinter die Korrektur (nicht markieren: sonst überschreibt das nächste Tippen sie)
+    oDoc.CurrentController.getViewCursor().gotoRange(oFund.getEnd(), False)
     Schreiben(sAus, Array("ok", "1"))
     Exit Sub
 Fehler:
