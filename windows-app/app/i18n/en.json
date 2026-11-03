@@ -4591,7 +4591,8 @@
   "Übersetzen": "Translate",
   "Übersetzung": "Translation",
   "Überzeugend": "Confident",
-  "Deutsch": "German"
+  "Deutsch": "German",
+  "Die Datei ist schreibgeschützt.": "The file is read-only."
  },
  "patterns": {
   "App-Design: {0}": "App theme: {0}",
