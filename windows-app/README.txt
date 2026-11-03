@@ -57,6 +57,18 @@ sind nicht nötig. Das Sprachmodell des KI-Assistenten ist nicht enthalten –
 Novadesk lädt es nur, wenn Sie den Assistenten einrichten.
 
 
+Neu in Version 5.0 Beta 9 – Aufräum-Beta
+-----------------------------------------
+Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
+Version bleibt 4.0.0. Nichts Neues, nur Fehler behoben:
+- Backup-Center: „Original ersetzen“ klappt auch mit der ältesten Fassung;
+  wird ein neues Dokument über eine vorhandene Datei gespeichert, wird deren
+  bisheriger Stand vorher gesichert.
+- Umbenennen: „Rückgängig“ auch nach getauschten Namen.
+- Menüband in kleinen Fenstern: nur Symbole statt abgeschnittener Knöpfe.
+- Englische Oberfläche: Statuszeile von Texten vollständig übersetzt.
+
+
 Neu in Version 5.0 Beta 8 – KI-Werkzeuge für alle Dokumente
 --------------------------------------------------------------
 Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile

@@ -2,6 +2,23 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.9
+
+Beta zum Testen (Aufräum-Beta, nichts Neues). Details in den [Release Notes](release-notes/5.0.0-beta.9.md).
+
+- Backup-Center: `restore_replace` kopiert die Fassung, bevor `remember` den jetzigen Stand sichert (das Aufräumen
+  nach `keep` löschte sonst die älteste Fassung vor dem Kopieren); `before_save` sichert auch, wenn ein neues
+  Dokument über eine vorhandene Datei gespeichert wird; eine fehlgeschlagene automatische Sicherung wird beim
+  nächsten Mal wiederholt.
+- Umbenennen: `naming.undo` über vorläufige Namen wie `apply` (Tausch und Groß-/Kleinschreibung), gibt die
+  zurückbenannten Paare zurück.
+- Menüband: `Reader/RibbonBar.qml` misst die Breite mit Beschriftungen und setzt `squeezed`; `PButton.compact`
+  zeigt dann nur das Symbol (Beschriftung in der Kurzinfo). Gilt für alle Leisten und die Reiterzeile.
+- Statuszeile von Texten: `text.document.status_text` macht aus den Meldungen von LibreOffice (in dessen Sprache)
+  deutsche Texte, die die englische Oberfläche übersetzt; Sprache über den Code (`de-DE` → »Deutsch«).
+- Pakete: fontTools 4.68.0, pypdf 6.21.4, pytz/tzdata 2026.6, Actions (setup-python 7.1.0, upload-artifact 7.0.2,
+  download-artifact 8.0.2).
+
 # Novadesk 5.0.0-beta.8
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.8.md).
