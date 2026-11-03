@@ -193,3 +193,25 @@ def test_status_line_independent_of_libreoffice_language() -> None:
         assert [i18n.tr(text) for text in ("Seite 2 von 7", "58 Wörter", "1 Wort", "Deutsch")] == ["Page 2 of 7", "58 words", "1 word", "German"]
     finally:
         i18n.set_language("de")
+
+
+@needs_text
+def test_ribbon_squeezes_to_icons_in_a_small_window(ui_app) -> None:
+    """Beta 9: Im kleinen Fenster zeigen die Leisten des Menübands nur noch Symbole, statt die letzten Knöpfe am
+    Fensterrand abzuschneiden; im großen Fenster wieder mit Beschriftung."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    _new_text(h)
+    view = h.item("textView")
+    view.setProperty("ribbon", "file")
+    bar = h.item("textRibbonBar_file")
+    h.window.resize(1700, 860)
+    assert wait_until(lambda: not bar.property("squeezed"), 5)
+    assert h.item("textFileNew").property("text") and not h.item("textFileNew").property("iconOnly")
+    h.window.resize(800, 600)
+    assert wait_until(lambda: bar.property("squeezed"), 5)
+    pump(0.3)
+    assert h.item("textFileNew").property("iconOnly")
+    assert bar.property("implicitWidth") <= bar.property("width") + 0.5  # alles passt hinein
+    h.window.resize(1700, 860)
+    assert wait_until(lambda: not bar.property("squeezed"), 5)

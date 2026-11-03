@@ -137,10 +137,8 @@ T.Button {
 
     PToolTip {
         // Nur Symbol (schmales Menüband): Beschriftung und Kurzinfo zusammen
-        readonly property string label: control.compact && control.text !== "" && control.text !== control.tip
-            ? (control.tip !== "" ? I18n.tr(control.text, I18n.revision) + " – " + I18n.tr(control.tip, I18n.revision) : I18n.tr(control.text, I18n.revision))
-            : I18n.tr(control.tip, I18n.revision)
-        text: label
-        visible: label !== "" && control.hovered && !control.pressed
+        readonly property bool withLabel: control.compact && control.text !== "" && control.text !== control.tip
+        text: I18n.tr(withLabel ? (control.tip !== "" ? I18n.tr(control.text, I18n.revision) + " – " + I18n.tr(control.tip, I18n.revision) : control.text) : control.tip, I18n.revision)
+        visible: text !== "" && control.hovered && !control.pressed
     }
 }
