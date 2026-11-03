@@ -6,6 +6,10 @@ Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
 Beta zum Testen (Aufräum-Beta, nichts Neues). Details in den [Release Notes](release-notes/5.0.0-beta.9.md).
 
+- Office speichern (Windows): Textkern (`cmd_save`) speichert per `saveAs` direkt ans Ziel, der Rechenkern per
+  `storeAsURL` (Kopie: `storeToURL`) – statt Ersatzdatei + `os.replace`, das an der System-Dateisperre von
+  LibreOffice für die geöffnete Datei scheiterte. `build.py probe_calc`/`probe_text` speichern jetzt wie die App
+  (`TakeOwnership`) mehrmals über die geöffnete Datei, auch nach erneutem Öffnen.
 - Backup-Center: `restore_replace` kopiert die Fassung, bevor `remember` den jetzigen Stand sichert (das Aufräumen
   nach `keep` löschte sonst die älteste Fassung vor dem Kopieren); `before_save` sichert auch, wenn ein neues
   Dokument über eine vorhandene Datei gespeichert wird; eine fehlgeschlagene automatische Sicherung wird beim

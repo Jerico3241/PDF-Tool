@@ -61,6 +61,8 @@ Neu in Version 5.0 Beta 9 – Aufräum-Beta
 -----------------------------------------
 Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
 Version bleibt 4.0.0. Nichts Neues, nur Fehler behoben:
+- Texte, Tabellen und Präsentationen lassen sich unter Windows wieder über
+  die geöffnete Datei speichern (vorher Meldung „gesperrt“).
 - Backup-Center: „Original ersetzen“ klappt auch mit der ältesten Fassung;
   wird ein neues Dokument über eine vorhandene Datei gespeichert, wird deren
   bisheriger Stand vorher gesichert.

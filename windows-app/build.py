@@ -751,7 +751,19 @@ def probe_calc(program: Path) -> None:
             probe.call("input", doc=doc, row=row, col=0, text=text)
         # seit Beta 5: Datenbalken, Auswahlliste und Pivot-Tabelle (eigene Mappe, damit A3 oben bleibt)
         probe.call("save", doc=doc, path=str(target))
+        # Seit Beta 9: wie in der App über die geöffnete Datei speichern – zweimal, dann wieder öffnen und erneut
+        # speichern. Unter Windows sperrt LibreOffice die geöffnete Datei; das Ersetzen von außen schlug fehl.
+        probe.call("input", doc=doc, row=0, col=1, text="7")
+        probe.call("save", doc=doc, path=str(target))
+        probe.call("input", doc=doc, row=1, col=1, text="8")
+        probe.call("save", doc=doc, path=str(target))
         probe.call("close", doc=doc)
+        again = probe.call("open", path=str(target))["doc"]
+        probe.call("input", doc=again, row=2, col=1, text="=B1+B2")
+        probe.call("save", doc=again, path=str(target))
+        probe.call("input", doc=again, row=3, col=1, text="9")
+        probe.call("save", doc=again, path=str(target))
+        probe.call("close", doc=again)
         data = probe.call("new")["doc"]
         for row, (place, amount) in enumerate((("Ort", "Betrag"), ("Köln", "480"), ("Bonn", "1250"), ("Köln", "190"))):
             probe.call("input", doc=data, row=row, col=0, text=place)
@@ -781,10 +793,15 @@ def probe_calc(program: Path) -> None:
         probe.stop()
     import openpyxl
 
-    value = openpyxl.load_workbook(target, data_only=True).active["A3"].value if target.is_file() else None
+    sheet = openpyxl.load_workbook(target, data_only=True).active if target.is_file() else None
+    value = sheet["A3"].value if sheet else None
     if value != 5:
         fail(f"Probe des Rechenkerns fehlgeschlagen: =SUMME(A1:A2) ergab {value!r} statt 5")
-    log("  Probe: Rechenkern für Tabellen (=SUMME -> .xlsx, Datenbalken, Auswahlliste, Pivot-Tabelle)")
+    saved = [sheet[cell].value for cell in ("B1", "B2", "B3", "B4")]
+    if saved != [7, 8, 15, 9]:
+        fail(f"Probe des Rechenkerns fehlgeschlagen: Speichern über die geöffnete Datei ergab {saved!r} statt [7, 8, 15, 9]")
+    log("  Probe: Rechenkern für Tabellen (=SUMME -> .xlsx, über die geöffnete Datei speichern, Datenbalken, "
+        "Auswahlliste, Pivot-Tabelle)")
     remove(work)
 
 
@@ -916,8 +933,23 @@ def probe_text(program: Path) -> None:
         folien("FolienBilder", pictures.as_uri(), 320, 180, "png", 0, 1)
         if not (pictures / "folie-1.png").is_file() or not (pictures / "folie-2.png").is_file():
             fail("Probe des Textkerns fehlgeschlagen: Folienbilder (wie beim Vorführen) fehlen")
-        call("save", doc=deck, path=str(deck_target))
+        # Wie in der App (»TakeOwnership«): danach gehört das Dokument zur Datei, jedes weitere Speichern geht über sie
+        call("save", doc=deck, path=str(deck_target), options="TakeOwnership")
+        call("save", doc=deck, path=str(deck_target), options="TakeOwnership")
         call("close", doc=deck)
+        # Seit Beta 9: vorhandene Präsentation öffnen, Folie anfügen, zweimal über die geöffnete Datei speichern
+        # (unter Windows sperrt LibreOffice die geöffnete Datei – das Ersetzen von außen schlug fehl)
+        reopened = call("open", path=str(deck_target), kind="praesentation")["doc"]
+        call("uno", doc=reopened, command=".uno:InsertPage")
+        for _attempt in range(10):
+            call("settle", doc=reopened)
+            if int(call("parts", doc=reopened).get("count") or 0) == 3:
+                break
+        else:
+            fail("Probe des Textkerns fehlgeschlagen: die dritte Folie fehlt nach dem erneuten Öffnen")
+        call("save", doc=reopened, path=str(deck_target), options="TakeOwnership")
+        call("save", doc=reopened, path=str(deck_target), options="TakeOwnership")
+        call("close", doc=reopened)
         # Vorlagen (seit Beta 6): Texte und die Präsentation öffnen sich im Textkern
         for template in sorted((APP / "vorlagen").glob("*.fod[tp]")):
             opened = call("open", path=str(template), kind="praesentation" if template.suffix == ".fodp" else "text")
@@ -943,8 +975,17 @@ def probe_text(program: Path) -> None:
         tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
-        call("save", doc=doc, path=str(target))
+        call("save", doc=doc, path=str(target), options="TakeOwnership")
+        call("text", doc=doc, text=" Zweites Speichern")
+        call("save", doc=doc, path=str(target), options="TakeOwnership")
         call("close", doc=doc)
+        # Seit Beta 9: vorhandenes Dokument öffnen, ändern und über die geöffnete Datei speichern
+        reopened = call("open", path=str(target))["doc"]
+        call("text", doc=reopened, text="Wieder geöffnet ")
+        call("save", doc=reopened, path=str(target), options="TakeOwnership")
+        call("text", doc=reopened, text="und erneut gespeichert ")
+        call("save", doc=reopened, path=str(target), options="TakeOwnership")
+        call("close", doc=reopened)
     except text.TextError as exc:
         # Erst beenden: Dann liegt auch das Protokoll des Kerns vor (Exit-Code, letzte Meldungen)
         windows = _windows_of(probe._process.pid if probe._process else 0)  # noqa: SLF001 - nur für die Fehlermeldung
@@ -956,16 +997,19 @@ def probe_text(program: Path) -> None:
     content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""
     if "Novadesk Textprobe äöü" not in content:
         fail("Probe des Textkerns fehlgeschlagen: der getippte Satz fehlt in der gespeicherten .docx")
+    if not all(part in content for part in ("Zweites Speichern", "Wieder geöffnet", "und erneut gespeichert")):
+        fail("Probe des Textkerns fehlgeschlagen: Speichern über die geöffnete .docx fehlt in der Datei")
     names = zipfile.ZipFile(target).namelist()
     if "<m:oMath" not in content or not any(name.startswith("word/charts/chart") for name in names) or 'w:docPartGallery w:val="Table of Contents"' not in content:
         fail("Probe des Textkerns fehlgeschlagen: Formel, Diagramm oder Inhaltsverzeichnis fehlen in der gespeicherten .docx")
     slide_names = zipfile.ZipFile(deck_target).namelist() if deck_target.is_file() else []
-    if "ppt/slides/slide2.xml" not in slide_names:
-        fail("Probe des Textkerns fehlgeschlagen: die gespeicherte .pptx hat keine zweite Folie")
+    if "ppt/slides/slide3.xml" not in slide_names:
+        fail("Probe des Textkerns fehlgeschlagen: die über die geöffnete Datei gespeicherte .pptx hat keine dritte Folie")
     first_slide = zipfile.ZipFile(deck_target).read("ppt/slides/slide1.xml").decode("utf-8")
     if not any(name.startswith("ppt/media/") and name.endswith(".mp4") for name in slide_names) or "transition" not in first_slide:
         fail("Probe des Textkerns fehlgeschlagen: Video oder Übergang fehlen in der gespeicherten .pptx")
-    log("  Probe: Textkern (tippen, Formel, Diagramm, Verzeichnis, zeichnen, .docx und .pptx speichern, Design, Master, "
+    log("  Probe: Textkern (tippen, Formel, Diagramm, Verzeichnis, zeichnen, .docx und .pptx speichern – auch über die "
+        "geöffnete Datei –, Design, Master, "
         "Übergang, Video, Folienbilder, Vorlagen)")
     remove(work)
 
