@@ -1124,7 +1124,8 @@ FocusScope {
     PMenu {
         id: layoutMenu
         objectName: "slidesLayoutMenu"
-        Repeater {
+        PMenuItems {
+            menu: layoutMenu
             model: view.doc ? view.doc.layoutList() : []
             PMenuItem {
                 required property var modelData
@@ -1137,7 +1138,8 @@ FocusScope {
     PMenu {
         id: shapeMenu
         objectName: "slidesShapeMenu"
-        Repeater {
+        PMenuItems {
+            menu: shapeMenu
             model: view.doc ? view.doc.shapeList() : []
             PMenuItem {
                 required property var modelData
@@ -1150,7 +1152,8 @@ FocusScope {
     PMenu {
         id: tableMenu
         objectName: "slidesTableMenu"
-        Repeater {
+        PMenuItems {
+            menu: tableMenu
             model: [[2, 2], [3, 3], [4, 3], [5, 4], [8, 5]]
             PMenuItem {
                 required property var modelData

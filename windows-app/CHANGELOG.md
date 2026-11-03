@@ -10,6 +10,10 @@ Beta zum Testen (Aufräum-Beta, nichts Neues). Details in den [Release Notes](re
   `storeAsURL` (Kopie: `storeToURL`) – statt Ersatzdatei + `os.replace`, das an der System-Dateisperre von
   LibreOffice für die geöffnete Datei scheiterte. `build.py probe_calc`/`probe_text` speichern jetzt wie die App
   (`TakeOwnership`) mehrmals über die geöffnete Datei, auch nach erneutem Öffnen.
+- Menüs mit Einträgen aus einem Modell (KI: Ton, Übersetzen; Text/Präsentation: Tabelle, Seriendruckfelder, Layout,
+  Formen): neues `Controls/PMenuItems.qml` (Instantiator + `insertItem`) statt Repeater im Menü. Der Repeater erzeugte
+  die Einträge bei asynchron geladenen Seiten in wechselnder Reihenfolge (»stackBefore … must be a sibling« in der
+  Windows-Prüfung von main).
 - Backup-Center: `restore_replace` kopiert die Fassung, bevor `remember` den jetzigen Stand sichert (das Aufräumen
   nach `keep` löschte sonst die älteste Fassung vor dem Kopieren); `before_save` sichert auch, wenn ein neues
   Dokument über eine vorhandene Datei gespeichert wird; eine fehlgeschlagene automatische Sicherung wird beim

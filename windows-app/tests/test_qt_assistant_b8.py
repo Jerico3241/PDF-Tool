@@ -9,7 +9,7 @@ import datetime
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject, QUrl
+from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QUrl
 from PySide6.QtQml import QQmlComponent
 
 from conftest import pump, wait_until
@@ -87,6 +87,12 @@ def test_views_with_the_ai_tab_load_without_messages(ui_app) -> None:
         view.setParentItem(h.window.contentItem())
         pump(0.3)
         assert view.findChild(QObject, bar) is not None, bar
+        if name == "TextView":
+            # Menüpunkte aus einem Modell (PMenuItems) stehen vollständig und in Reihenfolge hinter den festen Einträgen
+            menu = view.findChild(QObject, "aiRibbonTranslateMenu")
+            names = [QMetaObject.invokeMethod(menu, "itemAt", Q_RETURN_ARG("QQuickItem*"), Q_ARG(int, index)).objectName()
+                     for index in range(int(menu.property("count")))]
+            assert names == ["aiRibbonTranslateSide"] + [f"aiRibbonTranslate_{key}" for key in ("en", "de", "fr", "es", "it", "nl", "pl", "pt", "tr")]
         view.deleteLater()
         pump(0.2)
 
