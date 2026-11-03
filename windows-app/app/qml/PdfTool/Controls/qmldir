@@ -22,6 +22,7 @@ PListItem 1.0 PListItem.qml
 PListPage 1.0 PListPage.qml
 PMenu 1.0 PMenu.qml
 PMenuItem 1.0 PMenuItem.qml
+PMenuItems 1.0 PMenuItems.qml
 PPage 1.0 PPage.qml
 PPickerField 1.0 PPickerField.qml
 PProgressBar 1.0 PProgressBar.qml

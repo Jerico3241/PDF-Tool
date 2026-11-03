@@ -705,7 +705,8 @@ FocusScope {
     PMenu {
         id: tableMenu
         objectName: "textTableMenu"
-        Repeater {
+        PMenuItems {
+            menu: tableMenu
             model: [[2, 2], [3, 3], [4, 3], [5, 4], [8, 5]]
             PMenuItem {
                 required property var modelData
@@ -730,7 +731,8 @@ FocusScope {
     PMenu {
         id: fieldMenu
         objectName: "textFieldMenu"
-        Repeater {
+        PMenuItems {
+            menu: fieldMenu
             model: view.doc ? view.doc.mergeFields : []
             PMenuItem {
                 required property string modelData

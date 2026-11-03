@@ -219,7 +219,8 @@ RowLayout {
     PMenu {
         id: toneMenu
         objectName: "aiRibbonToneMenu"
-        Repeater {
+        PMenuItems {
+            menu: toneMenu
             model: [
                 { key: "formal", label: "Förmlich", icon: "briefcase" }, { key: "friendly", label: "Freundlich", icon: "emoji" },
                 { key: "factual", label: "Sachlich", icon: "text_align_left" }, { key: "casual", label: "Locker", icon: "chat" },
@@ -243,7 +244,9 @@ RowLayout {
             iconName: "layout_column_two"
             onTriggered: translateMenu.afterClose = function() { Assistant.translate() }
         }
-        Repeater {
+        PMenuItems {
+            menu: translateMenu
+            offset: 1
             model: [
                 { key: "en", label: "Markierung ins Englische" }, { key: "de", label: "Markierung ins Deutsche" },
                 { key: "fr", label: "Markierung ins Französische" }, { key: "es", label: "Markierung ins Spanische" },
