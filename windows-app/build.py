@@ -880,6 +880,18 @@ def probe_text(program: Path) -> None:
     deck_target = work / "probe.pptx"
     step = "Start"
 
+    def written(marker: str, when: str) -> None:
+        """Nach jedem Speichern prüfen, ob der Stand wirklich in der .docx steht (sonst: was steht drin)."""
+        try:
+            with zipfile.ZipFile(target) as archive:
+                plain = re.sub(r"<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
+        except (OSError, KeyError, zipfile.BadZipFile) as exc:
+            fail(f"Probe des Textkerns fehlgeschlagen: .docx nach »{when}« nicht lesbar ({type(exc).__name__}: {exc})")
+        if marker not in plain:
+            files = ", ".join(f"{item.name} ({item.stat().st_size} B)" for item in sorted(work.iterdir()) if item.is_file())
+            fail(f"Probe des Textkerns fehlgeschlagen: nach »{when}« fehlt »{marker}« in der .docx\n"
+                 f"Text am Ende: {plain[-240:]!r}\nDateien: {files}")
+
     def call(name: str, /, **args):
         nonlocal step
         step = name + (f" {args['kind']}" if "kind" in args else "") + (" (Datei)" if args.get("path") and name == "open" else "")
@@ -976,18 +988,22 @@ def probe_text(program: Path) -> None:
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
         call("save", doc=doc, path=str(target), options="TakeOwnership")
+        written("Textprobe", "erstes Speichern")
         # Ans Ende: »ErsetzenEinmal« ließ die Schreibmarke mitten im Probesatz stehen
         call("uno", doc=doc, command=".uno:GoToEndOfDoc", wait=0.5)
         call("text", doc=doc, text=" Zweites Speichern")
         call("save", doc=doc, path=str(target), options="TakeOwnership")
+        written("Zweites Speichern", "zweites Speichern")
         call("close", doc=doc)
         # Seit Beta 9: vorhandenes Dokument öffnen, ändern und über die geöffnete Datei speichern
         reopened = call("open", path=str(target))["doc"]
         call("uno", doc=reopened, command=".uno:GoToEndOfDoc", wait=0.5)
         call("text", doc=reopened, text=" Wieder geöffnet")
         call("save", doc=reopened, path=str(target), options="TakeOwnership")
+        written("Wieder geöffnet", "Speichern nach erneutem Öffnen")
         call("text", doc=reopened, text=" und erneut gespeichert")
         call("save", doc=reopened, path=str(target), options="TakeOwnership")
+        written("und erneut gespeichert", "zweites Speichern nach erneutem Öffnen")
         call("close", doc=reopened)
     except text.TextError as exc:
         # Erst beenden: Dann liegt auch das Protokoll des Kerns vor (Exit-Code, letzte Meldungen)
