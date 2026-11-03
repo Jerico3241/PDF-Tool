@@ -890,7 +890,7 @@ def probe_text(program: Path) -> None:
         if marker not in plain:
             files = ", ".join(f"{item.name} ({item.stat().st_size} B)" for item in sorted(work.iterdir()) if item.is_file())
             fail(f"Probe des Textkerns fehlgeschlagen: nach »{when}« fehlt »{marker}« in der .docx\n"
-                 f"Text am Ende: {plain[-240:]!r}\nDateien: {files}")
+                 f"Text: {plain[:120]!r} … {plain[-120:]!r}\nDateien: {files}")
 
     def call(name: str, /, **args):
         nonlocal step
@@ -989,19 +989,20 @@ def probe_text(program: Path) -> None:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
         call("save", doc=doc, path=str(target), options="TakeOwnership")
         written("Textprobe", "erstes Speichern")
-        # Ans Ende: »ErsetzenEinmal« ließ die Schreibmarke mitten im Probesatz stehen
-        call("uno", doc=doc, command=".uno:GoToEndOfDoc", wait=0.5)
-        call("text", doc=doc, text=" Zweites Speichern")
+        # An den Anfang: »ErsetzenEinmal« ließ die Schreibmarke mitten im Probesatz stehen, und am Ende des Dokuments
+        # steht das (schreibgeschützte) Inhaltsverzeichnis
+        call("uno", doc=doc, command=".uno:GoToStartOfDoc", wait=0.5)
+        call("text", doc=doc, text="Zweites Speichern ")
         call("save", doc=doc, path=str(target), options="TakeOwnership")
         written("Zweites Speichern", "zweites Speichern")
         call("close", doc=doc)
         # Seit Beta 9: vorhandenes Dokument öffnen, ändern und über die geöffnete Datei speichern
         reopened = call("open", path=str(target))["doc"]
-        call("uno", doc=reopened, command=".uno:GoToEndOfDoc", wait=0.5)
-        call("text", doc=reopened, text=" Wieder geöffnet")
+        call("uno", doc=reopened, command=".uno:GoToStartOfDoc", wait=0.5)
+        call("text", doc=reopened, text="Wieder geöffnet ")
         call("save", doc=reopened, path=str(target), options="TakeOwnership")
         written("Wieder geöffnet", "Speichern nach erneutem Öffnen")
-        call("text", doc=reopened, text=" und erneut gespeichert")
+        call("text", doc=reopened, text="und erneut gespeichert ")
         call("save", doc=reopened, path=str(target), options="TakeOwnership")
         written("und erneut gespeichert", "zweites Speichern nach erneutem Öffnen")
         call("close", doc=reopened)
