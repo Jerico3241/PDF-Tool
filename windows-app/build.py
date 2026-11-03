@@ -976,14 +976,17 @@ def probe_text(program: Path) -> None:
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:
             fail("Probe des Textkerns fehlgeschlagen: die Seite ließ sich nicht zeichnen")
         call("save", doc=doc, path=str(target), options="TakeOwnership")
+        # Ans Ende: »ErsetzenEinmal« ließ die Schreibmarke mitten im Probesatz stehen
+        call("uno", doc=doc, command=".uno:GoToEndOfDoc", wait=0.5)
         call("text", doc=doc, text=" Zweites Speichern")
         call("save", doc=doc, path=str(target), options="TakeOwnership")
         call("close", doc=doc)
         # Seit Beta 9: vorhandenes Dokument öffnen, ändern und über die geöffnete Datei speichern
         reopened = call("open", path=str(target))["doc"]
-        call("text", doc=reopened, text="Wieder geöffnet ")
+        call("uno", doc=reopened, command=".uno:GoToEndOfDoc", wait=0.5)
+        call("text", doc=reopened, text=" Wieder geöffnet")
         call("save", doc=reopened, path=str(target), options="TakeOwnership")
-        call("text", doc=reopened, text="und erneut gespeichert ")
+        call("text", doc=reopened, text=" und erneut gespeichert")
         call("save", doc=reopened, path=str(target), options="TakeOwnership")
         call("close", doc=reopened)
     except text.TextError as exc:
@@ -997,7 +1000,8 @@ def probe_text(program: Path) -> None:
     content = zipfile.ZipFile(target).read("word/document.xml").decode("utf-8") if target.is_file() else ""
     if "Novadesk Textprobe äöü" not in content:
         fail("Probe des Textkerns fehlgeschlagen: der getippte Satz fehlt in der gespeicherten .docx")
-    if not all(part in content for part in ("Zweites Speichern", "Wieder geöffnet", "und erneut gespeichert")):
+    plain = re.sub(r"<[^>]+>", "", content)  # Text ohne XML: Word-Läufe können getippten Text teilen
+    if not all(part in plain for part in ("Zweites Speichern", "Wieder geöffnet", "und erneut gespeichert")):
         fail("Probe des Textkerns fehlgeschlagen: Speichern über die geöffnete .docx fehlt in der Datei")
     names = zipfile.ZipFile(target).namelist()
     if "<m:oMath" not in content or not any(name.startswith("word/charts/chart") for name in names) or 'w:docPartGallery w:val="Table of Contents"' not in content:
