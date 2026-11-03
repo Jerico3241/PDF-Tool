@@ -9,6 +9,9 @@ import PdfTool.Controls
 // die Seiten, auf die sie sich stützen – ein Klick springt dorthin. Das Gespräch gehört zum Tab und lebt nur im
 // Arbeitsspeicher. »Mehrere PDFs fragen«: Fragen an gewählte PDFs oder einen Ordner, die Antwort nennt Datei und Seite.
 // Ohne Sprachmodell: »Einrichten …« (wie in den Einstellungen); während des Downloads dessen Fortschritt.
+// Seit 5.0 Beta 8 auch für Texte, Präsentationen und Tabellen (``Assistant.docKind``): Antworten nennen dort Seiten,
+// Folien bzw. Blätter; Knöpfe unter einer Antwort (``actions``) übernehmen ein Ergebnis (Ersetzen, Einfügen, Diagramm),
+// Korrekturen der Grammatikprüfung (``changes``) lassen sich einzeln übernehmen.
 // Kopf (Titel, Schließen) und Breite kommen von der rechten Seitenleiste (RightPanel).
 ColumnLayout {
     id: root
@@ -19,6 +22,9 @@ ColumnLayout {
     readonly property bool ready: phase === "ready"
     readonly property bool loading: phase === "download" || phase === "verify"
     readonly property bool several: Assistant.scopeLabel !== ""  // Fragen an mehrere PDFs
+    readonly property string docKind: Assistant.docKind  // pdf, text, praesentation, tabelle
+    readonly property bool isPdf: docKind === "pdf"
+    readonly property string docWord: docKind === "text" ? "diesem Text" : docKind === "praesentation" ? "dieser Präsentation" : docKind === "tabelle" ? "dieser Tabelle" : "diesem PDF"
     spacing: 0
 
     function send(question) {
@@ -61,7 +67,7 @@ ColumnLayout {
                 width: parent.width
                 text: I18n.tr(!Assistant.available ? "Diese Installation enthält den KI-Assistenten nicht."
                       : root.loading ? Assistant.statusText
-                      : "Fragen zum PDF beantworten und Dokumente zusammenfassen – vollständig auf diesem PC. Dafür wird einmal ein Sprachmodell geladen.", I18n.revision)
+                      : "Fragen beantworten, zusammenfassen, Texte schreiben und übersetzen – vollständig auf diesem PC. Dafür wird einmal ein Sprachmodell geladen.", I18n.revision)
                 tone: "secondary"
                 horizontalAlignment: Text.AlignHCenter
                 wrap: true
@@ -123,10 +129,12 @@ ColumnLayout {
                 PIcon { anchors.centerIn: parent; name: "chat_sparkle"; size: Metrics.iconSizeLarge; color: Theme.accentText }
             }
             Item { width: 1; height: Metrics.s4 }
-            PText { width: parent.width; text: I18n.tr("Fragen zu diesem PDF", I18n.revision); textStyle: "bodyStrong"; horizontalAlignment: Text.AlignHCenter; wrap: true }
+            PText { objectName: "readerAssistantIntroTitle"; width: parent.width; text: I18n.tr("Fragen zu " + root.docWord, I18n.revision); textStyle: "bodyStrong"; horizontalAlignment: Text.AlignHCenter; wrap: true }
             PText {
                 width: parent.width
-                text: I18n.tr("Der Assistent antwortet nur anhand dieses Dokuments und nennt die Seiten, auf die er sich stützt.", I18n.revision)
+                text: I18n.tr(root.docKind === "praesentation" ? "Der Assistent antwortet nur anhand dieser Präsentation und nennt die Folien, auf die er sich stützt."
+                              : root.docKind === "tabelle" ? "Der Assistent antwortet nur anhand dieser Tabelle und nennt Blatt und Zeile. Kennzahlen rechnet Novadesk selbst."
+                              : "Der Assistent antwortet nur anhand dieses Dokuments und nennt die Seiten, auf die er sich stützt.", I18n.revision)
                 tone: "secondary"
                 horizontalAlignment: Text.AlignHCenter
                 wrap: true
@@ -143,14 +151,53 @@ ColumnLayout {
             PButton {
                 objectName: "readerAssistantTranslate"
                 width: parent.width
+                visible: root.docKind !== "tabelle"
                 iconName: "local_language"
                 text: I18n.tr("Dokument übersetzen …", I18n.revision)
                 enabled: !Assistant.busy && root.doc !== null
                 onClicked: { flick.stick = true; Assistant.translate() }
             }
             PButton {
+                objectName: "readerAssistantWrite"
+                width: parent.width
+                visible: root.docKind === "text"
+                iconName: "pen_sparkle"
+                text: I18n.tr("Text schreiben lassen …", I18n.revision)
+                enabled: !Assistant.busy && root.doc !== null
+                onClicked: { flick.stick = true; Assistant.writeText() }
+            }
+            PButton {
+                objectName: "readerAssistantGrammar"
+                width: parent.width
+                visible: root.docKind === "text"
+                iconName: "text_grammar_wand"
+                text: I18n.tr("Grammatik prüfen", I18n.revision)
+                enabled: !Assistant.busy && root.doc !== null
+                onClicked: { flick.stick = true; Assistant.checkGrammar() }
+            }
+            PButton {
+                objectName: "readerAssistantAnalyze"
+                width: parent.width
+                visible: root.docKind === "tabelle"
+                iconName: "data_trending"
+                text: I18n.tr("Tabelle auswerten", I18n.revision)
+                tip: I18n.tr("Die Tabelle um die markierte Zelle auswerten", I18n.revision)
+                enabled: !Assistant.busy && root.doc !== null
+                onClicked: { flick.stick = true; Assistant.analyzeTable() }
+            }
+            PButton {
+                objectName: "readerAssistantChart"
+                width: parent.width
+                visible: root.docKind === "tabelle"
+                iconName: "data_bar_vertical"
+                text: I18n.tr("Diagramm vorschlagen", I18n.revision)
+                enabled: !Assistant.busy && root.doc !== null
+                onClicked: { flick.stick = true; Assistant.suggestChart() }
+            }
+            PButton {
                 id: severalButton
                 objectName: "readerAssistantSeveral"
+                visible: root.isPdf
                 width: parent.width
                 iconName: "library"
                 text: I18n.tr("Mehrere PDFs fragen …", I18n.revision)
@@ -159,11 +206,11 @@ ColumnLayout {
                 onClicked: severalMenu.popup(severalButton, 0, severalButton.height)
             }
             Repeater {
-                model: [
+                model: root.isPdf || root.docKind === "text" ? [
                     { label: "Fristen und Termine", question: "Welche Fristen und Termine nennt das Dokument?" },
                     { label: "Beträge und Kosten", question: "Welche Beträge und Kosten nennt das Dokument?" },
                     { label: "Beteiligte Personen und Firmen", question: "Welche Personen und Firmen sind beteiligt, und in welcher Rolle?" }
-                ]
+                ] : []
                 PButton {
                     required property var modelData
                     width: parent.width
@@ -198,14 +245,29 @@ ColumnLayout {
         readonly property real endY: Math.max(0, contentHeight - height)
         property bool stick: true
         property bool scrolling: false
+        property real lastContentHeight: 0
+        property int lastCount: 0
         function toEnd() {
             scrolling = true
-            contentY = endY
+            contentY = Math.max(0, contentHeight - height)  // nicht ``endY``: die Bindung ist im Signal evtl. noch alt
             scrolling = false
         }
-        onContentYChanged: if (!scrolling) stick = contentY >= endY - 24
-        onContentHeightChanged: if (stick) toEnd()
+        // Nur Scrollen durch den Benutzer löst vom Ende – nicht das Neuberechnen der Höhe (Umbruch, neue Knöpfe)
+        onContentYChanged: if (!scrolling && contentHeight === lastContentHeight) stick = contentY >= endY - 24
+        onContentHeightChanged: {
+            lastContentHeight = contentHeight
+            if (stick) toEnd()
+        }
         onHeightChanged: if (stick) toEnd()
+        // Neue Frage (auch aus dem Menüband): wieder ans Ende
+        Connections {
+            target: root.conversation
+            function onCountChanged() {
+                if (root.conversation.count > flick.lastCount) flick.stick = true
+                flick.lastCount = root.conversation.count
+                if (flick.stick) Qt.callLater(flick.toEnd)
+            }
+        }
 
         ColumnLayout {
             id: entries
@@ -226,6 +288,8 @@ ColumnLayout {
                     required property var pages
                     required property var sources
                     required property bool own  // vom Benutzer getippte Frage (nie übersetzen)
+                    required property var actions  // Knöpfe unter der Antwort: {key, label, icon, tip}
+                    required property var changes  // Korrekturen: {index, before, after, rich, state}
                     Layout.fillWidth: true
                     implicitHeight: kind === "question" ? bubble.height : details.implicitHeight
                     Accessible.role: Accessible.ListItem
@@ -326,8 +390,8 @@ ColumnLayout {
                                     implicitHeight: 28
                                     leftPadding: 8
                                     rightPadding: 8
-                                    text: I18n.tr("S. " + modelData, I18n.revision)
-                                    tip: I18n.tr("Zur Seite " + modelData, I18n.revision)
+                                    text: I18n.tr((root.docKind === "praesentation" ? "Folie " : "S. ") + modelData, I18n.revision)
+                                    tip: I18n.tr((root.docKind === "praesentation" ? "Zur Folie " : "Zur Seite ") + modelData, I18n.revision)
                                     onClicked: Assistant.openPage(modelData)
                                 }
                             }
@@ -353,6 +417,86 @@ ColumnLayout {
                                 onClicked: Assistant.copy(entry.key)
                             }
                         }
+                        // Korrekturen der Grammatikprüfung: je Satz vorher/nachher, einzeln übernehmen
+                        Repeater {
+                            model: entry.kind === "answer" && !entry.pending ? entry.changes : []
+                            Rectangle {
+                                id: changeCard
+                                required property var modelData
+                                objectName: "readerAssistantChange"
+                                Layout.fillWidth: true
+                                implicitHeight: changeColumn.implicitHeight + 16
+                                radius: Metrics.radiusControl
+                                color: Theme.control
+                                border.width: 1
+                                border.color: Theme.controlStroke
+                                opacity: modelData.state === "done" ? 0.7 : 1
+                                ColumnLayout {
+                                    id: changeColumn
+                                    x: 8
+                                    y: 8
+                                    width: parent.width - 16
+                                    spacing: Metrics.s6
+                                    Text {
+                                        Layout.fillWidth: true
+                                        // ``rich`` ist maskiert: <s> gestrichen, <b> neu (assistant.writing.diff_rich)
+                                        text: I18n.tr(changeCard.modelData.rich, I18n.revision)
+                                        textFormat: Text.StyledText
+                                        wrapMode: Text.Wrap
+                                        font: Typography.body
+                                        color: Theme.textPrimary
+                                        Accessible.role: Accessible.StaticText
+                                        Accessible.name: I18n.tr("Vorschlag: ", I18n.revision) + changeCard.modelData.after
+                                    }
+                                    RowLayout {
+                                        spacing: Metrics.s6
+                                        PButton {
+                                            objectName: "readerAssistantChangeApply"
+                                            visible: changeCard.modelData.state === ""
+                                            implicitHeight: 28
+                                            iconName: "checkmark"
+                                            text: I18n.tr("Übernehmen", I18n.revision)
+                                            enabled: !Assistant.busy
+                                            onClicked: Assistant.applyChange(entry.key, changeCard.modelData.index)
+                                        }
+                                        PIcon {
+                                            visible: changeCard.modelData.state !== ""
+                                            name: changeCard.modelData.state === "done" ? "checkmark" : "warning"
+                                            size: 14
+                                            color: changeCard.modelData.state === "done" ? Theme.success : Theme.textSecondary
+                                        }
+                                        PText {
+                                            objectName: "readerAssistantChangeState"
+                                            visible: changeCard.modelData.state !== ""
+                                            text: I18n.tr(changeCard.modelData.state === "done" ? "Übernommen" : "Nicht mehr im Text gefunden", I18n.revision)
+                                            textStyle: "caption"
+                                            tone: "secondary"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Ergebnis übernehmen: Ersetzen, Einfügen, Diagramm einfügen, alle Korrekturen …
+                        Flow {
+                            Layout.fillWidth: true
+                            visible: entry.kind === "answer" && !entry.pending && entry.actions.length > 0
+                            spacing: Metrics.s6
+                            Repeater {
+                                model: entry.kind === "answer" && !entry.pending ? entry.actions : []
+                                PButton {
+                                    required property var modelData
+                                    required property int index
+                                    objectName: "readerAssistantAction_" + modelData.key
+                                    implicitHeight: 30
+                                    kind: index === 0 ? "accent" : "standard"
+                                    iconName: modelData.icon
+                                    text: I18n.tr(modelData.label, I18n.revision)
+                                    tip: I18n.tr(modelData.tip, I18n.revision)
+                                    enabled: !Assistant.busy
+                                    onClicked: Assistant.act(entry.key, modelData.key)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -374,7 +518,7 @@ ColumnLayout {
             PText {
                 objectName: "readerAssistantScope"
                 Layout.fillWidth: true
-                text: I18n.tr("Fragen an: " + (root.several ? Assistant.scopeLabel : "dieses PDF"), I18n.revision)
+                text: I18n.tr("Fragen an: " + (root.several ? Assistant.scopeLabel : root.docKind === "text" ? "diesen Text" : root.docKind === "praesentation" ? "diese Präsentation" : root.docKind === "tabelle" ? "diese Tabelle" : "dieses PDF"), I18n.revision)
                 textStyle: "caption"
                 tone: "secondary"
                 elide: Text.ElideRight
@@ -382,7 +526,7 @@ ColumnLayout {
             PButton {
                 id: scopeButton
                 objectName: "readerAssistantScopeButton"
-                visible: !root.several
+                visible: !root.several && root.isPdf
                 implicitHeight: 24
                 leftPadding: 6
                 rightPadding: 6
@@ -411,7 +555,7 @@ ColumnLayout {
                 minLines: 1
                 maxLines: 5
                 label: I18n.tr(root.several ? "Frage an die gewählten PDFs" : "Frage zum Dokument", I18n.revision)
-                placeholderText: I18n.tr(root.several ? "Frage an die gewählten PDFs …" : "Frage zu diesem PDF …", I18n.revision)
+                placeholderText: I18n.tr(root.several ? "Frage an die gewählten PDFs …" : "Frage zu " + root.docWord + " …", I18n.revision)
                 enabled: root.doc !== null
                 submitOnEnter: true
                 onSubmitted: if (root.send(input.text)) input.text = ""
@@ -428,7 +572,7 @@ ColumnLayout {
             PIconButton {
                 objectName: "readerAssistantTranslateMore"
                 Layout.alignment: Qt.AlignBottom
-                visible: root.conversation.count > 0 && !Assistant.busy && !root.several
+                visible: root.conversation.count > 0 && !Assistant.busy && !root.several && root.docKind !== "tabelle"
                 iconName: "local_language"
                 tip: I18n.tr("Dokument übersetzen", I18n.revision)
                 enabled: root.doc !== null
@@ -459,7 +603,9 @@ ColumnLayout {
             PIcon { Layout.alignment: Qt.AlignTop; name: "shield_checkmark"; size: 14; color: Theme.textTertiary }
             PText {
                 Layout.fillWidth: true
-                text: I18n.tr("Läuft nur auf diesem PC. Antworten können Fehler enthalten – bitte auf den genannten Seiten prüfen.", I18n.revision)
+                text: I18n.tr(root.docKind === "tabelle" ? "Läuft nur auf diesem PC. Antworten können Fehler enthalten – bitte in der Tabelle prüfen."
+                              : root.docKind === "praesentation" ? "Läuft nur auf diesem PC. Antworten können Fehler enthalten – bitte auf den genannten Folien prüfen."
+                              : "Läuft nur auf diesem PC. Antworten können Fehler enthalten – bitte auf den genannten Seiten prüfen.", I18n.revision)
                 textStyle: "caption"
                 tone: "tertiary"
                 wrap: true

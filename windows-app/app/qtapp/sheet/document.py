@@ -104,6 +104,7 @@ class SheetController(Observable):
     encryptedChanged, encrypted = prop(bool, "encrypted", False)  # Kennwort zum Öffnen gesetzt
     crosshairChanged, crosshair = prop(bool, "crosshair", False)  # Lese-Kreuz: Zeile und Spalte der Zelle hervorheben
     validationChanged, validation = prop(dict, "validation", {})  # Datenüberprüfung der aktiven Zelle
+    aiPanelChanged, aiPanel = prop(bool, "aiPanel", False)  # Seitenleiste mit dem KI-Assistenten (seit 5.0 Beta 8)
 
     contentChanged = Signal()
     editRequested = Signal(str)  # Bearbeiten beginnen (mit diesem Text, »« = bisheriger Inhalt)
@@ -117,6 +118,8 @@ class SheetController(Observable):
         self.app = reader.app
         self.service = service
         self.ident = ident
+        self._ai_edits = 0  # KI-Assistent: Stand der Daten (Text der Blätter neu lesen, wenn er sich ändert)
+        self.ai_labels: list[str] = []
         self.sourcePath = ""  # wie ein PDF-Dokument ohne umgewandelte Quelle
         self.panels: dict = {}
         self.currentPage = 0
@@ -226,6 +229,7 @@ class SheetController(Observable):
                 status: str = "") -> None:
         """Ändernder Befehl: danach Zustand, sichtbare Zellen (und mit ``layout`` den Aufbau) neu laden."""
         self.busy = True
+        self._ai_edits += 1
 
         def done(result) -> None:
             self.busy = False
@@ -674,6 +678,7 @@ class SheetController(Observable):
                 self.busy = False
                 fallback(exc)
 
+            self._ai_edits += 1
             self._call("paste", {"row": row, "col": col, "text": text}, done, failed, quiet=True)
             return
         if text:
@@ -960,6 +965,69 @@ class SheetController(Observable):
         return self._images.get(self._image_key(item), "")
 
     # Blätter ---------------------------------------------------------------------------------------------------------
+    # KI-Assistent (seit 5.0 Beta 8) --------------------------------------------------------------------------------
+    def goTo(self, _page: int) -> None:  # noqa: N802
+        pass
+
+    def ai_revision(self) -> int:
+        return self._ai_edits
+
+    def ai_show_panel(self) -> None:
+        self.aiPanel = True
+
+    def ai_hide_panel(self) -> None:
+        self.aiPanel = False
+
+    @Slot()
+    def toggleAiPanel(self) -> None:  # noqa: N802
+        self.aiPanel = not self.aiPanel
+
+    def assistant_texts(self, done: Callable[[list[str]], None], failed: Callable[[BaseException], None]) -> None:
+        """Text aller sichtbaren Blätter für Fragen: je Blatt eine »Seite« mit »Zeile N: Spalte: Wert; …«.
+        ``ai_labels`` nennt danach die Blätter."""
+        from assistant import tables
+
+        cached = getattr(self, "_ai_texts", None)
+        revision = self._ai_edits
+        if cached is not None and cached[0] == revision:
+            self.ai_labels = cached[2]
+            done(cached[1])
+            return
+
+        def got(result: dict) -> None:
+            sheets = (result or {}).get("sheets") or []
+            labels = [f"Blatt »{entry.get('name', '')}«" for entry in sheets]
+
+            def build() -> list[str]:
+                return [tables.sheet_page(entry.get("name", ""), entry.get("rows") or [], int(entry.get("first") or 1)) for entry in sheets]
+
+            def built(texts: list[str]) -> None:
+                self._ai_texts = (revision, texts, labels)
+                self.ai_labels = labels
+                done(texts)
+
+            self.app.worker.run(build, built, lambda exc, _details: failed(exc))
+
+        self._call("ai_texts", {}, got, failed, quiet=True)
+
+    def ai_table(self, done: Callable[[dict], None], failed: Callable[[BaseException], None]) -> None:
+        """Tabelle um die Auswahl (Auswerten, Diagramm vorschlagen): {range, rows, sheet, name}."""
+        sheet = self.activeSheet
+        name = self.sheets[sheet].get("name", "") if 0 <= sheet < len(self.sheets) else ""
+
+        def got(result: dict) -> None:
+            data = dict(result or {})
+            data.update({"sheet": sheet, "name": name})
+            done(data)
+
+        self._call("region_texts", {"range": self.selection}, got, failed, quiet=True)
+
+    def ai_add_chart(self, sheet: int, block: list, kind: str) -> None:
+        """Vorgeschlagenes Diagramm einfügen – auf dem Blatt, auf dem die Tabelle steht."""
+        if sheet != self.activeSheet and 0 <= sheet < len(self.sheets):
+            self.activateSheet(sheet)
+        self._change("add_chart", {"range": list(block), "type": kind, "sheet": sheet}, layout=True, status="Diagramm eingefügt.")
+
     @Slot(int)
     def activateSheet(self, index: int) -> None:  # noqa: N802
         if not 0 <= index < len(self.sheets) or index == self.activeSheet:

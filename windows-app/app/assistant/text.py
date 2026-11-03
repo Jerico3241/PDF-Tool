@@ -44,7 +44,8 @@ _HYPHEN_BREAK = re.compile(r"(\w)-\s*\n\s*(?=[a-zäöüß])")
 _SPACES = re.compile(r"[ \t ]+")
 _SENTENCE = re.compile(r"(?<=[.!?:;])\s+")
 # Seitenangaben in Antworten: »S. 3«, »S. 3–4«, »S. 3, 5 und 7«, »Seite 3«, »Seiten 3 bis 5«
-_CITATION = re.compile(r"\b(S\.|Seiten?)\s?(\d{1,5})((?:\s?(?:[,–\-]|und|bis)\s?\d{1,5})*)")
+# seit 5.0 Beta 8 auch Folien von Präsentationen: »Folie 3«, »Folien 2 und 4«
+_CITATION = re.compile(r"\b(S\.|Seiten?|Folien?)\s?(\d{1,5})((?:\s?(?:[,–\-]|und|bis)\s?\d{1,5})*)")
 _BOLD = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
 _BULLET = re.compile(r"[-*•·]\s+")  # nummerierte Zeilen bleiben Text: ihre Zahlen bleiben genau so stehen
 _HEADING = re.compile(r"#{1,6}\s+")
@@ -191,9 +192,15 @@ class Index:
         return [self.items[index] for index in sorted(chosen)]
 
 
-def excerpt_block(items: list[Passage]) -> str:
-    """Abschnitte für das Modell: je Abschnitt »[Seite N]« und der Text."""
-    return "\n\n".join(f"[Seite {item.page + 1}]\n{item.text}" for item in items)
+def excerpt_block(items: list[Passage], labels: list[str] | None = None, unit: str = "Seite") -> str:
+    """Abschnitte für das Modell: je Abschnitt »[Seite N]« und der Text. Präsentationen zählen Folien (``unit``),
+    Tabellen nennen ihr Blatt (``labels`` je »Seite«, etwa »Blatt »Umsatz««)."""
+    def label(item: Passage) -> str:
+        if labels and 0 <= item.page < len(labels):
+            return labels[item.page]
+        return f"{unit} {item.page + 1}"
+
+    return "\n\n".join(f"[{label(item)}]\n{item.text}" for item in items)
 
 
 def library_block(items: list[Passage], names: list[str]) -> str:

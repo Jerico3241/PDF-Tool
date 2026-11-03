@@ -62,7 +62,7 @@ MARGINS = {"normal": (2500, 2500, 2500, 2500), "narrow": (1270, 1270, 1270, 1270
 # Andere Fassung zum Vergleichen
 COMPARE_FILTER = "Texte (*.docx *.doc *.odt *.rtf);;Alle Dateien (*.*)"
 # Seitenleiste rechts: Formatvorlagen, Kommentare, Änderungen, Serienbrief (seit 5.0 Beta 5 – eine zur Zeit)
-PANELS = ("styles", "comments", "changes", "merge")
+PANELS = ("styles", "comments", "changes", "merge", "assistant")  # »assistant«: KI-Assistent (seit 5.0 Beta 8)
 # Querverweise: Art des Ziels → was sich einfügen lässt (Schlüssel, Bezeichnung)
 REFERENCE_PARTS = {
     "heading": (("page", "Seitenzahl"), ("text", "Text der Überschrift"), ("number", "Nummer der Überschrift"), ("updown", "»oben« bzw. »unten«")),
@@ -202,8 +202,13 @@ class TextController(Observable):
     def busy_saving(self) -> bool:
         return self.saving
 
-    def goTo(self, _page: int) -> None:  # noqa: N802
-        pass
+    def goTo(self, page: int) -> None:  # noqa: N802
+        """Zur Seite springen (Seitenverweise des KI-Assistenten): Schreibmarke an den Anfang des Textbereichs der Seite."""
+        if not self.ready or not 0 <= page < len(self.pages):
+            return
+        x, y, width, height = (int(value) for value in self.pages[page][:4])
+        # unterhalb der Kopfzeile, links im Textbereich (Ränder sind meist 2–2,5 cm)
+        self._place_cursor([x + width // 6, y + height // 8, 1, 2])
 
     def write_recovery_now(self) -> None:
         pass
@@ -1237,6 +1242,94 @@ class TextController(Observable):
                     pass
 
         self._call("export", {"path": str(target), "format": "pdf"}, done)
+
+    # KI-Assistent (seit 5.0 Beta 8) --------------------------------------------------------------------------------
+    def ai_revision(self) -> int:
+        return self._edits
+
+    def ai_show_panel(self) -> None:
+        """Seitenleiste mit dem KI-Assistenten zeigen (nicht umschalten)."""
+        self.panel = "assistant"
+        self.sidebar = True
+
+    def ai_hide_panel(self) -> None:
+        """Assistent ausgeschaltet: seine Seitenleiste schließen."""
+        if self.panel == "assistant":
+            self.sidebar = False
+            self.panel = "styles"
+
+    def assistant_texts(self, done: Callable[[list[str]], None], failed: Callable[[BaseException], None]) -> None:
+        """Text je Seite (bzw. Folie) für den KI-Assistenten: über eine PDF im Arbeitsordner, damit die Seiten genau wie
+        im Ausdruck gezählt werden. Je Stand nur einmal."""
+        cached = getattr(self, "_ai_texts", None)
+        revision = self._edits
+        if cached is not None and cached[0] == revision:
+            done(cached[1])
+            return
+        folder = Path(tempfile.mkdtemp(prefix="pdf-tool-ki-"))
+        target = folder / "text.pdf"
+
+        def cleanup() -> None:
+            import shutil
+
+            shutil.rmtree(folder, ignore_errors=True)
+
+        def read() -> list[str]:
+            import pypdfium2 as pdfium
+
+            from pdfium_lock import PDFIUM_LOCK
+
+            try:
+                with PDFIUM_LOCK:
+                    document = pdfium.PdfDocument(str(target))
+                    try:
+                        return [document[index].get_textpage().get_text_range() for index in range(len(document))]
+                    finally:
+                        document.close()
+            finally:
+                cleanup()
+
+        def got(texts: list[str]) -> None:
+            self._ai_texts = (revision, texts)
+            done(texts)
+
+        def broken(exc: BaseException, _details: str = "") -> None:
+            cleanup()
+            failed(exc)
+
+        self._call("export", {"path": str(target), "format": "pdf"}, lambda _result: self.app.worker.run(read, got, broken), broken)
+
+    def ai_selection(self, done: Callable[[str], None]) -> None:
+        """Markierter Text (leer: nichts markiert)."""
+        if not self.selection and not self.graphic:
+            done("")
+            return
+
+        def got(data: dict) -> None:
+            value = base64.b64decode((data or {}).get("text/plain;charset=utf-8") or "").decode("utf-8", "replace")
+            done(value.replace("\r\n", "\n").replace("\r", "\n"))
+
+        self._call("selection", {"mimes": ["text/plain;charset=utf-8"]}, got, lambda _exc: done(""), priority=INPUT)
+
+    def ai_paragraphs(self, limit: int, done: Callable[[list[str]], None], failed: Callable[[BaseException], None]) -> None:
+        """Absätze des Textes (Grammatik prüfen, Übersetzung nebeneinander) – höchstens etwa ``limit`` Zeichen."""
+        self.macro("Absaetze", [limit], lambda result: done([str(item) for item in result]), failed)
+
+    def ai_before_cursor(self, done: Callable[[str], None]) -> None:
+        """Text vor der Schreibmarke (»Text schreiben lassen« schließt daran an)."""
+        self.macro("VorDerMarke", [1500], lambda result: done(str(result[0]) if result else ""), lambda _exc: done(""))
+
+    def ai_insert(self, value: str, done: Callable[[bool], None] | None = None) -> None:
+        """Text an der Schreibmarke einfügen bzw. die Markierung ersetzen (rein, ohne Format)."""
+        self._follow = True
+        data = base64.b64encode(str(value).encode("utf-8")).decode("ascii")
+        self._call("paste", {"mime": "text/plain;charset=utf-8", "data": data},
+                   (lambda ok: done(bool(ok))) if done else None, (lambda _exc: done(False)) if done else None, priority=INPUT)
+
+    def ai_replace_once(self, before: str, after: str, done: Callable[[bool], None]) -> None:
+        """Eine Stelle genau so suchen und ersetzen (Korrektur übernehmen)."""
+        self._follow = True
+        self.macro("ErsetzenEinmal", [before, after], lambda result: done(bool(result) and str(result[0]) == "1"), lambda _exc: done(False))
 
     # Schließen ---------------------------------------------------------------------------------------------------------
     def shutdown(self, discard_recovery: bool = True) -> None:

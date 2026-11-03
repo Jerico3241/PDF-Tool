@@ -217,7 +217,7 @@ class SlidesController(TextController):
     slideNamesChanged, slideNames = prop(list, "slideNames", [])
     slideRevisionChanged, slideRevision = prop(int, "slideRevision", 0)  # steigt, wenn die Folienbilder alt sind
     notesOpenChanged, notesOpen = prop(bool, "notesOpen", True)
-    panelChanged, panel = prop(str, "panel", "slides")  # Seitenleiste rechts: »slides«, »layouts« oder zu («»)
+    panelChanged, panel = prop(str, "panel", "slides")  # Seitenleiste rechts: »slides«, »layouts«, »assistant« (KI) oder zu («»)
     fittingChanged, fitting = prop(bool, "fitting", True)  # Folie füllt die Ansicht (bis jemand selbst zoomt)
     presentingChanged, presenting = prop(bool, "presenting", False)
     presentIndexChanged, presentIndex = prop(int, "presentIndex", 0)
@@ -324,6 +324,17 @@ class SlidesController(TextController):
                 self.refresh_notes()
 
         self._call("part", {"part": index}, done, priority=INPUT)
+
+    def goTo(self, page: int) -> None:  # noqa: N802
+        """Folienverweise des KI-Assistenten (»Folie 3«)."""
+        self.goSlide(page)
+
+    def ai_show_panel(self) -> None:
+        self.panel = "assistant"
+
+    def ai_hide_panel(self) -> None:
+        if self.panel == "assistant":
+            self.panel = ""
 
     @Slot()
     def nextSlide(self) -> None:  # noqa: N802

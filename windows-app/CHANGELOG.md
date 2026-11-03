@@ -2,6 +2,25 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.8
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.8.md).
+
+- KI-Werkzeuge (`qtapp/aitools.py`, Mixin von `AssistantController`): Schreibhilfe und Grammatik
+  (`assistant/writing.py`, Sätze vergleichen mit `difflib`), Übersetzung nebeneinander als `.fodt`
+  (`assistant/bilingual.py`, nummerierte Absätze), Präsentation aus Thema oder Dokument als `.fodp` im Design
+  »Projektvorstellung« (`assistant/slidegen.py`), Tabellen auswerten und Diagrammregel (`assistant/tables.py`,
+  Kennzahlen ohne Modell), PDF-Formular ausfüllen mit JSON-Schema (`assistant/formfill.py`,
+  `client.Chat(json_schema=…)`, Beschriftungen über `forms.labels`, ein Rückgängig-Schritt).
+- Fragen und Zusammenfassen für Texte, Präsentationen und Tabellen: `prompts.Scope`, Texte je Seite/Folie über
+  ein temporäres PDF (`assistant_texts`), Tabellen je Blatt über `ai_texts` im Rechenkern; »Folie N« wird verlinkt.
+- Textkern: Makros `Absaetze`, `VorDerMarke`, `ErsetzenEinmal` (`tools/text/macros.py`).
+- Oberfläche: Reiter »KI« (`AiRibbon.qml`) in allen vier Ansichten, Seitenleiste »KI-Assistent« auch in Texten,
+  Präsentationen und Tabellen, neue Dialoge `AiWriteContent`, `AiSlidesContent`, `AiFormContent`,
+  `AiFormReviewContent`; »Dokument übersetzen« mit Wahl »nebeneinander«. Neue Fluent-Symbole.
+- Behoben: Das Gespräch scrollte bei langen Antworten nicht ganz ans Ende (Knöpfe unter der Antwort blieben
+  verdeckt).
+
 # Novadesk 5.0.0-beta.7
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.7.md).

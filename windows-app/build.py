@@ -756,6 +756,9 @@ def probe_calc(program: Path) -> None:
         for row, (place, amount) in enumerate((("Ort", "Betrag"), ("Köln", "480"), ("Bonn", "1250"), ("Köln", "190"))):
             probe.call("input", doc=data, row=row, col=0, text=place)
             probe.call("input", doc=data, row=row, col=1, text=amount)
+        texts = probe.call("ai_texts", doc=data)  # KI-Assistent (seit Beta 8): Text aller Blätter
+        if not texts.get("sheets") or texts["sheets"][0]["rows"][:2] != [["Ort", "Betrag"], ["Köln", "480"]]:
+            fail(f"Probe des Rechenkerns fehlgeschlagen: »ai_texts« liefert {texts!r}")
         probe.call("conditional", doc=data, sheet=0, range=[1, 1, 3, 1], rule="bar_blue")
         cells = probe.call("cells", doc=data, sheet=0, range=[0, 0, 3, 1])
         if not any((style or {}).get("bar") for style in cells.get("styles", {}).values()):
@@ -928,6 +931,14 @@ def probe_text(program: Path) -> None:
         call("macro", doc=doc, name="Verzeichnis", values=["Inhaltsverzeichnis", "3"])
         if call("macro", doc=doc, name="VerzeichnisseAktualisieren") != ["1"]:
             fail("Probe des Textkerns fehlgeschlagen: das Inhaltsverzeichnis fehlt")
+        # KI-Werkzeuge (seit Beta 8): Absätze lesen, Text vor der Schreibmarke, eine Stelle ersetzen.
+        # Erst nach dem Verzeichnis: »ErsetzenEinmal« setzt die Schreibmarke hinter die Korrektur, ein danach eingefügtes
+        # Verzeichnis würde den Probesatz teilen
+        if not any("Textprobe" in item for item in call("macro", doc=doc, name="Absaetze", values=["10000"])):
+            fail("Probe des Textkerns fehlgeschlagen: das Makro »Absaetze« liefert den getippten Text nicht")
+        call("macro", doc=doc, name="VorDerMarke", values=["200"])
+        if call("macro", doc=doc, name="ErsetzenEinmal", values=["Textprobe", "Textprobe"]) != ["1"]:
+            fail("Probe des Textkerns fehlgeschlagen: das Makro »ErsetzenEinmal« findet den getippten Text nicht")
         call("settle", doc=doc)
         tile = call("tile", doc=doc, pw=256, ph=256, x=0, y=0, w=3840, h=3840)
         if len(tile) != 256 * 256 * 4 or len(set(tile[::4])) < 2:

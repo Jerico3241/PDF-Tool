@@ -183,6 +183,43 @@ def find(document: EditorDocument, key: str):
     raise UnsupportedEdit("Das Formularfeld ist nicht mehr vorhanden.")
 
 
+def labels(document: EditorDocument) -> dict[str, str]:
+    """Beschriftungen der Felder für den KI-Assistenten (seit 5.0 Beta 8): Tooltip (/TU) bzw. Text links neben oder
+    über dem ersten Widget auf der Seite – Feldnamen wie »Text1« sagen dem Modell sonst nichts."""
+    from pdfium_lock import PDFIUM_LOCK
+
+    result: dict[str, str] = {}
+    tooltips: dict[str, str] = {}
+    if isinstance(document.pdf.Root.get("/AcroForm"), Dictionary):
+        for item, _members in _groups(document):
+            tip = item.get_inheritable_field_value("/TU")
+            if tip is not None and str(tip).strip():
+                tooltips[f"{item.obj.objgen[0]}-{item.obj.objgen[1]}"] = " ".join(str(tip).split())[:120]
+    for info in list_fields(document):
+        if info.key in tooltips:
+            result[info.key] = tooltips[info.key]
+            continue
+        if not info.widgets:
+            continue
+        widget = info.widgets[0]
+        x0, y0, x1, y1 = widget.rect
+        height = max(8.0, y1 - y0)
+        text = ""
+        try:
+            with PDFIUM_LOCK:
+                textpage = document.textpage(widget.page)
+                # links daneben (gleiche Zeile), sonst darüber
+                text = textpage.get_text_bounded(left=max(0.0, x0 - 220), bottom=y0 + height * 0.15, right=x0 - 0.5, top=y1 - height * 0.15)
+                if not text.strip():
+                    text = textpage.get_text_bounded(left=x0 - 2, bottom=y1, right=x1 + 2, top=y1 + 16)
+        except Exception:  # noqa: BLE001 - ohne Text bleibt es beim Feldnamen
+            text = ""
+        text = " ".join(str(text or "").split()).strip(" :_.")
+        if text:
+            result[info.key] = text[-80:]
+    return result
+
+
 # --- Ausfüllen ------------------------------------------------------------------------------------------------
 def set_value(document: EditorDocument, history: History, key: str, value) -> None:
     """Wert eines Feldes setzen: Text (``str``), Kontrollkästchen (``bool``), Optionsfeld

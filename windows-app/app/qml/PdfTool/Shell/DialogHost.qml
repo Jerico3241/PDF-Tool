@@ -171,6 +171,10 @@ T.Popup {
                             case "text_formula": return formulaContent
                             case "text_chart": return chartContent
                             case "sheet_form": return sheetFormContent
+                            case "ai_write": return aiWriteContent
+                            case "ai_slides": return aiSlidesContent
+                            case "ai_form": return aiFormContent
+                            case "ai_form_review": return aiFormReviewContent
                             default: return null
                             }
                         }
@@ -248,6 +252,10 @@ T.Popup {
     Component { id: digitalSignContent; DigitalSignContent {} }
     Component { id: signaturesContent; SignaturesContent {} }
     Component { id: translateContent; TranslateContent {} }
+    Component { id: aiWriteContent; AiWriteContent {} }
+    Component { id: aiSlidesContent; AiSlidesContent {} }
+    Component { id: aiFormContent; AiFormContent {} }
+    Component { id: aiFormReviewContent; AiFormReviewContent {} }
     Component { id: shortcutsContent; ShortcutsContent {} }
     Component { id: headerFooterContent; HeaderFooterContent {} }
     Component { id: watermarkContent; WatermarkContent {} }

@@ -21,9 +21,10 @@ from assistant import catalog, runtime, store
 from assistant import library as pdflibrary
 from assistant import text as doctext
 from assistant.client import AssistantError, Cancelled, Chat
-from assistant.prompts import (ANSWER_TOKENS, LANGUAGES, PART_TOKENS, QUESTION_CHARS, combine_messages, library_messages, part_messages, plan_summary, question_messages,
-                               summary_messages, translate_messages, translation_parts, translation_tokens)
+from assistant.prompts import (ANSWER_TOKENS, LANGUAGES, PART_TOKENS, QUESTION_CHARS, Scope, combine_messages, library_messages, part_messages, plan_summary,
+                               question_messages, summary_messages, translate_messages, translation_parts, translation_tokens)
 
+from .aitools import AiTools
 from .base import Observable, prop
 from .models import KeyedListModel
 
@@ -38,7 +39,10 @@ HF_SUFFIXES = (".hf.co", ".huggingface.co")  # Speicher von Hugging Face (Weiter
 # Einträge des Gesprächs: question, answer, error oder note; ``rich`` ist die Antwort zum Anzeigen (siehe
 # ``assistant.text.rich``), ``pages`` die genannten Seiten (1-basiert), ``sources`` bei mehreren PDFs die genannten
 # Stellen ({label, file, page})
-ENTRY_ROLES = ("key", "kind", "text", "rich", "pending", "note", "pages", "sources", "own")
+# Seit 5.0 Beta 8: ``actions`` – Knöpfe unter einer Antwort ({key, label, icon}: Ersetzen, Einfügen, Diagramm einfügen …),
+# ``changes`` – Korrekturvorschläge der Grammatikprüfung ({index, before, after, rich, state})
+ENTRY_ROLES = ("key", "kind", "text", "rich", "pending", "note", "pages", "sources", "own", "actions", "changes")
+OFFICE_KINDS = ("text", "praesentation", "tabelle")
 LIBRARY = "__mehrere__"  # Gespräch über mehrere PDFs (statt eines Dokument-Tabs)
 
 
@@ -53,7 +57,7 @@ def _duration(seconds: float) -> str:
     return f"{minutes} Min." if minutes < 90 else f"{minutes // 60} Std. {minutes % 60} Min."
 
 
-class AssistantController(Observable):
+class AssistantController(AiTools, Observable):
     enabledChanged, enabled = prop(bool, "enabled", False)
     availableChanged, available = prop(bool, "available", False)  # Laufzeit vorhanden (Windows-Setup)
     # off (aus) · setup (eingeschaltet, kein Modell) · download · verify (Prüfsumme) · ready
@@ -68,6 +72,8 @@ class AssistantController(Observable):
     busyChanged, busy = prop(bool, "busy", False)  # eine Antwort läuft
     # Fragen an mehrere PDFs: Bezeichnung (»12 PDFs aus »Verträge««, leer = das geöffnete Dokument)
     scopeLabelChanged, scopeLabel = prop(str, "scopeLabel", "")
+    # Art des gezeigten Dokuments (seit 5.0 Beta 8): pdf, text, praesentation, tabelle – Texte und Knöpfe der Seitenleiste
+    docKindChanged, docKind = prop(str, "docKind", "pdf")
 
     def __init__(self, app, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -89,6 +95,8 @@ class AssistantController(Observable):
         self._library: pdflibrary.Library | None = None
         self._library_index: doctext.Index | None = None
         self._translate_language = "en"
+        self._translate_mode = "pdf"
+        self._payloads: dict[str, dict] = {}  # Antwort → was ihre Knöpfe brauchen (Markierung, Diagramm …)
         self._download_started = 0.0
         self._download_offset = 0
         self.set_quietly("available", runtime.server_path() is not None and runtime.platform_supported())
@@ -160,6 +168,9 @@ class AssistantController(Observable):
             self.cancelDownload()  # aus heißt: nichts wird geladen (der Teil bleibt zum Fortsetzen)
             if self.reader is not None:
                 self.reader.close_right_panel("assistant")
+                for doc in list(self.reader._docs.values()):
+                    if hasattr(doc, "ai_hide_panel"):
+                        doc.ai_hide_panel()
         self._refresh_state()
         self.app.persist()
         self.app.set_status("KI-Assistent eingeschaltet." if enabled else "KI-Assistent ausgeschaltet.", "success")
@@ -381,6 +392,20 @@ class AssistantController(Observable):
     def _document(self):
         return self.reader.current if self.reader is not None else None
 
+    @staticmethod
+    def _kind(doc) -> str:
+        """pdf, text, praesentation oder tabelle."""
+        kind = getattr(doc, "kind", "pdf") if doc is not None else "pdf"
+        return kind if kind in OFFICE_KINDS else "pdf"
+
+    @staticmethod
+    def _revision(doc) -> int:
+        return doc.ai_revision() if hasattr(doc, "ai_revision") else doc.revision
+
+    def _scope(self, doc) -> Scope:
+        kind = self._kind(doc)
+        return Scope(kind, tuple(getattr(doc, "ai_labels", []) or ()) if kind == "tabelle" else ())
+
     def _current_key(self) -> str:
         """Gespräch, das die Seitenleiste zeigt: mehrere PDFs oder das aktive Dokument."""
         if self.scopeLabel:
@@ -391,11 +416,13 @@ class AssistantController(Observable):
     def _show_current(self) -> None:
         """Anderer Tab: dessen Gespräch zeigen; Gespräche geschlossener Dokumente verfallen."""
         key = self._current_key()
+        self.docKind = self._kind(self._document())
         self.conversation.set_items(self._conversations.get(key, []) if key else [])
         open_docs = set(self.reader.tabs.keys()) if self.reader is not None else set()
         open_docs.add(LIBRARY)
         for ident in [ident for ident in list(self._conversations) + list(self._indexes) if ident not in open_docs]:
-            self._conversations.pop(ident, None)
+            for entry in self._conversations.pop(ident, None) or []:
+                self._payloads.pop(entry.get("key", ""), None)
             self._indexes.pop(ident, None)
         if self._answer_owner and self._answer_owner not in open_docs:
             self.stop()
@@ -403,7 +430,8 @@ class AssistantController(Observable):
     def _push(self, ident: str, entry: dict) -> int:
         conversation = self._conversations.setdefault(ident, [])
         self._serial += 1
-        conversation.append({"key": f"e{self._serial}", "rich": "", "pending": False, "note": "", "pages": [], "sources": [], "own": False, **entry})
+        conversation.append({"key": f"e{self._serial}", "rich": "", "pending": False, "note": "", "pages": [], "sources": [], "own": False,
+                             "actions": [], "changes": [], **entry})
         self._publish(ident)
         return len(conversation) - 1
 
@@ -447,7 +475,8 @@ class AssistantController(Observable):
         if model is None:
             return
         ident = doc.ident
-        self._push(ident, {"kind": "question", "text": question if kind == "question" else "Dokument zusammenfassen", "own": kind == "question"})
+        summary = {"tabelle": "Tabelle zusammenfassen", "praesentation": "Präsentation zusammenfassen"}.get(self._kind(doc), "Dokument zusammenfassen")
+        self._push(ident, {"kind": "question", "text": question if kind == "question" else summary, "own": kind == "question"})
         index = self._push(ident, {"kind": "answer", "text": "", "pending": True, "note": "Dokument wird gelesen …"})
         self.busy = True
         self._answer_owner = ident
@@ -464,8 +493,10 @@ class AssistantController(Observable):
         if self._cancel.is_set():
             self._finish(ident, index, cancelled=True)
             return
-        revision = doc.revision
-        page_count = len(texts)
+        revision = self._revision(doc)
+        scope = self._scope(doc)
+        # Seitenverweise: PDFs, Texte und Präsentationen (Folien); Tabellen nennen Blatt und Zeile (keine Verweise)
+        page_count = len(texts) if scope.kind != "tabelle" else 0
         cancel = self._cancel
         worker = self.app.worker
 
@@ -484,24 +515,23 @@ class AssistantController(Observable):
             stream = _Stream(worker, lambda value: self._update(ident, index, text=value, rich=doctext.rich(value, page_count), note=""))
             if kind == "question":
                 excerpts = index_.search(question, QUESTION_CHARS)
-                text = self._chat(endpoint, question_messages(question, excerpts), ANSWER_TOKENS, cancel, stream)
+                text = self._chat(endpoint, question_messages(question, excerpts, scope), ANSWER_TOKENS, cancel, stream)
                 return {"text": text, "scope": ""}
             plan = plan_summary(index_.items)
             if len(plan.parts) == 1:
-                text = self._chat(endpoint, summary_messages(plan.parts[0]), ANSWER_TOKENS, cancel, stream)
+                text = self._chat(endpoint, summary_messages(plan.parts[0], scope), ANSWER_TOKENS, cancel, stream)
             else:
                 notes = []
                 for number, part in enumerate(plan.parts, 1):
                     worker.post(self._note, ident, index, f"Teil {number} von {len(plan.parts)} wird gelesen …")
-                    notes.append(self._chat(endpoint, part_messages(part, number, len(plan.parts)), PART_TOKENS, cancel, None))
+                    notes.append(self._chat(endpoint, part_messages(part, number, len(plan.parts), scope), PART_TOKENS, cancel, None))
                 worker.post(self._note, ident, index, "Zusammenfassung wird geschrieben …")
-                text = self._chat(endpoint, combine_messages(notes, plan.last_page, plan.complete), ANSWER_TOKENS, cancel, stream)
-            scope = "" if plan.complete else f"Zusammengefasst wurden die Seiten 1 bis {plan.last_page} von {page_count} – längere Dokumente liest der Assistent nur bis dahin."
-            return {"text": text, "scope": scope}
+                text = self._chat(endpoint, combine_messages(notes, plan.last_page, plan.complete, scope), ANSWER_TOKENS, cancel, stream)
+            return {"text": text, "scope": "" if plan.complete else _partly(scope, plan.last_page, len(texts))}
 
         def done(result: dict) -> None:
             if result.get("empty"):
-                self._finish(ident, index, error="Dieses PDF enthält keinen lesbaren Text (vermutlich ein Scan). Erst »Text erkennen (OCR)« ausführen – danach kann der Assistent es lesen.")
+                self._finish(ident, index, error=_EMPTY.get(scope.kind, _EMPTY["pdf"]))
                 return
             answer = result["text"].strip() or "Der Assistent hat keine Antwort geliefert."
             self._finish(ident, index, text=answer, page_count=page_count, scope=result.get("scope", ""))
@@ -520,11 +550,13 @@ class AssistantController(Observable):
     def _note(self, ident: str, index: int, note: str) -> None:
         self._update(ident, index, note=note)
 
-    def _chat(self, endpoint, messages: list[dict], max_tokens: int, cancel: threading.Event, stream) -> str:
+    def _chat(self, endpoint, messages: list[dict], max_tokens: int, cancel: threading.Event, stream, *, temperature: float | None = None,
+              json_schema: dict | None = None) -> str:
         """Eine Anfrage im Arbeitsthread; ``stream`` bekommt den wachsenden Text (oder ``None``)."""
         if cancel.is_set():
             raise Cancelled()
-        chat = Chat(endpoint, messages, max_tokens=max_tokens)
+        options = {"temperature": temperature} if temperature is not None else {}
+        chat = Chat(endpoint, messages, max_tokens=max_tokens, json_schema=json_schema, **options)
         self._chat_obj = chat
         if cancel.is_set():
             raise Cancelled()
@@ -554,7 +586,8 @@ class AssistantController(Observable):
         note("Antwort wird geschrieben …")
         return endpoint
 
-    def _finish(self, ident: str, index: int, *, text: str = "", page_count: int = 0, scope: str = "", error: str = "", cancelled: bool = False, plain: bool = False) -> None:
+    def _finish(self, ident: str, index: int, *, text: str = "", page_count: int = 0, scope: str = "", error: str = "", cancelled: bool = False, plain: bool = False,
+                actions: list | None = None, changes: list | None = None) -> None:
         if error:
             self._update(ident, index, kind="error", text=error, rich="", pending=False, note="")
         elif cancelled:
@@ -570,7 +603,8 @@ class AssistantController(Observable):
             self._update(ident, index, text=text, rich=doctext.rich(text, 0, names, counts), pending=False, note=scope, sources=sources)
         else:
             pages = doctext.cited_pages(text, page_count) if not plain else []
-            self._update(ident, index, text=text, rich=doctext.rich(text, page_count), pending=False, note=scope, pages=pages)
+            self._update(ident, index, text=text, rich=doctext.rich(text, page_count), pending=False, note=scope, pages=pages,
+                         actions=list(actions or []), changes=list(changes or []))
         self.busy = False
         self._answer_owner = ""
         self.app.timers.later("assistant:idle", IDLE_MS, self._stop_server)
@@ -740,17 +774,31 @@ class AssistantController(Observable):
         """»Dokument übersetzen«: Sprache und Seiten wählen, Ziel bestimmen, Seite für Seite übersetzen, als neues PDF
         speichern und öffnen. Abbrechen verwirft die Übersetzung."""
         doc = self._document()
-        if doc is None or self.scopeLabel or self._can_answer() is None:
+        if doc is None or self.scopeLabel or self.busy:
             return
-        data = {"languages": [{"key": key, "label": value[0]} for key, value in LANGUAGES.items()], "pageCount": doc.pageCount, "language": self._translate_language}
+        kind = self._kind(doc)
+        if kind == "tabelle":
+            return
+        if self._can_answer() is None:
+            self._show_panel(doc)
+            return
+        count = doc.slideCount if kind == "praesentation" else 1 if kind == "text" else doc.pageCount
+        data = {"languages": [{"key": key, "label": value[0]} for key, value in LANGUAGES.items()], "pageCount": count,
+                "language": self._translate_language, "kind": kind, "mode": self._translate_mode}
         answer, result = self.app.dialogs.ask("assistant_translate", "Dokument übersetzen", "", primary="Übersetzen …", close="Abbrechen", data=data, width=560)
         result = result or {}
         language = str(result.get("language") or "")
-        if answer != "primary" or language not in LANGUAGES:
+        if answer != "primary" or language not in LANGUAGES or self._document() is not doc:
             return
         self._translate_language = language
-        first = max(0, min(doc.pageCount - 1, int(result.get("first") or 0)))
-        last = max(first, min(doc.pageCount - 1, int(result.get("last", doc.pageCount - 1))))
+        first = max(0, min(count - 1, int(result.get("first") or 0)))
+        last = max(first, min(count - 1, int(result.get("last", count - 1))))
+        if kind != "pdf" or result.get("mode") == "side":
+            if kind == "pdf":
+                self._translate_mode = "side"
+            self._translate_side(doc, language, first, -1 if kind == "text" else last)
+            return
+        self._translate_mode = "pdf"
         label = LANGUAGES[language][0]
         stem = doc.name[:-4] if doc.name.lower().endswith(".pdf") else doc.name
         target = self.reader.pick_save_pdf(f"{stem} ({label}).pdf", "Übersetzung speichern")
@@ -863,7 +911,8 @@ class AssistantController(Observable):
         doc = self._document()
         if doc is None or self.busy:
             return
-        self._conversations.pop(doc.ident, None)
+        for entry in self._conversations.pop(doc.ident, None) or []:
+            self._payloads.pop(entry.get("key", ""), None)
         self.conversation.set_items([])
 
     @Slot(str)
@@ -876,7 +925,11 @@ class AssistantController(Observable):
     @Slot(int)
     def openPage(self, page: int) -> None:  # noqa: N802
         doc = self._document()
-        if doc is not None and 1 <= page <= doc.pageCount:
+        if doc is None:
+            return
+        kind = self._kind(doc)
+        count = len(doc.pages) if kind == "text" else doc.slideCount if kind == "praesentation" else doc.pageCount if kind == "pdf" else 0
+        if 1 <= page <= count:
             doc.goTo(page - 1)
 
     # Beenden ------------------------------------------------------------------------------------------------------
@@ -958,3 +1011,20 @@ def _copy(value: str) -> None:
     from PySide6.QtGui import QGuiApplication
 
     QGuiApplication.clipboard().setText(value)
+
+
+_EMPTY = {
+    "pdf": "Dieses PDF enthält keinen lesbaren Text (vermutlich ein Scan). Erst »Text erkennen (OCR)« ausführen – danach kann der Assistent es lesen.",
+    "text": "Dieses Dokument enthält noch keinen Text.",
+    "praesentation": "Diese Präsentation enthält noch keinen Text.",
+    "tabelle": "Diese Tabelle enthält noch keine Daten.",
+}
+
+
+def _partly(scope: Scope, last: int, total: int) -> str:
+    """Hinweis unter einer Zusammenfassung, die nur den Anfang eines langen Dokuments liest."""
+    if scope.kind == "praesentation":
+        return f"Zusammengefasst wurden die Folien 1 bis {last} von {total} – längere Präsentationen liest der Assistent nur bis dahin."
+    if scope.kind == "tabelle":
+        return "Zusammengefasst wurde nur der Anfang der Tabelle – größere Tabellen liest der Assistent nur bis dahin."
+    return f"Zusammengefasst wurden die Seiten 1 bis {last} von {total} – längere Dokumente liest der Assistent nur bis dahin."

@@ -2,7 +2,7 @@ Novadesk für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 5.0.0-beta.7
+Version 5.0.0-beta.8
 
 Novadesk (bis Version 4.0 „PDF Tool“) ist ein Office für Windows: Texte,
 Tabellen, Präsentationen und PDFs an einem Ort, alles lokal auf diesem PC.
@@ -41,7 +41,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“, bis Version 4.0
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-5.0.0-beta.7.exe
+PDF-Tool-Setup-5.0.0-beta.8.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -55,6 +55,25 @@ Präsentationen und zum Bearbeiten von Texten und Tabellen. Eine eigene Python-I
 Microsoft Office, qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme
 sind nicht nötig. Das Sprachmodell des KI-Assistenten ist nicht enthalten –
 Novadesk lädt es nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 5.0 Beta 8 – KI-Werkzeuge für alle Dokumente
+--------------------------------------------------------------
+Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
+Version bleibt 4.0.0. Der KI-Assistent läuft wie bisher nur auf diesem PC.
+- Neuer Reiter „KI“ in PDFs, Texten, Präsentationen und Tabellen.
+- Fragen und Zusammenfassen jetzt auch für Texte, Präsentationen und
+  Tabellen – mit Verweisen auf Seite, Folie bzw. Blatt und Zeile.
+- Texte schreiben lassen, markierten Text umschreiben, kürzen, ausführlicher
+  oder in einfacher Sprache schreiben, Ton ändern (förmlich, freundlich …).
+- Grammatik mit KI prüfen: Korrekturen Satz für Satz ansehen und übernehmen.
+- Übersetzen: Markierung übersetzen und ersetzen, ganze Dokumente
+  nebeneinander (Original und Übersetzung Absatz für Absatz).
+- Präsentation aus einem Thema oder aus dem geöffneten Dokument erstellen.
+- Tabellen auswerten (Kennzahlen rechnet Novadesk selbst) und ein passendes
+  Diagramm vorschlagen und einfügen.
+- PDF-Formulare mit KI ausfüllen: Angaben eintippen oder aus einer Datei
+  laden, jeden Vorschlag prüfen, dann eintragen.
 
 
 Neu in Version 5.0 Beta 7 – Umwandeln, Backup-Center, Reparieren
@@ -577,7 +596,7 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.7 (Kanal „Beta“): von
+Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.8 (Kanal „Beta“): von
 selbst beim Start oder mit einem Klick, ohne Setup-Assistent. Die Ordner
 bleiben dieselben; Startmenü und Desktop zeigen danach „Novadesk“ statt
 „PDF Tool“. Alle Daten und Einstellungen bleiben erhalten. Das Setup ist

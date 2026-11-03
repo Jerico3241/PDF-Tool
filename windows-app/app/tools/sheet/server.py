@@ -2221,6 +2221,39 @@ class Kernel:
             lines.append([sheet.getCellByPosition(col, row).getString() for col in range(a.StartColumn, last_col + 1)])
         return {"range": [a.StartRow, a.StartColumn, last_row, last_col], "rows": lines}
 
+    def cmd_ai_texts(self, args):
+        """Angezeigte Texte aller sichtbaren Blätter für den KI-Assistenten (seit 5.0 Beta 8): je Blatt Name, erste Zeile
+        und Zeilen des benutzten Bereichs – höchstens ``cells`` Zellen insgesamt (Standard 40 000), je Blatt höchstens
+        30 Spalten."""
+        doc = self.doc(args)
+        budget = max(100, min(int(args.get("cells") or 40000), 200000))
+        sheets = doc.model.getSheets()
+        result = []
+        for index in range(sheets.getCount()):
+            sheet = sheets.getByIndex(index)
+            if not sheet.IsVisible:
+                continue
+            cursor = sheet.createCursor()
+            cursor.gotoStartOfUsedArea(False)
+            first = cursor.getRangeAddress()
+            cursor.gotoEndOfUsedArea(False)
+            last = cursor.getRangeAddress()
+            r0, c0 = first.StartRow, first.StartColumn
+            r1, c1 = last.EndRow, min(last.EndColumn, first.StartColumn + 29)
+            width = c1 - c0 + 1
+            rows, truncated = [], False
+            for row in range(r0, r1 + 1):
+                if budget < width:
+                    truncated = True
+                    break
+                rows.append([sheet.getCellByPosition(col, row).getString() for col in range(c0, c1 + 1)])
+                budget -= width
+            while rows and not any(cell.strip() for cell in rows[-1]):
+                rows.pop()
+            result.append({"index": index, "name": sheet.getName(), "first": r0 + 1, "rows": rows,
+                           "truncated": truncated or last.EndColumn > c1})
+        return {"sheets": result}
+
     def cmd_set_texts(self, args):
         """Texte untereinander ab ``row``/``col`` eintragen (als Text, wie getippt nicht ausgewertet)."""
         doc = self.doc(args)

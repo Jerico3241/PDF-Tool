@@ -631,6 +631,36 @@ class Session:
     def set_field(self, key: str, value) -> None:
         forms.set_value(self.document, self.history, key, value)
 
+    def ai_fields(self) -> list[dict]:
+        """Ausfüllbare Felder mit Beschriftung für »Formular mit KI ausfüllen« (seit 5.0 Beta 8)."""
+        names = forms.labels(self.document)
+        result = []
+        for info in forms.list_fields(self.document):
+            if not info.editable or info.kind not in (forms.TEXT, forms.CHECKBOX, forms.RADIO, forms.COMBO, forms.LIST):
+                continue
+            options = list(info.options)
+            if info.kind == forms.RADIO:  # Optionsfelder: Exportwerte der Knöpfe, ohne »/«
+                options = [(value, value.lstrip("/")) for value in dict.fromkeys(info.on_values) if value]
+            value = info.value if isinstance(info.value, bool) else str(info.value)
+            if info.kind == forms.RADIO and value and not str(value).startswith("/"):
+                value = "/" + str(value)
+            result.append({"key": info.key, "name": info.name, "kind": info.kind, "label": names.get(info.key, ""), "options": options,
+                           "maxLength": info.max_length, "multiline": info.multiline, "value": value,
+                           "page": info.widgets[0].page if info.widgets else 0})
+        return result
+
+    def set_fields(self, values: dict) -> list[str]:
+        """Mehrere Felder ausfüllen (KI-Assistent), ein Schritt zum Rückgängigmachen – Ergebnis: Schlüssel der Felder,
+        die sich nicht setzen ließen."""
+        failed = []
+        with commands.group(self.document, self.history, "Formular mit KI ausfüllen"):
+            for key, value in values.items():
+                try:
+                    forms.set_value(self.document, self.history, key, value)
+                except Exception:  # noqa: BLE001 - ein Feld scheitert, die anderen werden trotzdem gefüllt
+                    failed.append(key)
+        return failed
+
     # Formulare gestalten (Koordinaten der Anzeige, je Seite) --------------------------------------------------
     def design_widgets(self) -> list[dict]:
         result = []

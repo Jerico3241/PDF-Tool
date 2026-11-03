@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 MAX_AGE = 24 * 3600
-SYSTEM_TEMP = ("pdf-tool-vorschau-*", "pdf-tool-reparatur-*", "pdf-tool-logo-*", "pdf-tool-diagnose-*", "pdf-tool-ocr-*", "pdf-tool-anhaenge-*", "pdf-tool-einfuegen-*")
+SYSTEM_TEMP = ("pdf-tool-vorschau-*", "pdf-tool-reparatur-*", "pdf-tool-logo-*", "pdf-tool-diagnose-*", "pdf-tool-ocr-*", "pdf-tool-anhaenge-*", "pdf-tool-einfuegen-*", "pdf-tool-ki-*")
 DATA_TEMP = (".~*.tmp", ".gui-config-*.tmp", ".kundenakten-*.tmp", ".stapel-*.tmp", ".releases-*.tmp")
 DATA_DIRS = ("", "vorlagen", "regelwerke", "contract-history")
 BACKUP_TEMP = (".~sicherung-*.partial",)

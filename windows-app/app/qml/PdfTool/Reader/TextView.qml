@@ -30,7 +30,7 @@ FocusScope {
     property bool reading: false   // Lesemodus: nur lesen, ohne Menüband und Seitenleiste
     property bool eyeCare: false   // Augenschutz: Seiten sanft grün getönt (wie WPS), gilt für alle Texte
     readonly property string panel: doc !== null && doc.sidebar ? doc.panel : ""
-    readonly property var panelTitles: ({ "styles": "Formatvorlagen", "comments": "Kommentare", "changes": "Änderungen", "merge": "Serienbrief" })
+    readonly property var panelTitles: ({ "styles": "Formatvorlagen", "comments": "Kommentare", "changes": "Änderungen", "merge": "Serienbrief", "assistant": "KI-Assistent" })
 
     onDocChanged: { reading = false; if (doc) Qt.callLater(function() { canvas.forceActiveFocus() }) }
     function back() { canvas.forceActiveFocus() }
@@ -84,7 +84,7 @@ FocusScope {
                     model: [
                         { key: "file", label: "Datei" }, { key: "start", label: "Start" }, { key: "insert", label: "Einfügen" },
                         { key: "page", label: "Seite" }, { key: "references", label: "Referenzen" }, { key: "mailings", label: "Sendungen" },
-                        { key: "review", label: "Überprüfen" }, { key: "view", label: "Ansicht" }
+                        { key: "review", label: "Überprüfen" }, { key: "view", label: "Ansicht" }, { key: "ai", label: "KI" }
                     ]
                     RibbonTab {
                         required property var modelData
@@ -353,6 +353,17 @@ FocusScope {
                 ToolButton { objectName: "textEyeCare"; iconName: "eye_lines"; text: I18n.tr("Augenschutz", I18n.revision); tip: I18n.tr("Seiten in sanftem Grün statt grellem Weiß – angenehmer bei langem Lesen", I18n.revision); toggle: true; enabled: true; checked: view.eyeCare; onClicked: view.eyeCare = !view.eyeCare }
                 Item { Layout.fillWidth: true }
             }
+
+            // KI (seit Beta 8)
+            AiRibbon {
+                objectName: "textRibbonBar_ai"
+                visible: view.ribbon === "ai"
+                kind: "text"
+                ready: view.ready
+                kindColor: view.kindColor
+                panelOpen: view.panel === "assistant"
+                onPanelToggled: if (view.doc) view.doc.showPanel("assistant")
+            }
         }
 
         // Seiten und Formatvorlagen --------------------------------------------------------------------------------
@@ -602,6 +613,17 @@ FocusScope {
                     anchors.leftMargin: 1
                     doc: view.doc
                 }
+                Loader {
+                    objectName: "textAssistantPanel"
+                    active: view.panel === "assistant" && Assistant.enabled
+                    visible: active
+                    anchors.top: sidebarHeader.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 1
+                    sourceComponent: AssistantPanel { doc: view.doc }
+                }
                 TextMergePanel {
                     visible: view.panel === "merge"
                     anchors.top: sidebarHeader.bottom
@@ -627,6 +649,7 @@ FocusScope {
                     { key: "comments", icon: "comment_multiple", tip: "Kommentare", name: "textRailComments" },
                     { key: "changes", icon: "document_edit", tip: "Änderungen", name: "textRailChanges" },
                     { key: "merge", icon: "mail_multiple", tip: "Serienbrief", name: "textRailMerge" },
+                    { key: "assistant", icon: "sparkle", tip: "KI-Assistent", name: "textRailAssistant" },
                     { key: "search", icon: "search", tip: "Suchen und ersetzen (Strg+F)", name: "textRailSearch", separator: true }
                 ]
                 onSelected: (key) => {
