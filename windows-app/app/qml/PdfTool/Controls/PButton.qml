@@ -18,12 +18,14 @@ T.Button {
     // ändert. Die Schaltfläche schaltet sich nicht selbst um – sonst ginge die Bindung verloren und sie
     // zeigte einen Zustand, den es nicht gibt.
     property bool toggle: false
+    // Schmales Menüband (seit 5.0 Beta 9): nur das Symbol, die Beschriftung steht in der Kurzinfo
+    property bool compact: false
 
     readonly property bool accentKind: kind === "accent"
     readonly property bool subtleKind: kind === "subtle" || kind === "link"
     readonly property bool linkKind: kind === "link"  // wie »subtle«, Schrift und Symbol in der Akzentfarbe
     readonly property bool dangerKind: kind === "danger"
-    readonly property bool iconOnly: text === "" && iconName !== ""
+    readonly property bool iconOnly: iconName !== "" && (text === "" || compact)
 
     implicitHeight: large ? Metrics.controlHeightLarge : Metrics.controlHeight
     implicitWidth: Math.max(minimumWidth, iconOnly ? implicitHeight : Math.ceil(contentItem.implicitWidth) + leftPadding + rightPadding)
@@ -73,7 +75,7 @@ T.Button {
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: I18n.tr(control.busy && control.busyText !== "" ? control.busyText : control.text, I18n.revision)
+                text: control.compact && control.iconName !== "" ? "" : I18n.tr(control.busy && control.busyText !== "" ? control.busyText : control.text, I18n.revision)
                 visible: text !== ""
                 font: control.font
                 color: control.foreground
@@ -134,7 +136,11 @@ T.Button {
     Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
 
     PToolTip {
-        text: I18n.tr(control.tip, I18n.revision)
-        visible: control.tip !== "" && control.hovered && !control.pressed
+        // Nur Symbol (schmales Menüband): Beschriftung und Kurzinfo zusammen
+        readonly property string label: control.compact && control.text !== "" && control.text !== control.tip
+            ? (control.tip !== "" ? I18n.tr(control.text, I18n.revision) + " – " + I18n.tr(control.tip, I18n.revision) : I18n.tr(control.text, I18n.revision))
+            : I18n.tr(control.tip, I18n.revision)
+        text: label
+        visible: label !== "" && control.hovered && !control.pressed
     }
 }

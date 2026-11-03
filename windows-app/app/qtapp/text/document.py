@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -56,6 +57,45 @@ KEY_DELETE = 1286
 # Kennzeichen unserer Kopien in der Zwischenablage: Beim Beenden ersetzt der Reader sie durch Qt-eigene Daten
 # (``ReaderController._release_clipboard``), sonst stürzt der Abbau der Anwendung ab
 TEXT_CLIP_FORMAT = "application/x-novadesk-text"
+# Sprache der Statuszeile: Code von LibreOffice → Name (die Oberfläche übersetzt ihn)
+LANGUAGE_NAMES = {
+    "de": "Deutsch", "en": "Englisch", "fr": "Französisch", "es": "Spanisch", "it": "Italienisch", "nl": "Niederländisch",
+    "pl": "Polnisch", "pt": "Portugiesisch", "tr": "Türkisch", "ru": "Russisch", "uk": "Ukrainisch", "hr": "Kroatisch",
+    "cs": "Tschechisch",
+}
+_NUMBER = re.compile(r"\d(?:[\d.,'\u00a0\u202f]*\d)?")
+
+
+def _numbers(value: str) -> list[int]:
+    return [int(re.sub(r"\D", "", match)) for match in _NUMBER.findall(value)]
+
+
+def status_text(name: str, value: str) -> str:
+    """Seite, Wörter und Sprache für die Statuszeile – unabhängig von der Sprache, in der LibreOffice sie meldet
+    (»Page 1 of 3«, »Ausgewählt: 4 Wörter, 20 Zeichen«, »German (Germany);de-DE«). Die Texte sind deutsch wie alle
+    übrigen und werden in QML übersetzt (seit 5.0 Beta 9; vorher blieben sie bei englischer Oberfläche deutsch)."""
+    if name == ".uno:StatePageNumber":
+        numbers = _numbers(value.split(" (")[0])
+        return f"Seite {numbers[0]} von {numbers[1]}" if len(numbers) >= 2 else value.split(" (")[0].strip()
+    if name == ".uno:StateWordCount":
+        words = value.split(", ")[0]
+        numbers = _numbers(words)
+        if not numbers:
+            return words.strip()
+        def amount(number: int) -> str:
+            return f"{number:,}".replace(",", ".")
+
+        if len(numbers) > 1:  # Teil markiert: »2 von 6 Wörtern«
+            return f"Ausgewählt: {amount(numbers[0])} von {amount(numbers[1])} Wörtern"
+        count = amount(numbers[0])
+        if ":" in words:  # alles markiert
+            return f"Ausgewählt: {count} Wort" if numbers[0] == 1 else f"Ausgewählt: {count} Wörter"
+        return f"{count} Wort" if numbers[0] == 1 else f"{count} Wörter"
+    if name == ".uno:LanguageStatus":
+        label, _, code = value.partition(";")
+        known = LANGUAGE_NAMES.get(code.strip().split("-")[0].lower())
+        return known or label.split(" (")[0].strip()
+    return value
 MOD_SHIFT, MOD_CTRL, MOD_ALT = 0x1000, 0x2000, 0x4000
 # Seiten: A4 in 1/100 mm; Ränder in 1/100 mm (Normal wie in Word: 2,5 cm, Schmal 1,27 cm, Breit 2,5/5 cm)
 MARGINS = {"normal": (2500, 2500, 2500, 2500), "narrow": (1270, 1270, 1270, 1270), "wide": (5080, 5080, 2540, 2540)}
@@ -368,11 +408,11 @@ class TextController(Observable):
         elif name == ".uno:Copy":
             self.canCopy = value == "enabled"
         elif name == ".uno:StatePageNumber":
-            self.pageText = value.split(" (")[0].strip()
+            self.pageText = status_text(name, value)
         elif name == ".uno:StateWordCount":
-            self.wordText = value.split(",")[0].strip()
+            self.wordText = status_text(name, value)
         elif name == ".uno:LanguageStatus":
-            self.languageText = value.split(";")[0].split(" (")[0].strip()
+            self.languageText = status_text(name, value)
 
     def _open_link(self, url: str) -> None:
         from PySide6.QtGui import QDesktopServices

@@ -114,14 +114,31 @@ def apply(renames: list[Rename]) -> list[tuple[Path, Path]]:
     return [(current, original) for current, original in done]
 
 
-def undo(pairs: list[tuple[Path, Path]]) -> int:
-    """Umbenennen rückgängig machen; gibt die Zahl der zurückbenannten Dateien zurück."""
-    back = 0
+def undo(pairs: list[tuple[Path, Path]]) -> list[tuple[Path, Path]]:
+    """Umbenennen rückgängig machen; gibt (bisheriger Ort, jetziger Ort) der zurückbenannten Dateien zurück.
+
+    Wie ``apply`` über vorläufige Namen: Nach einem Tausch (A → B, B → A) oder einer Änderung nur der Groß-/Kleinschreibung
+    gibt es den ursprünglichen Namen ja schon (unter Windows auch »name.pdf« für »Name.pdf«)."""
+    temps: list[tuple[Path, Path, Path]] = []  # (vorläufig, ursprünglich, jetzig)
     for current, original in reversed(pairs):
-        if current.exists() and not original.exists():
+        if not current.exists():
+            continue
+        temp = current.with_name(f".{secrets.token_hex(6)}.novadesk-umbenennen{current.suffix}")
+        try:
+            os.rename(current, temp)
+        except OSError:
+            continue
+        temps.append((temp, original, current))
+    back: list[tuple[Path, Path]] = []
+    for temp, original, current in temps:
+        for target in (original, current):  # Ursprünglicher Name belegt (neue Datei): den jetzigen Namen behalten
+            if target.exists():
+                continue
             try:
-                os.rename(current, original)
-                back += 1
+                os.rename(temp, target)
             except OSError:
                 continue
+            if target == original:
+                back.append((current, original))
+            break
     return back

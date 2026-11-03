@@ -125,3 +125,21 @@ def test_settings_round_trip_and_invalid_values() -> None:
     broken = versions.Settings.from_config({"minuten": 7, "behalten": "viele", "tage": -1})
     assert broken == versions.Settings()
     assert versions.Settings.from_config(None) == versions.Settings()
+
+
+def test_replace_with_the_oldest_kept_version(tmp_path: Path) -> None:
+    """Beta 9: Bei voller Ablage räumt das Sichern des jetzigen Stands auf – die wiederhergestellte (älteste) Fassung
+    darf dabei nicht verloren gehen, bevor sie kopiert ist."""
+    s = store(tmp_path, keep=5)
+    original = tmp_path / "Bericht.docx"
+    for number in range(5):
+        original.write_bytes(f"stand {number}".encode())
+        s.remember(original)
+    original.write_bytes(b"jetzt")
+    oldest = s.document(versions.key_of(original)).versions[-1]
+    assert oldest.path.read_bytes() == b"stand 0"
+    s.restore_replace(oldest.path, str(original))
+    assert original.read_bytes() == b"stand 0"
+    contents = [v.path.read_bytes() for v in s.document(versions.key_of(original)).versions]
+    assert contents[0] == b"jetzt" and len(contents) == 5
+    assert not list(tmp_path.glob(".*.tmp"))

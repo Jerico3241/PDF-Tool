@@ -480,14 +480,15 @@ class ConvertController(Observable):
     def undoRename(self) -> None:  # noqa: N802
         if not self._undo or self.running:
             return
-        back = naming.undo(self._undo)
-        restored = {str(current): str(original) for current, original in self._undo}
+        moved = naming.undo(self._undo)
+        restored = {str(current): str(original) for current, original in moved}
         for item in self._items:
             old = restored.get(item["path"])
-            if old and Path(old).exists():
+            if old:
                 item.update(path=old, name=Path(old).name, state="waiting", message="", outputs=[])
         self._undo = []
         self.canUndo = False
+        back = len(moved)
         self.resultText = f"{back} {'Name' if back == 1 else 'Namen'} wiederhergestellt."
         self.resultTone = "success"
         self._refresh()

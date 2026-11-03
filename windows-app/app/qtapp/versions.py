@@ -49,7 +49,9 @@ def before_save(app, target: str, current: str, proceed: Callable[[], None]) -> 
     Scheitert das Ablegen, wird trotzdem gespeichert (protokolliert) – Speichern darf daran nie hängen."""
     store = versions.store()
     path = Path(target)
-    if not store.settings.enabled or not current or not path.is_file():
+    # Auch ein neues Dokument, das über eine vorhandene Datei gespeichert wird, sichert deren Stand (wie bei PDFs)
+    del current
+    if not store.settings.enabled or not path.is_file():
         proceed()
         return
 
@@ -351,11 +353,13 @@ class VersionsController(Observable):
                 _log().warning("Automatische Sicherung nicht möglich: %s", type(exc).__name__)
                 continue
 
-            def written(ok: bool, target=target) -> None:
+            def written(ok: bool, target=target, ident=document.ident, marker=marker) -> None:
                 if ok:
                     self.app.worker.run(lambda: store.added(target), lambda _added: self._auto_done(), lambda _exc, _details: None)
                 else:
                     target.unlink(missing_ok=True)
+                    if self._marked.get(ident) == marker:
+                        del self._marked[ident]  # beim nächsten Mal erneut versuchen
 
             writer(str(target), written)
 

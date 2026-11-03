@@ -112,6 +112,7 @@ FocusScope {
         kind: "subtle"
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
+        compact: parent !== null && parent.squeezed === true
         enabled: view.sheet !== null && view.sheet.ready
     }
 
@@ -125,7 +126,7 @@ FocusScope {
             Layout.fillWidth: true
             implicitHeight: 38
             color: Theme.layer
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -165,6 +166,7 @@ FocusScope {
                 PButton {
                     objectName: "sheetOverview"
                     kind: "link"
+                    compact: parent.squeezed === true
                     iconName: "document_table"
                     text: I18n.tr("Übersicht erstellen", I18n.revision)
                     tip: I18n.tr("Aus dieser Tabelle eine Vertragsübersicht erstellen", I18n.revision)
@@ -174,6 +176,7 @@ FocusScope {
                 PButton {
                     objectName: "sheetPdf"
                     kind: "link"
+                    compact: parent.squeezed === true
                     iconName: "document_pdf"
                     text: I18n.tr("Als PDF speichern", I18n.revision)
                     enabled: view.sheet !== null && view.sheet.ready
@@ -191,7 +194,7 @@ FocusScope {
             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
 
             // Start (wie im Design): Einfügen, Schrift, F, K, Format, Summe, Sortieren, Filter, Diagramm
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -293,7 +296,7 @@ FocusScope {
             }
 
             // Datei
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -315,7 +318,7 @@ FocusScope {
             }
 
             // Einfügen
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -338,7 +341,7 @@ FocusScope {
             }
 
             // Formeln
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -360,7 +363,7 @@ FocusScope {
             }
 
             // Daten
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -387,7 +390,7 @@ FocusScope {
             }
 
             // Überprüfen: Schutz und Kennwort
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -430,7 +433,7 @@ FocusScope {
             }
 
             // Ansicht
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
