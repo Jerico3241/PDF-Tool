@@ -22,6 +22,7 @@ import ctypes as C
 import json
 import os
 import queue
+import re
 import socket
 import sys
 import threading
@@ -588,26 +589,19 @@ class Kernel:
         if not fmt:
             raise KernelError("Dieses Dateiformat kann Novadesk nicht speichern.", "format")
         self.settle()
-        # Erst neben das Ziel, dann ersetzen: Bricht das Speichern ab, bleibt die bisherige Datei heil
-        folder = os.path.dirname(os.path.abspath(path))
-        temp = os.path.join(folder, f".~novadesk-{os.getpid()}-{int(time.time() * 1000)}{extension}")
+        # Direkt ans Ziel: LibreOffice hält unter Windows die geöffnete Datei gesperrt (System-Dateisperre). Eine eigene
+        # Ersatzdatei ließe sich deshalb nicht über das Dokument legen (Fehler seit Beta 2). Beim Speichern auf die
+        # eigene Datei schreibt LibreOffice selbst erst eine Kopie, gibt die Sperre frei und ersetzt dann die Datei;
+        # zusätzlich legt das Backup-Center vorher eine Fassung an.
+        if os.path.isfile(path) and not os.access(path, os.W_OK):
+            raise KernelError("Die Datei ist schreibgeschützt.", "gesperrt")
         options = args.get("options") or None
-        ok = doc.cls.saveAs(doc.pointer, file_url(temp).encode("utf-8"), fmt.encode("utf-8"), options.encode("utf-8") if options else None)
-        if not ok or not os.path.isfile(temp):
+        ok = doc.cls.saveAs(doc.pointer, file_url(path).encode("utf-8"), fmt.encode("utf-8"), options.encode("utf-8") if options else None)
+        if not ok or not os.path.isfile(path):
             message = self.error_text()
-            try:
-                os.remove(temp)
-            except OSError:
-                pass
+            if re.search(r"lock|locked|sperr|access|denied|0x20|0x21", message or "", re.I):
+                raise KernelError("Die Datei ist in einem anderen Programm geöffnet oder schreibgeschützt.", "gesperrt")
             raise KernelError("Das Dokument ließ sich nicht speichern." + (f" ({message[:200]})" if message else ""), "speichern")
-        try:
-            os.replace(temp, path)
-        except OSError as exc:
-            try:
-                os.remove(temp)
-            except OSError:
-                pass
-            raise KernelError(f"Die Datei ist gesperrt oder schreibgeschützt ({exc.strerror or exc}).", "gesperrt") from exc
         return True
 
     def cmd_export(self, args):

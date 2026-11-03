@@ -2,7 +2,7 @@ Novadesk für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 5.0.0-beta.8
+Version 5.0.0-beta.9
 
 Novadesk (bis Version 4.0 „PDF Tool“) ist ein Office für Windows: Texte,
 Tabellen, Präsentationen und PDFs an einem Ort, alles lokal auf diesem PC.
@@ -41,7 +41,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“, bis Version 4.0
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-5.0.0-beta.8.exe
+PDF-Tool-Setup-5.0.0-beta.9.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -55,6 +55,20 @@ Präsentationen und zum Bearbeiten von Texten und Tabellen. Eine eigene Python-I
 Microsoft Office, qpdf, Ghostscript, Tesseract oder andere Zusatzprogramme
 sind nicht nötig. Das Sprachmodell des KI-Assistenten ist nicht enthalten –
 Novadesk lädt es nur, wenn Sie den Assistenten einrichten.
+
+
+Neu in Version 5.0 Beta 9 – Aufräum-Beta
+-----------------------------------------
+Beta-Version zum Testen (nur mit „Beta-Versionen erhalten“). Die stabile
+Version bleibt 4.0.0. Nichts Neues, nur Fehler behoben:
+- Texte, Tabellen und Präsentationen lassen sich unter Windows wieder über
+  die geöffnete Datei speichern (vorher Meldung „gesperrt“).
+- Backup-Center: „Original ersetzen“ klappt auch mit der ältesten Fassung;
+  wird ein neues Dokument über eine vorhandene Datei gespeichert, wird deren
+  bisheriger Stand vorher gesichert.
+- Umbenennen: „Rückgängig“ auch nach getauschten Namen.
+- Menüband in kleinen Fenstern: nur Symbole statt abgeschnittener Knöpfe.
+- Englische Oberfläche: Statuszeile von Texten vollständig übersetzt.
 
 
 Neu in Version 5.0 Beta 8 – KI-Werkzeuge für alle Dokumente
@@ -596,7 +610,7 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.8 (Kanal „Beta“): von
+Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.9 (Kanal „Beta“): von
 selbst beim Start oder mit einem Klick, ohne Setup-Assistent. Die Ordner
 bleiben dieselben; Startmenü und Desktop zeigen danach „Novadesk“ statt
 „PDF Tool“. Alle Daten und Einstellungen bleiben erhalten. Das Setup ist
@@ -1203,7 +1217,7 @@ Umgebungsvariable SIGN_COMMAND setzen, z. B.
 Ohne Zertifikat bleibt das Setup unsigniert (SmartScreen-Hinweis beim ersten
 Start ist dann normal).
 
-Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 fonttools==4.67.0
+Tests: py -3.13 -m pip install pytest pandas openpyxl reportlab pillow xlrd pypdf xlwt pikepdf==10.17.0 pypdfium2==5.14.0 PySide6-Essentials==6.11.2 fonttools==4.68.0
        py -3.13 -m pytest windows-app\tests
 
 GitHub Actions baut das Setup bei jedem Pull Request und auf main auf

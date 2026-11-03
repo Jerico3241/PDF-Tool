@@ -54,9 +54,10 @@ FocusScope {
         kind: "subtle"
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
+        compact: parent !== null && parent.squeezed === true
         enabled: view.ready
     }
-    component Bar: RowLayout {
+    component Bar: RibbonBar {
         anchors.fill: parent
         anchors.leftMargin: 12
         anchors.rightMargin: 12
@@ -75,7 +76,7 @@ FocusScope {
             visible: !view.reading
             implicitHeight: 38
             color: Theme.layer
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -130,6 +131,7 @@ FocusScope {
                 PButton {
                     objectName: "textPdf"
                     kind: "link"
+                    compact: parent.squeezed === true
                     iconName: "document_pdf"
                     text: I18n.tr("Als PDF speichern", I18n.revision)
                     enabled: view.ready

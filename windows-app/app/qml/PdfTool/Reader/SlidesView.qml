@@ -51,9 +51,10 @@ FocusScope {
         kind: "subtle"
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
+        compact: parent !== null && parent.squeezed === true
         enabled: view.ready
     }
-    component Bar: RowLayout {
+    component Bar: RibbonBar {
         anchors.fill: parent
         anchors.leftMargin: 12
         anchors.rightMargin: 12
@@ -71,7 +72,7 @@ FocusScope {
             Layout.fillWidth: true
             implicitHeight: 38
             color: Theme.layer
-            RowLayout {
+            RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
@@ -126,6 +127,7 @@ FocusScope {
                 PButton {
                     objectName: "slidesPresent"
                     kind: "link"
+                    compact: parent.squeezed === true
                     iconName: "play"
                     text: I18n.tr("Präsentieren", I18n.revision)
                     tip: I18n.tr("Vollbild ab dieser Folie" + Shortcuts.hints["reader.present"], I18n.revision)
@@ -135,6 +137,7 @@ FocusScope {
                 PButton {
                     objectName: "slidesPdf"
                     kind: "link"
+                    compact: parent.squeezed === true
                     iconName: "document_pdf"
                     text: I18n.tr("Als PDF speichern", I18n.revision)
                     enabled: view.ready

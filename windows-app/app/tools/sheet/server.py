@@ -548,8 +548,7 @@ class Kernel:
         return True
 
     def cmd_save(self, args):
-        """Speichern unter ``path`` im Format der Endung (CSV: nur das aktive Blatt). Erst in eine Datei daneben, dann
-        ersetzen – so bleibt bei einem Fehler die bisherige Datei unverändert."""
+        """Speichern unter ``path`` im Format der Endung (CSV: nur das aktive Blatt); ``copy``: nur eine Kopie schreiben."""
         doc = self.doc(args)
         path = args["path"]
         suffix = os.path.splitext(path)[1].lower()
@@ -568,25 +567,25 @@ class Kernel:
                     pass
         elif doc.password and suffix in (".xlsx", ".xlsm", ".ods"):
             props.append(_prop("Password", doc.password))
-        folder = os.path.dirname(os.path.abspath(path))
-        temp = ""
+        # Direkt ans Ziel: LibreOffice hält unter Windows die geöffnete Datei gesperrt (System-Dateisperre), eine eigene
+        # Ersatzdatei ließ sich deshalb nicht über die Tabelle legen (Fehler seit Beta 2). storeAsURL auf die eigene
+        # Datei schreibt erst eine Kopie, gibt die Sperre frei und ersetzt dann; das Backup-Center sichert vorher.
+        if os.path.isfile(path) and not os.access(path, os.W_OK):
+            raise CalcError("Die Datei ist schreibgeschützt.", "gesperrt")
         try:
-            handle, temp = tempfile.mkstemp(prefix=".novadesk-", suffix=suffix, dir=folder)
-            os.close(handle)
-            doc.model.storeToURL(_url(temp), tuple(props))
-            os.replace(temp, path)
+            if args.get("copy"):
+                doc.model.storeToURL(_url(path), tuple(props))
+            else:
+                doc.model.storeAsURL(_url(path), tuple(props))
         except PermissionError as exc:
             raise CalcError("Die Datei ist in einem anderen Programm geöffnet oder schreibgeschützt.", "gesperrt") from exc
         except OSError as exc:
             raise CalcError("Die Datei ließ sich nicht speichern (%s)." % (exc.strerror or type(exc).__name__), "speichern") from exc
         except Exception as exc:  # noqa: BLE001 - IOException von LibreOffice
+            text = str(getattr(exc, "Message", "") or exc)
+            if any(word in text.lower() for word in ("lock", "access", "denied", "0x20", "0x21")):
+                raise CalcError("Die Datei ist in einem anderen Programm geöffnet oder schreibgeschützt.", "gesperrt") from exc
             raise CalcError("Die Datei ließ sich nicht speichern.", "speichern") from exc
-        finally:
-            if temp and os.path.exists(temp):
-                try:
-                    os.remove(temp)
-                except OSError:
-                    pass
         if not args.get("copy"):
             doc.path, doc.filter, doc.filter_options = path, filter_name, options
             self._mark_saved(doc)

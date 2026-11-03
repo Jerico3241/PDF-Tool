@@ -67,6 +67,7 @@ Rectangle {
         kind: "subtle"
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
+        compact: parent !== null && parent.squeezed === true
         enabled: root.ready
     }
     // Werkzeug: markiert, solange es gewählt ist
@@ -80,7 +81,7 @@ Rectangle {
         onClicked: root.chooseTool(toolKey)
         Accessible.role: Accessible.RadioButton
     }
-    component Bar: RowLayout {
+    component Bar: RibbonBar {
         anchors.fill: parent
         anchors.leftMargin: 12
         anchors.rightMargin: 12
@@ -93,7 +94,7 @@ Rectangle {
         spacing: 0
 
         // Reiter und Befehle rechts -----------------------------------------------------------------------------
-        RowLayout {
+        RibbonBar {
             objectName: "readerRibbonTabs"
             Layout.fillWidth: true
             Layout.preferredHeight: 38
@@ -157,6 +158,7 @@ Rectangle {
             PButton {
                 objectName: "readerAllTools"
                 kind: "link"
+                compact: parent.squeezed === true
                 iconName: "apps"
                 text: I18n.tr("Alle Werkzeuge", I18n.revision)
                 tip: I18n.tr("Alle Werkzeuge mit Namen zeigen", I18n.revision)

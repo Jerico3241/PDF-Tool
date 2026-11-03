@@ -4590,7 +4590,9 @@
   "Übernommen": "Applied",
   "Übersetzen": "Translate",
   "Übersetzung": "Translation",
-  "Überzeugend": "Confident"
+  "Überzeugend": "Confident",
+  "Deutsch": "German",
+  "Die Datei ist schreibgeschützt.": "The file is read-only."
  },
  "patterns": {
   "App-Design: {0}": "App theme: {0}",
@@ -5518,6 +5520,11 @@
   "{0} von {1} Vorschlägen gewählt. Bitte prüfen – die KI kann sich irren.": "{0} of {1} suggestions selected. Please check – the AI can be wrong.",
   "{0} {1} ausgefüllt": "{0} {1} filled in",
   "{0} – einzeln oder alle übernehmen.": "{0} – apply one by one or all at once.",
-  "Übersetzung nebeneinander geöffnet: **{0}** ({1} Absätze).": "Side-by-side translation opened: **{0}** ({1} paragraphs)."
+  "Übersetzung nebeneinander geöffnet: **{0}** ({1} Absätze).": "Side-by-side translation opened: **{0}** ({1} paragraphs).",
+  "Ausgewählt: {0} Wort": "Selected: {0} word",
+  "Ausgewählt: {0} Wörter": "Selected: {0} words",
+  "Ausgewählt: {0} von {1} Wörtern": "Selected: {0} of {1} words",
+  "{0} Wort": "{0} word",
+  "{0} Wörter": "{0} words"
  }
 }

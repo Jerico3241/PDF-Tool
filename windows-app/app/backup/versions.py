@@ -339,16 +339,18 @@ class VersionStore:
             raise OSError("Diese Fassung gibt es nicht mehr.")
         if not target.parent.is_dir():
             raise OSError("Der Ordner des Originals existiert nicht mehr.")
-        if target.is_file():
-            enabled = self.settings.enabled
-            self.settings.enabled = True  # auch bei ausgeschalteter Sicherung: vor dem Ersetzen immer sichern
-            try:
-                self.remember(target, BEFORE_SAVE)
-            finally:
-                self.settings.enabled = enabled
+        # Erst die Fassung kopieren, dann den jetzigen Stand sichern: Das Sichern räumt auf (``keep``) und könnte sonst
+        # genau die älteste Fassung löschen, die gerade wiederhergestellt werden soll.
         temp = target.parent / f".{secrets.token_hex(4)}.novadesk.tmp"
         try:
             shutil.copyfile(version, temp)
+            if target.is_file():
+                enabled = self.settings.enabled
+                self.settings.enabled = True  # auch bei ausgeschalteter Sicherung: vor dem Ersetzen immer sichern
+                try:
+                    self.remember(target, BEFORE_SAVE)
+                finally:
+                    self.settings.enabled = enabled
             os.replace(temp, target)
         finally:
             temp.unlink(missing_ok=True)
