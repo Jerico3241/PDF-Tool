@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
@@ -36,7 +37,9 @@ Item {
         poll.stop()
     }
     function snap(key) {
-        if (!source || key === "" || source.width <= 0 || source.height <= 0)
+        // nur bei sichtbarem Fenster (im Infobereich versteckt kann grabToImage nichts zeichnen)
+        if (!source || key === "" || source.width <= 0 || source.height <= 0 || !source.Window.window || !source.Window.window.visible
+                || source.Window.window.visibility === Window.Minimized)
             return
         switcher.shotSize = Qt.size(Math.round(source.width / 2), Math.round(source.height / 2))
         source.grabToImage(function(result) {
