@@ -278,7 +278,9 @@ Item {
                 orientation: ListView.Horizontal
                 model: Reader.tabs
                 spacing: 2
-                clip: true
+                // Nur beim Blättern abschneiden: sonst schnitte die Liste den Schatten des aktiven Tabs zu einem harten
+                // Rechteck ab (seit 5.0 Beta 10, 3D-Design)
+                clip: bar.docsOverflow
                 // Ziehen gehört den Tabs (umordnen) – die Liste selbst blättert nur mit Mausrad, ‹ › und am Rand beim Ziehen
                 interactive: false
                 boundsBehavior: Flickable.StopAtBounds
@@ -505,7 +507,7 @@ Item {
         x: progress < 1 ? fromX + (goal.x - fromX) * progress : goal.x
         width: progress < 1 ? fromWidth + (goal.width - fromWidth) * progress : goal.width
         // unter der Kachel, leuchtend in der Farbe der Dateiart (Entwurf 7: 5 px unter dem Tab, 3 px hoch)
-        y: row.y + row.height / 2 + Metrics.dockTabHeight / 2 + 1
+        y: row.y + row.height / 2 + Metrics.dockTabHeight / 2 - 1  // an der Unterkante der Kachel, mit Abstand zur Schale
         height: 3
         radius: 1.5
         // Dokument: Farbe seiner Dateiart (Tabelle grün …); Start und Werkzeuge: Akzent
@@ -528,7 +530,7 @@ Item {
                 color: "transparent"
                 border.width: 1.5
                 border.color: indicator.color
-                opacity: (Theme.neon ? 0.35 * Theme.glow : 0.16) * (1 - index / 4)
+                opacity: (Theme.neon ? 0.35 * Theme.glow : 0.08) * (1 - index / 4)
             }
         }
         NumberAnimation { id: glide; target: indicator; property: "progress"; to: 1; duration: Motion.indicator; easing.type: Motion.decelerate }

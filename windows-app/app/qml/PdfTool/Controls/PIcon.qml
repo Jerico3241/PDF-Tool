@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import QtQuick.Layouts
 import PdfTool.Style
 
 // Fluent-Symbol in beliebiger Farbe – scharf in jeder Skalierung (gerendert in Gerätepixeln).
@@ -12,6 +13,9 @@ Image {
 
     width: size
     height: size
+    // Layouts: feste Wunschgröße – sonst nähmen sie die Bildgröße in Gerätepixeln (bei 200 % doppelt so groß)
+    Layout.preferredWidth: size
+    Layout.preferredHeight: size
     visible: name !== ""
     source: name !== "" ? Theme.icon(name, color) : ""
     sourceSize: Qt.size(Math.ceil(size * ratio), Math.ceil(size * ratio))

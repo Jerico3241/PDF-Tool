@@ -90,7 +90,7 @@ T.AbstractButton {
             id: row
             anchors.fill: parent
             spacing: 8
-            // Dateiart: farbige Kachel (Verlauf, Glanzkante, kleiner Schatten) mit weißem Symbol
+            // Dateiart: farbige Kachel (Verlauf, Glanzkante) mit weißem Symbol
             Rectangle {
                 objectName: "tabKindTile"
                 Layout.alignment: Qt.AlignVCenter
@@ -104,7 +104,6 @@ T.AbstractButton {
                     GradientStop { position: 1.0; color: FileKinds.deep(tab.kind) }
                 }
                 Rectangle { x: 3; y: 1; width: parent.width - 6; height: 1; color: "#66FFFFFF" }
-                PShadow { radius: parent.radius; depth: 2; strength: 0.8 }
                 Image {
                     anchors.centerIn: parent
                     width: 15
