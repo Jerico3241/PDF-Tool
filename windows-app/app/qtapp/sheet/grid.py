@@ -8,6 +8,8 @@ Zoom). Das Raster lädt nichts selbst – es meldet den sichtbaren Bereich an de
 
 from __future__ import annotations
 
+import datetime
+
 from PySide6.QtCore import Property, QObject, QPointF, QRectF, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtQuick import QQuickItem, QQuickPaintedItem
@@ -15,6 +17,14 @@ from PySide6.QtQuick import QQuickItem, QQuickPaintedItem
 from tools.sheet.engine import cell_name, column_name
 
 from .model import MM100_TO_PX
+
+# Strg+Umschalt+Ziffer wie in Excel: Qt meldet je nach Tastatur die Ziffer oder das Zeichen darüber (deutsch: ! § $ %)
+_EXCEL_NUMBER_KEYS = {
+    Qt.Key.Key_1: "number", Qt.Key.Key_Exclam: "number",
+    Qt.Key.Key_3: "date", Qt.Key.Key_section: "date", Qt.Key.Key_NumberSign: "date",
+    Qt.Key.Key_4: "currency", Qt.Key.Key_Dollar: "currency",
+    Qt.Key.Key_5: "percent", Qt.Key.Key_Percent: "percent",
+}
 
 HEADER_H = 26
 PADDING = 4
@@ -1242,6 +1252,24 @@ class SheetGrid(QQuickPaintedItem):
             controller.undo()
         elif ctrl and not alt and key == Key.Key_Y:
             controller.redo()
+        elif ctrl and shift and not alt and key in _EXCEL_NUMBER_KEYS:
+            controller.numberFormat(_EXCEL_NUMBER_KEYS[key])  # Strg+Umschalt+1/3/4/5: Zahl, Datum, Währung, Prozent
+        elif ctrl and shift and not alt and key in (Key.Key_F, Key.Key_K, Key.Key_U):
+            controller.toggle({Key.Key_F: "bold", Key.Key_K: "italic", Key.Key_U: "underline"}[key])  # wie Excel deutsch
+        elif ctrl and not shift and not alt and key == Key.Key_5:
+            controller.toggle("strike")  # Strg+5: durchgestrichen
+        elif ctrl and not shift and not alt and key in (Key.Key_9, Key.Key_0):
+            controller.hideCells("rows" if key == Key.Key_9 else "cols", True)  # Strg+9 / Strg+0: ausblenden
+        elif ctrl and not alt and key == Key.Key_Period:
+            # Strg+. heutiges Datum, Strg+Umschalt+. Uhrzeit (Excel deutsch) – als Eingabe, Eingabetaste übernimmt
+            now = datetime.datetime.now()
+            controller.typeText(now.strftime("%H:%M") if shift else now.strftime("%d.%m.%Y"))
+        elif ctrl and not alt and key in (Key.Key_Plus, Key.Key_Minus):
+            # Strg++ / Strg+-: Zeilen (bzw. ganz markierte Spalten) einfügen oder löschen – wie Excel
+            layout = self._layout()
+            r0, c0, r1, c1 = controller.selection
+            whole_cols = r1 - r0 >= layout.max_rows - 1 and c1 - c0 < layout.max_cols - 1
+            controller.insertCells("cols" if whole_cols else "rows", key == Key.Key_Minus)
         elif ctrl and not alt and key == Key.Key_B:
             controller.toggle("bold")
         elif ctrl and not alt and key == Key.Key_I:
@@ -1252,8 +1280,6 @@ class SheetGrid(QQuickPaintedItem):
             controller.fill("down")
         elif ctrl and not alt and key == Key.Key_R:
             controller.fill("right")
-        elif ctrl and not alt and key in (Key.Key_Plus, Key.Key_Minus) and shift is False and False:
-            pass
         else:
             text = event.text()
             if text and text.isprintable() and (not ctrl or alt):

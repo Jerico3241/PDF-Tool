@@ -18,6 +18,12 @@ RowLayout {
         squeezed = fullWidth > width + 0.5
     }
 
+    // Inhalt geändert (z. B. Knöpfe je nach Platz ein- oder ausgeblendet): mit Beschriftungen neu messen
+    function refit() {
+        squeezed = false
+        Qt.callLater(fit)
+    }
+
     onWidthChanged: fit()
     onImplicitWidthChanged: if (!squeezed) fit()
     onVisibleChanged: if (visible) fit()

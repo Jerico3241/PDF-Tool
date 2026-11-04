@@ -175,6 +175,9 @@ class TextController(Observable):
     italicChanged, italic = prop(bool, "italic", False)
     underlineChanged, underline = prop(bool, "underline", False)
     strikeChanged, strike = prop(bool, "strike", False)
+    superscriptChanged, superscript = prop(bool, "superscript", False)
+    subscriptChanged, subscript = prop(bool, "subscript", False)
+    highlightChanged, highlight = prop(str, "highlight", "")  # Textmarker (leer: keiner)
     fontNameChanged, fontName = prop(str, "fontName", "")
     fontSizeChanged, fontSize = prop(str, "fontSize", "")
     fontColorChanged, fontColor = prop(str, "fontColor", "")
@@ -208,6 +211,7 @@ class TextController(Observable):
     tilesInvalidated = Signal(int, int, int, int)  # Twips; Breite 0 = alles
     caretMoved = Signal()  # Schreibmarke sichtbar machen (nach Tasten und Suchen)
     findRequested = Signal()  # Strg+F: Suchleiste zeigen
+    replaceRequested = Signal()  # Strg+H: Suchleiste mit »Ersetzen« zeigen
     contextMenuRequested = Signal()
     commentRequested = Signal()  # »Neuer Kommentar«: Seitenleiste zeigt das Eingabefeld
 
@@ -273,6 +277,17 @@ class TextController(Observable):
             self._apply_size(result)
             for kind, payload in self.service.claim(self.generation, self.doc):
                 self._on_event(self.generation, self.doc, kind, payload)
+            if not path:
+                # Neu: Schrift, Abstände und Ränder wie in Word bzw. PowerPoint (statt der Vorgaben von LibreOffice)
+                name, module = ("NeuWieWord", "Text") if self.KIND == "text" else ("NeuWiePowerPoint", "Folien")
+                self._call("macro", {"name": name, "module": module, "values": []}, lambda _result: finish(),
+                           lambda _exc: finish(), quiet=True, priority=INPUT)
+                return
+            finish()
+
+        def finish() -> None:
+            if self._closed:
+                return
             self.ready = True
             if self.KIND == "text":
                 self.refresh_comments()
@@ -380,7 +395,7 @@ class TextController(Observable):
         else:
             name, _sep, value = payload.partition("=")
         flags = {".uno:Bold": "bold", ".uno:Italic": "italic", ".uno:Underline": "underline", ".uno:Strikeout": "strike",
-                 ".uno:DefaultBullet": "bullets", ".uno:DefaultNumbering": "numbering", ".uno:TrackChanges": "trackChanges",
+                 ".uno:SuperScript": "superscript", ".uno:SubScript": "subscript", ".uno:DefaultBullet": "bullets", ".uno:DefaultNumbering": "numbering", ".uno:TrackChanges": "trackChanges",
                  ".uno:SpellOnline": "spelling", ".uno:ControlCodes": "marks", ".uno:ShowTrackedChanges": "showChanges"}
         if name in flags:
             setattr(self, flags[name], value == "true")
@@ -391,6 +406,8 @@ class TextController(Observable):
             self.fontSize = size[:-2] if size.endswith(".0") else size
         elif name in (".uno:Color", ".uno:FontColor"):
             self.fontColor = _hex(value)
+        elif name in (".uno:CharBackColor", ".uno:BackColor"):
+            self.highlight = _hex(value)
         elif name in (".uno:LeftPara", ".uno:CenterPara", ".uno:RightPara", ".uno:JustifyPara"):
             if value == "true":
                 self.align = {".uno:LeftPara": "left", ".uno:CenterPara": "center", ".uno:RightPara": "right"}.get(name, "justify")
@@ -470,7 +487,10 @@ class TextController(Observable):
                     "bullets": ".uno:DefaultBullet", "numbering": ".uno:DefaultNumbering", "superscript": ".uno:SuperScript",
                     "subscript": ".uno:SubScript", "trackChanges": ".uno:TrackChanges", "spelling": ".uno:SpellOnline",
                     "marks": ".uno:ControlCodes", "indent": ".uno:IncrementIndent", "outdent": ".uno:DecrementIndent",
-                    "clear": ".uno:ResetAttributes"}
+                    "clear": ".uno:ResetAttributes", "grow": ".uno:Grow", "shrink": ".uno:Shrink",
+                    "paintbrush": ".uno:FormatPaintbrush", "sentenceCase": ".uno:ChangeCaseToSentenceCase",
+                    "lowerCase": ".uno:ChangeCaseToLower", "upperCase": ".uno:ChangeCaseToUpper",
+                    "titleCase": ".uno:ChangeCaseToTitleCase", "toggleCase": ".uno:ChangeCaseToToggleCase"}
         if key in commands:
             self.uno(commands[key])
 
@@ -502,6 +522,23 @@ class TextController(Observable):
         value = int(color.lstrip("#"), 16) if color else -1
         self.fontColor = color
         self.uno(".uno:Color", {"Color": ("long", value)})
+
+    @Slot(str)
+    def setHighlight(self, color: str) -> None:  # noqa: N802
+        """Textmarker wie in Word (leer: keiner)."""
+        value = int(color.lstrip("#"), 16) if color else -1
+        self.highlight = color
+        self.uno(".uno:CharBackColor", {"CharBackColor": ("long", value)})
+
+    @Slot(int)
+    def setLineSpacing(self, percent: int) -> None:  # noqa: N802
+        """Zeilenabstand der markierten Absätze in Prozent (100, 108, 115, 150, 200) wie im Menü von Word."""
+        self.macro("Zeilenabstand", [int(percent)])
+
+    @Slot(bool)
+    def setParagraphSpace(self, after: bool) -> None:  # noqa: N802
+        """»Abstand nach Absatz hinzufügen« (8 pt) bzw. entfernen – wie in Word."""
+        self.macro("Absatzabstand", ["282" if after else "0"])
 
     @Slot(str)
     def applyStyle(self, label: str) -> None:  # noqa: N802
@@ -1180,6 +1217,10 @@ class TextController(Observable):
     @Slot()
     def requestSearch(self) -> None:  # noqa: N802
         self.findRequested.emit()
+
+    @Slot()
+    def requestReplace(self) -> None:  # noqa: N802
+        self.replaceRequested.emit()
 
     @Slot()
     def saveAs(self) -> None:  # noqa: N802

@@ -1481,8 +1481,9 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.save"] || []; enabled: view.active; onActivated: { view.commitEdit(0, 0); view.sheet.saveNow() } }
     Shortcut { sequences: Shortcuts.keys["reader.saveAs"] || []; enabled: view.active; onActivated: { view.commitEdit(0, 0); view.sheet.saveAs() } }
     Shortcut { sequences: Shortcuts.keys["reader.print"] || []; enabled: view.active; onActivated: { view.commitEdit(0, 0); view.sheet.printSheet() } }
-    Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: view.active; onActivated: view.sheet.zoomStep(1) }
-    Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active; onActivated: view.sheet.zoomStep(-1) }
+    // In den Zellen gehören Strg++ und Strg+- wie in Excel dem Einfügen bzw. Löschen von Zeilen (Zoom: Strg+Mausrad, Regler)
+    Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: view.active && !grid.activeFocus; onActivated: view.sheet.zoomStep(1) }
+    Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active && !grid.activeFocus; onActivated: view.sheet.zoomStep(-1) }
     Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
     Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
     Shortcut { sequences: ["Ctrl+PgDown"]; enabled: view.active && view.sheet.activeSheet < view.sheet.sheets.length - 1; onActivated: view.sheet.activateSheet(view.sheet.activeSheet + 1) }

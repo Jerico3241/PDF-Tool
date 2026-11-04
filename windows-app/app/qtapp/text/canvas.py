@@ -43,6 +43,49 @@ _APP_KEYS = {Qt.Key.Key_S, Qt.Key.Key_P, Qt.Key.Key_F, Qt.Key.Key_N, Qt.Key.Key_
              Qt.Key.Key_6, Qt.Key.Key_F1, Qt.Key.Key_Return, Qt.Key.Key_Enter}
 
 
+# Tastenkürzel wie in Word und PowerPoint (deutsch), die LibreOffice anders belegt oder Novadesk sonst selbst hätte:
+# (Taste, Umschalt) → Befehl von LibreOffice. »*« gilt für Texte und Präsentationen, »text« nur für Texte.
+_OFFICE_KEYS = {
+    "*": {
+        (Qt.Key.Key_F, True): ".uno:Bold",            # Strg+Umschalt+F: Fett (Word deutsch)
+        (Qt.Key.Key_K, True): ".uno:Italic",          # Strg+Umschalt+K: Kursiv
+        (Qt.Key.Key_U, True): ".uno:Underline",       # Strg+Umschalt+U: Unterstrichen
+        (Qt.Key.Key_Greater, True): ".uno:Grow",      # Strg+Umschalt+>: Schrift größer
+        (Qt.Key.Key_Greater, False): ".uno:Grow",
+        (Qt.Key.Key_Less, False): ".uno:Shrink",      # Strg+<: Schrift kleiner
+        (Qt.Key.Key_Less, True): ".uno:Shrink",
+        (Qt.Key.Key_Space, False): ".uno:ResetAttributes",  # Strg+Leertaste: Zeichenformat entfernen
+        (Qt.Key.Key_L, True): ".uno:DefaultBullet",   # Strg+Umschalt+L: Aufzählung
+    },
+    "text": {
+        (Qt.Key.Key_M, False): ".uno:IncrementIndent",  # Strg+M: Einzug vergrößern (in PowerPoint: neue Folie)
+        (Qt.Key.Key_M, True): ".uno:DecrementIndent",
+        (Qt.Key.Key_1, False): ".uno:SpacePara1",     # Strg+1: einfacher Zeilenabstand
+        (Qt.Key.Key_2, False): ".uno:SpacePara2",     # Strg+2: doppelt
+        (Qt.Key.Key_5, False): ".uno:SpacePara15",    # Strg+5: 1,5-fach
+    },
+}
+
+
+_SHADOW = ((1, 0, 26), (2, 1, 16), (4, 2, 9), (7, 3, 5))  # (Ausdehnung, Versatz nach unten, Deckkraft 0…255)
+
+
+def _paint_page_shadow(painter: QPainter, rect: QRectF) -> None:
+    """Weicher Schatten unter einer Seite bzw. Folie – das Blatt liegt auf dem Grund wie in Word und PowerPoint."""
+    painter.save()
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    for grow, down, alpha in _SHADOW:
+        painter.setBrush(QColor(0, 0, 0, alpha))
+        painter.drawRoundedRect(rect.adjusted(-grow, -grow + down, grow, grow + down), grow, grow)
+    painter.restore()
+
+
+def office_command(kind: str, key: int, shift: bool) -> str:
+    """Befehl für ein Strg-Tastenkürzel wie in Office (leer: keins)."""
+    return _OFFICE_KEYS.get(kind, {}).get((key, shift)) or _OFFICE_KEYS["*"].get((key, shift), "")
+
+
 def awt_key(key: int) -> int:
     """Taste von Qt → Tastencode von LibreOffice (0 = keine)."""
     if key in _KEYS:
@@ -272,6 +315,13 @@ class TextCanvas(QQuickPaintedItem):
         width = self._doc_px()[0]
         return max(0.0, (self.width() - width) / 2) if width < self.width() else 0.0
 
+    def _offset_y(self) -> float:
+        """Präsentationen: die Folie steht senkrecht mittig (wie in PowerPoint); Texte beginnen oben wie in Word."""
+        if self._controller is None or getattr(self._controller, "KIND", "text") != "praesentation":
+            return 0.0
+        height = self._doc_px()[1]
+        return max(0.0, (self.height() - height) / 2) if height < self.height() else 0.0
+
     def _max_scroll_x(self) -> float:
         return max(0.0, self._doc_px()[0] - self.width())
 
@@ -280,12 +330,12 @@ class TextCanvas(QQuickPaintedItem):
 
     def to_view(self, x: float, y: float) -> QPointF:
         scale = self._scale()
-        return QPointF(self._offset_x() + x * scale - self._scroll_x, y * scale - self._scroll_y)
+        return QPointF(self._offset_x() + x * scale - self._scroll_x, self._offset_y() + y * scale - self._scroll_y)
 
     def to_doc(self, point: QPointF) -> tuple[int, int]:
         scale = self._scale()
         return (int(round((point.x() - self._offset_x() + self._scroll_x) / scale)),
-                int(round((point.y() + self._scroll_y) / scale)))
+                int(round((point.y() - self._offset_y() + self._scroll_y) / scale)))
 
     def _view_rect(self, rect: list[int]) -> QRectF:
         scale = self._scale()
@@ -408,6 +458,7 @@ class TextCanvas(QQuickPaintedItem):
         clip = QPainterPath()
         for rect in pages:
             if rect.intersects(view):
+                _paint_page_shadow(painter, rect)
                 painter.fillRect(rect, self._colors["paper"])
                 clip.addRect(rect)
         painter.save()
@@ -690,6 +741,28 @@ class TextCanvas(QQuickPaintedItem):
             event.accept()
             return
         if ctrl and not alt:
+            kind = getattr(controller, "KIND", "text")
+            command = office_command(kind, key, shift)
+            if command:
+                controller.uno(command)
+                event.accept()
+                return
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and kind == "text" and not shift:
+                controller.insertPageBreak()  # Strg+Eingabe: Seitenumbruch (wie Word)
+                event.accept()
+                return
+            if key == Qt.Key.Key_H and not shift:
+                controller.requestReplace()  # Strg+H: Suchen und ersetzen
+                event.accept()
+                return
+            if key == Qt.Key.Key_D and not shift and kind == "praesentation":
+                controller.duplicateSlide()  # Strg+D: Folie duplizieren (wie PowerPoint)
+                event.accept()
+                return
+            if key == Qt.Key.Key_M and not shift and kind == "praesentation":
+                controller.newSlide()  # Strg+M: neue Folie (wie PowerPoint)
+                event.accept()
+                return
             if key == Qt.Key.Key_C or (key == Qt.Key.Key_Insert and not shift):
                 controller.copy()
             elif key == Qt.Key.Key_X:
@@ -736,6 +809,10 @@ class TextCanvas(QQuickPaintedItem):
             return
         if text and text.isprintable():
             controller.type_text(text)
+            event.accept()
+            return
+        if key == Qt.Key.Key_F3 and shift and not ctrl and not alt and not self._read_only:
+            controller.uno(".uno:ChangeCaseRotateCase")  # Umschalt+F3: Groß-/Kleinschreibung wechseln (wie Word)
             event.accept()
             return
         code = awt_key(key)

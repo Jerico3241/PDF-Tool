@@ -16,6 +16,7 @@ Importe aus Novadesk, Syntax bis Python 3.8.
 import base64
 import json
 import os
+import re
 import select
 import socket
 import tempfile
@@ -497,6 +498,15 @@ class Kernel:
             default.CharFontName = args.get("font") or "Calibri"
             default.CharHeight = float(args.get("size") or 11)
         except Exception:  # noqa: BLE001 - dann eben die Vorgabe von LibreOffice
+            pass
+        try:
+            # Blattnamen wie in Excel (»Tabelle1«), auch wenn LibreOffice ohne deutsche Sprachdateien »Sheet1« vorgibt
+            sheets = model.getSheets()
+            for name in list(sheets.getElementNames()):
+                match = re.fullmatch(r"(?:Sheet|Table|Feuille|Hoja|Foglio)(\d+)", name)
+                if match and not sheets.hasByName("Tabelle" + match.group(1)):
+                    sheets.getByName(name).setName("Tabelle" + match.group(1))
+        except Exception:  # noqa: BLE001
             pass
         model.setModified(False)
         return self._register(model, "", FILTERS[".xlsx"], "")

@@ -136,21 +136,26 @@ FocusScope {
         }
     }
 
+    // Text, Tabelle oder Präsentation im Vordergrund: dort gehören Strg+1 … Strg+8 und Strg+Eingabe dem Dokument
+    // (wie in Word, Excel und PowerPoint: Zeilenabstand, Zellen formatieren, Seitenumbruch …), nicht der Navigation
+    readonly property string officeKind: App.currentPage === "reader" && Reader.current !== null && Reader.current !== undefined
+                                         && ["text", "praesentation", "tabelle"].indexOf(Reader.current.kind) >= 0 ? Reader.current.kind : ""
+
     // Tastenkürzel (nicht, solange ein Dialog offen ist)
-    Shortcut { sequences: Shortcuts.keys["app.primary"] || []; enabled: !Dialogs.open; onActivated: App.primaryAction() }
+    Shortcut { sequences: Shortcuts.keys["app.primary"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.primaryAction() }
     Shortcut { sequences: Shortcuts.keys["app.open"] || []; enabled: !Dialogs.open; onActivated: App.openAction() }
-    Shortcut { objectName: "newSheetShortcut"; sequences: Shortcuts.keys["app.new"] || []; enabled: !Dialogs.open; onActivated: Reader.newSheet() }
+    Shortcut { objectName: "newSheetShortcut"; sequences: Shortcuts.keys["app.new"] || []; enabled: !Dialogs.open; onActivated: shell.officeKind === "text" ? Reader.newText() : (shell.officeKind === "praesentation" ? Reader.newSlides() : Reader.newSheet()) }
     Shortcut { sequences: Shortcuts.keys["app.find"] || []; enabled: !Dialogs.open; onActivated: App.findAction() }
     Shortcut { sequences: Shortcuts.keys["app.help"] || []; enabled: !Dialogs.open; onActivated: App.showHelp() }
     Shortcut { sequences: Shortcuts.keys["app.shortcuts"] || []; enabled: !Dialogs.open; onActivated: Shortcuts.showOverview() }
-    Shortcut { sequences: Shortcuts.keys["app.home"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(1) }
-    Shortcut { sequences: Shortcuts.keys["app.contracts"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(2) }
-    Shortcut { sequences: Shortcuts.keys["app.repair"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(3) }
-    Shortcut { sequences: Shortcuts.keys["app.settings"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(4) }
-    Shortcut { sequences: Shortcuts.keys["app.reader"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(5) }
-    Shortcut { sequences: Shortcuts.keys["app.actions"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(6) }
-    Shortcut { sequences: Shortcuts.keys["app.convert"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(7) }
-    Shortcut { sequences: Shortcuts.keys["app.versions"] || []; enabled: !Dialogs.open; onActivated: App.openShortcut(8) }
+    Shortcut { sequences: Shortcuts.keys["app.home"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(1) }
+    Shortcut { sequences: Shortcuts.keys["app.contracts"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(2) }
+    Shortcut { sequences: Shortcuts.keys["app.repair"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(3) }
+    Shortcut { sequences: Shortcuts.keys["app.settings"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(4) }
+    Shortcut { sequences: Shortcuts.keys["app.reader"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(5) }
+    Shortcut { sequences: Shortcuts.keys["app.actions"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(6) }
+    Shortcut { sequences: Shortcuts.keys["app.convert"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(7) }
+    Shortcut { sequences: Shortcuts.keys["app.versions"] || []; enabled: !Dialogs.open && shell.officeKind === ""; onActivated: App.openShortcut(8) }
     // Tab eines Werkzeugs schließen (im Reader schließt Strg+W das Dokument); die Einstellungen (ohne eigenen Tab)
     // schließt Strg+W zurück zur Seite davor
     Shortcut { sequences: Shortcuts.keys["app.closeTab"] || []; enabled: !Dialogs.open && App.currentPage !== "reader" && App.openTabs.indexOf(App.currentTool) >= 0; onActivated: App.closeTab(App.currentTool) }

@@ -41,6 +41,7 @@ FocusScope {
     Connections {
         target: view.doc
         function onFindRequested() { findBar.show() }
+        function onReplaceRequested() { findBar.replacing = true; findBar.show() }
         function onFitRequested() { view.fitSlide() }
         function onReadyChanged() { view.fitSlide() }
         function onDocWidthChanged() { view.fitSlide() }

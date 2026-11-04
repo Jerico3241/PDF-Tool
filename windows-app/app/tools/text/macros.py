@@ -538,6 +538,83 @@ Sub Vergleichen(sEin As String, sAus As String)
 Fehler:
     Melden(sAus, Error$)
 End Sub
+
+' Zeilenabstand der markierten Absätze in Prozent (Wert 0), wie das Menü »Zeilenabstand« in Word (seit 5.0 Beta 10)
+Sub Zeilenabstand(sEin As String, sAus As String)
+    Dim aWerte As Variant, oAuswahl As Object, i As Integer, aZeile As New com.sun.star.style.LineSpacing
+    On Error GoTo Fehler
+    aWerte = Lesen(sEin)
+    aZeile.Mode = 0 : aZeile.Height = CInt(Wert(aWerte, 0))
+    oAuswahl = ThisComponent.getCurrentSelection()
+    ThisComponent.UndoManager.enterUndoContext("Zeilenabstand")
+    For i = 0 To oAuswahl.getCount() - 1
+        oAuswahl.getByIndex(i).ParaLineSpacing = aZeile
+    Next i
+    ThisComponent.UndoManager.leaveUndoContext()
+    Schreiben(sAus, Array("ok"))
+    Exit Sub
+Fehler:
+    Melden(sAus, Error$)
+End Sub
+
+' Abstand nach den markierten Absätzen in 1/100 mm (Wert 0): 282 = 8 pt wie in Word, 0 = entfernen
+Sub Absatzabstand(sEin As String, sAus As String)
+    Dim aWerte As Variant, oAuswahl As Object, i As Integer
+    On Error GoTo Fehler
+    aWerte = Lesen(sEin)
+    oAuswahl = ThisComponent.getCurrentSelection()
+    ThisComponent.UndoManager.enterUndoContext("Absatzabstand")
+    For i = 0 To oAuswahl.getCount() - 1
+        oAuswahl.getByIndex(i).ParaBottomMargin = CLng(Wert(aWerte, 0))
+    Next i
+    ThisComponent.UndoManager.leaveUndoContext()
+    Schreiben(sAus, Array("ok"))
+    Exit Sub
+Fehler:
+    Melden(sAus, Error$)
+End Sub
+
+' Neuer Text wie in Word (seit 5.0 Beta 10): Calibri 11, 8 pt Abstand nach Absätzen, Zeilenabstand 108 %,
+' Überschriften in Calibri Light und Blau, Seitenränder 2,5 / 2,0 cm wie das deutsche Word
+Sub NeuWieWord(sEin As String, sAus As String)
+    Dim oDoc As Object, oAbsatz As Object, oStil As Object, oSeite As Object, aZeile As New com.sun.star.style.LineSpacing
+    Dim aTitel As Variant, aGroesse As Variant, i As Integer
+    On Error GoTo Fehler
+    oDoc = ThisComponent
+    oAbsatz = oDoc.StyleFamilies.getByName("ParagraphStyles")
+    oStil = oAbsatz.getByName("Standard")
+    oStil.CharFontName = "Calibri"
+    oStil.CharHeight = 11
+    oStil.ParaBottomMargin = 282
+    aZeile.Mode = 0 : aZeile.Height = 108
+    oStil.ParaLineSpacing = aZeile
+    If oAbsatz.hasByName("Text body") Then
+        oAbsatz.getByName("Text body").ParaBottomMargin = 282
+        oAbsatz.getByName("Text body").ParaLineSpacing = aZeile
+    End If
+    If oAbsatz.hasByName("Heading") Then oAbsatz.getByName("Heading").CharFontName = "Calibri Light"
+    aTitel = Array("Heading 1", "Heading 2", "Heading 3")
+    aGroesse = Array(16, 13, 12)
+    For i = 0 To 2
+        If oAbsatz.hasByName(aTitel(i)) Then
+            oStil = oAbsatz.getByName(aTitel(i))
+            oStil.CharFontName = "Calibri Light"
+            oStil.CharHeight = aGroesse(i)
+            oStil.CharWeight = com.sun.star.awt.FontWeight.NORMAL
+            oStil.CharColor = RGB(47, 84, 150)
+            oStil.ParaTopMargin = IIf(i = 0, 423, 141)
+            oStil.ParaBottomMargin = 0
+        End If
+    Next i
+    oSeite = oDoc.StyleFamilies.getByName("PageStyles").getByName("Standard")
+    oSeite.TopMargin = 2500 : oSeite.BottomMargin = 2000 : oSeite.LeftMargin = 2500 : oSeite.RightMargin = 2500
+    oDoc.UndoManager.clear()
+    oDoc.setModified(False)
+    Schreiben(sAus, Array("ok"))
+    Exit Sub
+Fehler:
+    Melden(sAus, Error$ & " (Zeile " & Erl & ")")
+End Sub
 '''
 
 SLIDES_BASIC = r'''
@@ -902,6 +979,30 @@ Sub FolienBilder(sEin As String, sAus As String)
         aArg(2).Name = "FilterData" : aArg(2).Value = aDaten()
         oFilter.filter(aArg())
     Next i
+    Schreiben(sAus, Array("ok"))
+    Exit Sub
+Fehler:
+    Melden(sAus, Error$ & " (Zeile " & Erl & ")")
+End Sub
+
+' Neue Präsentation wie in PowerPoint (seit 5.0 Beta 10): Titel in Calibri Light, Text in Calibri
+Sub NeuWiePowerPoint(sEin As String, sAus As String)
+    Dim oDoc As Object, oMaster As Object, oStile As Object, i As Integer, j As Integer, sStil As String
+    On Error GoTo Fehler
+    oDoc = ThisComponent
+    For i = 0 To oDoc.MasterPages.Count - 1
+        oMaster = oDoc.MasterPages.getByIndex(i)
+        oStile = oDoc.StyleFamilies.getByName(oMaster.Name)
+        Schrift(oStile.getByName("title"), "Calibri Light", -1)
+        Schrift(oStile.getByName("subtitle"), "Calibri", -1)
+        For j = 1 To 9
+            sStil = "outline" & CStr(j)
+            If oStile.hasByName(sStil) Then Schrift(oStile.getByName(sStil), "Calibri", -1)
+        Next j
+        If oStile.hasByName("notes") Then Schrift(oStile.getByName("notes"), "Calibri", -1)
+    Next i
+    oDoc.UndoManager.clear()
+    oDoc.setModified(False)
     Schreiben(sAus, Array("ok"))
     Exit Sub
 Fehler:
