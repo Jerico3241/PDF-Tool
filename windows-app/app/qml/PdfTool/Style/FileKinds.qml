@@ -19,10 +19,14 @@ QtObject {
         "csv": "CSV"
     })
 
+    // Zweite, dunklere Farbe für den Verlauf der Kachel (Tab-Dock, Entwurf 7)
+    function deep(kind) { return Qt.darker(color(kind), 1.35) }
     function known(kind) { return colors[kind] !== undefined }
     function color(kind) { return known(kind) ? colors[kind] : Theme.accent }
     // Symbol in 16, 24, 32 oder 48 px (dazu @2x für hohe Auflösung – Qt wählt selbst)
     function image(kind, size) { return known(kind) ? Qt.resolvedUrl("../../images/" + kind + "-" + size + ".png") : "" }
+    // Weiße Silhouette für die farbige Kachel im Tab-Dock (seit 5.0 Beta 10)
+    function whiteImage(kind) { return known(kind) ? Qt.resolvedUrl("../../images/" + kind + "-white-16.png") : "" }
     // Dateiart aus dem Dateinamen (wie office.symbol in Python)
     function of(name) {
         var match = /\.([A-Za-z0-9]+)$/.exec(String(name || ""))

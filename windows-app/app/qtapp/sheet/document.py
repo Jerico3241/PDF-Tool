@@ -85,6 +85,7 @@ class SheetController(Observable):
     cellStyleChanged, cellStyle = prop(dict, "cellStyle", {})  # Format der aktiven Zelle (für die Knöpfe)
     formatKindChanged, formatKind = prop(str, "formatKind", "standard")
     mergedChanged, merged = prop(bool, "merged", False)
+    paintingChanged, painting = prop(bool, "painting", False)  # Pinsel »Format übertragen« wartet auf die Zielauswahl
     statsChanged, stats = prop(dict, "stats", {})  # {sum, count, numbers, average}
     undoTextChanged, undoText = prop(str, "undoText", "")
     redoTextChanged, redoText = prop(str, "redoText", "")
@@ -135,6 +136,7 @@ class SheetController(Observable):
         self._pending: set = set()
         self._viewport = (0, 0, 40, 15)
         self._anchor = (0, 0)
+        self._paint_source: tuple[int, int, int] | None = None
         self._end = (0, 0)
         self._closing = False
         self._closed = False
@@ -764,6 +766,34 @@ class SheetController(Observable):
             self._change("format", {"range": [r0, c0, r0, c0], "set": {"halign": "center", "valign": "center"}})
 
         self._change("merge", {"range": self.selection, "merge": True}, layout=True, then=center)
+
+    @Slot()
+    def togglePainter(self) -> None:  # noqa: N802
+        """Format übertragen (Pinsel): merkt sich die aktive Zelle; die nächste Auswahl mit der Maus bekommt ihr Format."""
+        self._paint_source = None if self.painting else (self.cursorRow, self.cursorCol, self.activeSheet)
+        self.painting = self._paint_source is not None
+
+    @Slot()
+    def finishPainting(self) -> None:  # noqa: N802
+        """Nach dem Loslassen der Maus: Format auf die Auswahl übertragen (nur auf demselben Blatt)."""
+        source, self._paint_source = self._paint_source, None
+        self.painting = False
+        if source is None or source[2] != self.activeSheet:
+            return
+        self._change("paint_format", {"range": self.selection, "source": [source[0], source[1]]}, layout=True,
+                     then=lambda _r: self._load_cell())
+
+    @Slot(str)
+    def formatAsTable(self, style: str) -> None:  # noqa: N802
+        """Als Tabelle formatieren (Kopfzeile, gebänderte Zeilen, Linien) und den Filter einschalten wie in Excel."""
+        def done(result: dict) -> None:
+            area = result.get("range")
+            if area:
+                self.selectRange(*area)
+            if not self.filterOn:
+                self.toggleFilter()
+
+        self._change("table_style", {"range": self.selection, "style": style}, layout=True, then=done)
 
     # Zeilen und Spalten ----------------------------------------------------------------------------------------------
     @Slot(str, bool)

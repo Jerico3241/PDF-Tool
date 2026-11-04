@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
@@ -44,6 +45,43 @@ FocusScope {
             anchors.fill: parent
             color: Theme.background
         }
+        // Seit 5.0 Beta 10 (Entwürfe 7/8): feiner Farbverlauf (hell: kühles Blau → Grau → zartes Lila), im Neon-Modus
+        // zwei Lichtflecken in den Neon-Farben oben links und unten rechts. Ohne Mica sichtbar, Mica liegt darüber.
+        Shape {
+            id: backdrop
+            anchors.fill: parent
+            visible: !Theme.dark || Theme.neon
+            ShapePath {
+                strokeWidth: -1
+                fillGradient: LinearGradient {
+                    x1: 0; y1: 0; x2: backdrop.width * 0.55; y2: backdrop.height
+                    GradientStop { position: 0.0; color: Theme.neon ? "#0A0C11" : "#EEF3FA" }
+                    GradientStop { position: 0.38; color: Theme.neon ? "#0A0C11" : "#F3F3F3" }
+                    GradientStop { position: 1.0; color: Theme.neon ? "#0A0C11" : "#F4F1F8" }
+                }
+                PathRectangle { width: backdrop.width; height: backdrop.height }
+            }
+            ShapePath {
+                strokeWidth: -1
+                fillGradient: RadialGradient {
+                    centerX: backdrop.width * 0.12; centerY: -backdrop.height * 0.1; centerRadius: Math.max(600, backdrop.width * 0.55)
+                    focalX: centerX; focalY: centerY
+                    GradientStop { position: 0.0; color: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.20) : "transparent" }
+                    GradientStop { position: 0.6; color: "transparent" }
+                }
+                PathRectangle { width: backdrop.width; height: backdrop.height }
+            }
+            ShapePath {
+                strokeWidth: -1
+                fillGradient: RadialGradient {
+                    centerX: backdrop.width * 1.05; centerY: backdrop.height * 1.1; centerRadius: Math.max(500, backdrop.width * 0.45)
+                    focalX: centerX; focalY: centerY
+                    GradientStop { position: 0.0; color: Theme.neon ? Qt.rgba(0.49, 0.30, 1.0, 0.18) : "transparent" }
+                    GradientStop { position: 0.6; color: "transparent" }
+                }
+                PathRectangle { width: backdrop.width; height: backdrop.height }
+            }
+        }
         Image {
             id: mica
             readonly property var win: shell.Window.window
@@ -76,8 +114,8 @@ FocusScope {
             y: tabs.height
             width: parent.width
             height: parent.height - y
-            color: Theme.layer
-            Rectangle { width: parent.width; height: 1; color: Theme.layerStroke; visible: !shell.fullScreen }
+            // 3D-Design: keine eigene Ebene mehr – Leisten und Karten schweben über dem Hintergrund (Vollbild: Fläche der Seiten)
+            color: shell.fullScreen ? Theme.layer : "transparent"
 
             PageHost {
                 id: host
@@ -116,6 +154,12 @@ FocusScope {
         }
     }
 
+    // 3D-Tab-Übersicht (Strg+Tab, Entwurf 10) über allem außer den Dialogen
+    TabSwitcher {
+        anchors.fill: parent
+        source: host
+        z: 50
+    }
     DialogHost {}
 
     DropArea {

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
@@ -10,8 +11,82 @@ import PdfTool.Controls
 PPage {
     id: page
     objectName: "settingsPage"
-    title: I18n.tr("Einstellungen", I18n.revision)
+    // Breites Fenster (seit 5.0 Beta 10, Entwurf 5): Bereiche links untereinander, rechts der gewählte mit seinem Namen
+    // als Überschrift; schmal wie bisher oben nebeneinander
+    readonly property bool sideNav: width >= 900
+    sideWidth: sideNav ? 260 : 0
+    readonly property var sectionIcons: ({ general: "settings", personalize: "paint_brush", reader: "document_pdf", assistant: "sparkle",
+                                           contracts: "document_table", updates: "arrow_sync", data: "save", info: "info" })
+    function sectionLabel(key) {
+        var list = Settings.sections
+        for (var i = 0; i < list.length; ++i)
+            if (list[i].key === key) return list[i].label
+        return ""
+    }
+    title: I18n.tr(sideNav ? sectionLabel(Settings.section) : "Einstellungen", I18n.revision)
+    subtitle: I18n.tr(sideNav && Settings.section === "personalize" ? "So sieht Novadesk aus – Änderungen wirken sofort." : "", I18n.revision)
     signal themeRequested(var apply)
+
+    side: Column {
+        objectName: "settingsNav"
+        x: 10
+        y: 18
+        width: page.sideWidth - 20
+        spacing: 4
+        Repeater {
+            model: Settings.sections
+            T.AbstractButton {
+                id: navItem
+                required property var modelData
+                readonly property bool selected: Settings.section === modelData.key
+                objectName: "settingsNav_" + modelData.key
+                width: parent.width
+                height: 38
+                hoverEnabled: true
+                focusPolicy: Qt.TabFocus
+                Accessible.role: Accessible.PageTab
+                Accessible.name: I18n.tr(modelData.label, I18n.revision)
+                Accessible.selected: selected
+                onClicked: { Settings.setSection(modelData.key); page.scrollToTop() }
+                background: Rectangle {
+                    radius: Metrics.radiusControl + 2
+                    color: navItem.selected ? Theme.navSelected : (navItem.hovered ? Theme.subtleHover : "transparent")
+                    Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+                    PFocusRing { visible: navItem.visualFocus }
+                    Rectangle {
+                        visible: navItem.selected
+                        x: 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 3
+                        height: 18
+                        radius: 1.5
+                        color: Theme.accent
+                        Repeater {
+                            model: Theme.glow > 0 ? 3 : 0
+                            Rectangle {
+                                required property int index
+                                x: -(index + 1); y: -(index + 1)
+                                width: parent.width + 2 * (index + 1); height: parent.height + 2 * (index + 1)
+                                radius: width / 2
+                                color: "transparent"
+                                border.width: 1
+                                border.color: Theme.accent
+                                opacity: 0.3 * Theme.glow * (1 - index / 3)
+                            }
+                        }
+                    }
+                }
+                contentItem: Item {}
+                Row {
+                    x: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 12
+                    PIcon { anchors.verticalCenter: parent.verticalCenter; name: page.sectionIcons[navItem.modelData.key] || "settings"; size: 18; color: Theme.textPrimary }
+                    PText { anchors.verticalCenter: parent.verticalCenter; text: I18n.tr(navItem.modelData.label, I18n.revision) }
+                }
+            }
+        }
+    }
 
     function indexOfValue(list, value) {
         for (var i = 0; i < list.length; ++i)
@@ -22,6 +97,7 @@ PPage {
     // Bereiche: nur der gewählte ist sichtbar
     PSelectorBar {
         objectName: "settingsSections"
+        visible: !page.sideNav
         Layout.fillWidth: true
         Layout.maximumWidth: implicitWidth
         Layout.bottomMargin: 8
@@ -169,6 +245,302 @@ PPage {
                 spacing: 8
                 PIcon { name: "info"; color: Theme.textSecondary; Layout.alignment: Qt.AlignTop; Layout.topMargin: 1 }
                 PText { text: I18n.tr(Settings.texts.backgroundNote, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; Layout.fillWidth: true }
+            }
+        }
+    }
+
+    // Personalisieren (seit 5.0 Beta 10, Entwurf 5): Design, Neon, Startseite, Ecken, Dichte, Menüband, Animationen
+    ColumnLayout {
+        objectName: "settingsSection_personalize"
+        Layout.fillWidth: true
+        visible: Settings.section === "personalize"
+        spacing: 6
+
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "dark_theme"
+            title: I18n.tr("App-Design", I18n.revision)
+            description: I18n.tr(ThemeBackend.neon ? "Im Neon-Modus immer dunkel" : "Hell, Dunkel oder wie Windows", I18n.revision)
+            PSegmented {
+                objectName: "personalizeTheme"
+                label: I18n.tr("App-Design", I18n.revision)
+                enabled: !ThemeBackend.neon
+                opacity: enabled ? 1 : 0.5
+                model: [{ value: "light", label: "Hell" }, { value: "dark", label: "Dunkel" }, { value: "system", label: "Wie Windows" }]
+                current: ThemeBackend.neon ? "dark" : ThemeBackend.mode
+                onActivated: (value) => page.themeRequested(function() { Settings.setTheme(value) })
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "sparkle"
+            title: I18n.tr("Neon-Modus", I18n.revision)
+            description: I18n.tr("Leuchtende Akzentfarbe mit sanftem Glühen an Reitern, Auswahl, Zellrahmen und Schreibmarke", I18n.revision)
+            PToggle {
+                objectName: "neonToggle"
+                label: I18n.tr("Neon-Modus", I18n.revision)
+                checked: ThemeBackend.neon
+                onToggled: { var on = checked; page.themeRequested(function() { Settings.setNeon(on) }) }
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "color"
+            title: I18n.tr("Neon-Farbe", I18n.revision)
+            description: I18n.tr("Gilt für die ganze App – Dokumente behalten ihre eigenen Farben", I18n.revision)
+            Row {
+                objectName: "neonColors"
+                spacing: 10
+                Repeater {
+                    model: Settings.choices.neonColors
+                    T.AbstractButton {
+                        id: neonSwatch
+                        required property var modelData
+                        readonly property bool selected: String(ThemeBackend.neonColor).toUpperCase() === String(modelData.value).toUpperCase()
+                        objectName: "neonColor_" + index
+                        required property int index
+                        width: 30
+                        height: 30
+                        hoverEnabled: true
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: I18n.tr(modelData.name, I18n.revision)
+                        Accessible.checked: selected
+                        onClicked: { var value = modelData.value; page.themeRequested(function() { Settings.setNeonColor(value); if (!ThemeBackend.neon) Settings.setNeon(true) }) }
+                        background: Item {
+                            Rectangle {  // Schein
+                                anchors.centerIn: parent
+                                width: 40; height: 40; radius: 20
+                                color: neonSwatch.modelData.value
+                                opacity: neonSwatch.hovered || neonSwatch.selected ? 0.35 : 0.2
+                                Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
+                            }
+                            Rectangle { anchors.fill: parent; radius: 15; color: neonSwatch.modelData.value; scale: neonSwatch.pressed ? 0.92 : 1; Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast } } }
+                            Rectangle {  // gewählt: Ring mit Abstand
+                                visible: neonSwatch.selected
+                                anchors.centerIn: parent
+                                width: 38; height: 38; radius: 19
+                                color: "transparent"
+                                border.width: 2
+                                border.color: Theme.textPrimary
+                            }
+                            PFocusRing { visible: neonSwatch.visualFocus }
+                        }
+                        PToolTip { text: I18n.tr(neonSwatch.modelData.name, I18n.revision); visible: neonSwatch.hovered; y: neonSwatch.height + 8 }
+                    }
+                }
+                // Eigene Farbe
+                T.AbstractButton {
+                    id: customNeon
+                    objectName: "neonColorCustom"
+                    readonly property bool selected: {
+                        var list = Settings.choices.neonColors
+                        for (var i = 0; i < list.length; ++i)
+                            if (String(list[i].value).toUpperCase() === String(ThemeBackend.neonColor).toUpperCase()) return false
+                        return true
+                    }
+                    width: 30
+                    height: 30
+                    hoverEnabled: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: I18n.tr("Eigene Farbe", I18n.revision)
+                    onClicked: customPopup.open()
+                    background: Rectangle {
+                        radius: 15
+                        color: customNeon.selected ? ThemeBackend.neonColor : (customNeon.hovered ? Theme.subtleHover : "transparent")
+                        border.width: customNeon.selected ? 2 : 1
+                        border.color: customNeon.selected ? Theme.textPrimary : Theme.textTertiary
+                        PFocusRing { visible: customNeon.visualFocus }
+                    }
+                    contentItem: Item { PIcon { anchors.centerIn: parent; name: "add"; size: 14; color: customNeon.selected ? "#06121A" : Theme.textSecondary } }
+                    PToolTip { text: I18n.tr("Eigene Farbe", I18n.revision); visible: customNeon.hovered && !customPopup.opened; y: customNeon.height + 8 }
+                    T.Popup {
+                        id: customPopup
+                        objectName: "neonCustomPopup"
+                        y: customNeon.height + 8
+                        x: customNeon.width - width
+                        padding: 12
+                        focus: true
+                        background: Rectangle { color: Theme.flyout; border.color: Theme.flyoutStroke; radius: Metrics.radiusOverlay; PShadow { radius: Metrics.radiusOverlay } }
+                        contentItem: ColumnLayout {
+                            spacing: 8
+                            PText { text: I18n.tr("Eigene Neon-Farbe", I18n.revision); textStyle: "bodyStrong" }
+                            Grid {
+                                columns: 8
+                                spacing: 6
+                                Repeater {
+                                    model: ["#00FFC6", "#00B3FF", "#4D7CFF", "#7C4DFF", "#E040FB", "#FF4081", "#FF6E40", "#FFD740",
+                                            "#C6FF00", "#76FF03", "#18FFFF", "#40C4FF", "#B388FF", "#FF80AB", "#FFAB40", "#EEFF41"]
+                                    T.AbstractButton {
+                                        required property string modelData
+                                        width: 22; height: 22
+                                        onClicked: { var value = modelData; customPopup.close(); page.themeRequested(function() { Settings.setNeonColor(value); if (!ThemeBackend.neon) Settings.setNeon(true) }) }
+                                        background: Rectangle { radius: 11; color: parent.modelData; border.width: parent.hovered ? 2 : 0; border.color: Theme.textPrimary }
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                spacing: 6
+                                PTextField {
+                                    id: hexField
+                                    objectName: "neonHexField"
+                                    preferredWidth: 120
+                                    placeholderText: "#RRGGBB"
+                                    text: ThemeBackend.neonColor
+                                    onSubmitted: hexApply.clicked()
+                                }
+                                PButton {
+                                    id: hexApply
+                                    kind: "accent"
+                                    text: I18n.tr("Übernehmen", I18n.revision)
+                                    enabled: /^#?[0-9A-Fa-f]{6}$/.test(hexField.text.trim())
+                                    onClicked: {
+                                        var value = hexField.text.trim()
+                                        if (value.charAt(0) !== "#") value = "#" + value
+                                        customPopup.close()
+                                        page.themeRequested(function() { Settings.setNeonColor(value); if (!ThemeBackend.neon) Settings.setNeon(true) })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "weather_moon"
+            title: I18n.tr("Leuchtstärke", I18n.revision)
+            description: I18n.tr("Wie stark Neon glüht", I18n.revision)
+            PSegmented {
+                objectName: "personalizeGlow"
+                label: I18n.tr("Leuchtstärke", I18n.revision)
+                model: Settings.choices.glows
+                current: ThemeBackend.glow
+                onActivated: (value) => Settings.setGlow(value)
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "home"
+            title: I18n.tr("Startseite", I18n.revision)
+            description: I18n.tr("Hintergrund der Startseite", I18n.revision)
+            Row {
+                objectName: "personalizeStart"
+                spacing: 10
+                Repeater {
+                    model: Settings.choices.startBackgrounds
+                    T.AbstractButton {
+                        id: bgChoice
+                        required property var modelData
+                        readonly property bool selected: ThemeBackend.startBackground === modelData.value
+                        objectName: "startBackground_" + modelData.value
+                        width: 96
+                        height: 80
+                        hoverEnabled: true
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: I18n.tr(modelData.label, I18n.revision)
+                        Accessible.checked: selected
+                        onClicked: Settings.setStartBackground(modelData.value)
+                        background: Item {}
+                        contentItem: Item {}
+                        Rectangle {
+                            id: preview
+                            width: 96
+                            height: 58
+                            radius: Metrics.radiusControl + 2
+                            clip: true
+                            color: Theme.surface
+                            border.width: bgChoice.selected ? 2 : 1
+                            border.color: bgChoice.selected ? Theme.accent : Theme.border
+                            gradient: bgChoice.modelData.value === "gradient" ? previewGradient : null
+                            Gradient {
+                                id: previewGradient
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0; color: Theme.dark ? "#1B2A4A" : "#DCE8FB" }
+                                GradientStop { position: 1; color: Theme.dark ? "#3A1B4A" : "#EFE3F8" }
+                            }
+                            // Raster
+                            Repeater {
+                                model: bgChoice.modelData.value === "grid" ? 8 : 0
+                                Rectangle { required property int index; x: index * 12 + 6; width: 1; height: preview.height; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25) }
+                            }
+                            Repeater {
+                                model: bgChoice.modelData.value === "grid" ? 5 : 0
+                                Rectangle { required property int index; y: index * 12 + 6; height: 1; width: preview.width; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25) }
+                            }
+                            Repeater {
+                                model: bgChoice.selected && Theme.glow > 0 ? 3 : 0
+                                Rectangle {
+                                    required property int index
+                                    x: -(index + 1); y: -(index + 1)
+                                    width: preview.width + 2 * (index + 1); height: preview.height + 2 * (index + 1)
+                                    radius: preview.radius + index + 1
+                                    color: "transparent"; border.width: 1; border.color: Theme.accent
+                                    opacity: 0.25 * Theme.glow * (1 - index / 3)
+                                }
+                            }
+                        }
+                        PText {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: preview.height + 4
+                            text: I18n.tr(bgChoice.modelData.label, I18n.revision)
+                            textStyle: "caption"
+                            tone: "secondary"
+                        }
+                    }
+                }
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "shapes"
+            title: I18n.tr("Ecken", I18n.revision)
+            description: I18n.tr("Rund wie Windows 11 oder eckig", I18n.revision)
+            PSegmented {
+                objectName: "personalizeCorners"
+                label: I18n.tr("Ecken", I18n.revision)
+                model: Settings.choices.corners
+                current: ThemeBackend.corners
+                onActivated: (value) => Settings.setCorners(value)
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "grid"
+            title: I18n.tr("Dichte", I18n.revision)
+            description: I18n.tr("Abstände in Leisten und Listen", I18n.revision)
+            PSegmented {
+                objectName: "personalizeDensity"
+                label: I18n.tr("Dichte", I18n.revision)
+                model: Settings.choices.densities
+                current: ThemeBackend.density
+                onActivated: (value) => Settings.setDensity(value)
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "panel_left"
+            title: I18n.tr("Menüband", I18n.revision)
+            description: I18n.tr("Befehle mit Beschriftung oder nur als Symbole", I18n.revision)
+            PSegmented {
+                objectName: "personalizeRibbon"
+                label: I18n.tr("Menüband", I18n.revision)
+                model: Settings.choices.ribbon
+                current: ThemeBackend.ribbonLabels ? "text" : "icons"
+                onActivated: (value) => Settings.setRibbonLabels(value === "text")
+            }
+        }
+        PSettingsCard {
+            Layout.fillWidth: true
+            iconName: "play"
+            title: I18n.tr("Animationen", I18n.revision)
+            description: I18n.tr(ThemeBackend.profileNote !== "" ? "Gleitende Reiter, Seitenleisten und Zellrahmen. " + ThemeBackend.profileNote : "Gleitende Reiter, Seitenleisten und Zellrahmen", I18n.revision)
+            PSegmented {
+                objectName: "personalizeMotion"
+                label: I18n.tr("Animationen", I18n.revision)
+                model: Settings.profiles
+                current: ThemeBackend.profile
+                onActivated: (value) => Settings.setProfile(value)
             }
         }
     }

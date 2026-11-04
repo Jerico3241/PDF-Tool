@@ -122,6 +122,44 @@ def test_conditional_formatting_and_data_bars(ui_app, tmp_path: Path, monkeypatc
 
 
 @needs_calc
+def test_start_tab_table_style_painter_and_number_buttons(ui_app, tmp_path: Path) -> None:
+    """Reiter Start wie Excel (seit 5.0 Beta 10): »Als Tabelle« färbt die Kopfzeile, bändert die Zeilen und schaltet den
+    Filter ein (eine Zelle steht für den ganzen Bereich); der Pinsel überträgt Fett und Füllfarbe; € und % schalten
+    das Zahlenformat und ein zweiter Klick wieder auf Standard."""
+    h = ui_app
+    h.app.dialogs.shutdown()
+    sheet = _open(h, _workbook(tmp_path / "Start.xlsx"))
+    view = h.item("sheetView")
+    sheet.select(2, 1, False)
+    sheet.formatAsTable("green")
+    assert wait_until(lambda: not sheet.busy and sheet.filterOn, 20)
+    assert sheet.selection == [0, 0, 5, 5]
+    header = _cell(sheet, 0, 0)[1]
+    assert header.get("background", "").lower() == "#70ad47" and header.get("bold") and header.get("color", "").lower() == "#ffffff"
+    assert _cell(sheet, 2, 0)[1].get("background", "").lower() == "#e2efda"  # gebändert
+    assert _cell(sheet, 1, 0)[1].get("background") in (None, "")
+    # Pinsel: Format der Kopfzeile auf eine leere Zelle
+    sheet.select(0, 1, False)
+    pump(0.3)
+    sheet.togglePainter()
+    assert sheet.painting
+    sheet.select(8, 1, False)
+    sheet.finishPainting()
+    assert not sheet.painting
+    assert wait_until(lambda: not sheet.busy and _cell(sheet, 8, 1)[1].get("bold") is True, 20)
+    assert _cell(sheet, 8, 1)[1].get("background", "").lower() == "#70ad47"
+    # € und %: Umschalter wie in Excel
+    sheet.select(1, 2, False)
+    assert wait_until(lambda: not sheet.busy, 10)
+    view.format("currency")
+    assert wait_until(lambda: sheet.formatKind == "currency" and not sheet.busy, 20)
+    view.format("currency")
+    assert wait_until(lambda: sheet.formatKind == "standard" and not sheet.busy, 20)
+    for name in ("sheetBordersApply", "sheetFillMenu", "sheetAsTable", "sheetNumberFormat", "sheetPainter"):
+        assert h.item(name) is not None, name
+
+
+@needs_calc
 def test_validation_list_rejects_and_offers_items(ui_app, tmp_path: Path, monkeypatch) -> None:
     """Datenüberprüfung »Liste«: falsche Eingaben lehnt der Kern ab (die Zelle bleibt, die Mappe gilt danach nicht als
     geändert), der Pfeil an der Zelle bietet die Einträge an."""

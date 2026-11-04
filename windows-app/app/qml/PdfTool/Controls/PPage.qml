@@ -17,6 +17,9 @@ Item {
     default property alias content: column.data
     property alias flickable: flick
     property alias header: headerSlot.data
+    // Navigation links neben dem Inhalt (seit 5.0 Beta 10, Einstellungen wie im Entwurf 5): scrollt nicht mit
+    property real sideWidth: 0
+    property alias side: sideSlot.data
     readonly property real contentWidth: column.width
     readonly property int columns: contentWidth >= Metrics.twoColumnsFrom ? 2 : 1
 
@@ -42,9 +45,17 @@ Item {
     }
     NumberAnimation { id: revealAnim; target: flick; property: "contentY"; duration: Motion.scroll; easing.type: Motion.decelerate }
 
+    Item {
+        id: sideSlot
+        width: page.sideWidth
+        height: parent.height
+        visible: page.sideWidth > 0
+    }
+
     Flickable {
         id: flick
         anchors.fill: parent
+        anchors.leftMargin: page.sideWidth
         contentWidth: width
         contentHeight: column.implicitHeight + Metrics.pagePaddingTop + Metrics.pagePaddingBottom
         boundsBehavior: Flickable.StopAtBounds

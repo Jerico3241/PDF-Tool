@@ -98,13 +98,16 @@ Item {
         font.weight: Font.DemiBold
     }
 
-    // Karte »Neu« bzw. »PDF öffnen«: oben eine Linie in der Farbe der Dateiart, Symbol, Name und Beschreibung
+    // Karte »Neu« bzw. »PDF öffnen« (seit 5.0 Beta 10, Entwürfe 6/11): schwebende 3D-Karte mit Rand und Schein in der
+    // Farbe der Dateiart, leicht nach hinten geneigt; unter der Maus kippt sie zur Maus hin und hebt sich. Nur die
+    // Fläche (face) bewegt sich – die Karte selbst behält Lage und Größe (Layout, Fokus, Klickfläche).
     component KindCard: T.AbstractButton {
         id: kindCard
         property string kind: ""
         property string title: ""
         property string description: ""
-        implicitHeight: 91
+        readonly property color kindColor: FileKinds.color(kind)
+        implicitHeight: 100
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         Accessible.role: Accessible.Button
@@ -113,60 +116,68 @@ Item {
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         contentItem: Item {}
-        // Farbige Oberkante wie »border-top« an einer runden Karte: die Karte liegt 3 px tiefer auf einer Fläche in
-        // der Farbe der Dateiart
-        background: Rectangle {
-            objectName: "kindLine"
-            radius: Metrics.radiusControl + 2
-            color: FileKinds.color(kindCard.kind)
-            Rectangle {
+        background: Item {}
+        HoverHandler { id: cardHover }
+        Item {
+            id: face
+            anchors.fill: parent
+            readonly property bool tilt: Motion.moves
+            readonly property real px: cardHover.hovered ? cardHover.point.position.x / Math.max(1, width) : 0.5
+            readonly property real py: cardHover.hovered ? cardHover.point.position.y / Math.max(1, height) : 0.5
+            readonly property bool up: kindCard.hovered || kindCard.visualFocus
+            property real ax: !tilt ? 0 : (up ? 4 + (0.5 - py) * 10 : 8)
+            property real ay: !tilt || !up ? 0 : (px - 0.5) * 14
+            property real lift: !tilt || !up ? 0 : (kindCard.pressed ? -3 : -8)
+            property real grow: !tilt || !up ? 1 : (kindCard.pressed ? 1.01 : 1.04)
+            Behavior on ax { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+            Behavior on ay { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+            Behavior on lift { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+            Behavior on grow { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+            transform: [
+                Rotation { origin.x: face.width / 2; origin.y: face.height / 2; axis { x: 1; y: 0; z: 0 } angle: face.ax },
+                Rotation { origin.x: face.width / 2; origin.y: face.height / 2; axis { x: 0; y: 1; z: 0 } angle: face.ay },
+                Scale { origin.x: face.width / 2; origin.y: face.height / 2; xScale: face.grow; yScale: face.grow },
+                Translate { y: face.lift }
+            ]
+            PGloss {
+                objectName: "kindLine"
                 anchors.fill: parent
-                anchors.topMargin: 3
-                radius: Metrics.radiusControl + 2
-                color: kindCard.pressed ? Theme.controlPressed : (kindCard.hovered ? Theme.controlHover : Theme.surface)
-                border.width: 1
-                border.color: Theme.border
-                // oben gerade (an der farbigen Linie)
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.leftMargin: 1
-                    anchors.rightMargin: 1
-                    height: Metrics.radiusControl + 2
-                    color: parent.color
+                radius: Metrics.radiusFloat
+                high: face.up
+                stroke: Qt.rgba(kindCard.kindColor.r, kindCard.kindColor.g, kindCard.kindColor.b, face.up ? 0.9 : (Theme.neon ? 0.45 : 0.30))
+                glowColor: Theme.neon ? kindCard.kindColor : "transparent"
+                Behavior on stroke { enabled: Motion.enabled; ColorAnimation { duration: Motion.normal } }
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 22
+                anchors.rightMargin: Metrics.s16
+                anchors.topMargin: 18
+                anchors.bottomMargin: Metrics.s12
+                spacing: 18
+                Image {
+                    objectName: "kindIcon"
+                    Layout.preferredWidth: 44
+                    Layout.preferredHeight: 44
+                    Layout.alignment: Qt.AlignTop
+                    source: FileKinds.image(kindCard.kind, 48)
+                    sourceSize: Qt.size(48, 48)
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    scale: face.up && Motion.moves ? 1.08 : 1
+                    Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+                    Accessible.ignored: true
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 2
+                    PText { Layout.fillWidth: true; text: I18n.tr(kindCard.title, I18n.revision); textStyle: "bodyStrong"; wrap: true }
+                    PText { Layout.fillWidth: true; text: I18n.tr(kindCard.description, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; font.pixelSize: 13 }
                 }
             }
+            PFocusRing { visible: kindCard.visualFocus; radius_: Metrics.radiusFloat }
         }
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 22
-            anchors.rightMargin: Metrics.s16
-            anchors.topMargin: 3 + 14
-            anchors.bottomMargin: Metrics.s12
-            spacing: 18
-            Image {
-                objectName: "kindIcon"
-                Layout.preferredWidth: 40
-                Layout.preferredHeight: 40
-                Layout.alignment: Qt.AlignTop
-                source: FileKinds.image(kindCard.kind, 48)
-                sourceSize: Qt.size(48, 48)
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                scale: kindCard.hovered && Motion.moves ? 1.06 : 1
-                Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
-                Accessible.ignored: true
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignTop
-                spacing: 2
-                PText { Layout.fillWidth: true; text: I18n.tr(kindCard.title, I18n.revision); textStyle: "bodyStrong"; wrap: true }
-                PText { Layout.fillWidth: true; text: I18n.tr(kindCard.description, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; font.pixelSize: 13 }
-            }
-        }
-        PFocusRing { visible: kindCard.visualFocus; radius_: Metrics.radiusControl + 2 }
     }
 
     // Karte einer Vorlage (seit 5.0 Beta 6): oben das Vorschaubild (Anfang der ersten Seite bzw. die erste Folie), darunter
@@ -521,9 +532,8 @@ Item {
         width: App.navOpen ? 240 : 0
         visible: width > 0
         clip: true
-        color: Theme.background
+        color: "transparent"  // 3D-Design: die Navigation liegt auf dem Hintergrund (Entwurf 11)
         Behavior on width { enabled: Motion.moves; NumberAnimation { duration: Motion.pane; easing.type: Motion.decelerate } }
-        Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider }
 
         ColumnLayout {
             x: 10
@@ -539,20 +549,21 @@ Item {
                 Layout.leftMargin: 2
                 Layout.rightMargin: 2
                 Layout.bottomMargin: 14
-                implicitHeight: 36
                 hoverEnabled: true
                 focusPolicy: Qt.StrongFocus
                 text: I18n.tr("Neu", I18n.revision)
                 Accessible.role: Accessible.ButtonMenu
                 Accessible.name: I18n.tr("Neu", I18n.revision)
                 onClicked: newMenu.opened ? newMenu.close() : newMenu.popup(newButton, 0, newButton.height + 4)
+                implicitHeight: 40
                 background: Rectangle {
-                    radius: Metrics.radiusControl + 2
+                    radius: Metrics.radiusControl + 4
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: Theme.brandStart }
-                        GradientStop { position: 1; color: Theme.brandEnd }
+                        GradientStop { position: 0; color: Theme.neon ? Theme.accent : Theme.brandStart }
+                        GradientStop { position: 1; color: Theme.neon ? Theme.neonSecond : Theme.brandEnd }
                     }
+                    PLift { radius: parent.radius; strength: 0.8; glowColor: Theme.neon ? Theme.accent : "transparent" }
                     Rectangle {
                         anchors.fill: parent
                         radius: parent.radius
@@ -566,12 +577,12 @@ Item {
                     anchors.leftMargin: 14
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 10
-                    PIcon { anchors.verticalCenter: parent.verticalCenter; name: "add"; color: "white" }
+                    PIcon { anchors.verticalCenter: parent.verticalCenter; name: "add"; color: Theme.neon ? "#06121A" : "white" }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("Neu", I18n.revision)
                         font: Typography.bodyStrong
-                        color: "white"
+                        color: Theme.neon ? "#06121A" : "white"
                         textFormat: Text.PlainText
                     }
                 }
@@ -614,6 +625,34 @@ Item {
         }
     }
 
+    // Hintergrund der Startseite (Personalisieren): schlicht, Verlauf oder Neon-Raster
+    Item {
+        objectName: "homeBackdrop"
+        anchors.left: nav.right
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        clip: true
+        visible: ThemeBackend.startBackground !== "plain"
+        Rectangle {
+            anchors.fill: parent
+            visible: ThemeBackend.startBackground === "gradient"
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.06 : 0.05) }
+                GradientStop { position: 1; color: Theme.neon ? Qt.rgba(0.49, 0.30, 1.0, 0.07) : Qt.rgba(0.6, 0.4, 0.9, 0.05) }
+            }
+        }
+        Repeater {
+            model: ThemeBackend.startBackground === "grid" ? Math.ceil(parent.width / 28) : 0
+            Rectangle { required property int index; x: index * 28; width: 1; height: parent.height; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.07 : 0.06) }
+        }
+        Repeater {
+            model: ThemeBackend.startBackground === "grid" ? Math.ceil(parent.height / 28) : 0
+            Rectangle { required property int index; y: index * 28; height: 1; width: parent.width; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.07 : 0.06) }
+        }
+    }
+
     PPage {
         id: content
         anchors.left: nav.right
@@ -650,15 +689,18 @@ Item {
             Rectangle {
                 objectName: "homeHero"
                 Layout.fillWidth: true
-                implicitHeight: 120
-                radius: Metrics.radiusCard + 4
+                implicitHeight: 140
+                radius: Metrics.radiusFloat
                 border.width: 1
-                border.color: Theme.border
+                border.color: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35) : Theme.border
+                // Neon (Entwurf 6/11): Verlauf aus Neon-Farbe, Lila und Pink
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0; color: Theme.heroStart }
-                    GradientStop { position: 1; color: Theme.heroEnd }
+                    GradientStop { position: 0; color: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16) : Theme.heroStart }
+                    GradientStop { position: 0.6; color: Theme.neon ? Qt.rgba(0.49, 0.30, 1.0, 0.15) : Qt.tint(Theme.heroStart, Qt.rgba(1, 1, 1, 0.4)) }
+                    GradientStop { position: 1; color: Theme.neon ? Qt.rgba(1.0, 0.24, 0.65, 0.12) : Theme.heroEnd }
                 }
+                PLift { radius: parent.radius; strength: 0.7; glowColor: Theme.neon ? Theme.accent : "transparent" }
                 ColumnLayout {
                     anchors.left: parent.left
                     anchors.right: heroImage.left
@@ -696,6 +738,26 @@ Item {
                     smooth: true
                     mipmap: true
                     Accessible.ignored: true
+                    // Das Logo dreht sich beim ersten Zeigen einmal in 3D (Entwurf 11) und schwebt danach sanft
+                    transform: [
+                        Rotation { id: logoSpin; origin.x: heroImage.width / 2; origin.y: heroImage.height / 2; axis { x: 0; y: 1; z: 0 } angle: 0 },
+                        Translate { id: logoFloat; y: 0 }
+                    ]
+                    property bool spun: false
+                    onVisibleChanged: spinOnce()
+                    Component.onCompleted: spinOnce()
+                    function spinOnce() {
+                        if (spun || !visible || !Motion.moves) return
+                        spun = true
+                        spin.start()
+                    }
+                    NumberAnimation { id: spin; target: logoSpin; property: "angle"; from: 0; to: 360; duration: 1400; easing.type: Easing.OutCubic }
+                    SequentialAnimation {
+                        running: Motion.moves && heroImage.visible && page.visible
+                        loops: Animation.Infinite
+                        NumberAnimation { target: logoFloat; property: "y"; from: 0; to: -5; duration: 2200; easing.type: Easing.InOutSine }
+                        NumberAnimation { target: logoFloat; property: "y"; from: -5; to: 0; duration: 2200; easing.type: Easing.InOutSine }
+                    }
                 }
             }
 

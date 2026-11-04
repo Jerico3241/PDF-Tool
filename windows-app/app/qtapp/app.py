@@ -11,7 +11,7 @@ import traceback
 from pathlib import Path
 from typing import Callable, Protocol, Sequence
 
-from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtCore import QObject, Property, Qt, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
 from appstate import APP_NAME, DEVELOPER, ERROR_LOG, NEUERUNGEN, VERSION, State, major_minor, save_config
@@ -115,6 +115,7 @@ class AppController(Observable):
 
     closeAccepted = Signal()  # QML schließt danach das Fenster
     focusRequested = Signal(str)  # Name eines Eingabefelds (z. B. »kd«), das den Fokus erhalten soll
+    tabSwitchRequested = Signal(int)  # Strg+Tab: 3D-Tab-Übersicht zeigen und um so viele Dokumente weiter
 
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -306,6 +307,16 @@ class AppController(Observable):
     def openShortcut(self, number: int) -> None:  # noqa: N802
         if 1 <= number <= len(SHORTCUT_TARGETS):
             self.openTool(SHORTCUT_TARGETS[number - 1])
+
+    @Slot(int)
+    def switchTab(self, offset: int) -> None:  # noqa: N802
+        """Strg+Tab bzw. Strg+Umschalt+Tab: wechselt sofort und zeigt die 3D-Tab-Übersicht, solange Strg gedrückt ist."""
+        self.tabSwitchRequested.emit(int(offset))
+
+    @Slot(result=bool)
+    def ctrlHeld(self) -> bool:  # noqa: N802
+        """Ist Strg noch gedrückt? (Die Tab-Übersicht schließt beim Loslassen.)"""
+        return bool(QGuiApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
 
     def refresh_hint(self) -> None:
         _key, hooks = self._page_tool()

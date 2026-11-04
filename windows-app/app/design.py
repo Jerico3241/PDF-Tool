@@ -353,3 +353,64 @@ def palette_tokens(pal: Palette) -> dict[str, object]:
     data = asdict(pal)
     data.pop("extras", None)
     return data
+
+
+# --- Neon (seit 5.0 Beta 10) ----------------------------------------------------------------
+# Leuchtende Akzentfarben auf fast schwarzem Grund (Entwurf 5): Cyan, Pink, Lila, Grün, Orange, Rot
+NEON_COLORS: tuple[tuple[str, str], ...] = (
+    ("Cyan", "#00E5FF"),
+    ("Pink", "#FF3EA5"),
+    ("Lila", "#B26BFF"),
+    ("Grün", "#39FF88"),
+    ("Orange", "#FFB000"),
+    ("Rot", "#FF4D4D"),
+)
+DEFAULT_NEON = "#00E5FF"
+NEON_SECOND = "#7C4DFF"  # zweite Farbe der Verläufe (Knopf »Neu«, Willkommenskopf)
+
+
+def neon_palette(color: str) -> Palette:
+    """Dunkle Palette des Neon-Modus: fast schwarze Flächen, Kanten im Neon-Ton, die Neon-Farbe als Akzent.
+    Auf der leuchtenden Akzentfläche steht dunkler Text (alle Neon-Farben sind hell)."""
+    try:
+        rgb(color)
+    except (ValueError, IndexError):
+        color = DEFAULT_NEON
+    color = color.upper()
+    base = build_palette(True, Accent(light_fill=color, light_text=color, dark_fill=color, dark_text=color))
+    stroke = mix("#262B36", color, 0.26)
+    card = "#141821"
+    return replace(
+        base,
+        mica="#0A0C11",
+        layer="#10131A",
+        layer_stroke=stroke,
+        card=card,
+        card_stroke=stroke,
+        card_secondary="#181C26",
+        divider=mix("#232733", color, 0.12),
+        flyout="#151922",
+        flyout_stroke=stroke,
+        dialog="#141821",
+        dialog_footer="#0F1218",
+        text="#EEF2F8",
+        text2="#A7B0C0",
+        text3="#717B8C",
+        control="#1A1E28",
+        control_hover="#202532",
+        control_pressed="#171B24",
+        control_disabled="#161922",
+        control_stroke=mix("#2A2F3B", color, 0.18),
+        control_edge=mix("#323846", color, 0.18),
+        input_focus="#0E1117",
+        accent=color,
+        accent_hover=mix(color, "#FFFFFF", 0.18),
+        accent_pressed=mix(color, card, 0.25),
+        accent_text=mix(color, "#FFFFFF", 0.20),
+        on_accent="#06121A",
+        on_accent_pressed=mix("#06121A", color, 0.45),
+        accent_stroke=mix(color, "#FFFFFF", 0.10),
+        accent_edge=mix(color, "#000000", 0.14),
+        focus_outer=color,
+        extras={"neon": True},
+    )

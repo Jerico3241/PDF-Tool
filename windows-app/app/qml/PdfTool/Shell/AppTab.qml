@@ -5,16 +5,20 @@ import PdfTool.Style
 import PdfTool.Controls
 import PdfTool.Backend
 
-// Ein Tab der Leiste oben: ⌂ Start, ein Werkzeug oder ein Dokument. Der aktive Tab hat die Farbe der
-// Inhaltsebene und geht nahtlos in sie über (wie Tabs in Windows 11); die übrigen liegen auf dem Hintergrund,
-// beim Zeigen leicht hinterlegt. Schließen: ×, mittlere Maustaste. Die Schrift wechselt beim Aktivieren nicht
-// – der Tab behält seine Breite. Ist er schmaler als nötig (Name gekürzt), steht × wie in Browsern nur am
-// aktiven Tab und beim Zeigen, der Punkt nur, wenn ungespeichert – der Platz geht an den Namen.
+// Ein Tab im Tab-Dock oben (seit 5.0 Beta 10, Entwürfe 7/8): ⌂ Start, ein Werkzeug oder ein Dokument. Die Tabs liegen
+// als Kacheln in einer schwebenden Schale; der aktive hebt sich in 3D ab (Glanz, tiefer Schatten, 1 px höher), die
+// Farbe seiner Dateiart leuchtet darunter (Markierung in AppTabs). Dokumente zeigen eine farbige Kachel mit weißem
+// Symbol. Schließen: ×, mittlere Maustaste. Die Schrift wechselt beim Aktivieren nicht – der Tab behält seine Breite.
+// Ist er schmaler als nötig (Name gekürzt), steht × wie in Browsern nur am aktiven Tab und beim Zeigen, der Punkt
+// nur, wenn ungespeichert – der Platz geht an den Namen.
 T.AbstractButton {
     id: tab
     property string iconName: ""
     property url imageSource: ""        // farbiges Symbol der Dateiart (seit 5.0) statt eines Fluent-Symbols
-    property color kindColor: "transparent"  // Farbe der Dateiart: Linie oben am aktiven Tab
+    property color kindColor: "transparent"  // Farbe der Dateiart: Kachel und Leuchten unter dem aktiven Tab
+    property string kind: ""            // Dateiart: farbige Kachel mit weißem Symbol (Entwurf 7)
+    property real minWidth: 0
+    property bool tile: false           // ⌂ Start: eigene erhabene Kachel neben dem Dock
     property string title: ""
     property string tooltip: title
     property bool active: false
@@ -28,16 +32,20 @@ T.AbstractButton {
     readonly property bool iconOnly: title === ""
     // Volle Breite mit ganzem Namen, Punkt und × – unabhängig davon, was gerade zu sehen ist (die Breite kommt von
     // außen; so entsteht keine Schleife über die Breite)
-    readonly property real fullWidth: iconOnly ? Metrics.appTabIconOnly
-        : Math.min(Metrics.appTabMaxWidth, leftPadding + rightPadding + (iconName !== "" || imageSource != "" ? Metrics.iconSize + row.spacing : 0)
-                   + Math.ceil(label.implicitWidth) + (showDirty ? 6 + row.spacing : 0) + (closable ? 24 + row.spacing : 0))
+    readonly property real fullWidth: iconOnly ? (tile ? Metrics.dockTabHeight : Metrics.appTabIconOnly)
+        : Math.min(Metrics.appTabMaxWidth, leftPadding + rightPadding + (kind !== "" ? 24 + row.spacing : iconName !== "" || imageSource != "" ? Metrics.iconSize + row.spacing : 0)
+                   + Math.ceil(boldName.advanceWidth) + (showDirty ? 6 + row.spacing : 0) + (closable ? 24 + row.spacing : 0))
     readonly property bool narrow: !iconOnly && width < fullWidth - 0.5
     signal closeRequested()
+    // Breite immer mit fetter Schrift gemessen: der aktive Tab ist fett und wird dadurch nicht breiter
+    TextMetrics { id: boldName; font: Typography.bodyStrong; text: I18n.tr(tab.title, I18n.revision) }
 
-    implicitHeight: Metrics.appTabHeight
-    implicitWidth: fullWidth
-    leftPadding: iconOnly ? 0 : 12
+    implicitHeight: Metrics.dockTabHeight
+    implicitWidth: Math.max(minWidth, fullWidth)
+    leftPadding: iconOnly ? 0 : (kind !== "" ? 6 : 10)
     rightPadding: iconOnly ? 0 : (closable ? 4 : 12)
+    // Aktiv: hebt sich 1 px aus dem Dock
+    transform: Translate { y: tab.active && !tab.tile ? -1 : 0; Behavior on y { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } } }
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
     Accessible.role: Accessible.PageTab
@@ -53,37 +61,21 @@ T.AbstractButton {
     }
 
     background: Item {
-        // Aktiv: oben gerundet, unten offen – 1 px über die Kante der Inhaltsebene, deren Linie dort verschwindet
-        Item {
+        // Aktiv (bzw. ⌂ Start immer): erhabene Kachel mit Glanz und tiefem Schatten, im Neon-Modus mit farbigem Schein
+        PGloss {
+            objectName: "tabKindLine"
             anchors.fill: parent
-            anchors.bottomMargin: -1
-            clip: true
-            opacity: tab.active ? 1 : 0
-            Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
-            Rectangle {
-                width: parent.width
-                height: parent.height + Metrics.radiusCard
-                radius: Metrics.radiusCard
-                color: Theme.layer
-                border.width: 1
-                border.color: Theme.layerStroke
-            }
-            // Dateiart: farbige Linie oben (wie das Symbol – Grün für Tabellen, Blau für Texte …)
-            Rectangle {
-                objectName: "tabKindLine"
-                x: Metrics.radiusCard
-                width: parent.width - 2 * Metrics.radiusCard
-                height: 2
-                radius: 1
-                color: tab.kindColor
-                visible: tab.kindColor.a > 0
-            }
+            radius: Metrics.radiusPill
+            high: !tab.tile
+            glowColor: tab.active ? (tab.kindColor.a > 0 ? tab.kindColor : Theme.accent) : "transparent"
+            opacity: tab.active || tab.tile ? 1 : 0
+            scale: tab.pressed && Motion.moves ? 0.98 : 1
+            Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } }
+            Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast } }
         }
         Rectangle {
             anchors.fill: parent
-            anchors.topMargin: 3
-            anchors.bottomMargin: 3
-            radius: Metrics.radiusControl + 2
+            radius: Metrics.radiusPill
             color: tab.pressed ? Theme.subtlePressed : Theme.subtleHover
             opacity: !tab.active && (tab.hovered || tab.pressed) ? 1 : 0
             Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fast } }
@@ -98,12 +90,37 @@ T.AbstractButton {
             id: row
             anchors.fill: parent
             spacing: 8
+            // Dateiart: farbige Kachel (Verlauf, Glanzkante, kleiner Schatten) mit weißem Symbol
+            Rectangle {
+                objectName: "tabKindTile"
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+                visible: tab.kind !== ""
+                radius: Metrics.square ? 3 : 7
+                gradient: Gradient {
+                    orientation: Gradient.Vertical
+                    GradientStop { position: 0.0; color: Qt.lighter(tab.kindColor, 1.12) }
+                    GradientStop { position: 1.0; color: FileKinds.deep(tab.kind) }
+                }
+                Rectangle { x: 3; y: 1; width: parent.width - 6; height: 1; color: "#66FFFFFF" }
+                PShadow { radius: parent.radius; depth: 2; strength: 0.8 }
+                Image {
+                    anchors.centerIn: parent
+                    width: 15
+                    height: 15
+                    source: tab.kind !== "" ? FileKinds.whiteImage(tab.kind) : ""
+                    sourceSize: Qt.size(30, 30)
+                    smooth: true
+                    Accessible.ignored: true
+                }
+            }
             PIcon {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: tab.iconOnly ? (tab.width - width) / 2 : 0
                 name: tab.iconName
-                color: tab.active ? Theme.accent : Theme.textSecondary
-                visible: tab.iconName !== "" && tab.imageSource == ""
+                color: tab.active ? Theme.accent : (tab.tile ? Theme.textPrimary : Theme.textSecondary)
+                visible: tab.iconName !== "" && tab.imageSource == "" && tab.kind === ""
                 Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
             }
             Image {
@@ -112,7 +129,7 @@ T.AbstractButton {
                 Layout.preferredWidth: Metrics.iconSize
                 Layout.preferredHeight: Metrics.iconSize
                 source: tab.imageSource
-                visible: tab.imageSource != ""
+                visible: tab.imageSource != "" && tab.kind === ""
                 fillMode: Image.PreserveAspectFit
                 smooth: true
                 Accessible.ignored: true
@@ -123,6 +140,7 @@ T.AbstractButton {
                 Layout.alignment: Qt.AlignVCenter
                 text: I18n.tr(tab.title, I18n.revision)
                 tone: tab.active ? "primary" : "secondary"
+                textStyle: tab.active ? "bodyStrong" : "body"
                 elide: tab.elideMode
                 visible: !tab.iconOnly
             }
@@ -130,11 +148,11 @@ T.AbstractButton {
             Rectangle {
                 objectName: tab.dirtyName
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 6
-                Layout.preferredHeight: 6
-                radius: 3
+                Layout.preferredWidth: 7
+                Layout.preferredHeight: 7
+                radius: 3.5
                 visible: tab.showDirty && (!tab.narrow || tab.unsaved)
-                color: tab.active ? Theme.textPrimary : Theme.textSecondary
+                color: tab.kindColor.a > 0 ? tab.kindColor : Theme.accent
                 opacity: tab.unsaved ? 1 : 0
                 Behavior on opacity { enabled: Motion.enabled; NumberAnimation { duration: Motion.fade; easing.type: Motion.decelerate } }
             }

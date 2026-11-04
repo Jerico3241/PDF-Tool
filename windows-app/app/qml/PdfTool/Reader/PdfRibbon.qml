@@ -26,9 +26,8 @@ Rectangle {
     readonly property bool roomy: width >= 1180
     readonly property bool wide: width >= 1260   // genug Platz auch für »Unterschreiben« mit Text
 
-    implicitHeight: 38 + 46
-    color: Theme.layer
-    Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
+    implicitHeight: 38 + Metrics.commandBarHeight + 18
+    color: "transparent"  // 3D-Design: Reiter auf dem Hintergrund, darunter die schwebende Befehlsleiste
 
     function chooseTool(key) {
         if (!doc) return
@@ -65,6 +64,7 @@ Rectangle {
     // Schaltfläche der Leiste: Symbol und (optional) Text, ohne Fläche
     component ToolButton: PButton {
         kind: "subtle"
+        implicitHeight: 30
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
         compact: parent !== null && parent.squeezed === true
@@ -168,10 +168,17 @@ Rectangle {
         }
 
         // Leiste des Reiters -------------------------------------------------------------------------------------
+        // Befehlsleiste: schwebende Karte mit Glanz und Schatten (seit 5.0 Beta 10, wie bei Texten und Tabellen)
+        PGloss {
+            Layout.fillWidth: true
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            Layout.topMargin: 4
+            Layout.bottomMargin: 14
+            Layout.preferredHeight: Metrics.commandBarHeight
         Item {
             objectName: "readerRibbonBar"
-            Layout.fillWidth: true
-            Layout.preferredHeight: 46
+            anchors.fill: parent
             clip: true
 
             // Start: Auswählen, Verschieben | Markieren, Notiz, Freihand, Text hinzufügen | Text bearbeiten,
@@ -381,6 +388,7 @@ Rectangle {
                 panelOpen: Reader.rightPanel === "assistant"
                 onPanelToggled: root.toggleRight("assistant")
             }
+        }
         }
     }
 

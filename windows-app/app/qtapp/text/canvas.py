@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 
 from PySide6.QtCore import Property, QObject, QPointF, QRect, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor, QImage, QPainter, QPainterPath
+from PySide6.QtGui import QColor, QCursor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtQuick import QQuickItem, QQuickPaintedItem
 from shiboken6 import isValid
 
@@ -67,7 +67,9 @@ _OFFICE_KEYS = {
 }
 
 
-_SHADOW = ((1, 0, 26), (2, 1, 16), (4, 2, 9), (7, 3, 5))  # (Ausdehnung, Versatz nach unten, Deckkraft 0…255)
+# (Ausdehnung, Versatz nach unten, Deckkraft 0…255): seit 5.0 Beta 10 ein tiefer Schatten – das Blatt schwebt über der
+# Arbeitsfläche (Entwurf 7: Licht von oben, Schatten weit nach unten)
+_SHADOW = tuple((1 + round(i * 2.2), round(i * 1.7), round(11 * (1 - i / 15))) for i in range(15))
 
 
 def _paint_page_shadow(painter: QPainter, rect: QRectF) -> None:
@@ -78,6 +80,21 @@ def _paint_page_shadow(painter: QPainter, rect: QRectF) -> None:
     for grow, down, alpha in _SHADOW:
         painter.setBrush(QColor(0, 0, 0, alpha))
         painter.drawRoundedRect(rect.adjusted(-grow, -grow + down, grow, grow + down), grow, grow)
+    painter.restore()
+
+
+def _paint_page_glow(painter: QPainter, rect: QRectF, color: QColor) -> None:
+    """Neon-Modus: feiner Rand und Schein in der Neon-Farbe um das Blatt (Entwurf 2/8)."""
+    if color.alpha() == 0:
+        return
+    painter.save()
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    for i in range(10):
+        glow = QColor(color)
+        glow.setAlpha(round(color.alpha() * (0.5 if i == 0 else 0.22 * (1 - i / 10))))
+        painter.setPen(QPen(glow, 1.5))
+        painter.drawRoundedRect(rect.adjusted(-0.5 - i * 1.5, -0.5 - i * 1.5, 0.5 + i * 1.5, 0.5 + i * 1.5), i * 1.5, i * 1.5)
     painter.restore()
 
 
@@ -123,7 +140,7 @@ class TextCanvas(QQuickPaintedItem):
         self._scroll_x = 0.0
         self._scroll_y = 0.0
         self._colors = {"background": QColor("#E9E9E9"), "paper": QColor("#FFFFFF"), "caret": QColor("#000000"),
-                        "selection": QColor(0, 120, 212, 70), "accent": QColor("#0F6CBD"), "tint": QColor(0, 0, 0, 0),
+                        "selection": QColor(0, 120, 212, 70), "accent": QColor("#0F6CBD"), "tint": QColor(0, 0, 0, 0), "glow": QColor(0, 0, 0, 0),
                         "comment": QColor("#FFF1A8")}
         self._read_only = False  # Lesemodus: nur lesen, auswählen und kopieren
         self._tiles: dict[tuple[int, int], QImage] = {}
@@ -153,6 +170,8 @@ class TextCanvas(QQuickPaintedItem):
         self.setAcceptHoverEvents(True)
         self.setFlag(QQuickItem.Flag.ItemAcceptsInputMethod, True)
         self.setActiveFocusOnTab(True)
+        self._full_pending = True
+        self._page_shadow = True
         self.setOpaquePainting(True)
         self.setAntialiasing(False)
         self.widthChanged.connect(self._geometry_changed)
@@ -254,6 +273,8 @@ class TextCanvas(QQuickPaintedItem):
             color = QColor(value)
             if color != self._colors[key]:
                 self._colors[key] = color
+                if key == "background":
+                    self.setOpaquePainting(color.alpha() == 255)  # durchsichtig: Mulde mit runden Ecken dahinter
                 self.colorsChanged.emit()
                 self.update()
 
@@ -267,6 +288,18 @@ class TextCanvas(QQuickPaintedItem):
     # Augenschutz (seit 5.0 Beta 5): Die Seiten werden mit dieser Farbe multipliziert – Weiß wird zum sanften Ton,
     # Schrift bleibt dunkel. Durchsichtig = aus.
     tintColor = _color_property("tint", colorsChanged)
+    glowColor = _color_property("glow", colorsChanged)  # Neon: Schein um das Blatt (transparent: keiner)
+
+    def _get_shadow(self) -> bool:
+        return self._page_shadow
+
+    def _set_shadow(self, value: bool) -> None:
+        if bool(value) != self._page_shadow:
+            self._page_shadow = bool(value)
+            self.update()
+
+    # Schatten unter dem Blatt (Notizen unter der Folie: ohne – dort ist das »Blatt« nur die Fläche des Felds)
+    pageShadow = Property(bool, _get_shadow, _set_shadow, notify=colorsChanged)
     commentColor = _color_property("comment", colorsChanged)  # Text mit Kommentar
     del _color_property
 
@@ -448,7 +481,15 @@ class TextCanvas(QQuickPaintedItem):
             controller.request_tile(args, done, failed)
 
     # Zeichnen ----------------------------------------------------------------------------------------------------------
+    def update(self, rect: QRect | None = None) -> None:  # noqa: D401 - wie QQuickPaintedItem.update
+        if rect is None or rect.isNull():
+            self._full_pending = True
+            super().update()
+        else:
+            super().update(rect)
+
     def paint(self, painter: QPainter) -> None:
+        self._full_pending = False
         painter.fillRect(QRectF(0, 0, self.width(), self.height()), self._colors["background"])
         controller = self._controller
         if controller is None:
@@ -458,7 +499,9 @@ class TextCanvas(QQuickPaintedItem):
         clip = QPainterPath()
         for rect in pages:
             if rect.intersects(view):
-                _paint_page_shadow(painter, rect)
+                if self._page_shadow:
+                    _paint_page_shadow(painter, rect)
+                _paint_page_glow(painter, rect, self._colors["glow"])
                 painter.fillRect(rect, self._colors["paper"])
                 clip.addRect(rect)
         painter.save()
@@ -531,7 +574,10 @@ class TextCanvas(QQuickPaintedItem):
         self._blink_on = not self._blink_on
         if self._controller is not None and self._controller.cursor:
             rect = self._view_rect(self._controller.cursor)
-            self.update(QRect(int(rect.x()) - 2, int(rect.y()) - 2, 6, int(rect.height()) + 4))
+            # Nur die Schreibmarke neu zeichnen – aber ein noch ausstehendes ganzes Neuzeichnen nicht verlieren: Qt
+            # vereinigt update() (leeres Rechteck = alles) mit update(rect) zu nur »rect« (z. B. verschluckte das Blinken
+            # den Wechsel in den Neon-Modus). Darum ganz neu zeichnen, solange ein ganzes Neuzeichnen aussteht.
+            self.update(QRect(int(rect.x()) - 2, int(rect.y()) - 2, 6, int(rect.height()) + 4) if not self._full_pending else QRect(0, 0, int(self.width()) + 1, int(self.height()) + 1))
 
     def focusInEvent(self, event) -> None:  # noqa: N802
         super().focusInEvent(event)

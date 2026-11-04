@@ -17,10 +17,11 @@ Rectangle {
     signal selected(string key)
 
     implicitWidth: Metrics.readerRailWidth
-    color: Theme.layer
+    // 3D-Design (seit 5.0 Beta 10): der Streifen liegt ohne eigene Fläche auf dem Hintergrund; der gezeigte Inhalt ist
+    // eine Kachel im Akzentton (Neon: mit leuchtendem Rand), der Strich zur Seitenleiste hin leuchtet
+    color: "transparent"
     Accessible.role: Accessible.PageTabList
     Accessible.name: I18n.tr("Seitenleiste", I18n.revision)
-    Rectangle { x: root.side === "right" ? 0 : root.width - 1; width: 1; height: parent.height; color: Theme.divider }
 
     Column {
         x: (root.width - Metrics.readerRailButton) / 2
@@ -56,22 +57,37 @@ Rectangle {
                     Keys.onReturnPressed: root.selected(entry.modelData.key)
                     Keys.onEnterPressed: root.selected(entry.modelData.key)
                     background: Rectangle {
-                        radius: Metrics.radiusControl
-                        color: button.pressed ? Theme.subtlePressed : (button.selected ? Theme.subtleHover : (button.hovered ? Theme.subtleHover : "transparent"))
+                        radius: Metrics.radiusControl + 2
+                        color: button.pressed ? Theme.subtlePressed : (button.selected ? Theme.pressedFill : (button.hovered ? Theme.subtleHover : "transparent"))
+                        border.width: button.selected && Theme.neon ? 1 : 0
+                        border.color: Theme.accent
                         Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
                         PFocusRing { visible: button.visualFocus; inset: -1 }
                         Rectangle {
                             visible: button.selected
-                            x: root.side === "right" ? 0 : parent.width - width
+                            x: root.side === "right" ? -7 : parent.width + 4
                             anchors.verticalCenter: parent.verticalCenter
                             width: 3
-                            height: 16
+                            height: 18
                             radius: 1.5
-                            color: root.accentColor
+                            color: Theme.neon ? Theme.accent : root.accentColor
+                            Repeater {
+                                model: Theme.glow > 0 ? 3 : 0
+                                Rectangle {
+                                    required property int index
+                                    x: -(index + 1); y: -(index + 1)
+                                    width: parent.width + 2 * (index + 1); height: parent.height + 2 * (index + 1)
+                                    radius: width / 2
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: Theme.accent
+                                    opacity: 0.3 * Theme.glow * (1 - index / 3)
+                                }
+                            }
                         }
                     }
                     contentItem: Item {
-                        PIcon { anchors.centerIn: parent; name: entry.modelData.icon; color: button.selected ? Theme.textPrimary : Theme.textSecondary }
+                        PIcon { anchors.centerIn: parent; name: entry.modelData.icon; color: button.selected ? Theme.accent : Theme.textSecondary }
                     }
                     PToolTip {
                         text: I18n.tr(entry.modelData.tip, I18n.revision)

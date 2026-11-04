@@ -20,12 +20,16 @@ T.Button {
     property bool toggle: false
     // Schmales Menüband (seit 5.0 Beta 9): nur das Symbol, die Beschriftung steht in der Kurzinfo
     property bool compact: false
+    property color labelColor: "transparent"  // eigene Schriftfarbe (Vorschau der Formatvorlagen), sonst wie üblich
 
     readonly property bool accentKind: kind === "accent"
     readonly property bool subtleKind: kind === "subtle" || kind === "link"
     readonly property bool linkKind: kind === "link"  // wie »subtle«, Schrift und Symbol in der Akzentfarbe
     readonly property bool dangerKind: kind === "danger"
     readonly property bool iconOnly: iconName !== "" && (text === "" || compact)
+    // 3D-Design (seit 5.0 Beta 10): eingeschaltete Umschalter ohne Fläche liegen sichtbar tiefer – Akzentton, innerer
+    // Schatten oben, im Neon-Modus mit leuchtendem Rand
+    readonly property bool sunk: subtleKind && checked && enabled
 
     implicitHeight: large ? Metrics.controlHeightLarge : Metrics.controlHeight
     implicitWidth: Math.max(minimumWidth, iconOnly ? implicitHeight : Math.ceil(contentItem.implicitWidth) + leftPadding + rightPadding)
@@ -44,6 +48,8 @@ T.Button {
         if (!enabled) return accentKind || dangerKind ? Theme.textOnAccentDisabled : Theme.disabled
         if (accentKind || dangerKind) return pressed ? Theme.textOnAccentPressed : Theme.textOnAccent
         if (pressed) return Theme.textSecondary
+        if (sunk) return Theme.accent
+        if (labelColor.a > 0) return labelColor
         return linkKind ? Theme.accentText : Theme.textPrimary
     }
 
@@ -101,7 +107,8 @@ T.Button {
             if (control.subtleKind) {
                 if (!control.enabled) return "transparent"
                 if (control.pressed) return Theme.subtlePressed
-                if (control.hovered || control.checked) return Theme.subtleHover
+                if (control.sunk) return Theme.pressedFill
+                if (control.hovered) return Theme.subtleHover
                 return "transparent"
             }
             if (!control.enabled) return Theme.controlDisabled
@@ -109,8 +116,9 @@ T.Button {
             if (control.hovered) return Theme.controlHover
             return Theme.control
         }
-        border.width: control.subtleKind ? 0 : 1
+        border.width: control.subtleKind ? (control.sunk && Theme.neon ? 1 : 0) : 1
         border.color: {
+            if (control.subtleKind) return Theme.accent
             if (control.accentKind || control.dangerKind) return control.enabled ? (control.dangerKind ? Theme.error : Theme.accentStroke) : "transparent"
             return Theme.controlStroke
         }
@@ -126,6 +134,35 @@ T.Button {
             height: 1
             color: control.accentKind || control.dangerKind ? Theme.accentEdge : Theme.controlEdge
             opacity: 0.8
+        }
+        // Gedrückt/eingeschaltet: innerer Schatten oben (Licht von oben, die Fläche liegt tiefer)
+        Repeater {
+            model: control.sunk ? 3 : 0
+            Rectangle {
+                required property int index
+                x: Metrics.radiusControl
+                y: 1 + index
+                width: face.width - 2 * Metrics.radiusControl
+                height: 1
+                color: Theme.pressedInset
+                opacity: 1 - index / 3
+            }
+        }
+        // Neon: leuchtender Schein um den eingeschalteten Knopf
+        Repeater {
+            model: control.sunk && Theme.glow > 0 ? 4 : 0
+            Rectangle {
+                required property int index
+                x: -(index + 1)
+                y: -(index + 1)
+                width: face.width + 2 * (index + 1)
+                height: face.height + 2 * (index + 1)
+                radius: face.radius + index + 1
+                color: "transparent"
+                border.width: 1
+                border.color: Theme.accent
+                opacity: 0.22 * Theme.glow * (1 - index / 4)
+            }
         }
         PFocusRing {
             visible: control.visualFocus

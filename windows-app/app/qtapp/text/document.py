@@ -212,6 +212,7 @@ class TextController(Observable):
     caretMoved = Signal()  # Schreibmarke sichtbar machen (nach Tasten und Suchen)
     findRequested = Signal()  # Strg+F: Suchleiste zeigen
     replaceRequested = Signal()  # Strg+H: Suchleiste mit »Ersetzen« zeigen
+    readingRequested = Signal()  # Statuszeile: Lesemodus (wie die Ansichtsknöpfe unten rechts in Word)
     contextMenuRequested = Signal()
     commentRequested = Signal()  # »Neuer Kommentar«: Seitenleiste zeigt das Eingabefeld
 
@@ -490,7 +491,10 @@ class TextController(Observable):
                     "clear": ".uno:ResetAttributes", "grow": ".uno:Grow", "shrink": ".uno:Shrink",
                     "paintbrush": ".uno:FormatPaintbrush", "sentenceCase": ".uno:ChangeCaseToSentenceCase",
                     "lowerCase": ".uno:ChangeCaseToLower", "upperCase": ".uno:ChangeCaseToUpper",
-                    "titleCase": ".uno:ChangeCaseToTitleCase", "toggleCase": ".uno:ChangeCaseToToggleCase"}
+                    "titleCase": ".uno:ChangeCaseToTitleCase", "toggleCase": ".uno:ChangeCaseToToggleCase",
+                    # Präsentation (Start wie in PowerPoint): Zeilenabstand und Anordnen
+                    "spacing1": ".uno:SpacePara1", "spacing15": ".uno:SpacePara15", "spacing2": ".uno:SpacePara2",
+                    "front": ".uno:BringToFront", "forward": ".uno:Forward", "backward": ".uno:Backward", "back": ".uno:SendToBack"}
         if key in commands:
             self.uno(commands[key])
 
@@ -1221,6 +1225,10 @@ class TextController(Observable):
     @Slot()
     def requestReplace(self) -> None:  # noqa: N802
         self.replaceRequested.emit()
+
+    @Slot()
+    def requestReading(self) -> None:  # noqa: N802
+        self.readingRequested.emit()
 
     @Slot()
     def saveAs(self) -> None:  # noqa: N802
