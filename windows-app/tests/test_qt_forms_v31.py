@@ -106,6 +106,8 @@ def test_create_move_resize_duplicate_delete_and_undo(reader_app, tmp_path: Path
     doc = open_pdf(h, samples.standard_text(tmp_path / "leer.pdf"), whole_page=True)
     doc.setZoom(100)  # »Ganze Seite« ist unter dem Menüband zu klein: die Ecke des Textfelds läge über dem Kästchen
     pump(0.3)
+    h.item("readerView").setProperty("contentY", 0)  # Seitenanfang oben: die Leiste des Werkzeugs liegt nicht über den Feldern
+    pump(0.3)
     design_mode(h, doc)
     # Textfeld: Feldart wählen, Rahmen aufziehen
     press(h, "readerFormKind_text")
