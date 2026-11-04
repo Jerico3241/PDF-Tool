@@ -4694,7 +4694,9 @@
   "Zeilen- und Absatzabstand": "Line and paragraph spacing",
   "Zeilenabstand": "Line spacing",
   "Zentriert ausrichten": "Middle align",
-  "Zoom": "Zoom"
+  "Zoom": "Zoom",
+  "In Windows sind die Animationseffekte ausgeschaltet – Novadesk zeigt trotzdem alle Animationen. Weniger Bewegung: »Reduziert«.": "Animation effects are turned off in Windows – Novadesk still shows all animations. For less motion: “Reduced”.",
+  "Zuletzt verwendet durchsuchen": "Search recent files"
  },
  "patterns": {
   "App-Design: {0}": "App theme: {0}",

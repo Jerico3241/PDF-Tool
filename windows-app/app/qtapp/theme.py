@@ -89,10 +89,13 @@ class ThemeController(Observable):
     neonChanged, neon = prop(bool, "neon", False)
     neonColorChanged, neonColor = prop(str, "neonColor", design.DEFAULT_NEON)
     glowChanged, glow = prop(str, "glow", "medium")
-    startBackgroundChanged, startBackground = prop(str, "startBackground", "gradient")
+    startBackgroundChanged, startBackground = prop(str, "startBackground", "grid")
     cornersChanged, corners = prop(str, "corners", "round")
     densityChanged, density = prop(str, "density", "normal")
     ribbonLabelsChanged, ribbonLabels = prop(bool, "ribbonLabels", True)
+    # Auftritte (Dokument fliegt herein, Startseite baut sich nacheinander auf). Nur für automatische Tests
+    # abschaltbar (NOVADESK_OHNE_AUFTRITTE=1): dort klicken die Tests gleich nach dem Öffnen in das Dokument.
+    introsChanged, intros = prop(bool, "intros", True)
 
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -107,7 +110,8 @@ class ThemeController(Observable):
         self.set_quietly("neon", bool(cfg.get("neon", False)))
         self.set_quietly("neonColor", valid_neon(cfg.get("neon_farbe")))
         self.set_quietly("glow", _pick(cfg.get("leuchtstaerke"), GLOWS, "medium"))
-        self.set_quietly("startBackground", _pick(cfg.get("startseite_hintergrund"), START_BACKGROUNDS, "gradient"))
+        self.set_quietly("startBackground", _pick(cfg.get("startseite_hintergrund"), START_BACKGROUNDS, "grid"))
+        self.set_quietly("intros", not os.environ.get("NOVADESK_OHNE_AUFTRITTE"))
         self.set_quietly("corners", _pick(cfg.get("ecken"), CORNERS, "round"))
         self.set_quietly("density", _pick(cfg.get("dichte"), DENSITIES, "normal"))
         self.set_quietly("ribbonLabels", cfg.get("menueband_text", True) is not False)
@@ -204,13 +208,14 @@ class ThemeController(Observable):
         self.systemReducedMotion = reduced
         if os.environ.get("UE_NO_ANIMATIONS"):
             effective = PROFILE_OFF
-        elif self.profile == PROFILE_FULL and reduced:
-            effective = PROFILE_REDUCED
         else:
+            # Seit 5.0 Beta 11 gilt die Einstellung der App: Novadesk ist durchgehend animiert, auch wenn Windows die
+            # Animationseffekte ausgeschaltet hat (häufig auf virtuellen Rechnern und über Remotedesktop). Wer weniger
+            # Bewegung möchte, wählt in Novadesk »Reduziert« oder »Aus«.
             effective = self.profile
         self.effectiveProfile = effective
         if self.profile == PROFILE_FULL and reduced:
-            self.profileNote = "In Windows sind die Animationseffekte ausgeschaltet – es gilt »Reduziert«."
+            self.profileNote = "In Windows sind die Animationseffekte ausgeschaltet – Novadesk zeigt trotzdem alle Animationen. Weniger Bewegung: »Reduziert«."
         else:
             self.profileNote = ""
 

@@ -170,7 +170,7 @@ T.Button {
     }
 
     scale: pressed ? Motion.pressScale : 1.0
-    Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast; easing.type: Motion.decelerate } }
+    Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: control.pressed ? Motion.fast : Motion.normal; easing.type: control.pressed ? Motion.decelerate : Easing.OutBack; easing.overshoot: 3 } }
 
     PToolTip {
         // Nur Symbol (schmales Menüband): Beschriftung und Kurzinfo zusammen

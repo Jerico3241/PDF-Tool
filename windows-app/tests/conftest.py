@@ -86,6 +86,9 @@ def _windows_settings(monkeypatch):
 
     monkeypatch.setattr(winsys, "client_area_animations", lambda: True)
     monkeypatch.setattr(winsys, "mica_supported", lambda: False)
+    # Auftritte (Dokument fliegt herein, Startseite baut sich auf) dauern über eine halbe Sekunde – Tests klicken
+    # gleich nach dem Öffnen; Tests der Auftritte schalten sie selbst ein
+    monkeypatch.setenv("NOVADESK_OHNE_AUFTRITTE", "1")
 
 
 class FakeHelper:

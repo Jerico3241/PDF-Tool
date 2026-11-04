@@ -116,6 +116,7 @@ class AppController(Observable):
     closeAccepted = Signal()  # QML schließt danach das Fenster
     focusRequested = Signal(str)  # Name eines Eingabefelds (z. B. »kd«), das den Fokus erhalten soll
     tabSwitchRequested = Signal(int)  # Strg+Tab: 3D-Tab-Übersicht zeigen und um so viele Dokumente weiter
+    homeSearchRequested = Signal()  # Startseite: Suche (Lupe oben rechts, Strg+F) – »Zuletzt verwendet« durchsuchen
 
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -358,6 +359,10 @@ class AppController(Observable):
 
     @Slot()
     def findAction(self) -> None:  # noqa: N802
+        if self.currentPage == "home":
+            self.showHomeSection("recent")
+            self.homeSearchRequested.emit()
+            return
         _key, hooks = self._page_tool()
         if hooks is not None:
             hooks.find_action(self.currentPage)

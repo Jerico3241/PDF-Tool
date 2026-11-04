@@ -48,7 +48,7 @@ T.Menu {
     enter: Transition {
         ParallelAnimation {
             NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.menu; easing.type: Motion.decelerate }
-            NumberAnimation { property: "scale"; from: Motion.menuScale; to: 1; duration: Motion.menu; easing.type: Motion.decelerate }
+            NumberAnimation { property: "scale"; from: Motion.menuScale; to: 1; duration: Motion.menu; easing.type: Motion.moves ? Easing.OutBack : Motion.decelerate; easing.overshoot: 1.2 }
         }
     }
     exit: Transition {

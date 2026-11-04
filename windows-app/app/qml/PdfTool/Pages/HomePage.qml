@@ -20,7 +20,24 @@ Item {
     readonly property bool wide: contentWidth >= Metrics.homeSideBySideFrom
     readonly property var kindTitles: ({ "text": "Texte", "tabelle": "Tabellen", "praesentation": "Präsentationen", "pdf": "PDFs" })
     readonly property string kindShown: section.indexOf("kind:") === 0 ? section.substring(5) : ""
-    onSectionChanged: content.scrollToTop()
+    onSectionChanged: { content.scrollToTop(); page.playEntrance() }
+    property Item navSelected: null   // gewählter Eintrag der Navigation: die Markierung gleitet zu ihm
+
+    // Auftritt (seit 5.0 Beta 11): Kopf, Karten und Liste kommen nacheinander von unten herein, das Logo dreht sich.
+    // Beim Öffnen der Startseite und bei jedem Wechsel des Bereichs.
+    property int entranceRun: 0
+    function playEntrance() {
+        if (!Motion.intros) return
+        Qt.callLater(page.bumpEntrance)  // erst wenn der neue Bereich sichtbar ist
+    }
+    function bumpEntrance() {
+        entranceRun++
+    }
+    Connections {
+        target: App
+        function onCurrentPageChanged() { if (App.currentPage === "home") page.playEntrance() }
+        function onReadyChanged() { if (App.ready && App.currentPage === "home") page.playEntrance() }
+    }
 
     function entriesOf(kind) {
         if (kind === "") return Reader.recent
@@ -29,6 +46,39 @@ Item {
     function createNew(kind) {
         if (kind === "tabelle") Reader.newSheet()
         else Reader.newOffice(kind)
+    }
+
+    // Auftritt eines Elements (seit 5.0 Beta 11): nach »order« × Motion.stagger blendet es ein und gleitet von unten
+    // (bzw. von links: dx) an seinen Platz, auf Wunsch aus einer Neigung (tilt, Grad um die waagerechte Achse) heraus.
+    component Entrance: QtObject {
+        id: entrance
+        property Item target: null
+        property int order: 0
+        property real distance: 40
+        property real dx: 0
+        property real tilt: 0
+        property Translate shift: Translate { x: 0; y: 0 }
+        property Rotation turn: Rotation { origin.x: entrance.target ? entrance.target.width / 2 : 0; origin.y: entrance.target ? entrance.target.height : 0; axis { x: 1; y: 0; z: 0 } angle: 0 }
+        property Connections watch: Connections { target: page; function onEntranceRunChanged() { entrance.play() } }
+        property SequentialAnimation anim: SequentialAnimation {
+            onFinished: if (entrance.target) entrance.target.transform = []
+            PauseAnimation { duration: Math.max(0, entrance.order) * Motion.stagger }
+            ParallelAnimation {
+                NumberAnimation { target: entrance.target; property: "opacity"; to: 1; duration: 420; easing.type: Easing.OutCubic }
+                NumberAnimation { target: entrance.shift; properties: "x,y"; to: 0; duration: 700; easing.type: Easing.OutBack; easing.overshoot: 1.05 }
+                NumberAnimation { target: entrance.turn; property: "angle"; to: 0; duration: 760; easing.type: Easing.OutBack; easing.overshoot: 1.3 }
+            }
+        }
+        function play() {
+            if (!target || !Motion.intros) return
+            anim.stop()
+            target.transform = tilt !== 0 ? [turn, shift] : [shift]
+            target.opacity = 0
+            shift.x = dx
+            shift.y = distance
+            turn.angle = tilt
+            anim.start()
+        }
     }
 
     // Eintrag der Navigation: Symbol (Fluent oder Dateiart), Name; gewählt: hinterlegt mit Akzentstrich links
@@ -47,7 +97,8 @@ Item {
         Keys.onEnterPressed: clicked()
         background: Rectangle {
             radius: Metrics.radiusControl
-            color: navItem.selected ? Theme.navSelected : (navItem.pressed ? Theme.subtlePressed : (navItem.hovered ? Theme.subtleHover : "transparent"))
+            // gewählt: die gemeinsame Markierung (navHighlight) gleitet hierher; ohne Animation steht sie sofort da
+            color: navItem.selected ? (Motion.moves ? "transparent" : Theme.navSelected) : (navItem.pressed ? Theme.subtlePressed : (navItem.hovered ? Theme.subtleHover : "transparent"))
             Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
             Rectangle {
                 objectName: "navIndicator"
@@ -58,13 +109,17 @@ Item {
                 radius: 1.5
                 color: Theme.accent
                 visible: navItem.selected
+                opacity: Motion.moves ? 0 : 1
             }
             PFocusRing { visible: navItem.visualFocus; radius_: Metrics.radiusControl }
         }
+        onSelectedChanged: if (selected) page.navSelected = navItem
+        Component.onCompleted: if (selected) page.navSelected = navItem
         contentItem: Item {}
         Row {
             anchors.left: parent.left
-            anchors.leftMargin: 12
+            anchors.leftMargin: 12 + (navItem.hovered && !navItem.selected && Motion.moves ? 5 : 0)
+            Behavior on anchors.leftMargin { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Easing.OutBack } }
             anchors.verticalCenter: parent.verticalCenter
             spacing: 12
             PIcon {
@@ -107,7 +162,7 @@ Item {
         property string title: ""
         property string description: ""
         readonly property color kindColor: FileKinds.color(kind)
-        implicitHeight: 100
+        implicitHeight: 106
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
         Accessible.role: Accessible.Button
@@ -172,8 +227,8 @@ Item {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
                     spacing: 2
-                    PText { Layout.fillWidth: true; text: I18n.tr(kindCard.title, I18n.revision); textStyle: "bodyStrong"; wrap: true }
-                    PText { Layout.fillWidth: true; text: I18n.tr(kindCard.description, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; font.pixelSize: 13 }
+                    PText { Layout.fillWidth: true; text: I18n.tr(kindCard.title, I18n.revision); textStyle: "bodyStrong"; wrap: true; font.pixelSize: 16; font.weight: Font.DemiBold }
+                    PText { Layout.fillWidth: true; text: I18n.tr(kindCard.description, I18n.revision); textStyle: "caption"; tone: "secondary"; wrap: true; font.pixelSize: 14 }
                 }
             }
             PFocusRing { visible: kindCard.visualFocus; radius_: Metrics.radiusFloat }
@@ -295,15 +350,19 @@ Item {
         property var entries: []
         property int limit: 0
         property string prefix: "homeStartRecent"
+        // Start (Entwurf 11): ohne Kopfzeile, höhere Zeilen, Ordner weit rechts, Datum rechtsbündig; Zeilen treten
+        // nacheinander auf (entranceFrom: Platz in der Reihenfolge der Startseite)
+        property bool startStyle: false
+        property int entranceFrom: -1
         readonly property var shown: limit > 0 ? entries.slice(0, limit) : entries
         readonly property bool showFolder: width >= Metrics.homeRecentFolderFrom
-        readonly property real nameWidth: showFolder ? Math.floor((width - 2 * 16) * 0.45) : width - 2 * 16 - Metrics.homeRecentWhenWidth - 24
-        readonly property real folderWidth: showFolder ? Math.floor((width - 2 * 16) * 0.32) : 0
+        readonly property real nameWidth: showFolder ? Math.floor((width - 2 * 16) * (startStyle ? 0.70 : 0.45)) : width - 2 * 16 - Metrics.homeRecentWhenWidth - 24
+        readonly property real folderWidth: showFolder ? Math.floor((width - 2 * 16) * (startStyle ? 0.17 : 0.32)) : 0
         implicitHeight: tableColumn.implicitHeight
         radius: Metrics.radiusCard
-        color: Theme.surface
+        color: Theme.neon ? Qt.rgba(Theme.surface.r, Theme.surface.g, Theme.surface.b, 0.92) : Theme.surface
         border.width: 1
-        border.color: Theme.border
+        border.color: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.30) : Theme.border
         ColumnLayout {
             id: tableColumn
             anchors.left: parent.left
@@ -312,6 +371,7 @@ Item {
             Item {
                 objectName: table.prefix + "Header"
                 Layout.fillWidth: true
+                visible: !table.startStyle
                 implicitHeight: 34
                 Row {
                     anchors.left: parent.left
@@ -330,14 +390,15 @@ Item {
                     required property int index
                     objectName: table.prefix + "_" + index
                     Layout.fillWidth: true
-                    implicitHeight: 40
+                    implicitHeight: table.startStyle ? 44 : 40
+                    Entrance { target: table.entranceFrom >= 0 ? row : null; order: table.entranceFrom + row.index; distance: 0; dx: -30 }
                     Accessible.role: Accessible.ListItem
                     Accessible.name: I18n.tr(modelData.name + (modelData.missing ? " (nicht mehr vorhanden)" : ""), I18n.revision)
-                    Rectangle { anchors.left: parent.left; anchors.right: parent.right; height: 1; color: Theme.divider }
+                    Rectangle { anchors.left: parent.left; anchors.right: parent.right; height: 1; color: Theme.divider; visible: !table.startStyle || row.index > 0 }
                     Rectangle {
                         anchors.fill: parent
                         anchors.topMargin: 1
-                        radius: row.index === table.shown.length - 1 ? Metrics.radiusCard : 0
+                        radius: row.index === table.shown.length - 1 || table.startStyle && row.index === 0 ? Metrics.radiusCard : 0
                         color: tap.pressed ? Theme.subtlePressed : (hover.hovered && !row.modelData.missing ? Theme.subtleHover : "transparent")
                     }
                     HoverHandler { id: hover; cursorShape: row.modelData.missing ? Qt.ArrowCursor : Qt.PointingHandCursor }
@@ -379,6 +440,8 @@ Item {
                         Item { width: 12; height: 1; visible: table.showFolder }
                         PText {
                             anchors.verticalCenter: parent.verticalCenter
+                            width: table.startStyle ? table.width - 2 * 16 - table.nameWidth - table.folderWidth - (table.showFolder ? 12 : 0) : implicitWidth
+                            horizontalAlignment: table.startStyle ? Text.AlignRight : Text.AlignLeft
                             text: I18n.tr(row.modelData.missing ? "Nicht mehr vorhanden" : row.modelData.opened, I18n.revision)
                             tone: row.modelData.missing ? "tertiary" : "secondary"
                         }
@@ -529,16 +592,54 @@ Item {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        width: App.navOpen ? 240 : 0
+        width: App.navOpen ? 250 : 0
         visible: width > 0
         clip: true
         color: "transparent"  // 3D-Design: die Navigation liegt auf dem Hintergrund (Entwurf 11)
         Behavior on width { enabled: Motion.moves; NumberAnimation { duration: Motion.pane; easing.type: Motion.decelerate } }
 
+        // Markierung des gewählten Eintrags (seit 5.0 Beta 11): gleitet mit leichtem Nachfedern zum neuen Eintrag,
+        // der Akzentstrich dehnt sich dabei
+        Rectangle {
+            id: navHighlight
+            objectName: "navHighlight"
+            readonly property Item at: page.navSelected
+            readonly property bool shown: Motion.moves && at !== null && at.visible && at.selected
+            x: at ? at.parent.x + at.x : 0
+            y: at ? at.parent.y + at.y : 0
+            width: at ? at.width : 0
+            height: at ? at.height : 0
+            visible: shown
+            radius: Metrics.radiusControl
+            color: Theme.navSelected
+            Behavior on y {
+                enabled: Motion.moves
+                NumberAnimation { duration: Motion.indicator; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+            }
+            property real stretch: 0
+            onYChanged: if (Motion.moves && visible) { stretchAnim.restart() }
+            SequentialAnimation {
+                id: stretchAnim
+                NumberAnimation { target: navHighlight; property: "stretch"; to: 1; duration: Motion.indicator * 0.35; easing.type: Easing.OutCubic }
+                NumberAnimation { target: navHighlight; property: "stretch"; to: 0; duration: Motion.indicator * 0.65; easing.type: Easing.OutBack }
+            }
+            Rectangle {
+                x: 0
+                anchors.verticalCenter: parent.verticalCenter
+                width: 3
+                height: 16 + navHighlight.stretch * 14
+                radius: 1.5
+                color: Theme.accent
+                // Neon: der Strich leuchtet
+                Rectangle { anchors.centerIn: parent; width: 9; height: parent.height + 6; radius: 4.5; color: Theme.accent; opacity: Theme.neon ? 0.25 : 0; z: -1 }
+            }
+        }
+
         ColumnLayout {
+            id: navColumn
             x: 10
             y: 12
-            width: 240 - 2 * 10 - 1
+            width: 250 - 2 * 10 - 1
             spacing: 0
 
             // »+ Neu«: blauer Verlauf aus dem App-Symbol; öffnet das Menü mit den neuen Dateiarten
@@ -618,6 +719,15 @@ Item {
                     onClicked: App.showHomeSection("kind:" + modelData.kind)
                 }
             }
+        }
+        // »Mehr« (Vorlagen, Alle Werkzeuge, Übersichten-Ersteller): seit 5.0 Beta 11 unten in der Navigation – oben steht
+        // sie wie im Entwurf 11 (Neu, Start, Zuletzt verwendet, Datei öffnen, Dateiarten)
+        ColumnLayout {
+            id: navMore
+            x: 10
+            y: Math.max(navColumn.y + navColumn.height + 8, nav.height - height - 12)
+            width: navColumn.width
+            spacing: 0
             NavHeading { text: I18n.tr("Mehr", I18n.revision) }
             NavItem { objectName: "navTemplates"; Layout.fillWidth: true; text: I18n.tr("Vorlagen", I18n.revision); iconName: "library"; selected: page.section === "templates"; onClicked: App.showHomeSection("templates") }
             NavItem { objectName: "navTools"; Layout.fillWidth: true; text: I18n.tr("Alle Werkzeuge", I18n.revision); iconName: "toolbox"; selected: page.section === "tools"; onClicked: App.showHomeSection("tools") }
@@ -643,13 +753,26 @@ Item {
                 GradientStop { position: 1; color: Theme.neon ? Qt.rgba(0.49, 0.30, 1.0, 0.07) : Qt.rgba(0.6, 0.4, 0.9, 0.05) }
             }
         }
-        Repeater {
-            model: ThemeBackend.startBackground === "grid" ? Math.ceil(parent.width / 28) : 0
-            Rectangle { required property int index; x: index * 28; width: 1; height: parent.height; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.07 : 0.06) }
-        }
-        Repeater {
-            model: ThemeBackend.startBackground === "grid" ? Math.ceil(parent.height / 28) : 0
-            Rectangle { required property int index; y: index * 28; height: 1; width: parent.width; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.07 : 0.06) }
+        // Raster als eine Fläche (feste Zahl an Elementen, gleich bei jeder Fenstergröße)
+        Canvas {
+            id: grid
+            anchors.fill: parent
+            visible: ThemeBackend.startBackground === "grid"
+            readonly property color line: Theme.accent
+            readonly property real strength: Theme.dark ? 0.07 : 0.06
+            onLineChanged: requestPaint()
+            onStrengthChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onVisibleChanged: if (visible) requestPaint()
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                ctx.globalAlpha = strength
+                ctx.fillStyle = Qt.rgba(line.r, line.g, line.b, 1)
+                for (var x = 0; x < width; x += 28) ctx.fillRect(x, 0, 1, height)
+                for (var y = 0; y < height; y += 28) ctx.fillRect(0, y, width, 1)
+            }
         }
     }
 
@@ -661,6 +784,7 @@ Item {
         anchors.bottom: parent.bottom
         centered: true
         maxContentWidth: Metrics.homeMaxWidth
+        topPadding: 24
 
         // Hinweise nach dem Start (z. B. Ergebnis einer Wiederherstellung) und zum Öffnen von Dateien
         PInfoBar {
@@ -687,9 +811,11 @@ Item {
 
             // Willkommenskopf: Name und Satz links, rechts das App-Symbol (die bunten Seiten als Erkennungszeichen)
             Rectangle {
+                id: hero
                 objectName: "homeHero"
                 Layout.fillWidth: true
-                implicitHeight: 140
+                implicitHeight: 150
+                Entrance { target: hero; order: 0; distance: -30 }
                 radius: Metrics.radiusFloat
                 border.width: 1
                 border.color: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35) : Theme.border
@@ -713,6 +839,8 @@ Item {
                         Layout.fillWidth: true
                         text: I18n.tr("Willkommen bei " + App.appName, I18n.revision)
                         textStyle: "title"
+                        font.pixelSize: 36  // Entwurf 11: großer, kräftiger Titel
+                        font.weight: Font.Bold
                         elide: Text.ElideRight
                         Accessible.role: Accessible.Heading
                     }
@@ -752,6 +880,7 @@ Item {
                         spin.start()
                     }
                     NumberAnimation { id: spin; target: logoSpin; property: "angle"; from: 0; to: 360; duration: 1400; easing.type: Easing.OutCubic }
+                    Connections { target: page; function onEntranceRunChanged() { if (heroImage.visible && Motion.moves) spin.restart() } }
                     SequentialAnimation {
                         running: Motion.moves && heroImage.visible && page.visible
                         loops: Animation.Infinite
@@ -778,7 +907,10 @@ Item {
                         { kind: "pdf", title: "PDF öffnen", description: "Lesen, bearbeiten, vergleichen" }
                     ]
                     KindCard {
+                        id: kindCardItem
                         required property var modelData
+                        required property int index
+                        Entrance { target: kindCardItem; order: 2 + kindCardItem.index; distance: 50; tilt: 40 }
                         objectName: "kindCard_" + modelData.kind
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -790,35 +922,12 @@ Item {
                 }
             }
 
+            // Die Schnellwerkzeuge stehen seit 5.0 Beta 11 (Entwurf 11) unter »Alle Werkzeuge«
             PText {
-                Layout.topMargin: 26
-                Layout.bottomMargin: 10
-                text: I18n.tr("Schnellwerkzeuge", I18n.revision)
-                textStyle: "bodyStrong"
-                font.pixelSize: 15
-                font.weight: Font.DemiBold
-                Accessible.role: Accessible.Heading
-            }
-            Flow {
-                objectName: "homeStartTools"
-                Layout.fillWidth: true
-                spacing: 8
-                Repeater {
-                    model: Reader.startTools
-                    StartTool {
-                        required property var modelData
-                        objectName: "startTool_" + modelData.action
-                        text: I18n.tr(modelData.title, I18n.revision)
-                        iconName: modelData.icon
-                        description: I18n.tr(modelData.description, I18n.revision)
-                        onClicked: Reader.quickTool(modelData.action)
-                    }
-                }
-            }
-
-            PText {
-                Layout.topMargin: 26
-                Layout.bottomMargin: 10
+                id: recentHeading
+                Layout.topMargin: 30
+                Layout.bottomMargin: 12
+                Entrance { target: recentHeading; order: 6; distance: 24 }
                 text: I18n.tr("Zuletzt verwendet", I18n.revision)
                 textStyle: "bodyStrong"
                 font.pixelSize: 15
@@ -831,6 +940,8 @@ Item {
                 visible: Reader.recent.length > 0
                 entries: Reader.recent
                 limit: 6
+                startStyle: true
+                entranceFrom: 7
             }
             PText {
                 objectName: "homeStartRecentEmpty"
@@ -844,10 +955,12 @@ Item {
 
         // Eine Dateiart: »Neu …« und »Öffnen …«, darunter ihre zuletzt verwendeten Dateien -----------------------
         ColumnLayout {
+            id: homeKindCol
             objectName: "homeKind"
             Layout.fillWidth: true
             spacing: 0
             visible: page.kindShown !== ""
+            Entrance { target: homeKindCol.visible ? homeKindCol : null; distance: 48 }
             RowLayout {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Metrics.s16
@@ -900,10 +1013,12 @@ Item {
 
         // Zuletzt verwendet (alle Einträge, mit Filter, Größe, »Im Ordner zeigen« und »Liste leeren«) --------------
         ColumnLayout {
+            id: homeRecentSectionCol
             objectName: "homeRecentSection"
             Layout.fillWidth: true
             spacing: 0
             visible: page.section === "recent"
+            Entrance { target: homeRecentSectionCol.visible ? homeRecentSectionCol : null; distance: 48 }
             // Zuletzt verwendet: nur Pfade, Zeitpunkt und Größe (keine Inhalte); leeren lässt sich die Liste jederzeit. Über der
             // Liste lässt sie sich nach Dateiart filtern (Tabellen schließen CSV ein).
             PCard {
@@ -914,10 +1029,14 @@ Item {
                 iconName: "history"
                 readonly property bool showFolder: width >= Metrics.homeRecentFolderFrom
                 property string kindFilter: ""
+                property string query: ""
                 readonly property var entries: {
                     var filter = kindFilter
-                    if (filter === "") return Reader.recent
-                    return Reader.recent.filter(function(entry) { return entry.kind === filter || (filter === "tabelle" && entry.kind === "csv") })
+                    var words = query.trim().toLowerCase()
+                    return Reader.recent.filter(function(entry) {
+                        if (filter !== "" && !(entry.kind === filter || (filter === "tabelle" && entry.kind === "csv"))) return false
+                        return words === "" || (entry.name + " " + (entry.place || entry.folder)).toLowerCase().indexOf(words) >= 0
+                    })
                 }
                 // Spalten (Kopf und Zeilen gleich): Symbol, Name, Ordner, Geöffnet, Größe, zwei Schaltflächen
                 readonly property int buttonsWidth: 2 * Metrics.controlHeight + Metrics.s12  // zwei Schaltflächen mit Abstand
@@ -963,6 +1082,20 @@ Item {
                             text: I18n.tr(modelData.label, I18n.revision)
                             onClicked: recentCard.kindFilter = modelData.key
                         }
+                    }
+                }
+                // Suche (Lupe oben rechts, Strg+F): Name oder Ordner
+                PTextField {
+                    id: recentSearch
+                    objectName: "homeRecentSearch"
+                    Layout.fillWidth: true
+                    Layout.topMargin: Metrics.s8
+                    visible: Reader.recent.length > 0
+                    placeholderText: I18n.tr("Zuletzt verwendet durchsuchen", I18n.revision)
+                    onTextChanged: recentCard.query = text
+                    Connections {
+                        target: App
+                        function onHomeSearchRequested() { Qt.callLater(function() { recentSearch.forceActiveFocus(); recentSearch.selectAll() }) }
                     }
                 }
                 PText {
@@ -1071,6 +1204,7 @@ Item {
             Layout.fillWidth: true
             spacing: 0
             visible: page.section === "templates"
+            Entrance { target: templatesSection.visible ? templatesSection : null; distance: 48 }
             property string kindFilter: ""
             readonly property var entries: kindFilter === "" ? Reader.officeTemplates
                                                              : Reader.officeTemplates.filter(function(entry) { return entry.kind === kindFilter })
@@ -1161,10 +1295,12 @@ Item {
 
         // Alle Werkzeuge: Werkzeuge mit Schnellwerkzeugen und die Ablagefläche --------------------------------------
         ColumnLayout {
+            id: homeToolsSectionCol
             objectName: "homeToolsSection"
             Layout.fillWidth: true
             spacing: 0
             visible: page.section === "tools"
+            Entrance { target: homeToolsSectionCol.visible ? homeToolsSectionCol : null; distance: 48 }
             GridLayout {
                 id: top
                 objectName: "homeTop"

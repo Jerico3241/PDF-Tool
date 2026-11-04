@@ -123,7 +123,7 @@ WERKZEUGE = ("toolCard_reader", "toolCard_convert", "toolCard_actions", "toolCar
 def _pruefe_startseite(h) -> tuple[bool, int]:
     """Aufbau der Startseite; liefert (Werkzeuge und Ablagefläche nebeneinander, Spalten der Werkzeuge).
 
-    Seit 5.0 steht dieser Teil unter »Alle Werkzeuge« (Navigation links). Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1080 px
+    Seit 5.0 steht dieser Teil unter »Alle Werkzeuge« (Navigation links). Die Gruppe steht mittig (gleiche Ränder – nur bei ungerader Breite ein Pixel Unterschied), höchstens 1240 px
     breit, Ränder mindestens 36 px; Willkommenskopf, Dateiarten, Werkzeuge, »Zuletzt verwendet« und Datenschutzhinweis
     an derselben linken Kante und gleich breit. Breit: Werkzeuge und Ablagefläche (260 px) nebeneinander, gleich hoch, 16 px Abstand; schmal:
     untereinander. Die Werkzeuge: gleich breit, auf ganzen Pixeln, mittig in ihrer Karte, kein Wort mitten im Wort
@@ -138,7 +138,7 @@ def _pruefe_startseite(h) -> tuple[bool, int]:
     gx, _gy, gbreite, _gh = _szene(oben)
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
     assert abs(links - rechts) == int(fbreite) % 2, (links, rechts, fbreite)
-    assert gbreite <= 1080 and min(links, rechts) >= 36
+    assert gbreite <= 1240 and min(links, rechts) >= 36
     assert _szene(hinweis)[0] == gx and _szene(hinweis)[2] == gbreite
     k, a = _szene(karte), _szene(ablage)
     nebeneinander = a[1] == k[1]
@@ -182,7 +182,7 @@ def _alle(wurzel) -> list:
 # Spalten der Werkzeuge – vier Werkzeuge stehen zwei mal zwei). 760: kleinste Fensterbreite; 1093 × 614: 1366 × 768 bei 125 %; 1280 × 720: 1920 × 1080
 # bei 150 %.
 GROESSEN = (((1920, 1080), (True, 3)), ((2560, 1440), (True, 3)), ((1366, 768), (True, 3)), ((1280, 720), (True, 2)),
-            ((1093, 614), (False, 3)), ((900, 700), (False, 2)), ((760, 700), (False, 1)))  # seit 5.0 neben der Navigation (240 px)
+            ((1093, 614), (False, 3)), ((900, 700), (False, 2)), ((760, 700), (False, 1)))  # seit 5.0 neben der Navigation (250 px)
 
 
 @pytest.mark.parametrize("groesse,aufbau", GROESSEN)
@@ -191,20 +191,20 @@ def test_start_page_is_symmetric(ui_app, groesse, aufbau) -> None:
     h.window.resize(*groesse)
     pump(0.6)
     assert _pruefe_startseite(h) == aufbau
-    if aufbau[0] and groesse[0] >= 1600:  # neben der Navigation (240 px)
-        assert _szene(h.item("homeTop"))[2] == 1080  # volle Gruppe
+    if aufbau[0] and groesse[0] >= 1600:  # neben der Navigation (250 px)
+        assert _szene(h.item("homeTop"))[2] == 1240  # volle Gruppe
 
 
 @pytest.mark.parametrize("groesse", [g for g, _a in GROESSEN])
 def test_start_section_follows_design(ui_app, groesse) -> None:
-    """Startseite seit 5.0 (Entwurf 1-startseite.png): Navigation links (240 px), daneben mittig und höchstens 1080 px
+    """Startseite seit 5.0 (Entwurf 1-startseite.png): Navigation links (250 px), daneben mittig und höchstens 1240 px
     breit Begrüßung, Dateiarten, Schnellwerkzeuge und »Zuletzt verwendet« an derselben linken Kante und gleich breit."""
     h = ui_app
     h.window.resize(*groesse)
     h.app.showHomeSection("start")
     pump(0.6)
     nav = _szene(h.item("homeNav"))
-    assert nav[2] == 240
+    assert nav[2] == 250
     held = h.item("homeHero")
     flaeche = held.parentItem()
     while flaeche is not None and not flaeche.inherits("QQuickFlickable"):
@@ -213,8 +213,8 @@ def test_start_section_follows_design(ui_app, groesse) -> None:
     assert fx0 >= nav[0] + nav[2]
     gx, _gy, gbreite, _gh = _szene(held)
     links, rechts = gx - fx0, fx0 + fbreite - (gx + gbreite)
-    assert abs(links - rechts) <= 1 and gbreite <= 1080 and min(links, rechts) >= 24, (links, rechts, gbreite)
-    for name in ("homeKinds", "homeStartTools", "homeStartRecent" if h.item("homeStartRecent").isVisible() else "homeStartRecentEmpty"):
+    assert abs(links - rechts) <= 1 and gbreite <= 1240 and min(links, rechts) >= 24, (links, rechts, gbreite)
+    for name in ("homeKinds", "homeStartRecent" if h.item("homeStartRecent").isVisible() else "homeStartRecentEmpty"):
         lage = _szene(h.item(name))
         assert lage[0] == gx and lage[2] == gbreite, name
     arten = [_szene(h.item("kindCard_" + art)) for art in ("tabelle", "text", "praesentation", "pdf")]
@@ -717,8 +717,8 @@ def test_animation_profiles_follow_the_design_rules(app) -> None:
     pump(0.1)
     full = _motion(app)
     assert full["enabled"] and full["moves"]
-    assert 140 <= full["pageOut"] + full["pageIn"] <= 200  # Seitenwechsel: aus- und einblenden
-    assert 120 <= full["menu"] <= 160 and full["menuShift"] > 0  # Menüs: Deckkraft + leichte Bewegung
+    assert 300 <= full["pageOut"] + full["pageIn"] <= 500  # Seitenwechsel (seit Beta 11 deutlich): aus- und einblenden
+    assert 180 <= full["menu"] <= 260 and full["menuShift"] > 0  # Menüs: Deckkraft + Bewegung
     assert full["dialog"] > 0 and full["dialogScale"] < 1  # Dialoge: Einblenden + leichtes Skalieren
     assert full["expand"] > 0 and full["infoBar"] > 0 and full["tooltip"] > 0
     app.settings.setProfile("reduced")

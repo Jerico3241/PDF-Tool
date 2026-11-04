@@ -129,8 +129,12 @@ FocusScope {
                 x: 0
                 y: layer.height - height
                 width: layer.width
-                height: shell.fullScreen ? 0 : implicitHeight
-                visible: !shell.fullScreen
+                // Startseite (Entwurf 11): ohne Statuszeile, solange es nichts zu melden gibt – eine Meldung schiebt sie herein
+                readonly property bool quiet: App.currentPage === "home" && (App.statusText === "Bereit" || App.statusText === "")
+                height: shell.fullScreen || quiet ? 0 : implicitHeight
+                Behavior on height { enabled: Motion.moves && !shell.fullScreen; NumberAnimation { duration: Motion.expand; easing.type: Motion.decelerate } }
+                clip: true
+                visible: !shell.fullScreen && height > 0
             }
         }
     }
