@@ -2,6 +2,23 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.10
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.10.md).
+
+- 3D-Design ohne MultiEffect: `Controls/PLift.qml` (weicher Schatten als 9-Teile-Bild `images/lift-shadow.png`,
+  Neon-Schein), `PGloss.qml` (Glanzkarte, `slideIn`), `PWell.qml` (Mulde), `PSegmented.qml`. Theme-Tokens
+  neon/glow/gloss*, `ThemeBackend` mit neon, neonColor, glow, startBackground, corners, density, ribbonLabels
+  (Einstellungen → Personalisieren).
+- Tab-Dock (`Shell/AppTabs.qml`, `Metrics.dockBarHeight` 56) und Strg+Tab-Karussell (`Shell/TabSwitcher.qml`,
+  `App.switchTab`/`App.ctrlHeld`, Bilder per `grabToImage` nach dem Wechsel).
+- Reiter Start wie Office in `TextView.qml`, `SheetView.qml` (SplitTool, `startLevel`) und `SlidesView.qml`;
+  neue Rechenkern-Befehle `paint_format` und `table_style`; Textkern-Makros für Zeilenabstand/Anordnen.
+- Office-Tastenkürzel (`qtapp/text/canvas.py`, `qtapp/sheet/grid.py`, `tests/test_qt_office_keys.py`).
+- Animationen: Reiterlinie (`RibbonTab.qml`), gleitender Zellrahmen (`grid.py` `glideDuration`).
+- `PIcon` setzt in Layouts die Wunschgröße (bei 200 % sonst doppelt so groß).
+- Behoben: `update()` gefolgt von `update(rect)` zeichnete im Textkern nur das Rechteck neu.
+
 # Novadesk 5.0.0-beta.9
 
 Beta zum Testen (Aufräum-Beta, nichts Neues). Details in den [Release Notes](release-notes/5.0.0-beta.9.md).

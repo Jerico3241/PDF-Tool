@@ -35,6 +35,16 @@ PROFILE_LABELS = {PROFILE_FULL: "Vollständig", PROFILE_REDUCED: "Reduziert", PR
 CONFIG_PROFILE = "animationsprofil"
 CONFIG_LEGACY_ANIMATIONS = "animationen"  # bis 2.6: an/aus bzw. »wie Windows« (fehlt)
 
+# Personalisieren (seit 5.0 Beta 10): Neon-Modus, Leuchtstärke, Startseite, Ecken, Dichte, Menüband
+GLOWS = ("soft", "medium", "strong")
+GLOW_LABELS = {"soft": "Sanft", "medium": "Mittel", "strong": "Stark"}
+START_BACKGROUNDS = ("plain", "gradient", "grid")
+START_BACKGROUND_LABELS = {"plain": "Schlicht", "gradient": "Verlauf", "grid": "Neon-Raster"}
+CORNERS = ("round", "square")
+CORNER_LABELS = {"round": "Rund", "square": "Eckig"}
+DENSITIES = ("compact", "normal", "spacious")
+DENSITY_LABELS = {"compact": "Kompakt", "normal": "Normal", "spacious": "Geräumig"}
+
 
 def valid_accent(value) -> str:
     if value == design.SYSTEM_ACCENT:
@@ -76,6 +86,13 @@ class ThemeController(Observable):
     fontFamilyChanged, fontFamily = prop(str, "fontFamily", "")
     displayFamilyChanged, displayFamily = prop(str, "displayFamily", "")
     revisionChanged, revision = prop(int, "revision", 0)
+    neonChanged, neon = prop(bool, "neon", False)
+    neonColorChanged, neonColor = prop(str, "neonColor", design.DEFAULT_NEON)
+    glowChanged, glow = prop(str, "glow", "medium")
+    startBackgroundChanged, startBackground = prop(str, "startBackground", "gradient")
+    cornersChanged, corners = prop(str, "corners", "round")
+    densityChanged, density = prop(str, "density", "normal")
+    ribbonLabelsChanged, ribbonLabels = prop(bool, "ribbonLabels", True)
 
     def __init__(self, cfg: dict, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -87,6 +104,13 @@ class ThemeController(Observable):
         self.set_quietly("accentChoice", valid_accent(cfg.get("accent", design.SYSTEM_ACCENT)))
         self.set_quietly("profile", profile_from_config(cfg))
         self.set_quietly("micaEnabled", bool(cfg.get("mica", True)))
+        self.set_quietly("neon", bool(cfg.get("neon", False)))
+        self.set_quietly("neonColor", valid_neon(cfg.get("neon_farbe")))
+        self.set_quietly("glow", _pick(cfg.get("leuchtstaerke"), GLOWS, "medium"))
+        self.set_quietly("startBackground", _pick(cfg.get("startseite_hintergrund"), START_BACKGROUNDS, "gradient"))
+        self.set_quietly("corners", _pick(cfg.get("ecken"), CORNERS, "round"))
+        self.set_quietly("density", _pick(cfg.get("dichte"), DENSITIES, "normal"))
+        self.set_quietly("ribbonLabels", cfg.get("menueband_text", True) is not False)
         self.set_quietly("micaAvailable", winsys.mica_supported())
         self.mica = MicaSource()
         self._mica_thread: threading.Thread | None = None
@@ -111,6 +135,8 @@ class ThemeController(Observable):
         return self._palette
 
     def is_dark(self) -> bool:
+        if self.neon:
+            return True  # Neon leuchtet auf dunklem Grund
         if self.mode == THEME_DARK:
             return True
         if self.mode == THEME_LIGHT:
@@ -121,7 +147,10 @@ class ThemeController(Observable):
         return scheme == Qt.ColorScheme.Dark
 
     def _apply(self, initial: bool = False) -> bool:
-        palette = design.build_palette(self.is_dark(), design.resolve_accent(self.accentChoice))
+        if self.neon:
+            palette = design.neon_palette(self.neonColor)
+        else:
+            palette = design.build_palette(self.is_dark(), design.resolve_accent(self.accentChoice))
         if palette == self._palette:
             return False
         self._palette = palette
@@ -135,7 +164,10 @@ class ThemeController(Observable):
         tokens["smoke"] = "#4D000000" if not palette.dark else "#66000000"  # Abdunkelung hinter Dialogen
         tokens["shadow"] = "#24000000" if not palette.dark else "#52000000"
         # PDF Reader: Fläche hinter den Seiten; Treffer liegen auf dem weißen Papier (in jedem Design gleich)
-        tokens["viewer"] = "#E6E6E6" if not palette.dark else "#191919"
+        tokens["viewer"] = "#0E1117" if self.neon else "#E6E6E6" if not palette.dark else "#191919"
+        if self.neon:
+            tokens["smoke"] = "#99000000"
+            tokens["shadow"] = "#80000000"
         tokens["search_hit"] = "#66FFC400"
         tokens["search_hit_current"] = "#FF8A00"
         self.dark = palette.dark
@@ -212,9 +244,50 @@ class ThemeController(Observable):
         if self.micaWanted() and winsys.wallpaper_state() != self._wallpaper:
             self._load_mica()
 
+    # Personalisieren ---------------------------------------------------------------------------------
+    @Slot(bool)
+    def setNeon(self, enabled: bool) -> None:
+        self.neon = bool(enabled)
+        self._apply()
+        if self.micaWanted() and not self.mica.available:
+            self._load_mica()
+        self.micaSource = self._mica_url()
+
+    @Slot(str)
+    def setNeonColor(self, value: str) -> None:
+        self.neonColor = valid_neon(value)
+        self._apply()
+
+    @Slot(str)
+    def setGlow(self, value: str) -> None:
+        if value in GLOWS:
+            self.glow = value
+
+    @Slot(str)
+    def setStartBackground(self, value: str) -> None:
+        if value in START_BACKGROUNDS:
+            self.startBackground = value
+
+    @Slot(str)
+    def setCorners(self, value: str) -> None:
+        if value in CORNERS:
+            self.corners = value
+
+    @Slot(str)
+    def setDensity(self, value: str) -> None:
+        if value in DENSITIES:
+            self.density = value
+
+    @Slot(bool)
+    def setRibbonLabels(self, enabled: bool) -> None:
+        self.ribbonLabels = bool(enabled)
+
+    def neon_items(self) -> list[dict]:
+        return [{"value": value, "name": name} for name, value in design.NEON_COLORS]
+
     # Mica ----------------------------------------------------------------------------------------
     def micaWanted(self) -> bool:
-        return self.micaEnabled and self.micaAvailable
+        return self.micaEnabled and self.micaAvailable and not self.neon  # Neon: fast schwarz, ohne Hintergrundbild
 
     @Slot(bool)
     def setMica(self, enabled: bool) -> None:
@@ -257,7 +330,9 @@ class ThemeController(Observable):
 
     # Speichern ------------------------------------------------------------------------------------
     def config(self) -> dict:
-        data = {"theme": self.mode, "accent": self.accentChoice, "mica": bool(self.micaEnabled), CONFIG_PROFILE: self.profile}
+        data = {"theme": self.mode, "accent": self.accentChoice, "mica": bool(self.micaEnabled), CONFIG_PROFILE: self.profile,
+                "neon": bool(self.neon), "neon_farbe": self.neonColor, "leuchtstaerke": self.glow, "startseite_hintergrund": self.startBackground,
+                "ecken": self.corners, "dichte": self.density, "menueband_text": bool(self.ribbonLabels)}
         # Für ältere Versionen (bis 2.6): »aus« bleibt aus, ein ausdrückliches »an« bleibt bei
         # »Vollständig« erhalten, sonst wie Windows (Schlüssel fehlt).
         if self.profile == PROFILE_OFF:
@@ -267,6 +342,19 @@ class ThemeController(Observable):
         else:
             data[CONFIG_LEGACY_ANIMATIONS] = None
         return data
+
+
+def valid_neon(value) -> str:
+    text = str(value or "")
+    try:
+        design.rgb(text)
+    except (ValueError, IndexError):
+        return design.DEFAULT_NEON
+    return text.upper() if text.startswith("#") and len(text) == 7 else design.DEFAULT_NEON
+
+
+def _pick(value, options: tuple[str, ...], default: str) -> str:
+    return value if value in options else default
 
 
 def _rgba(color: str, alpha: float) -> str:

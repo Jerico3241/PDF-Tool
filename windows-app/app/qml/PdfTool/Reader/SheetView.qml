@@ -28,6 +28,90 @@ FocusScope {
                                     "#7F7F7F", "#F2F2F2", "#D0CECE", "#D6DCE4", "#D9E1F2", "#FCE4D6", "#EDEDED", "#FFF2CC", "#DDEBF7", "#E2EFDA",
                                     "#C00000", "#FF0000", "#FFC7CE", "#FFEB9C", "#C6EFCE", "#00B050", "#00B0F0", "#0070C0", "#002060", "#7030A0"]
 
+    // Reiter Start wie in Excel (seit 5.0 Beta 10) ------------------------------------------------------------------
+    readonly property var numberFormats: [
+        { key: "standard", label: "Standard" }, { key: "number", label: "Zahl" }, { key: "currency", label: "Währung" },
+        { key: "percent", label: "Prozent" }, { key: "date", label: "Datum" }, { key: "time", label: "Uhrzeit" }, { key: "text", label: "Text" }
+    ]
+    readonly property var borderPresets: [
+        { key: "bottom", icon: "border_bottom", label: "Rahmenlinie unten" }, { key: "top", icon: "border_top", label: "Rahmenlinie oben" },
+        { key: "left", icon: "border_left", label: "Rahmenlinie links" }, { key: "right", icon: "border_right", label: "Rahmenlinie rechts" },
+        { key: "none", icon: "border_none", label: "Kein Rahmen" }, { key: "all", icon: "border_all", label: "Alle Rahmenlinien" },
+        { key: "outer", icon: "border_outside", label: "Rahmenlinien außen" }, { key: "thick", icon: "border_outside_thick", label: "Dicke Rahmenlinie außen" }
+    ]
+    // zuletzt gewählt (wie in Excel unter bzw. auf dem Knopf); ein Klick auf den Knopf wendet es erneut an
+    property string lastBorder: "all"
+    readonly property string lastBorderIcon: {
+        for (var i = 0; i < borderPresets.length; ++i)
+            if (borderPresets[i].key === lastBorder) return borderPresets[i].icon
+        return "border_all"
+    }
+    property string lastFill: "#FFFF00"
+    property string lastColor: "#FF0000"
+    // Stufen der Leiste: 2 alles, 1 ohne Schrift ±/Dezimalstellen, 0 nur das Wichtigste – die höchste, die passt
+    property int startLevel: 2
+    onStartLevelChanged: startBar.refit()
+    function updateStartLevel() {
+        // zuerst mit Beschriftungen; passt nicht einmal Stufe 0, die höchste Stufe, die nur mit Symbolen passt
+        for (var level = 2; level >= 0; level--)
+            if (startWidth(level, false) <= startBar.width) { startLevel = level; return }
+        level = 2
+        while (level > 0 && startWidth(level, true) > startBar.width)
+            level--
+        startLevel = level
+    }
+    // Breite eines Knopfs mit Beschriftung – auch während die Leiste zusammengeschoben ist (dann zeigt er nur das Symbol)
+    FontMetrics { id: bodyMetrics; font: Typography.body }
+    FontMetrics { id: captionMetrics; font: Typography.caption }
+    function labelledWidth(item) {
+        if (!startBar.squeezed) return item.implicitWidth
+        if (item.bigButton === true) return Math.max(52, Math.ceil(captionMetrics.advanceWidth(item.text)) + 16)
+        return 8 + Metrics.iconSize + 8 + Math.ceil(bodyMetrics.advanceWidth(item.text)) + 10
+    }
+    function startWidth(level, iconsOnly) {
+        var total = 0, count = 0
+        for (var i = 0; i < startBar.children.length; i++) {
+            var item = startBar.children[i]
+            var from = item.minLevel === undefined ? 0 : item.minLevel
+            if (item.ribbonWidth !== undefined) {
+                total += item.ribbonWidth
+                count++
+                continue
+            }
+            if (level < from || item.implicitWidth <= 0)
+                continue
+            var labelled = item.iconName !== undefined && item.iconName !== "" && item.text !== undefined && item.text !== ""
+            total += !labelled ? item.implicitWidth : (iconsOnly ? Math.min(item.implicitWidth, 34) : view.labelledWidth(item))
+            count++
+        }
+        return total + Math.max(0, count - 1) * startBar.spacing
+    }
+    function stepSize(direction) {
+        var size = Math.round(sheet && sheet.cellStyle.size ? sheet.cellStyle.size : 11)
+        var next = size
+        if (direction > 0) {
+            for (var i = 0; i < sizes.length; ++i) if (sizes[i] > size) { next = sizes[i]; break }
+            if (next === size) next = size + 2
+        } else {
+            for (var j = sizes.length - 1; j >= 0; --j) if (sizes[j] < size) { next = sizes[j]; break }
+        }
+        sheet.setFormat("size", next)
+        grid.forceActiveFocus()
+    }
+    function pickBorder(key) {
+        lastBorder = key
+        sheet.borders(key)
+        grid.forceActiveFocus()
+    }
+    function align(key, value) {
+        sheet.setFormat(key, sheet.cellStyle[key] === value ? "" : value)  // nochmals: Standard (wie Excel)
+        grid.forceActiveFocus()
+    }
+    function format(kind) {
+        sheet.numberFormat(sheet.formatKind === kind ? "standard" : kind)
+        grid.forceActiveFocus()
+    }
+
     onSheetChanged: {
         view.cancelEdit()
         if (sheet) grid.forceActiveFocus()
@@ -110,10 +194,54 @@ FocusScope {
     // Schaltfläche der Leiste: Symbol und (optional) Text, ohne Fläche
     component ToolButton: PButton {
         kind: "subtle"
+        implicitHeight: 30
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
         compact: parent !== null && parent.squeezed === true
         enabled: view.sheet !== null && view.sheet.ready
+    }
+
+    // Knopf mit ˅ wie in Excel: links das Zuletzt-Gewählte anwenden, rechts die Auswahl öffnen
+    component SplitTool: Row {
+        id: split
+        property string iconName: ""
+        property string tip: ""
+        property string swatch: ""   // Farbstreifen unter dem Symbol (Füll- und Schriftfarbe)
+        property bool checked: false
+        signal apply()
+        signal menu()
+        enabled: view.sheet !== null && view.sheet.ready
+        PButton {
+            objectName: split.objectName + "Apply"
+            kind: "subtle"
+            implicitHeight: 30
+            iconName: split.iconName
+            tip: I18n.tr(split.tip, I18n.revision)
+            toggle: split.checked
+            checked: split.checked
+            onClicked: { split.apply(); grid.forceActiveFocus() }
+            Rectangle {
+                visible: split.swatch !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 4
+                width: 14
+                height: 3
+                radius: 1
+                color: split.swatch !== "" ? split.swatch : "transparent"
+            }
+        }
+        PButton {
+            objectName: split.objectName + "Menu"
+            kind: "subtle"
+            implicitHeight: 30
+            implicitWidth: 14
+            tip: I18n.tr(split.tip, I18n.revision)
+            onClicked: split.menu()
+            contentItem: Item {
+                PIcon { anchors.centerIn: parent; name: "chevron_down"; size: 10; color: parent.parent.foreground }
+            }
+        }
     }
 
     ColumnLayout {
@@ -125,7 +253,7 @@ FocusScope {
             objectName: "sheetRibbonTabs"
             Layout.fillWidth: true
             implicitHeight: 38
-            color: Theme.layer
+            color: "transparent"  // 3D-Design: Reiter liegen auf dem Hintergrund
             RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
@@ -186,34 +314,57 @@ FocusScope {
         }
 
         // Leiste des Reiters -------------------------------------------------------------------------------------
-        Rectangle {
+        // Befehlsleiste: schwebende Karte mit Glanz und Schatten (seit 5.0 Beta 10, Entwurf 7)
+        PGloss {
             objectName: "sheetToolbar"
             Layout.fillWidth: true
-            implicitHeight: 46
-            color: Theme.layer
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            Layout.topMargin: 4
+            Layout.bottomMargin: 14
+            implicitHeight: Metrics.commandBarHeight
 
-            // Start (wie im Design): Einfügen, Schrift, F, K, Format, Summe, Sortieren, Filter, Diagramm
+            // Start wie in Excel (seit 5.0 Beta 10, Entwürfe »3-tabelle-neon-pink« und »9-tabelle-3d-neon«): Zwischenablage |
+            // Schrift | Zeichen, Rahmen, Farben | Ausrichtung, Umbruch, Verbinden | Zahlenformat | Bedingt, Als Tabelle |
+            // Zellen einfügen/löschen | Summe, Sortieren, Filter, Suchen. Bei wenig Platz weichen zuerst seltene Knöpfe
+            // (startLevel), dann die Beschriftungen.
             RibbonBar {
+                id: startBar
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
                 anchors.bottomMargin: 1
                 spacing: 2
                 objectName: "sheetRibbonBar_start"
                 visible: view.ribbon === "start"
-                ToolButton {
+                onWidthChanged: Qt.callLater(view.updateStartLevel)
+                onVisibleChanged: if (visible) Qt.callLater(view.updateStartLevel)
+                Component.onCompleted: Qt.callLater(view.updateStartLevel)
+                RibbonBigButton {
                     objectName: "sheetPaste"
                     iconName: "clipboard_paste"
                     text: I18n.tr("Einfügen", I18n.revision)
                     tip: I18n.tr("Einfügen (Strg+V)", I18n.revision)
+                    enabled: view.sheet !== null && view.sheet.ready
                     onClicked: { view.sheet.paste(); grid.forceActiveFocus() }
+                }
+                ToolButton { objectName: "sheetCut"; iconName: "cut"; tip: I18n.tr("Ausschneiden (Strg+X)", I18n.revision); onClicked: { view.sheet.cut(); grid.forceActiveFocus() } }
+                ToolButton { objectName: "sheetCopy"; iconName: "copy"; tip: I18n.tr("Kopieren (Strg+C)", I18n.revision); onClicked: { view.sheet.copy(); grid.forceActiveFocus() } }
+                ToolButton {
+                    objectName: "sheetPainter"
+                    readonly property int minLevel: 1
+                    visible: view.startLevel >= minLevel
+                    iconName: "paint_brush"
+                    tip: I18n.tr("Format übertragen: danach die Zielzellen mit der Maus auswählen", I18n.revision)
+                    toggle: true
+                    checked: view.sheet !== null && view.sheet.painting
+                    onClicked: { view.sheet.togglePainter(); grid.forceActiveFocus() }
                 }
                 RibbonSeparator {}
                 PComboBox {
                     id: fontBox
                     objectName: "sheetFont"
-                    preferredWidth: 118
+                    preferredWidth: 112
                     label: I18n.tr("Schriftart", I18n.revision)
                     enabled: view.sheet !== null && view.sheet.ready
                     model: {
@@ -226,35 +377,126 @@ FocusScope {
                     }
                     onActivated: (index) => { view.sheet.setFormat("font", model[index]); grid.forceActiveFocus() }
                 }
+                PComboBox {
+                    objectName: "sheetSize"
+                    preferredWidth: 58
+                    label: I18n.tr("Schriftgröße", I18n.revision)
+                    enabled: view.sheet !== null && view.sheet.ready
+                    readonly property int value: Math.round(view.sheet && view.sheet.cellStyle.size ? view.sheet.cellStyle.size : 11)
+                    model: view.sizes.indexOf(value) >= 0 ? view.sizes : [value].concat(view.sizes)
+                    currentIndex: Math.max(0, model.indexOf(value))
+                    onActivated: (index) => { view.sheet.setFormat("size", model[index]); grid.forceActiveFocus() }
+                }
+                ToolButton { objectName: "sheetGrow"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "font_increase"; tip: I18n.tr("Schrift vergrößern", I18n.revision); onClicked: view.stepSize(1) }
+                ToolButton { objectName: "sheetShrink"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "font_decrease"; tip: I18n.tr("Schrift verkleinern", I18n.revision); onClicked: view.stepSize(-1) }
+                RibbonSeparator {}
+                ToolButton { objectName: "sheetBold"; iconName: "text_bold"; tip: I18n.tr("Fett (Strg+B)", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.bold === true; onClicked: { view.sheet.toggle("bold"); grid.forceActiveFocus() } }
+                ToolButton { objectName: "sheetItalic"; iconName: "text_italic"; tip: I18n.tr("Kursiv (Strg+I)", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.italic === true; onClicked: { view.sheet.toggle("italic"); grid.forceActiveFocus() } }
+                ToolButton { objectName: "sheetUnderline"; iconName: "text_underline"; tip: I18n.tr("Unterstrichen (Strg+U)", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.underline === true; onClicked: { view.sheet.toggle("underline"); grid.forceActiveFocus() } }
+                // Rahmen, Füllfarbe, Schriftfarbe: Klick wendet das Zuletzt-Gewählte an, ˅ öffnet die Auswahl (wie Excel)
+                SplitTool {
+                    id: bordersSplit
+                    objectName: "sheetBorders"
+                    iconName: view.lastBorderIcon
+                    tip: I18n.tr("Rahmen", I18n.revision)
+                    onApply: view.sheet.borders(view.lastBorder)
+                    onMenu: bordersMenu.popup(bordersSplit, 0, bordersSplit.height + 4)
+                }
+                SplitTool {
+                    id: fillSplit
+                    objectName: "sheetFill"
+                    iconName: "paint_bucket"
+                    tip: I18n.tr("Füllfarbe", I18n.revision)
+                    swatch: view.lastFill
+                    onApply: view.sheet.setFormat("background", view.lastFill)
+                    onMenu: colorPopup.openFor(fillSplit, "background")
+                }
+                SplitTool {
+                    id: colorSplit
+                    objectName: "sheetFontColor"
+                    iconName: "text_color"
+                    tip: I18n.tr("Schriftfarbe", I18n.revision)
+                    swatch: view.lastColor
+                    onApply: view.sheet.setFormat("color", view.lastColor)
+                    onMenu: colorPopup.openFor(colorSplit, "color")
+                }
+                RibbonSeparator {}
+                ToolButton { objectName: "sheetAlignLeft"; iconName: "text_align_left"; tip: I18n.tr("Linksbündig", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.halign === "left"; onClicked: view.align("halign", "left") }
+                ToolButton { objectName: "sheetAlignCenter"; iconName: "text_align_center"; tip: I18n.tr("Zentriert", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.halign === "center"; onClicked: view.align("halign", "center") }
+                ToolButton { objectName: "sheetAlignRight"; iconName: "text_align_right"; tip: I18n.tr("Rechtsbündig", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.halign === "right"; onClicked: view.align("halign", "right") }
+                ToolButton { objectName: "sheetAlignTop"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "align_top"; tip: I18n.tr("Oben ausrichten", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.valign === "top"; onClicked: view.align("valign", "top") }
+                ToolButton { objectName: "sheetAlignMiddle"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "align_center_vertical"; tip: I18n.tr("Zentriert ausrichten", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.valign === "center"; onClicked: view.align("valign", "center") }
+                ToolButton { objectName: "sheetAlignBottom"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "align_bottom"; tip: I18n.tr("Unten ausrichten", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.valign === "bottom"; onClicked: view.align("valign", "bottom") }
+                ToolButton { objectName: "sheetWrap"; iconName: "text_wrap"; tip: I18n.tr("Textumbruch", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.cellStyle.wrap === true; onClicked: { view.sheet.toggle("wrap"); grid.forceActiveFocus() } }
+                SplitTool {
+                    id: mergeSplit
+                    objectName: "sheetMerge"
+                    iconName: "table_cells_merge"
+                    tip: I18n.tr("Verbinden und zentrieren", I18n.revision)
+                    checked: view.sheet !== null && view.sheet.merged
+                    onApply: view.sheet.toggleMerge()
+                    onMenu: mergeMenu.popup(mergeSplit, 0, mergeSplit.height + 4)
+                }
+                RibbonSeparator {}
+                PComboBox {
+                    objectName: "sheetNumberFormat"
+                    preferredWidth: 108
+                    label: I18n.tr("Zahlenformat", I18n.revision)
+                    enabled: view.sheet !== null && view.sheet.ready
+                    textRole: "label"
+                    model: view.numberFormats
+                    currentIndex: {
+                        var kind = view.sheet ? view.sheet.formatKind : "standard"
+                        for (var i = 0; i < view.numberFormats.length; ++i)
+                            if (view.numberFormats[i].key === kind) return i
+                        return 0
+                    }
+                    displayText: I18n.tr(currentIndex >= 0 ? view.numberFormats[currentIndex].label : "", I18n.revision)
+                    onActivated: (index) => { view.sheet.numberFormat(view.numberFormats[index].key); grid.forceActiveFocus() }
+                }
+                ToolButton { objectName: "sheetCurrency"; iconName: "currency_dollar_euro"; tip: I18n.tr("Buchhaltungszahlenformat: Währung €", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.formatKind === "currency"; onClicked: view.format("currency") }
+                ToolButton { objectName: "sheetPercent"; text: "%"; tip: I18n.tr("Prozentformat", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.formatKind === "percent"; onClicked: view.format("percent") }
+                ToolButton { objectName: "sheetThousands"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; text: "000"; tip: I18n.tr("1.000er-Trennzeichen", I18n.revision); toggle: true; checked: view.sheet !== null && view.sheet.formatKind === "number"; onClicked: view.format("number") }
+                ToolButton { objectName: "sheetDecimalsLess"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "decimal_arrow_left"; tip: I18n.tr("Dezimalstelle löschen", I18n.revision); onClicked: { view.sheet.decimals(-1); grid.forceActiveFocus() } }
+                ToolButton { objectName: "sheetDecimalsMore"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "decimal_arrow_right"; tip: I18n.tr("Dezimalstelle hinzufügen", I18n.revision); onClicked: { view.sheet.decimals(1); grid.forceActiveFocus() } }
+                RibbonSeparator {}
                 ToolButton {
-                    objectName: "sheetBold"
-                    iconName: "text_bold"
-                    tip: I18n.tr("Fett (Strg+B)", I18n.revision)
-                    toggle: true
-                    checked: view.sheet !== null && view.sheet.cellStyle.bold === true
-                    onClicked: { view.sheet.toggle("bold"); grid.forceActiveFocus() }
+                    id: conditionalButton
+                    objectName: "sheetConditional"
+                    iconName: "table_lightning"
+                    text: I18n.tr("Bedingt", I18n.revision)
+                    tip: I18n.tr("Bedingte Formatierung: Zellen je nach Wert hervorheben oder Datenbalken zeigen", I18n.revision)
+                    onClicked: conditionalMenu.popup(conditionalButton, 0, conditionalButton.height + 4)
                 }
                 ToolButton {
-                    objectName: "sheetItalic"
-                    iconName: "text_italic"
-                    tip: I18n.tr("Kursiv (Strg+I)", I18n.revision)
-                    toggle: true
-                    checked: view.sheet !== null && view.sheet.cellStyle.italic === true
-                    onClicked: { view.sheet.toggle("italic"); grid.forceActiveFocus() }
+                    id: tableStyleButton
+                    objectName: "sheetAsTable"
+                    iconName: "table"
+                    text: I18n.tr("Als Tabelle", I18n.revision)
+                    tip: I18n.tr("Als Tabelle formatieren: Kopfzeile, gebänderte Zeilen und Filter", I18n.revision)
+                    onClicked: tableStyleMenu.popup(tableStyleButton, 0, tableStyleButton.height + 4)
                 }
-                ToolButton {
-                    id: formatButton
-                    objectName: "sheetFormat"
-                    iconName: "color"
-                    tip: I18n.tr("Format: Farben, Zahlenformat, Rahmen, Ausrichtung", I18n.revision)
-                    toggle: true
-                    checked: formatFlyout.opened
-                    onClicked: formatFlyout.opened ? formatFlyout.close() : formatFlyout.open()
+                RibbonSeparator {}
+                SplitTool {
+                    id: insertSplit
+                    objectName: "sheetInsertCells"
+                    iconName: "table_insert_row"
+                    tip: I18n.tr("Einfügen: Zeilen über der Auswahl", I18n.revision)
+                    onApply: view.sheet.insertCells("rows", false)
+                    onMenu: insertMenu.popup(insertSplit, 0, insertSplit.height + 4)
+                }
+                SplitTool {
+                    id: deleteSplit
+                    objectName: "sheetDeleteCells"
+                    iconName: "table_delete_row"
+                    tip: I18n.tr("Löschen: Zeilen der Auswahl", I18n.revision)
+                    onApply: view.sheet.insertCells("rows", true)
+                    onMenu: deleteMenu.popup(deleteSplit, 0, deleteSplit.height + 4)
                 }
                 RibbonSeparator {}
                 ToolButton {
                     objectName: "sheetSum"
-                    iconName: "add"
+                    iconName: "autosum"
                     text: I18n.tr("Summe", I18n.revision)
                     tip: I18n.tr("Summe der Zahlen darüber bzw. links (Alt+=)", I18n.revision)
                     onClicked: view.sheet.autoSum("SUMME")
@@ -263,34 +505,22 @@ FocusScope {
                     id: sortButton
                     objectName: "sheetSort"
                     iconName: "arrow_sort"
-                    text: I18n.tr("Sortieren", I18n.revision)
+                    tip: I18n.tr("Sortieren", I18n.revision)
                     onClicked: sortMenu.popup(sortButton, 0, sortButton.height + 4)
                 }
                 ToolButton {
                     objectName: "sheetFilter"
                     iconName: "filter"
-                    text: I18n.tr("Filter", I18n.revision)
                     tip: I18n.tr("Filter ein- oder ausschalten", I18n.revision)
                     toggle: true
                     checked: view.sheet !== null && view.sheet.filterOn
                     onClicked: view.sheet.toggleFilter()
                 }
                 ToolButton {
-                    id: conditionalButton
-                    objectName: "sheetConditional"
-                    iconName: "paint_brush"
-                    text: I18n.tr("Bedingte Formatierung", I18n.revision)
-                    tip: I18n.tr("Zellen je nach Wert hervorheben oder Datenbalken zeigen", I18n.revision)
-                    onClicked: conditionalMenu.popup(conditionalButton, 0, conditionalButton.height + 4)
-                }
-                RibbonSeparator {}
-                ToolButton {
-                    id: chartButton
-                    objectName: "sheetChart"
-                    iconName: "grid"
-                    text: I18n.tr("Diagramm", I18n.revision)
-                    tip: I18n.tr("Diagramm aus der Auswahl", I18n.revision)
-                    onClicked: chartMenu.popup(chartButton, 0, chartButton.height + 4)
+                    objectName: "sheetSearch"
+                    iconName: "search"
+                    tip: I18n.tr("Suchen (Strg+F)", I18n.revision)
+                    onClicked: findBar.show()
                 }
                 Item { Layout.fillWidth: true }
             }
@@ -472,11 +702,12 @@ FocusScope {
             objectName: "sheetFormulaBar"
             Layout.fillWidth: true
             implicitHeight: 40
-            color: Theme.layer
+            Layout.bottomMargin: 8
+            color: "transparent"  // 3D-Design: Namenfeld und Formelfeld liegen auf dem Hintergrund (Entwurf 9)
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
                 spacing: 8
                 Rectangle {
                     Layout.preferredWidth: 80
@@ -568,15 +799,20 @@ FocusScope {
         }
 
         // Raster mit Editor, Diagrammen und Bildlaufleisten --------------------------------------------------------
+        // 3D-Design (Entwurf 9): das Raster liegt in einer Mulde, Seitenleisten schweben als Karten
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            spacing: 12
         Item {
             id: gridArea
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+            Rectangle { anchors.fill: parent; radius: 6; color: grid.paperColor }
+            PWell { z: 5; radius: 6 }
 
             SheetGrid {
                 id: grid
@@ -588,14 +824,17 @@ FocusScope {
                 controller: view.sheet
                 focus: true
                 pointMode: view.pointing
-                headerColor: Theme.surfaceSecondary
+                // Neon (Entwurf 9): fast schwarzes Raster, feine Linien, Zellrahmen und Kopf der Zelle in der Neon-Farbe
+                headerColor: Theme.neon ? "#141821" : Theme.surfaceSecondary
                 headerTextColor: Theme.textSecondary
-                headerLineColor: Theme.divider
-                lineColor: Theme.dark ? "#3A3A3A" : "#E1E1E1"
-                paperColor: Theme.dark ? "#1F1F1F" : "#FFFFFF"
-                textColor: Theme.dark ? "#F0F0F0" : "#000000"
-                accentColor: Theme.dark ? "#4CA0E0" : "#1F5FBF"
-                selectedHeaderColor: Theme.dark ? "#2D3B4D" : "#E3ECF7"
+                headerLineColor: Theme.neon ? "#232836" : Theme.divider
+                lineColor: Theme.neon ? "#1D2230" : (Theme.dark ? "#3A3A3A" : "#E1E1E1")
+                paperColor: Theme.neon ? "#10131A" : (Theme.dark ? "#1F1F1F" : "#FFFFFF")
+                textColor: Theme.neon ? "#EEF2F8" : (Theme.dark ? "#F0F0F0" : "#000000")
+                accentColor: Theme.neon ? Theme.accent : (Theme.dark ? "#4CA0E0" : "#1F5FBF")
+                glowColor: Theme.neon ? Theme.glowColor(Theme.accent, 1.0) : "transparent"
+                glideDuration: Motion.moves ? 110 : 0  // Zellrahmen gleitet zur nächsten Zelle (Entwurf 3)
+                selectedHeaderColor: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.16) : (Theme.dark ? "#2D3B4D" : "#E3ECF7")
                 selectedHeaderTextColor: Theme.accentText
                 onReferencePicked: (text, replace) => view.insertReference(text, replace)
                 onContextMenuRequested: (x, y, area) => {
@@ -910,13 +1149,12 @@ FocusScope {
             }
         }
             // KI-Assistent rechts (seit Beta 8)
-            Rectangle {
+            PGloss {
                 objectName: "sheetAssistantPanel"
+                slideIn: true
                 Layout.fillHeight: true
                 Layout.preferredWidth: Metrics.readerLeftPanelWidth
                 visible: view.sheet !== null && view.sheet.aiPanel && Assistant.enabled
-                color: Theme.layer
-                Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
                 PanelHeader {
                     id: aiHeader
                     anchors.left: parent.left
@@ -941,14 +1179,13 @@ FocusScope {
         Rectangle {
             objectName: "sheetTabs"
             Layout.fillWidth: true
-            implicitHeight: 36
-            color: Theme.layer
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: Theme.divider }
+            implicitHeight: 40
+            color: "transparent"
             Row {
                 anchors.left: parent.left
-                anchors.leftMargin: 10
+                anchors.leftMargin: 14
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
+                spacing: 6
                 Repeater {
                     model: view.sheet ? view.sheet.sheets : []
                     T.AbstractButton {
@@ -958,7 +1195,7 @@ FocusScope {
                         readonly property bool selected: view.sheet !== null && view.sheet.activeSheet === index
                         objectName: "sheetTab_" + index
                         visible: modelData.visible !== false
-                        implicitHeight: 28
+                        implicitHeight: 30
                         implicitWidth: tabRow.implicitWidth + 26
                         hoverEnabled: true
                         Accessible.role: Accessible.PageTab
@@ -966,11 +1203,25 @@ FocusScope {
                         Accessible.selected: selected
                         onClicked: { view.commitEdit(0, 0); view.sheet.activateSheet(index); grid.forceActiveFocus() }
                         onDoubleClicked: view.sheet.renameSheet(index)
+                        // Blatt-Reiter als Kacheln (Entwurf 9): der gewählte im Akzentton mit Rand (Neon: leuchtend)
                         background: Rectangle {
-                            radius: Metrics.radiusControl
-                            color: sheetTab.selected ? Theme.surface : (sheetTab.hovered ? Theme.subtleHover : "transparent")
-                            border.width: sheetTab.selected ? 1 : 0
-                            border.color: Theme.border
+                            radius: Metrics.radiusControl + 2
+                            color: sheetTab.selected ? Theme.pressedFill : (sheetTab.hovered ? Theme.subtleHover : Theme.control)
+                            border.width: sheetTab.selected ? 2 : 1
+                            border.color: sheetTab.selected ? Theme.accent : Theme.controlStroke
+                            Repeater {
+                                model: sheetTab.selected && Theme.glow > 0 ? 4 : 0
+                                Rectangle {
+                                    required property int index
+                                    x: -(index + 1); y: -(index + 1)
+                                    width: parent.width + 2 * (index + 1); height: parent.height + 2 * (index + 1)
+                                    radius: parent.radius + index + 1
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: Theme.accent
+                                    opacity: 0.22 * Theme.glow * (1 - index / 4)
+                                }
+                            }
                             Rectangle {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
@@ -1131,12 +1382,104 @@ FocusScope {
         PMenuItem { text: I18n.tr("Löschen …", I18n.revision); iconName: "delete"; enabled: view.sheet !== null && view.sheet.sheets.length > 1; onTriggered: { var i = sheetMenu.index; sheetMenu.afterClose = function() { view.sheet.deleteSheet(i) } } }
     }
 
+    // Menüs des Reiters Start (seit 5.0 Beta 10) ---------------------------------------------------------------------
+    PMenu {
+        id: bordersMenu
+        objectName: "sheetBordersMenu"
+        PMenuItem { objectName: "sheetBorder_bottom"; text: I18n.tr("Rahmenlinie unten", I18n.revision); iconName: "border_bottom"; onTriggered: view.pickBorder("bottom") }
+        PMenuItem { objectName: "sheetBorder_top"; text: I18n.tr("Rahmenlinie oben", I18n.revision); iconName: "border_top"; onTriggered: view.pickBorder("top") }
+        PMenuItem { objectName: "sheetBorder_left"; text: I18n.tr("Rahmenlinie links", I18n.revision); iconName: "border_left"; onTriggered: view.pickBorder("left") }
+        PMenuItem { objectName: "sheetBorder_right"; text: I18n.tr("Rahmenlinie rechts", I18n.revision); iconName: "border_right"; onTriggered: view.pickBorder("right") }
+        PMenuItem { objectName: "sheetBorder_none"; text: I18n.tr("Kein Rahmen", I18n.revision); iconName: "border_none"; onTriggered: view.pickBorder("none") }
+        PMenuItem { objectName: "sheetBorder_all"; text: I18n.tr("Alle Rahmenlinien", I18n.revision); iconName: "border_all"; onTriggered: view.pickBorder("all") }
+        PMenuItem { objectName: "sheetBorder_outer"; text: I18n.tr("Rahmenlinien außen", I18n.revision); iconName: "border_outside"; onTriggered: view.pickBorder("outer") }
+        PMenuItem { objectName: "sheetBorder_thick"; text: I18n.tr("Dicke Rahmenlinie außen", I18n.revision); iconName: "border_outside_thick"; onTriggered: view.pickBorder("thick") }
+    }
+    PMenu {
+        id: mergeMenu
+        PMenuItem { text: I18n.tr("Verbinden und zentrieren", I18n.revision); iconName: "table_cells_merge"; onTriggered: if (!view.sheet.merged) view.sheet.toggleMerge() }
+        PMenuItem { text: I18n.tr("Verbindung aufheben", I18n.revision); iconName: "table_cells_split"; enabled: view.sheet !== null && view.sheet.merged; onTriggered: view.sheet.toggleMerge() }
+    }
+    PMenu {
+        id: tableStyleMenu
+        objectName: "sheetTableStyleMenu"
+        PMenuItem { objectName: "sheetTableStyle_blue"; text: I18n.tr("Tabellenformat Blau", I18n.revision); iconName: "table"; onTriggered: view.sheet.formatAsTable("blue") }
+        PMenuItem { objectName: "sheetTableStyle_green"; text: I18n.tr("Tabellenformat Grün", I18n.revision); iconName: "table"; onTriggered: view.sheet.formatAsTable("green") }
+        PMenuItem { objectName: "sheetTableStyle_orange"; text: I18n.tr("Tabellenformat Orange", I18n.revision); iconName: "table"; onTriggered: view.sheet.formatAsTable("orange") }
+        PMenuItem { objectName: "sheetTableStyle_gray"; text: I18n.tr("Tabellenformat Grau", I18n.revision); iconName: "table"; onTriggered: view.sheet.formatAsTable("gray") }
+    }
+    PMenu {
+        id: insertMenu
+        PMenuItem { text: I18n.tr("Blattzeilen einfügen", I18n.revision); iconName: "table_insert_row"; onTriggered: view.sheet.insertCells("rows", false) }
+        PMenuItem { text: I18n.tr("Blattspalten einfügen", I18n.revision); iconName: "table_insert_column"; onTriggered: view.sheet.insertCells("cols", false) }
+        PMenuItem { text: I18n.tr("Blatt einfügen", I18n.revision); iconName: "table_add"; onTriggered: view.sheet.addSheet() }
+    }
+    PMenu {
+        id: deleteMenu
+        PMenuItem { text: I18n.tr("Blattzeilen löschen", I18n.revision); iconName: "table_delete_row"; onTriggered: view.sheet.insertCells("rows", true) }
+        PMenuItem { text: I18n.tr("Blattspalten löschen", I18n.revision); iconName: "table_delete_column"; onTriggered: view.sheet.insertCells("cols", true) }
+    }
+    // Farbauswahl für Füll- und Schriftfarbe (unter dem jeweiligen ˅)
+    T.Popup {
+        id: colorPopup
+        objectName: "sheetColorPopup"
+        property string key: "background"
+        function openFor(anchor, which) {
+            key = which
+            parent = anchor
+            y = anchor.height + 4
+            open()
+        }
+        padding: 12
+        width: 10 * 32 + 9 * 2 + 24
+        implicitHeight: contentHeight + topPadding + bottomPadding
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        onClosed: grid.forceActiveFocus()
+        background: Rectangle {
+            color: Theme.flyout
+            border.color: Theme.flyoutStroke
+            radius: Metrics.radiusOverlay
+            PShadow { radius: Metrics.radiusOverlay }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            PText { text: I18n.tr(colorPopup.key === "background" ? "Füllfarbe" : "Schriftfarbe", I18n.revision); textStyle: "caption"; tone: "secondary" }
+            Flow {
+                Layout.fillWidth: true
+                spacing: 2
+                Repeater {
+                    model: view.swatches
+                    PSwatch {
+                        required property var modelData
+                        objectName: "sheetColorSwatch_" + modelData.substring(1)
+                        size: 30
+                        swatchColor: modelData
+                        tip: modelData
+                        selected: view.sheet !== null && String(view.sheet.cellStyle[colorPopup.key] || "").toUpperCase() === modelData
+                        onClicked: {
+                            if (colorPopup.key === "background") view.lastFill = modelData
+                            else view.lastColor = modelData
+                            view.sheet.setFormat(colorPopup.key, modelData)
+                            colorPopup.close()
+                        }
+                    }
+                }
+            }
+            PButton {
+                kind: "subtle"
+                text: I18n.tr(colorPopup.key === "background" ? "Keine Füllung" : "Automatisch", I18n.revision)
+                onClicked: { view.sheet.setFormat(colorPopup.key, colorPopup.key === "background" ? "" : "#000000"); colorPopup.close() }
+            }
+        }
+    }
+
     // Format: Schrift, Farben, Zahlenformat, Ausrichtung, Rahmen, Verbinden -------------------------------------------
     T.Popup {
         id: formatFlyout
         objectName: "sheetFormatFlyout"
-        parent: formatButton
-        y: formatButton.height + 4
+        parent: startBar
+        x: startBar.width - width
+        y: startBar.height + 4
         padding: 12
         width: 372
         implicitHeight: contentHeight + topPadding + bottomPadding
@@ -1481,10 +1824,11 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.save"] || []; enabled: view.active; onActivated: { view.commitEdit(0, 0); view.sheet.saveNow() } }
     Shortcut { sequences: Shortcuts.keys["reader.saveAs"] || []; enabled: view.active; onActivated: { view.commitEdit(0, 0); view.sheet.saveAs() } }
     Shortcut { sequences: Shortcuts.keys["reader.print"] || []; enabled: view.active; onActivated: { view.commitEdit(0, 0); view.sheet.printSheet() } }
-    Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: view.active; onActivated: view.sheet.zoomStep(1) }
-    Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active; onActivated: view.sheet.zoomStep(-1) }
-    Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
-    Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
+    // In den Zellen gehören Strg++ und Strg+- wie in Excel dem Einfügen bzw. Löschen von Zeilen (Zoom: Strg+Mausrad, Regler)
+    Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: view.active && !grid.activeFocus; onActivated: view.sheet.zoomStep(1) }
+    Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active && !grid.activeFocus; onActivated: view.sheet.zoomStep(-1) }
+    Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: App.switchTab(1) }
+    Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: App.switchTab(-1) }
     Shortcut { sequences: ["Ctrl+PgDown"]; enabled: view.active && view.sheet.activeSheet < view.sheet.sheets.length - 1; onActivated: view.sheet.activateSheet(view.sheet.activeSheet + 1) }
     Shortcut { sequences: ["Ctrl+PgUp"]; enabled: view.active && view.sheet.activeSheet > 0; onActivated: view.sheet.activateSheet(view.sheet.activeSheet - 1) }
 }

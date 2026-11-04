@@ -26,7 +26,38 @@ FocusScope {
     readonly property var sizes: ["8", "9", "10", "10,5", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72"]
     readonly property var swatches: ["#000000", "#404040", "#7F7F7F", "#C00000", "#FF0000", "#ED7D31", "#FFC000", "#00B050", "#0070C0", "#002060", "#7030A0", "#1F4E79"]
     readonly property var sidebarStyles: ["Überschrift 1", "Überschrift 2", "Standard", "Zitat"]
+    readonly property var galleryStyles: ["Standard", "Überschrift 1", "Überschrift 2", "Zitat"]  // Leiste wie in Word
     readonly property bool roomy: width >= 1440   // genug Platz für alle Beschriftungen in »Überprüfen«
+    // Reiter Start: 3 alles mit Formatvorlagen-Leiste, 2 Vorlagen als Liste, 1 ohne Seltenes, 0 nur das Wichtigste –
+    // die höchste Stufe, deren Knöpfe in die Leiste passen (gemessen an den Knöpfen selbst, auch an verborgenen)
+    property int startLevel: 3
+    onStartLevelChanged: startBar.refit()
+    function updateStartLevel() {
+        var level = 3
+        while (level > 0 && startWidth(level) > startBar.width)
+            level--
+        startLevel = level
+    }
+    function startWidth(level) {
+        var total = 0, count = 0
+        for (var i = 0; i < startBar.children.length; i++) {
+            var item = startBar.children[i]
+            var from = item.minLevel === undefined ? 0 : item.minLevel
+            var to = item.maxLevel === undefined ? 3 : item.maxLevel
+            if (item.ribbonWidth !== undefined) {  // Trennstrich: schmal, aber mit Rand
+                total += item.ribbonWidth
+                count++
+                continue
+            }
+            if (level < from || level > to || item.implicitWidth <= 0)
+                continue
+            total += item.minWidth !== undefined ? item.minWidth : item.implicitWidth
+            count++
+        }
+        return total + Math.max(0, count - 1) * startBar.spacing
+    }
+    readonly property var highlights: ["#FFFF00", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FF0000", "#000080", "#008080", "#008000", "#800080", "#800000", "#808000"]
+    property string lastHighlight: "#FFFF00"  // zuletzt gewählter Textmarker (wie in Word unter dem Knopf)
     property bool reading: false   // Lesemodus: nur lesen, ohne Menüband und Seitenleiste
     property bool eyeCare: false   // Augenschutz: Seiten sanft grün getönt (wie WPS), gilt für alle Texte
     readonly property string panel: doc !== null && doc.sidebar ? doc.panel : ""
@@ -47,11 +78,14 @@ FocusScope {
     Connections {
         target: view.doc
         function onFindRequested() { findBar.show() }
+        function onReplaceRequested() { findBar.replacing = true; findBar.show() }
+        function onReadingRequested() { view.startReading() }
     }
 
     // Schaltfläche der Leiste: Symbol und (optional) Text, ohne Fläche
     component ToolButton: PButton {
         kind: "subtle"
+        implicitHeight: 30
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
         compact: parent !== null && parent.squeezed === true
@@ -59,8 +93,8 @@ FocusScope {
     }
     component Bar: RibbonBar {
         anchors.fill: parent
-        anchors.leftMargin: 12
-        anchors.rightMargin: 12
+        anchors.leftMargin: 8
+        anchors.rightMargin: 8
         anchors.bottomMargin: 1
         spacing: 2
     }
@@ -75,7 +109,7 @@ FocusScope {
             Layout.fillWidth: true
             visible: !view.reading
             implicitHeight: 38
-            color: Theme.layer
+            color: "transparent"  // 3D-Design: Reiter liegen auf dem Hintergrund
             RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
@@ -141,32 +175,43 @@ FocusScope {
         }
 
         // Leiste des Reiters -------------------------------------------------------------------------------------
-        Rectangle {
+        // Befehlsleiste: schwebende Karte mit Glanz und Schatten (seit 5.0 Beta 10, Entwurf 7)
+        PGloss {
             objectName: "textToolbar"
             Layout.fillWidth: true
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            Layout.topMargin: 4
+            Layout.bottomMargin: 14
             visible: !view.reading
-            implicitHeight: 46
-            color: Theme.layer
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
+            implicitHeight: Metrics.commandBarHeight
 
-            // Start (wie im Entwurf): Einfügen, Ausschneiden, Kopieren | Schrift, Größe | F, K, U, Farbe |
-            // Ausrichtung, Aufzählung | Formatvorlage … Suchen, Seitenleiste
+            // Start wie in Word (seit 5.0 Beta 10, Entwurf »beta10-entwurf/1-text-modern-hell«): Zwischenablage | Schrift |
+            // Zeichen | Absatz | Ausrichtung und Zeilenabstand | Formatvorlagen … Suchen, Seitenleiste. Bei wenig Platz
+            // weichen zuerst die Formatvorlagen in eine Liste, dann seltene Knöpfe (startLevel), dann die Beschriftungen.
             Bar {
+                id: startBar
                 objectName: "textRibbonBar_start"
+                // Stufe erst nach dem Layout neu bestimmen (keine Bindung: die Knöpfe ändern ihre Breite mit der Stufe)
+                onWidthChanged: Qt.callLater(view.updateStartLevel)
+                onVisibleChanged: if (visible) Qt.callLater(view.updateStartLevel)
+                Component.onCompleted: Qt.callLater(view.updateStartLevel)
                 visible: view.ribbon === "start"
-                ToolButton {
+                RibbonBigButton {
                     objectName: "textPaste"
                     iconName: "clipboard_paste"
                     text: I18n.tr("Einfügen", I18n.revision)
                     tip: I18n.tr("Einfügen (Strg+V)", I18n.revision)
+                    enabled: view.ready
                     onClicked: { view.doc.paste(); view.back() }
                 }
                 ToolButton { objectName: "textCut"; iconName: "cut"; tip: I18n.tr("Ausschneiden (Strg+X)", I18n.revision); enabled: view.ready && view.doc.canCopy; onClicked: { view.doc.cut(); view.back() } }
                 ToolButton { objectName: "textCopy"; iconName: "copy"; tip: I18n.tr("Kopieren (Strg+C)", I18n.revision); enabled: view.ready && view.doc.canCopy; onClicked: { view.doc.copy(); view.back() } }
+                ToolButton { objectName: "textPaintbrush"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "paint_brush"; tip: I18n.tr("Format übertragen", I18n.revision); onClicked: { view.doc.toggle("paintbrush"); view.back() } }
                 RibbonSeparator {}
                 PComboBox {
                     objectName: "textFont"
-                    preferredWidth: 136
+                    preferredWidth: 112
                     label: I18n.tr("Schriftart", I18n.revision)
                     enabled: view.ready
                     readonly property string value: view.doc && view.doc.fontName ? view.doc.fontName : ""
@@ -177,7 +222,7 @@ FocusScope {
                 }
                 PComboBox {
                     objectName: "textSize"
-                    preferredWidth: 64
+                    preferredWidth: 58
                     label: I18n.tr("Schriftgröße", I18n.revision)
                     enabled: view.ready
                     readonly property string value: view.doc && view.doc.fontSize ? view.doc.fontSize.replace(".", ",") : ""
@@ -186,10 +231,35 @@ FocusScope {
                     displayText: I18n.tr(value, I18n.revision)
                     onActivated: (index) => { view.doc.setFontSize(model[index]); view.back() }
                 }
+                ToolButton { objectName: "textGrow"; iconName: "font_increase"; tip: I18n.tr("Schrift vergrößern (Strg+>)", I18n.revision); onClicked: { view.doc.toggle("grow"); view.back() } }
+                ToolButton { objectName: "textShrink"; iconName: "font_decrease"; tip: I18n.tr("Schrift verkleinern (Strg+<)", I18n.revision); onClicked: { view.doc.toggle("shrink"); view.back() } }
+                ToolButton { id: caseButton; objectName: "textCase"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "text_change_case"; tip: I18n.tr("Groß-/Kleinschreibung (Umschalt+F3)", I18n.revision); onClicked: caseMenu.popup(caseButton, 0, caseButton.height + 4) }
+                ToolButton { objectName: "textClear"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "text_clear_formatting"; tip: I18n.tr("Formatierung löschen (Strg+Leertaste)", I18n.revision); onClicked: { view.doc.toggle("clear"); view.back() } }
                 RibbonSeparator {}
                 ToolButton { objectName: "textBold"; iconName: "text_bold"; tip: I18n.tr("Fett (Strg+B)", I18n.revision); toggle: true; checked: view.ready && view.doc.bold; onClicked: { view.doc.toggle("bold"); view.back() } }
                 ToolButton { objectName: "textItalic"; iconName: "text_italic"; tip: I18n.tr("Kursiv (Strg+I)", I18n.revision); toggle: true; checked: view.ready && view.doc.italic; onClicked: { view.doc.toggle("italic"); view.back() } }
                 ToolButton { objectName: "textUnderline"; iconName: "text_underline"; tip: I18n.tr("Unterstrichen (Strg+U)", I18n.revision); toggle: true; checked: view.ready && view.doc.underline; onClicked: { view.doc.toggle("underline"); view.back() } }
+                ToolButton { objectName: "textStrike"; iconName: "text_strikethrough"; tip: I18n.tr("Durchgestrichen", I18n.revision); toggle: true; checked: view.ready && view.doc.strike; onClicked: { view.doc.toggle("strike"); view.back() } }
+                ToolButton { objectName: "textSubscript"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "text_subscript"; tip: I18n.tr("Tiefgestellt", I18n.revision); toggle: true; checked: view.ready && view.doc.subscript; onClicked: { view.doc.toggle("subscript"); view.back() } }
+                ToolButton { objectName: "textSuperscript"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "text_superscript"; tip: I18n.tr("Hochgestellt", I18n.revision); toggle: true; checked: view.ready && view.doc.superscript; onClicked: { view.doc.toggle("superscript"); view.back() } }
+                ToolButton {
+                    id: highlightButton
+                    objectName: "textHighlight"
+                    iconName: "highlight"
+                    tip: I18n.tr("Texthervorhebungsfarbe", I18n.revision)
+                    toggle: true
+                    checked: highlightFlyout.opened
+                    onClicked: highlightFlyout.opened ? highlightFlyout.close() : highlightFlyout.open()
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 5
+                        width: 14
+                        height: 3
+                        radius: 1
+                        color: view.lastHighlight
+                    }
+                }
                 ToolButton {
                     id: colorButton
                     objectName: "textColor"
@@ -209,12 +279,94 @@ FocusScope {
                     }
                 }
                 RibbonSeparator {}
+                ToolButton { objectName: "textBullets"; iconName: "text_bullet_list_ltr"; tip: I18n.tr("Aufzählungszeichen (Strg+Umschalt+L)", I18n.revision); toggle: true; checked: view.ready && view.doc.bullets; onClicked: { view.doc.toggle("bullets"); view.back() } }
+                ToolButton { objectName: "textNumbering"; iconName: "text_number_list_ltr"; tip: I18n.tr("Nummerierung", I18n.revision); toggle: true; checked: view.ready && view.doc.numbering; onClicked: { view.doc.toggle("numbering"); view.back() } }
+                ToolButton { objectName: "textOutdent"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "text_indent_decrease_ltr"; tip: I18n.tr("Einzug verkleinern (Strg+Umschalt+M)", I18n.revision); onClicked: { view.doc.toggle("outdent"); view.back() } }
+                ToolButton { objectName: "textIndent"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "text_indent_increase_ltr"; tip: I18n.tr("Einzug vergrößern (Strg+M)", I18n.revision); onClicked: { view.doc.toggle("indent"); view.back() } }
+                ToolButton { objectName: "textMarksStart"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "text_paragraph"; tip: I18n.tr("Alle anzeigen (Absatzmarken und Formatierungszeichen)", I18n.revision); toggle: true; checked: view.ready && view.doc.marks; onClicked: { view.doc.toggle("marks"); view.back() } }
+                RibbonSeparator {}
                 ToolButton { objectName: "textAlignLeft"; iconName: "text_align_left"; tip: I18n.tr("Linksbündig (Strg+L)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "left"; onClicked: { view.doc.setAlign("left"); view.back() } }
                 ToolButton { objectName: "textAlignCenter"; iconName: "text_align_center"; tip: I18n.tr("Zentriert (Strg+E)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "center"; onClicked: { view.doc.setAlign("center"); view.back() } }
-                ToolButton { objectName: "textBullets"; iconName: "text_bullet_list_ltr"; tip: I18n.tr("Aufzählung", I18n.revision); toggle: true; checked: view.ready && view.doc.bullets; onClicked: { view.doc.toggle("bullets"); view.back() } }
+                ToolButton { objectName: "textAlignRight"; iconName: "text_align_right"; tip: I18n.tr("Rechtsbündig (Strg+R)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "right"; onClicked: { view.doc.setAlign("right"); view.back() } }
+                ToolButton { objectName: "textAlignJustify"; iconName: "text_align_justify"; tip: I18n.tr("Blocksatz (Strg+J)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "justify"; onClicked: { view.doc.setAlign("justify"); view.back() } }
+                ToolButton { id: spacingButton; objectName: "textSpacing"; iconName: "text_line_spacing"; tip: I18n.tr("Zeilen- und Absatzabstand", I18n.revision); onClicked: spacingMenu.popup(spacingButton, 0, spacingButton.height + 4) }
                 RibbonSeparator {}
+                // Formatvorlagen: bei genug Platz als Leiste wie in Word, sonst als Liste
+                Rectangle {
+                    id: gallery
+                    objectName: "textStyleGallery"
+                    readonly property int minLevel: 3
+                    // Wie in Word: bei weniger Platz zeigt die Leiste weniger Vorlagen (mindestens zwei), der Rest über ⌄
+                    readonly property real minWidth: galleryWidth(2)
+                    function galleryWidth(count) {
+                        var total = galleryMore.implicitWidth + 8
+                        for (var i = 0; i < count && i < galleryItems.count; i++)
+                            total += galleryItems.itemAt(i) ? galleryItems.itemAt(i).implicitWidth + 2 : 0
+                        return total
+                    }
+                    readonly property int fitCount: {
+                        var count = 0
+                        while (count < galleryItems.count && galleryWidth(count + 1) <= width + 0.5)
+                            count++
+                        return Math.max(2, count)
+                    }
+                    visible: view.startLevel >= minLevel
+                    implicitWidth: galleryWidth(galleryItems.count)
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: minWidth
+                    Layout.preferredWidth: minWidth  // die Leiste misst sich mit der kleinsten Galerie (kein Zusammenschieben)
+                    Layout.maximumWidth: implicitWidth
+                    Layout.horizontalStretchFactor: 100
+                    implicitHeight: 38
+                    radius: Metrics.radiusControl + 4
+                    color: Theme.control
+                    border.color: Theme.controlStroke
+                    clip: true
+                    RowLayout {
+                        id: galleryRow
+                        anchors.left: parent.left
+                        anchors.leftMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        Repeater {
+                            id: galleryItems
+                            model: view.galleryStyles
+                            PButton {
+                                required property string modelData
+                                required property int index
+                                kind: "subtle"
+                                compact: false
+                                visible: index < gallery.fitCount
+                                implicitHeight: 30
+                                leftPadding: 10
+                                rightPadding: 10
+                                text: I18n.tr(modelData, I18n.revision)
+                                // Vorschau wie in Word: Überschriften blau, Zitat kursiv
+                                font: Qt.font({ family: Typography.family, pixelSize: index === 1 ? 15 : (index === 2 ? 13 : 14), italic: index === 3 })
+                                labelColor: index === 1 || index === 2 ? (Theme.dark ? "#7FA6E8" : "#2F5496") : (index === 3 ? Theme.textSecondary : "transparent")
+                                toggle: true
+                                checked: view.ready && view.doc.styleName === modelData
+                                enabled: view.ready
+                                onClicked: { view.doc.applyStyle(modelData); view.back() }
+                            }
+                        }
+                    }
+                    PIconButton {
+                        id: galleryMore
+                        anchors.right: parent.right
+                        anchors.rightMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        implicitWidth: 24
+                        iconName: "chevron_down"
+                        tip: I18n.tr("Alle Formatvorlagen", I18n.revision)
+                        enabled: view.ready
+                        onClicked: view.doc.showPanel("styles")
+                    }
+                }
                 PComboBox {
                     objectName: "textStyle"
+                    readonly property int maxLevel: 2
+                    visible: view.startLevel <= maxLevel
                     preferredWidth: 140
                     label: I18n.tr("Formatvorlage", I18n.revision)
                     enabled: view.ready
@@ -226,7 +378,7 @@ FocusScope {
                     onActivated: (index) => { view.doc.applyStyle(model[index]); view.back() }
                 }
                 Item { Layout.fillWidth: true }
-                PIconButton { objectName: "textSearch"; iconName: "search"; tip: I18n.tr("Suchen (Strg+F)", I18n.revision); enabled: view.ready; onClicked: findBar.show() }
+                PIconButton { objectName: "textSearch"; iconName: "search"; tip: I18n.tr("Suchen (Strg+F) und Ersetzen (Strg+H)", I18n.revision); enabled: view.ready; onClicked: findBar.show() }
                 PIconButton {
                     objectName: "textSidebarToggle"
                     iconName: "panel_right"
@@ -369,16 +521,24 @@ FocusScope {
         }
 
         // Seiten und Formatvorlagen --------------------------------------------------------------------------------
+        // 3D-Design (Entwurf 7): die Arbeitsfläche ist eine Mulde mit runden Ecken, die Seitenleiste eine schwebende Karte
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+            Layout.leftMargin: view.reading ? 0 : 14
+            Layout.bottomMargin: view.reading ? 0 : 6
+            spacing: 12
 
             Item {
                 id: pageArea
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
+                Rectangle {
+                    anchors.fill: parent
+                    radius: view.reading ? 0 : Metrics.radiusFloat
+                    color: Theme.viewer
+                }
 
                 TextCanvas {
                     id: canvas
@@ -387,10 +547,11 @@ FocusScope {
                     controller: view.doc
                     pixelRatio: Screen.devicePixelRatio
                     focus: true
-                    backgroundColor: Theme.viewer  // derselbe Grund wie bei PDFs
+                    backgroundColor: view.reading ? Theme.viewer : "transparent"  // Grund: die Mulde dahinter (wie bei PDFs)
+                    glowColor: Theme.neon ? Theme.glowColor(Theme.accent, 0.9) : "transparent"
                     paperColor: "#FFFFFF"
-                    caretColor: "#000000"
-                    selectionColor: Theme.dark ? "#5A4CA0E0" : "#4D0078D4"
+                    caretColor: Theme.neon ? Theme.accent : "#000000"
+                    selectionColor: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35) : (Theme.dark ? "#5A4CA0E0" : "#4D0078D4")
                     accentColor: Theme.dark ? "#4CA0E0" : "#0F6CBD"
                     readOnly: view.reading
                     tintColor: view.eyeCare ? "#D7EDD1" : "transparent"  // Augenschutz: Weiß wird zu sanftem Grün
@@ -528,16 +689,16 @@ FocusScope {
                     indeterminate: true
                     visible: view.doc !== null && (!view.doc.ready || view.doc.saving)
                 }
+                PWell { visible: !view.reading; radius: Metrics.radiusFloat }
             }
 
             // Formatvorlagen rechts neben der Seite, der Streifen mit den Symbolen am Fensterrand (wie bei PDFs) ---------
-            Rectangle {
+            PGloss {
                 objectName: "textSidebar"
+                slideIn: true
                 Layout.fillHeight: true
                 Layout.preferredWidth: Metrics.readerLeftPanelWidth
                 visible: view.doc !== null && view.doc.sidebar && !view.reading
-                color: Theme.layer
-                Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
                 // Kopf wie bei den Seitenleisten der PDFs (Titel, Schließen, Trennlinie)
                 PanelHeader {
                     id: sidebarHeader
@@ -567,17 +728,32 @@ FocusScope {
                             readonly property bool current: view.doc !== null && view.doc.styleName === modelData
                             objectName: "textSidebarStyle_" + index
                             Layout.fillWidth: true
-                            implicitHeight: 36
                             enabled: view.ready
                             hoverEnabled: true
                             Accessible.role: Accessible.Button
                             Accessible.name: I18n.tr(modelData, I18n.revision)
                             onClicked: { view.doc.applyStyle(modelData); view.back() }
+                            implicitHeight: styleItem.index === 0 ? 54 : 52
                             background: Rectangle {
-                                radius: Metrics.radiusControl
-                                color: styleItem.hovered ? Theme.controlHover : Theme.control
+                                radius: Metrics.radiusControl + 2
+                                color: styleItem.current ? Theme.pressedFill : (styleItem.hovered ? Theme.controlHover : Theme.control)
                                 border.width: styleItem.current ? 2 : 1
-                                border.color: styleItem.current ? view.kindColor : Theme.controlStroke
+                                border.color: styleItem.current ? (Theme.neon ? Theme.accent : view.kindColor) : Theme.controlStroke
+                                Behavior on color { enabled: Motion.enabled; ColorAnimation { duration: Motion.fast } }
+                                // Neon: die gewählte Vorlage leuchtet
+                                Repeater {
+                                    model: styleItem.current && Theme.glow > 0 ? 4 : 0
+                                    Rectangle {
+                                        required property int index
+                                        x: -(index + 1); y: -(index + 1)
+                                        width: parent.width + 2 * (index + 1); height: parent.height + 2 * (index + 1)
+                                        radius: parent.radius + index + 1
+                                        color: "transparent"
+                                        border.width: 1
+                                        border.color: Theme.accent
+                                        opacity: 0.25 * Theme.glow * (1 - index / 4)
+                                    }
+                                }
                             }
                             contentItem: Text {
                                 leftPadding: 10
@@ -586,10 +762,11 @@ FocusScope {
                                 elide: Text.ElideRight
                                 text: I18n.tr(styleItem.modelData, I18n.revision)
                                 font.family: Typography.family
-                                font.pixelSize: styleItem.index === 0 ? 17 : 14
-                                font.weight: styleItem.index <= 1 ? Font.DemiBold : Font.Normal
+                                // Vorschau wie in Word: Überschriften blau und leicht, Zitat kursiv
+                                font.pixelSize: styleItem.index === 0 ? 20 : (styleItem.index === 1 ? 16 : 15)
+                                font.weight: Font.Normal
                                 font.italic: styleItem.index === 3
-                                color: styleItem.index === 3 ? Theme.textSecondary : Theme.textPrimary
+                                color: styleItem.index <= 1 ? (Theme.dark ? "#7FA6E8" : "#2F5496") : (styleItem.index === 3 ? Theme.textSecondary : Theme.textPrimary)
                                 textFormat: Text.PlainText
                             }
                         }
@@ -702,6 +879,63 @@ FocusScope {
             PButton { text: I18n.tr("Automatisch", I18n.revision); kind: "subtle"; onClicked: { view.doc.setFontColor(""); colorFlyout.close() } }
         }
     }
+    T.Popup {
+        id: highlightFlyout
+        objectName: "textHighlightFlyout"
+        parent: highlightButton
+        y: highlightButton.height + 4
+        padding: 12
+        width: 232
+        implicitHeight: contentHeight + topPadding + bottomPadding
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent
+        onClosed: view.back()
+        background: Rectangle {
+            color: Theme.flyout
+            border.color: Theme.flyoutStroke
+            radius: Metrics.radiusOverlay
+            PShadow { radius: Metrics.radiusOverlay }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            PText { text: I18n.tr("Texthervorhebungsfarbe", I18n.revision); textStyle: "caption"; tone: "secondary" }
+            Flow {
+                Layout.fillWidth: true
+                spacing: 2
+                Repeater {
+                    model: view.highlights
+                    PSwatch {
+                        required property var modelData
+                        size: 32
+                        swatchColor: modelData
+                        tip: I18n.tr(modelData, I18n.revision)
+                        selected: view.doc !== null && view.doc.highlight.toUpperCase() === modelData
+                        onClicked: { view.lastHighlight = modelData; view.doc.setHighlight(modelData); highlightFlyout.close() }
+                    }
+                }
+            }
+            PButton { text: I18n.tr("Keine Farbe", I18n.revision); kind: "subtle"; onClicked: { view.doc.setHighlight(""); highlightFlyout.close() } }
+        }
+    }
+    PMenu {
+        id: caseMenu
+        objectName: "textCaseMenu"
+        PMenuItem { text: I18n.tr("Satzanfang groß", I18n.revision); onTriggered: { view.doc.toggle("sentenceCase"); view.back() } }
+        PMenuItem { text: I18n.tr("kleinbuchstaben", I18n.revision); onTriggered: { view.doc.toggle("lowerCase"); view.back() } }
+        PMenuItem { text: I18n.tr("GROSSBUCHSTABEN", I18n.revision); onTriggered: { view.doc.toggle("upperCase"); view.back() } }
+        PMenuItem { text: I18n.tr("Ersten Buchstaben Jedes Wortes Groß", I18n.revision); onTriggered: { view.doc.toggle("titleCase"); view.back() } }
+        PMenuItem { text: I18n.tr("gROSS-/kLEINSCHREIBUNG UMKEHREN", I18n.revision); onTriggered: { view.doc.toggle("toggleCase"); view.back() } }
+    }
+    PMenu {
+        id: spacingMenu
+        objectName: "textSpacingMenu"
+        PMenuItem { text: I18n.tr("1,0", I18n.revision); onTriggered: { view.doc.setLineSpacing(100); view.back() } }
+        PMenuItem { text: I18n.tr("1,08", I18n.revision); onTriggered: { view.doc.setLineSpacing(108); view.back() } }
+        PMenuItem { text: I18n.tr("1,15", I18n.revision); onTriggered: { view.doc.setLineSpacing(115); view.back() } }
+        PMenuItem { text: I18n.tr("1,5", I18n.revision); onTriggered: { view.doc.setLineSpacing(150); view.back() } }
+        PMenuItem { text: I18n.tr("2,0", I18n.revision); onTriggered: { view.doc.setLineSpacing(200); view.back() } }
+        PMenuItem { text: I18n.tr("Abstand nach Absatz hinzufügen", I18n.revision); onTriggered: { view.doc.setParagraphSpace(true); view.back() } }
+        PMenuItem { text: I18n.tr("Abstand nach Absatz entfernen", I18n.revision); onTriggered: { view.doc.setParagraphSpace(false); view.back() } }
+    }
     PMenu {
         id: tableMenu
         objectName: "textTableMenu"
@@ -766,8 +1000,8 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.print"] || []; enabled: view.active; onActivated: view.doc.printText() }
     Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: view.active; onActivated: view.doc.zoomStep(1) }
     Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active; onActivated: view.doc.zoomStep(-1) }
-    Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
-    Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
+    Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: App.switchTab(1) }
+    Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: App.switchTab(-1) }
     Shortcut { sequences: ["Escape"]; enabled: view.active && findBar.visible; onActivated: findBar.hide() }
     Shortcut { sequences: ["Escape"]; enabled: view.active && view.reading && !findBar.visible; onActivated: view.stopReading() }
 }

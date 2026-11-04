@@ -32,6 +32,44 @@ FocusScope {
     // war schon fertig geladen, bevor sie hier ankam (sonst blieb sie bei 100 %)
     onDocChanged: if (doc) Qt.callLater(function() { view.fitSlide(); canvas.forceActiveFocus() })
     function back() { canvas.forceActiveFocus() }
+    // Reiter Start: 2 alles, 1 ohne Einzug/Formatierung löschen, 0 nur das Wichtigste – die höchste Stufe, die passt
+    property int startLevel: 2
+    onStartLevelChanged: startBar.refit()
+    function updateStartLevel() {
+        // zuerst mit Beschriftungen; passt nicht einmal Stufe 0, die höchste Stufe, die nur mit Symbolen passt
+        for (var level = 2; level >= 0; level--)
+            if (startWidth(level, false) <= startBar.width) { startLevel = level; return }
+        level = 2
+        while (level > 0 && startWidth(level, true) > startBar.width)
+            level--
+        startLevel = level
+    }
+    // Breite eines Knopfs mit Beschriftung – auch während die Leiste zusammengeschoben ist (dann zeigt er nur das Symbol)
+    FontMetrics { id: bodyMetrics; font: Typography.body }
+    FontMetrics { id: captionMetrics; font: Typography.caption }
+    function labelledWidth(item) {
+        if (!startBar.squeezed) return item.implicitWidth
+        if (item.bigButton === true) return Math.max(52, Math.ceil(captionMetrics.advanceWidth(item.text)) + 16)
+        return 8 + Metrics.iconSize + 8 + Math.ceil(bodyMetrics.advanceWidth(item.text)) + 10
+    }
+    function startWidth(level, iconsOnly) {
+        var total = 0, count = 0
+        for (var i = 0; i < startBar.children.length; i++) {
+            var item = startBar.children[i]
+            var from = item.minLevel === undefined ? 0 : item.minLevel
+            if (item.ribbonWidth !== undefined) {
+                total += item.ribbonWidth
+                count++
+                continue
+            }
+            if (level < from || item.implicitWidth <= 0)
+                continue
+            var labelled = item.iconName !== undefined && item.iconName !== "" && item.text !== undefined && item.text !== ""
+            total += !labelled ? item.implicitWidth : (iconsOnly ? Math.min(item.implicitWidth, 34) : view.labelledWidth(item))
+            count++
+        }
+        return total + Math.max(0, count - 1) * startBar.spacing
+    }
     // Ein anderer Reiter schließt die Flyouts des alten (sie hängen an dessen Knöpfen und blieben sonst stehen)
     onRibbonChanged: { colorFlyout.close(); designFlyout.close(); backgroundFlyout.close() }
 
@@ -41,6 +79,7 @@ FocusScope {
     Connections {
         target: view.doc
         function onFindRequested() { findBar.show() }
+        function onReplaceRequested() { findBar.replacing = true; findBar.show() }
         function onFitRequested() { view.fitSlide() }
         function onReadyChanged() { view.fitSlide() }
         function onDocWidthChanged() { view.fitSlide() }
@@ -49,6 +88,7 @@ FocusScope {
 
     component ToolButton: PButton {
         kind: "subtle"
+        implicitHeight: 30
         leftPadding: text === "" ? 0 : 8
         rightPadding: text === "" ? 0 : 10
         compact: parent !== null && parent.squeezed === true
@@ -71,7 +111,7 @@ FocusScope {
             objectName: "slidesRibbonTabs"
             Layout.fillWidth: true
             implicitHeight: 38
-            color: Theme.layer
+            color: "transparent"  // 3D-Design: Reiter liegen auf dem Hintergrund
             RibbonBar {
                 anchors.fill: parent
                 anchors.leftMargin: 12
@@ -147,34 +187,52 @@ FocusScope {
         }
 
         // Leiste des Reiters -------------------------------------------------------------------------------------
-        Rectangle {
+        // Befehlsleiste: schwebende Karte mit Glanz und Schatten (seit 5.0 Beta 10, Entwurf 7)
+        PGloss {
             objectName: "slidesToolbar"
             Layout.fillWidth: true
-            implicitHeight: 46
-            color: Theme.layer
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.divider }
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            Layout.topMargin: 4
+            Layout.bottomMargin: 14
+            implicitHeight: Metrics.commandBarHeight
 
-            // Start (wie im Entwurf): Einfügen, Ausschneiden, Kopieren | Neue Folie, Layout | Schrift, Größe |
-            // F, K, U, Farbe | Ausrichtung, Aufzählung | Formen, Bild … Suchen, Folienleiste
+            // Start wie in PowerPoint (seit 5.0 Beta 10, Entwurf »4-praesentation-modern-hell«): Zwischenablage | Folien |
+            // Schrift | Zeichen | Absatz (Aufzählung, Nummerierung, Einzug, Ausrichtung, Zeilenabstand) | Zeichnen … Suchen.
+            // Bei wenig Platz weichen zuerst seltene Knöpfe (startLevel), dann die Beschriftungen.
             Bar {
+                id: startBar
                 objectName: "slidesRibbonBar_start"
                 visible: view.ribbon === "start"
-                ToolButton {
+                onWidthChanged: Qt.callLater(view.updateStartLevel)
+                onVisibleChanged: if (visible) Qt.callLater(view.updateStartLevel)
+                Component.onCompleted: Qt.callLater(view.updateStartLevel)
+                RibbonBigButton {
                     objectName: "slidesPaste"
                     iconName: "clipboard_paste"
                     text: I18n.tr("Einfügen", I18n.revision)
                     tip: I18n.tr("Einfügen (Strg+V)", I18n.revision)
+                    enabled: view.ready
                     onClicked: { view.doc.paste(); view.back() }
                 }
                 ToolButton { objectName: "slidesCut"; iconName: "cut"; tip: I18n.tr("Ausschneiden (Strg+X)", I18n.revision); enabled: view.ready && view.doc.canCopy; onClicked: { view.doc.cut(); view.back() } }
                 ToolButton { objectName: "slidesCopy"; iconName: "copy"; tip: I18n.tr("Kopieren (Strg+C)", I18n.revision); enabled: view.ready && view.doc.canCopy; onClicked: { view.doc.copy(); view.back() } }
+                ToolButton { objectName: "slidesPaintbrush"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "paint_brush"; tip: I18n.tr("Format übertragen", I18n.revision); onClicked: { view.doc.toggle("paintbrush"); view.back() } }
                 RibbonSeparator {}
-                ToolButton { objectName: "slidesNew"; iconName: "document_add"; text: I18n.tr("Neue Folie", I18n.revision); tip: I18n.tr("Folie hinter der gezeigten einfügen", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.newSlide(); view.back() } }
-                ToolButton { id: layoutButton; objectName: "slidesLayout"; iconName: "layout_column_two"; text: I18n.tr("Layout", I18n.revision); enabled: view.ready && !view.master; onClicked: layoutMenu.popup(layoutButton, 0, layoutButton.height + 4) }
+                RibbonBigButton {
+                    objectName: "slidesNew"
+                    iconName: "slide_add"
+                    text: I18n.tr("Neue Folie", I18n.revision)
+                    tip: I18n.tr("Folie hinter der gezeigten einfügen (Strg+M)", I18n.revision)
+                    enabled: view.ready && !view.master
+                    onClicked: { view.doc.newSlide(); view.back() }
+                }
+                ToolButton { id: layoutButton; objectName: "slidesLayout"; iconName: "layout_column_two"; tip: I18n.tr("Layout der Folie", I18n.revision); enabled: view.ready && !view.master; onClicked: layoutMenu.popup(layoutButton, 0, layoutButton.height + 4) }
+                ToolButton { objectName: "slidesDuplicate"; iconName: "slide_multiple"; tip: I18n.tr("Folie duplizieren", I18n.revision); enabled: view.ready && !view.master; onClicked: { view.doc.duplicateSlide(); view.back() } }
                 RibbonSeparator {}
                 PComboBox {
                     objectName: "slidesFont"
-                    preferredWidth: 136
+                    preferredWidth: 124
                     label: I18n.tr("Schriftart", I18n.revision)
                     enabled: view.ready
                     readonly property string value: view.doc && view.doc.fontName ? view.doc.fontName : ""
@@ -185,7 +243,7 @@ FocusScope {
                 }
                 PComboBox {
                     objectName: "slidesSize"
-                    preferredWidth: 64
+                    preferredWidth: 60
                     label: I18n.tr("Schriftgröße", I18n.revision)
                     enabled: view.ready
                     readonly property string value: view.doc && view.doc.fontSize ? view.doc.fontSize.replace(".", ",") : ""
@@ -194,9 +252,14 @@ FocusScope {
                     displayText: I18n.tr(value, I18n.revision)
                     onActivated: (index) => { view.doc.setFontSize(model[index]); view.back() }
                 }
+                ToolButton { objectName: "slidesGrow"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "font_increase"; tip: I18n.tr("Schrift vergrößern (Strg+>)", I18n.revision); onClicked: { view.doc.toggle("grow"); view.back() } }
+                ToolButton { objectName: "slidesShrink"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "font_decrease"; tip: I18n.tr("Schrift verkleinern (Strg+<)", I18n.revision); onClicked: { view.doc.toggle("shrink"); view.back() } }
+                ToolButton { objectName: "slidesClear"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "text_clear_formatting"; tip: I18n.tr("Formatierung löschen (Strg+Leertaste)", I18n.revision); onClicked: { view.doc.toggle("clear"); view.back() } }
+                RibbonSeparator {}
                 ToolButton { objectName: "slidesBold"; iconName: "text_bold"; tip: I18n.tr("Fett (Strg+B)", I18n.revision); toggle: true; checked: view.ready && view.doc.bold; onClicked: { view.doc.toggle("bold"); view.back() } }
                 ToolButton { objectName: "slidesItalic"; iconName: "text_italic"; tip: I18n.tr("Kursiv (Strg+I)", I18n.revision); toggle: true; checked: view.ready && view.doc.italic; onClicked: { view.doc.toggle("italic"); view.back() } }
                 ToolButton { objectName: "slidesUnderline"; iconName: "text_underline"; tip: I18n.tr("Unterstrichen (Strg+U)", I18n.revision); toggle: true; checked: view.ready && view.doc.underline; onClicked: { view.doc.toggle("underline"); view.back() } }
+                ToolButton { objectName: "slidesStrike"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "text_strikethrough"; tip: I18n.tr("Durchgestrichen", I18n.revision); toggle: true; checked: view.ready && view.doc.strike; onClicked: { view.doc.toggle("strike"); view.back() } }
                 ToolButton {
                     id: colorButton
                     objectName: "slidesColor"
@@ -216,12 +279,19 @@ FocusScope {
                     }
                 }
                 RibbonSeparator {}
+                ToolButton { objectName: "slidesBullets"; iconName: "text_bullet_list_ltr"; tip: I18n.tr("Aufzählungszeichen", I18n.revision); toggle: true; checked: view.ready && view.doc.bullets; onClicked: { view.doc.toggle("bullets"); view.back() } }
+                ToolButton { objectName: "slidesNumbering"; iconName: "text_number_list_ltr"; tip: I18n.tr("Nummerierung", I18n.revision); toggle: true; checked: view.ready && view.doc.numbering; onClicked: { view.doc.toggle("numbering"); view.back() } }
+                ToolButton { objectName: "slidesOutdent"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "text_indent_decrease_ltr"; tip: I18n.tr("Listenebene verringern", I18n.revision); onClicked: { view.doc.toggle("outdent"); view.back() } }
+                ToolButton { objectName: "slidesIndent"; readonly property int minLevel: 2; visible: view.startLevel >= minLevel; iconName: "text_indent_increase_ltr"; tip: I18n.tr("Listenebene erhöhen", I18n.revision); onClicked: { view.doc.toggle("indent"); view.back() } }
                 ToolButton { objectName: "slidesAlignLeft"; iconName: "text_align_left"; tip: I18n.tr("Linksbündig (Strg+L)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "left"; onClicked: { view.doc.setAlign("left"); view.back() } }
                 ToolButton { objectName: "slidesAlignCenter"; iconName: "text_align_center"; tip: I18n.tr("Zentriert (Strg+E)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "center"; onClicked: { view.doc.setAlign("center"); view.back() } }
-                ToolButton { objectName: "slidesBullets"; iconName: "text_bullet_list_ltr"; tip: I18n.tr("Aufzählung", I18n.revision); toggle: true; checked: view.ready && view.doc.bullets; onClicked: { view.doc.toggle("bullets"); view.back() } }
+                ToolButton { objectName: "slidesAlignRight"; iconName: "text_align_right"; tip: I18n.tr("Rechtsbündig (Strg+R)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "right"; onClicked: { view.doc.setAlign("right"); view.back() } }
+                ToolButton { objectName: "slidesAlignJustify"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "text_align_justify"; tip: I18n.tr("Blocksatz (Strg+J)", I18n.revision); toggle: true; checked: view.ready && view.doc.align === "justify"; onClicked: { view.doc.setAlign("justify"); view.back() } }
+                ToolButton { id: spacingButton; objectName: "slidesSpacing"; iconName: "text_line_spacing"; tip: I18n.tr("Zeilenabstand", I18n.revision); onClicked: spacingMenu.popup(spacingButton, 0, spacingButton.height + 4) }
                 RibbonSeparator {}
                 ToolButton { id: shapeButton; objectName: "slidesShapes"; iconName: "shapes"; text: I18n.tr("Formen", I18n.revision); tip: I18n.tr("Form wählen und auf der Folie aufziehen", I18n.revision); onClicked: shapeMenu.popup(shapeButton, 0, shapeButton.height + 4) }
-                ToolButton { objectName: "slidesImage"; iconName: "image_add"; tip: I18n.tr("Bild aus einer Datei einfügen", I18n.revision); onClicked: { view.doc.insertImage(); view.back() } }
+                ToolButton { id: arrangeButton; objectName: "slidesArrange"; iconName: "layer"; tip: I18n.tr("Anordnen: Objekt nach vorne oder hinten", I18n.revision); onClicked: arrangeMenu.popup(arrangeButton, 0, arrangeButton.height + 4) }
+                ToolButton { objectName: "slidesImage"; readonly property int minLevel: 1; visible: view.startLevel >= minLevel; iconName: "image_add"; tip: I18n.tr("Bild aus einer Datei einfügen", I18n.revision); onClicked: { view.doc.insertImage(); view.back() } }
                 Item { Layout.fillWidth: true }
                 PIconButton { objectName: "slidesSearch"; iconName: "search"; tip: I18n.tr("Suchen (Strg+F)", I18n.revision); enabled: view.ready; onClicked: findBar.show() }
                 PIconButton {
@@ -439,16 +509,21 @@ FocusScope {
         }
 
         // Folie, Notizen und die Folienleiste ----------------------------------------------------------------------
+        // 3D-Design (Entwurf 4): Folie und Notizen in einer Mulde mit runden Ecken, die Folienleiste als schwebende Karte
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+            Layout.leftMargin: 14
+            Layout.bottomMargin: 6
+            spacing: 12
 
             Item {
                 id: stage
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
+                Rectangle { anchors.fill: parent; radius: Metrics.radiusFloat; color: Theme.viewer }
+                PWell { z: 2; radius: Metrics.radiusFloat }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -458,22 +533,20 @@ FocusScope {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
 
-                        // Grund hinter der Folie; die Folie selbst bekommt oben und unten etwas Luft (wie im Entwurf)
-                        Rectangle { anchors.fill: parent; color: Theme.viewer }
+                        // Die Folie bekommt oben und unten etwas Luft (wie im Entwurf); der Grund ist die Mulde dahinter
 
                         TextCanvas {
                             id: canvas
                             objectName: "slidesCanvas"
-                            anchors.fill: parent
-                            anchors.topMargin: 16
-                            anchors.bottomMargin: 10
+                            anchors.fill: parent  // Luft um die Folie gibt fitSlide (Platz für den Schatten)
                             controller: view.doc
                             pixelRatio: Screen.devicePixelRatio
                             focus: true
-                            backgroundColor: Theme.viewer
+                            backgroundColor: "transparent"
+                            glowColor: Theme.neon ? Theme.glowColor(Theme.accent, 0.9) : "transparent"
                             paperColor: "#FFFFFF"
-                            caretColor: "#000000"
-                            selectionColor: Theme.dark ? "#5A4CA0E0" : "#4D0078D4"
+                            caretColor: Theme.neon ? Theme.accent : "#000000"
+                            selectionColor: Theme.neon ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35) : (Theme.dark ? "#5A4CA0E0" : "#4D0078D4")
                             accentColor: Theme.dark ? "#4CA0E0" : "#0F6CBD"
                             onContextMenuRequested: (x, y) => slideMenu.popup(canvas, x, y)
                             onWidthChanged: view.fitSlide()
@@ -619,8 +692,8 @@ FocusScope {
                             anchors.centerIn: parent
                             width: Math.min(parent.width - 32, Math.max(320, canvas ? canvas.contentWidth : 0))
                             height: parent.height - 14
-                            radius: Metrics.radiusControl
-                            color: Theme.layer
+                            radius: Metrics.radiusCard
+                            color: Theme.surface
                             border.color: Theme.divider
                             PText {
                                 id: notesTitle
@@ -641,8 +714,9 @@ FocusScope {
                                 anchors.topMargin: 2
                                 controller: view.doc ? view.doc.notes : null
                                 pixelRatio: Screen.devicePixelRatio
-                                backgroundColor: Theme.layer
-                                paperColor: Theme.layer
+                                backgroundColor: Theme.surface
+                                paperColor: Theme.surface
+                                pageShadow: false
                                 caretColor: Theme.textPrimary
                                 selectionColor: Theme.dark ? "#5A4CA0E0" : "#4D0078D4"
                                 accentColor: view.kindColor
@@ -655,13 +729,12 @@ FocusScope {
             }
 
             // Folienleiste rechts, der Streifen mit den Symbolen am Fensterrand (wie bei Texten und PDFs) ---------
-            Rectangle {
+            PGloss {
                 objectName: "slidesPanel"
+                slideIn: true
                 Layout.fillHeight: true
                 Layout.preferredWidth: Metrics.readerLeftPanelWidth
                 visible: view.doc !== null && view.doc.panel !== ""
-                color: Theme.layer
-                Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.divider; z: 1 }
                 PanelHeader {
                     id: panelHeader
                     anchors.left: parent.left
@@ -1121,6 +1194,22 @@ FocusScope {
         PMenuItem { objectName: "slidesExportImages"; text: I18n.tr("Folien als Bilder …", I18n.revision); iconName: "image_multiple"; onTriggered: view.doc.exportImages() }
         PMenuItem { objectName: "slidesExportVideo"; text: I18n.tr("Als Video …", I18n.revision); iconName: "filmstrip_play"; onTriggered: view.doc.exportVideo() }
     }
+    // Zeilenabstand und Anordnen (Start wie in PowerPoint, seit 5.0 Beta 10)
+    PMenu {
+        id: spacingMenu
+        objectName: "slidesSpacingMenu"
+        PMenuItem { text: I18n.tr("1,0", I18n.revision); onTriggered: { view.doc.toggle("spacing1"); view.back() } }
+        PMenuItem { text: I18n.tr("1,5", I18n.revision); onTriggered: { view.doc.toggle("spacing15"); view.back() } }
+        PMenuItem { text: I18n.tr("2,0", I18n.revision); onTriggered: { view.doc.toggle("spacing2"); view.back() } }
+    }
+    PMenu {
+        id: arrangeMenu
+        objectName: "slidesArrangeMenu"
+        PMenuItem { text: I18n.tr("In den Vordergrund", I18n.revision); iconName: "position_to_front"; onTriggered: { view.doc.toggle("front"); view.back() } }
+        PMenuItem { text: I18n.tr("Eine Ebene nach vorne", I18n.revision); iconName: "position_to_front"; onTriggered: { view.doc.toggle("forward"); view.back() } }
+        PMenuItem { text: I18n.tr("Eine Ebene nach hinten", I18n.revision); iconName: "position_to_back"; onTriggered: { view.doc.toggle("backward"); view.back() } }
+        PMenuItem { text: I18n.tr("In den Hintergrund", I18n.revision); iconName: "position_to_back"; onTriggered: { view.doc.toggle("back"); view.back() } }
+    }
     PMenu {
         id: layoutMenu
         objectName: "slidesLayoutMenu"
@@ -1188,8 +1277,8 @@ FocusScope {
     Shortcut { sequences: Shortcuts.keys["reader.print"] || []; enabled: view.active; onActivated: view.doc.printText() }
     Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: view.active; onActivated: view.doc.zoomStep(1) }
     Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: view.active; onActivated: view.doc.zoomStep(-1) }
-    Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
-    Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
+    Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: App.switchTab(1) }
+    Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: view.active && Reader.tabs.count > 1; onActivated: App.switchTab(-1) }
     Shortcut { sequences: Shortcuts.keys["reader.present"] || []; enabled: view.active && !view.doc.presenting && !view.master; onActivated: view.doc.present() }
     Shortcut { sequences: ["Escape"]; enabled: view.active && findBar.visible; onActivated: findBar.hide() }
 }

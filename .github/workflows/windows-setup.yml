@@ -76,8 +76,8 @@ jobs:
             dateien: objects objects_v31 edit_v31 reader_motion ocr convert
           - gruppe: PDF Reader – Schützen und Weitergeben, Links, Lesezeichen, Tabs, Startseite, KI-Assistent, Vergleichen, digitale Signatur, Tabellen, Texte, Präsentationen
             dateien: protect comfort assistant assistant_v40 assistant_b8 reader_v40 signing sheet sheet_data text text_review slides
-          - gruppe: Präsentationen Profi, Office-Vorlagen, Umwandeln (viele Dateien), Backup-Center
-            dateien: slides_pro umwandeln backup_center
+          - gruppe: Präsentationen Profi, Office-Vorlagen, Umwandeln (viele Dateien), Backup-Center, Office-Tastenkürzel
+            dateien: slides_pro umwandeln backup_center office_keys
     env:
       DATEIEN: ${{ matrix.dateien }}
     steps:

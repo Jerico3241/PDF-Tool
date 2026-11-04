@@ -8,13 +8,23 @@ Zoom). Das Raster lädt nichts selbst – es meldet den sichtbaren Bereich an de
 
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QObject, QPointF, QRectF, Qt, QTimer, Signal, Slot
+import datetime
+
+from PySide6.QtCore import Property, QEasingCurve, QObject, QPointF, QRectF, Qt, QTimer, QVariantAnimation, Signal, Slot
 from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtQuick import QQuickItem, QQuickPaintedItem
 
 from tools.sheet.engine import cell_name, column_name
 
 from .model import MM100_TO_PX
+
+# Strg+Umschalt+Ziffer wie in Excel: Qt meldet je nach Tastatur die Ziffer oder das Zeichen darüber (deutsch: ! § $ %)
+_EXCEL_NUMBER_KEYS = {
+    Qt.Key.Key_1: "number", Qt.Key.Key_Exclam: "number",
+    Qt.Key.Key_3: "date", Qt.Key.Key_section: "date", Qt.Key.Key_NumberSign: "date",
+    Qt.Key.Key_4: "currency", Qt.Key.Key_Dollar: "currency",
+    Qt.Key.Key_5: "percent", Qt.Key.Key_Percent: "percent",
+}
 
 HEADER_H = 26
 PADDING = 4
@@ -36,6 +46,7 @@ class SheetGrid(QQuickPaintedItem):
     contextMenuRequested = Signal(float, float, str)  # Lage, Bereich: »cell«, »cols«, »rows«
     filterButtonClicked = Signal(int, float, float)  # Spalte, Lage unter dem Knopf
     editRequested = Signal()  # Doppelklick auf eine Zelle
+    glideChanged = Signal()
 
     def __init__(self, parent: QQuickItem | None = None) -> None:
         super().__init__(parent)
@@ -46,7 +57,7 @@ class SheetGrid(QQuickPaintedItem):
         self._view_revision = 0
         self._colors = {
             "header": QColor("#F5F5F5"), "headerText": QColor("#5D5D5D"), "headerLine": QColor("#E0E0E0"),
-            "line": QColor("#E1E1E1"), "paper": QColor("#FFFFFF"), "text": QColor("#1A1A1A"), "accent": QColor("#0F6CBD"),
+            "line": QColor("#E1E1E1"), "paper": QColor("#FFFFFF"), "text": QColor("#1A1A1A"), "accent": QColor("#0F6CBD"), "glow": QColor(0, 0, 0, 0),
             "selectedHeader": QColor("#E1EBF7"), "selectedHeaderText": QColor("#0F548C"),
         }
         self._fonts: dict = {}
@@ -57,6 +68,17 @@ class SheetGrid(QQuickPaintedItem):
         self._autoscroll.setInterval(AUTOSCROLL_MS)
         self._autoscroll.timeout.connect(self._autoscroll_step)
         self._last_mouse = QPointF()
+        # Zellrahmen gleitet weich zur nächsten Zelle (wie in Excel, seit 5.0 Beta 10): Lage beim letzten Malen, Start
+        # der Bewegung und Fortschritt; ``glideDuration`` 0 (Animationen aus) springt
+        self._glide_ms = 0
+        self._last_area: QRectF | None = None
+        self._glide_from: QRectF | None = None
+        self._glide_t = 1.0
+        self._glide = QVariantAnimation(self)
+        self._glide.setStartValue(0.0)
+        self._glide.setEndValue(1.0)
+        self._glide.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._glide.valueChanged.connect(self._glide_step)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
         self.setAcceptHoverEvents(True)
         self.setFlag(QQuickItem.Flag.ItemIsFocusScope, False)
@@ -94,6 +116,7 @@ class SheetGrid(QQuickPaintedItem):
     def _connections(self, controller) -> list:
         return [
             (controller.revisionChanged, self.update),
+            (controller.selectionChanged, self._selection_moved),
             (controller.layoutRevisionChanged, self._layout_changed),
             (controller.zoomChanged, self._zoom_changed),
             (controller.activeSheetChanged, self._sheet_changed),
@@ -178,9 +201,38 @@ class SheetGrid(QQuickPaintedItem):
     paperColor = _color_property("paper", colorsChanged)
     textColor = _color_property("text", colorsChanged)
     accentColor = _color_property("accent", colorsChanged)
+    glowColor = _color_property("glow", colorsChanged)  # Neon: Schein um den Zellrahmen (transparent: keiner)
     selectedHeaderColor = _color_property("selectedHeader", colorsChanged)
     selectedHeaderTextColor = _color_property("selectedHeaderText", colorsChanged)
     del _color_property
+
+    def _get_glide(self) -> int:
+        return self._glide_ms
+
+    def _set_glide(self, value: int) -> None:
+        value = max(0, int(value))
+        if value != self._glide_ms:
+            self._glide_ms = value
+            self.glideChanged.emit()
+
+    glideDuration = Property(int, _get_glide, _set_glide, notify=glideChanged)
+
+    def _selection_moved(self) -> None:
+        if self._glide_ms <= 0 or self._last_area is None or self._drag is not None:
+            self._glide.stop()
+            self._glide_from = None
+            return
+        self._glide_from = QRectF(self._last_area)
+        self._glide.stop()
+        self._glide.setDuration(self._glide_ms)
+        self._glide_t = 0.0
+        self._glide.start()
+
+    def _glide_step(self, value) -> None:
+        self._glide_t = float(value)
+        if self._glide_t >= 1.0:
+            self._glide_from = None
+        self.update()
 
     # Lagen -----------------------------------------------------------------------------------------------------------
     def _layout(self):
@@ -740,6 +792,13 @@ class SheetGrid(QQuickPaintedItem):
         area = QRectF(x0, y0, x1 - x0, y1 - y0)
         accent = self._colors["accent"]
         single = (r0, c0, r1, c1) == (r0, c0, r0, c0) or layout.merge_at.get((r0, c0)) == (r0, c0, r1, c1)
+        whole = (sr0, sr1, sc0, sc1) == (r0, r1, c0, c1)
+        gliding = single and whole and self._glide_from is not None and self._glide_t < 1.0
+        if gliding:  # Zellrahmen unterwegs: zwischen alter und neuer Lage
+            t, a = self._glide_t, self._glide_from
+            area = QRectF(a.left() + (area.left() - a.left()) * t, a.top() + (area.top() - a.top()) * t,
+                          a.width() + (area.width() - a.width()) * t, a.height() + (area.height() - a.height()) * t)
+        self._last_area = QRectF(area) if single and whole else None
         if not single:
             fill = QColor(accent)
             fill.setAlphaF(0.12)
@@ -749,6 +808,17 @@ class SheetGrid(QQuickPaintedItem):
             hole = QPainterPath()
             hole.addRect(active)
             painter.fillPath(path.subtracted(hole), fill)
+        glow = self._colors["glow"]
+        if glow.alpha() > 0:  # Neon: der Zellrahmen leuchtet (Entwurf 9)
+            painter.save()
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            for step in range(1, 5):
+                halo = QColor(glow)
+                halo.setAlphaF(glow.alphaF() * 0.30 * (1 - step / 5))
+                painter.setPen(QPen(halo, 2 + 2 * step))
+                painter.drawRect(area.adjusted(-0.5, -0.5, -0.5, -0.5))
+            painter.restore()
         pen = QPen(accent, 2)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         painter.setPen(pen)
@@ -764,7 +834,7 @@ class SheetGrid(QQuickPaintedItem):
             painter.drawLine(QPointF(left - 1, top), QPointF(right + 1, top))
         if sr1 == r1:
             painter.drawLine(QPointF(left - 1, bottom), QPointF(right + 1, bottom))
-        if sr1 == r1 and sc1 == c1 and r1 < layout.max_rows - 1 and c1 < layout.max_cols - 1:
+        if sr1 == r1 and sc1 == c1 and r1 < layout.max_rows - 1 and c1 < layout.max_cols - 1 and not gliding:
             handle = QRectF(right - FILL_HANDLE / 2 + 0.5, bottom - FILL_HANDLE / 2 + 0.5, FILL_HANDLE, FILL_HANDLE)
             painter.fillRect(handle.adjusted(-1, -1, 1, 1), self._colors["paper"])
             painter.fillRect(handle, accent)
@@ -1103,6 +1173,8 @@ class SheetGrid(QQuickPaintedItem):
                 controller.fillTo(target[0], c0)
             elif target[1] < c0:
                 controller.fillTo(r0, target[1])
+        elif drag["kind"] == "cells" and controller.painting:
+            controller.finishPainting()  # Pinsel: Zielauswahl fertig
         self.update()
         event.accept()
 
@@ -1242,6 +1314,24 @@ class SheetGrid(QQuickPaintedItem):
             controller.undo()
         elif ctrl and not alt and key == Key.Key_Y:
             controller.redo()
+        elif ctrl and shift and not alt and key in _EXCEL_NUMBER_KEYS:
+            controller.numberFormat(_EXCEL_NUMBER_KEYS[key])  # Strg+Umschalt+1/3/4/5: Zahl, Datum, Währung, Prozent
+        elif ctrl and shift and not alt and key in (Key.Key_F, Key.Key_K, Key.Key_U):
+            controller.toggle({Key.Key_F: "bold", Key.Key_K: "italic", Key.Key_U: "underline"}[key])  # wie Excel deutsch
+        elif ctrl and not shift and not alt and key == Key.Key_5:
+            controller.toggle("strike")  # Strg+5: durchgestrichen
+        elif ctrl and not shift and not alt and key in (Key.Key_9, Key.Key_0):
+            controller.hideCells("rows" if key == Key.Key_9 else "cols", True)  # Strg+9 / Strg+0: ausblenden
+        elif ctrl and not alt and key == Key.Key_Period:
+            # Strg+. heutiges Datum, Strg+Umschalt+. Uhrzeit (Excel deutsch) – als Eingabe, Eingabetaste übernimmt
+            now = datetime.datetime.now()
+            controller.typeText(now.strftime("%H:%M") if shift else now.strftime("%d.%m.%Y"))
+        elif ctrl and not alt and key in (Key.Key_Plus, Key.Key_Minus):
+            # Strg++ / Strg+-: Zeilen (bzw. ganz markierte Spalten) einfügen oder löschen – wie Excel
+            layout = self._layout()
+            r0, c0, r1, c1 = controller.selection
+            whole_cols = r1 - r0 >= layout.max_rows - 1 and c1 - c0 < layout.max_cols - 1
+            controller.insertCells("cols" if whole_cols else "rows", key == Key.Key_Minus)
         elif ctrl and not alt and key == Key.Key_B:
             controller.toggle("bold")
         elif ctrl and not alt and key == Key.Key_I:
@@ -1252,8 +1342,6 @@ class SheetGrid(QQuickPaintedItem):
             controller.fill("down")
         elif ctrl and not alt and key == Key.Key_R:
             controller.fill("right")
-        elif ctrl and not alt and key in (Key.Key_Plus, Key.Key_Minus) and shift is False and False:
-            pass
         else:
             text = event.text()
             if text and text.isprintable() and (not ctrl or alt):

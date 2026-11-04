@@ -528,7 +528,7 @@ def test_scaling_does_not_break(ui_app) -> None:
     for breite, hoehe in ((760, 540), (1280, 720), (1920, 1080), (760, 540)):
         h.window.resize(breite, hoehe)
         pump(0.4)
-        assert leiste.width() == breite and leiste.height() == 40  # Tab-Leiste über die ganze Breite
+        assert leiste.width() == breite and leiste.height() == 56  # Tab-Leiste (Dock, seit 5.0 Beta 10) über die ganze Breite
 
 
 def test_long_status_is_elided_and_keeps_hints(ui_app) -> None:

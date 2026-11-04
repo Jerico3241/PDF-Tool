@@ -43,3 +43,4 @@ TextChangesPanel 1.0 TextChangesPanel.qml
 TextMergePanel 1.0 TextMergePanel.qml
 SlideShowMedia 1.0 SlideShowMedia.qml
 AiRibbon 1.0 AiRibbon.qml
+RibbonBigButton 1.0 RibbonBigButton.qml

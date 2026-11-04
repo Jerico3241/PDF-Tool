@@ -190,8 +190,11 @@ FocusScope {
                         id: center
                         anchors.fill: parent
                         // neue Breite sofort (einmal neu angeordnet, nicht in jedem Bild der Leisten-Animation)
-                        anchors.leftMargin: workspace.leftSpace
-                        anchors.rightMargin: workspace.rightSpace
+                        anchors.leftMargin: workspace.leftSpace + (Reader.fullScreen ? 0 : 14)
+                        anchors.rightMargin: workspace.rightSpace + (Reader.fullScreen || workspace.rightSpace <= workspace.railSpace ? 0 : 12)
+                        anchors.bottomMargin: Reader.fullScreen ? 0 : 6
+                        // 3D-Design (seit 5.0 Beta 10): die Dokumentfläche liegt als Mulde in der Arbeitsfläche
+                        PWell { z: 50; visible: !Reader.fullScreen; radius: Metrics.radiusFloat }
 
                         // Geteilte Ansicht: links das aktuelle PDF, rechts ein zweites (nicht beim Organisieren und
                         // in der Präsentation)
@@ -435,8 +438,8 @@ FocusScope {
                     else page.doc.selectAll(page.doc.currentPage)
                 }
             }
-            Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(1) }
-            Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: page.active && Reader.tabs.count > 1; onActivated: Reader.activateIndex(-1) }
+            Shortcut { sequences: Shortcuts.keys["reader.nextTab"] || []; enabled: page.active && Reader.tabs.count > 1; onActivated: App.switchTab(1) }
+            Shortcut { sequences: Shortcuts.keys["reader.previousTab"] || []; enabled: page.active && Reader.tabs.count > 1; onActivated: App.switchTab(-1) }
             Shortcut { sequences: Shortcuts.keys["reader.zoomIn"] || []; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomIn() }) }
             Shortcut { sequences: Shortcuts.keys["reader.zoomOut"] || []; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.zoomOut() }) }
             Shortcut { sequences: Shortcuts.keys["reader.fitPage"] || []; enabled: page.active && page.editing; onActivated: view.smoothly(function() { page.doc.fitPage() }) }

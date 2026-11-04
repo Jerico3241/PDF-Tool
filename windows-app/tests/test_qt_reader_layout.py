@@ -73,7 +73,7 @@ def test_side_panel_keeps_its_width_and_the_document_does_not_move(reader_app, t
         sizes.add(round(view.width()))
         assert round(right_x(panel)) == round(left_x(rail))
     assert widths == {LEFT_WIDTH}
-    assert positions == {round(left_x(rail)) - LEFT_WIDTH}
+    assert positions == {round(left_x(rail)) - LEFT_WIDTH - 12}  # seit 5.0 Beta 10: 12 px Abstand (Mulde und Karte)
     assert len(sizes) == 1
 
 
@@ -264,6 +264,30 @@ def test_many_tabs_show_whole_tabs_with_arrows_and_move_by_one_tab(reader_app, t
     assert versatz() == 0 and docs.width() == docs.property("contentWidth")
 
 
+def test_ctrl_tab_switches_at_once_and_shows_the_3d_overview_while_ctrl_is_held(reader_app, tmp_path: Path) -> None:
+    """Strg+Tab (seit 5.0 Beta 10, Entwurf 10): wechselt sofort zum nächsten Dokument und zeigt die 3D-Übersicht mit
+    einer Karte je Dokument, solange Strg gedrückt ist – ohne Strg schließt sie von selbst; Esc schließt sie auch."""
+    h = reader_app
+    for name in ("eins", "zwei", "drei"):
+        open_pdf(h, samples.standard_text(tmp_path / f"{name}.pdf"))
+    r = reader(h)
+    switcher = h.item("tabSwitcher")
+    assert not switcher.property("shown") and not switcher.isVisible()
+    app = h.runtime.singletons["App"]
+    switcher.setProperty("keepOpen", True)  # Strg »gedrückt halten«
+    first = r.currentKey
+    app.switchTab(1)
+    assert r.currentKey != first and switcher.property("shown")
+    pump(0.5)
+    assert switcher.isVisible() and h.item("tabSwitcherCard_2") is not None
+    app.switchTab(-1)
+    assert r.currentKey == first
+    switcher.setProperty("keepOpen", False)  # Strg losgelassen
+    assert wait_until(lambda: not switcher.property("shown"), 2)
+    pump(0.5)
+    assert not switcher.isVisible()
+
+
 def test_closing_with_many_tabs_leaves_no_qml_messages(reader_app, tmp_path: Path, capfd) -> None:
     """Beenden mit Werkzeug-Tabs und vielen PDFs: Beim Schließen der PDFs laufen keine Übergänge der Tab-Leiste
     mehr, und zum Löschen vorgemerkte Tabs enden vor der QML-Engine – sonst meldete Qt beim Abbau »Cannot find
@@ -304,7 +328,7 @@ def test_panel_opens_without_relayouting_the_document_every_frame(reader_profile
         assert panel.isVisible() and round(right_x(panel)) == round(edge)
     pump(0.4)
     assert panel.isVisible() and round(right_x(panel)) == round(edge)
-    assert round(right_x(view)) == round(left_x(panel))  # die Dokumentfläche endet an der Leiste
+    assert round(right_x(view)) == round(left_x(panel)) - 12  # die Dokumentfläche endet 12 px vor der Leiste (seit 5.0 Beta 10)
     assert len(set(round(width) for width in widths)) == 1  # die Dokumentfläche nimmt ihre Breite einmal an
     r.setRightPanel("comments")  # schließen
     pump(0.5)

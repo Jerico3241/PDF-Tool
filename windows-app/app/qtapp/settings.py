@@ -15,7 +15,21 @@ from __future__ import annotations
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from .base import Observable, prop
-from .theme import PROFILE_LABELS, PROFILES, THEME_LABELS, THEMES, ThemeController
+from .theme import (
+    CORNER_LABELS,
+    CORNERS,
+    DENSITIES,
+    DENSITY_LABELS,
+    GLOW_LABELS,
+    GLOWS,
+    PROFILE_LABELS,
+    PROFILES,
+    START_BACKGROUND_LABELS,
+    START_BACKGROUNDS,
+    THEME_LABELS,
+    THEMES,
+    ThemeController,
+)
 
 CUSTOMER_RECORDS_TITLE = "Kundenakte verwenden"
 CUSTOMER_RECORDS_TEXT = "Speichert Kundendaten lokal und ermöglicht die Wiedererkennung bekannter Rechnungsempfänger."
@@ -36,6 +50,7 @@ READER_PANELS = (("last", "Zuletzt verwendet"), ("thumbs", "Seiten"), ("outline"
 # Bereiche der Seite (seit 4.0): je Bereich nur seine Karten statt einer langen Liste
 SECTIONS = (
     ("general", "Allgemein"),
+    ("personalize", "Personalisieren"),
     ("reader", "PDF Reader"),
     ("assistant", "KI-Assistent"),
     ("contracts", "Vertragsübersichten"),
@@ -121,12 +136,22 @@ class SettingsController(Observable):
     def _reader_panels(self) -> list[dict]:
         return [{"value": value, "label": label} for value, label in READER_PANELS]
 
+    def _choices(self) -> dict:
+        def items(keys, labels):
+            return [{"value": key, "label": labels[key]} for key in keys]
+
+        return {"glows": items(GLOWS, GLOW_LABELS), "startBackgrounds": items(START_BACKGROUNDS, START_BACKGROUND_LABELS),
+                "corners": items(CORNERS, CORNER_LABELS), "densities": items(DENSITIES, DENSITY_LABELS),
+                "ribbon": [{"value": "text", "label": "Mit Text"}, {"value": "icons", "label": "Nur Symbole"}],
+                "neonColors": self.theme.neon_items()}
+
     _constant = Signal()
     themes = Property(list, _themes, notify=_constant)
     profiles = Property(list, _profiles, notify=_constant)
     readerZooms = Property(list, _reader_zooms, notify=_constant)
     readerPanels = Property(list, _reader_panels, notify=_constant)
     sections = Property(list, _sections, notify=_constant)
+    choices = Property("QVariantMap", _choices, notify=_constant)
 
     def _texts(self) -> dict:
         from .background import NOTE, TEXT, TITLE
@@ -162,6 +187,43 @@ class SettingsController(Observable):
         self.theme.setProfile(profile)
         self.app.persist()
         self.app.set_status(f"Animationen: {PROFILE_LABELS[profile]}", "success")
+
+    # Personalisieren (seit 5.0 Beta 10) ------------------------------------------------------------------
+    @Slot(bool)
+    def setNeon(self, enabled: bool) -> None:  # noqa: N802
+        self.theme.setNeon(enabled)
+        self.app.persist()
+        self.app.set_status("Neon-Modus eingeschaltet" if enabled else "Neon-Modus ausgeschaltet", "success")
+
+    @Slot(str)
+    def setNeonColor(self, value: str) -> None:  # noqa: N802
+        self.theme.setNeonColor(value)
+        self.app.persist()
+
+    @Slot(str)
+    def setGlow(self, value: str) -> None:  # noqa: N802
+        self.theme.setGlow(value)
+        self.app.persist()
+
+    @Slot(str)
+    def setStartBackground(self, value: str) -> None:  # noqa: N802
+        self.theme.setStartBackground(value)
+        self.app.persist()
+
+    @Slot(str)
+    def setCorners(self, value: str) -> None:  # noqa: N802
+        self.theme.setCorners(value)
+        self.app.persist()
+
+    @Slot(str)
+    def setDensity(self, value: str) -> None:  # noqa: N802
+        self.theme.setDensity(value)
+        self.app.persist()
+
+    @Slot(bool)
+    def setRibbonLabels(self, enabled: bool) -> None:  # noqa: N802
+        self.theme.setRibbonLabels(enabled)
+        self.app.persist()
 
     # PDF Reader: Ansicht beim Öffnen ------------------------------------------------------------------
     @Slot(str)

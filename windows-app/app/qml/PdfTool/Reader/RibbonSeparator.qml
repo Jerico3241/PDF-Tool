@@ -6,7 +6,8 @@ import PdfTool.Style
 Rectangle {
     Layout.preferredWidth: 1
     Layout.preferredHeight: 20
-    Layout.leftMargin: 6
-    Layout.rightMargin: 6
+    Layout.leftMargin: 4
+    Layout.rightMargin: 4
+    readonly property int ribbonWidth: 9  // Platz samt Rand (für das Messen der Leisten)
     color: Theme.divider
 }

@@ -406,7 +406,7 @@ class SlidesController(TextController):
         """Zoom so wählen, dass die ganze Folie in ``width`` × ``height`` (Pixel) passt – mit etwas Rand."""
         if not self.fitting or width < 40 or height < 40 or self.docWidth <= 0 or self.docHeight <= 0:
             return
-        scale = min((width - 48) * 15.0 / self.docWidth, (height - 40) * 15.0 / self.docHeight)
+        scale = min((width - 64) * 15.0 / self.docWidth, (height - 76) * 15.0 / self.docHeight)  # Rand für den Schatten
         zoom = max(10, min(400, int(round(scale * 100))))
         if zoom != self.zoom:
             self.zoom = zoom

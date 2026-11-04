@@ -5,6 +5,8 @@ import PdfTool.Backend
 import PdfTool.Style
 import PdfTool.Controls
 
+// Seit 5.0 Beta 10 (Entwürfe 7/8): ⌂ Start als erhabene Kachel, daneben das Tab-Dock – eine schwebende Schale mit
+// Glanz und Schatten, in der die Tabs als Kacheln liegen; unter dem aktiven leuchtet die Farbe seiner Dateiart.
 // Leiste oben nach dem Vorbild von Adobe Acrobat: ⌂ Start, je ein Tab für geöffnete Werkzeuge
 // (Vertragsübersichten, PDF reparieren) und für jedes geöffnete PDF, »+« öffnet weitere PDFs; rechts »?« mit dem
 // Hilfe-Menü und das Zahnrad für die Einstellungen (seit 4.0 Beta 7 ohne eigenen Tab und ohne ≡ Menü – jeder Befehl
@@ -20,7 +22,7 @@ import PdfTool.Controls
 Item {
     id: bar
     objectName: "appTabs"
-    implicitHeight: Metrics.appBarHeight
+    implicitHeight: Metrics.dockBarHeight
     Accessible.role: Accessible.PageTabList
     Accessible.name: I18n.tr("Start, Werkzeuge und Dokumente", I18n.revision)
 
@@ -36,7 +38,7 @@ Item {
     // (sonst werden sie gleichmäßig schmaler, der Name gekürzt); die Dokument-Tabs teilen sich den Rest und werden wie in
     // Edge schmaler – reicht auch das nicht, zeigt die Leiste nur ganze, gleich breite Tabs und ‹ › zum Blättern.
     // Alle Breiten folgen aus der Breite der Leiste, nie aus der Liste selbst (das gäbe eine Schleife).
-    readonly property real fixedWidth: menuButton.width + homeTab.width + addButton.width + helpButton.width + settingsButton.width + 6 * row.spacing
+    readonly property real fixedWidth: (searchButton.visible ? searchButton.width + row.spacing : 0) + menuButton.width + homeTab.width + addButton.width + helpButton.width + settingsButton.width + 6 * row.spacing + 20  // + Ränder: ≡ 6, ⌂ 10, + 4
     readonly property real toolTabCap: {
         var count = toolTabs.count
         if (count === 0) return 0
@@ -157,33 +159,56 @@ Item {
         else tabMenu.popup(tab, 0, tab.height + 4)
     }
 
+    // Tab-Dock: schwebende Schale vom ersten Tab bis »+« (Glanz von oben, feine Kontur, Schatten)
+    Rectangle {
+        id: dockShell
+        objectName: "tabDock"
+        readonly property Item first: { bar.tabsRevision; return toolTabs.count > 0 ? toolTabs.itemAt(0) : docsArea }
+        readonly property real startX: first ? row.x + first.x - 4 : 0
+        x: startX
+        y: row.y + (row.height - height) / 2
+        width: row.x + addButton.x + addButton.width + 4 - startX
+        height: Metrics.dockHeight
+        radius: Metrics.radiusFloat
+        border.width: 1
+        border.color: Theme.dockStroke
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: Theme.dockTop }
+            GradientStop { position: 1.0; color: Theme.dockBottom }
+        }
+        PLift { radius: dockShell.radius; strength: 0.8 }
+        Rectangle { x: dockShell.radius * 0.6; y: 1; width: parent.width - dockShell.radius * 1.2; height: 1; color: Theme.glossEdge; opacity: 0.8 }
+    }
+
     RowLayout {
         id: row
         anchors.fill: parent
-        anchors.leftMargin: 6
-        anchors.rightMargin: 6
+        anchors.leftMargin: 10
+        anchors.rightMargin: 10
+        anchors.topMargin: 8
+        anchors.bottomMargin: 6
         spacing: 2
 
         // ≡ blendet die Navigation der Startseite ein und aus (von anderen Seiten aus: zur Startseite mit Navigation)
         PIconButton {
             id: menuButton
             objectName: "appNavButton"
-            Layout.alignment: Qt.AlignBottom
-            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
-            Layout.rightMargin: 2
+            Layout.alignment: Qt.AlignVCenter
+            Layout.rightMargin: 6
             iconName: "navigation"
             tip: I18n.tr(App.currentPage === "home" && App.navOpen ? "Navigation ausblenden" : "Navigation einblenden", I18n.revision)
             onClicked: App.toggleNav()
         }
-        // Start: aktiv mit App-Symbol und Namen (wie im Design), sonst nur ⌂
+        // Start: erhabene Kachel mit ⌂ neben dem Dock (Entwurf 7) – aktiv im Akzent
         AppTab {
             id: homeTab
             objectName: "tabHome"
-            Layout.alignment: Qt.AlignBottom
-            Layout.preferredWidth: active ? 178 : Metrics.appTabIconOnly
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: Metrics.dockTabHeight
+            Layout.rightMargin: 10
+            tile: true
             iconName: "home"
-            imageSource: active ? Qt.resolvedUrl("../../images/app-16.png") : ""
-            title: active ? I18n.tr("Start", I18n.revision) : ""
+            title: ""
             tooltip: I18n.tr("Start" + Shortcuts.hints["app.home"], I18n.revision)
             active: bar.activeKey === "home"
             onClicked: App.navigate("home")
@@ -199,7 +224,7 @@ Item {
                 readonly property string key: modelData
                 readonly property var info: bar.toolInfo(modelData)
                 objectName: "tab_" + modelData
-                Layout.alignment: Qt.AlignBottom
+                Layout.alignment: Qt.AlignVCenter
                 // volle Breite, solange die Dokument-Tabs ihren Mindestplatz haben – sonst schmaler (Name gekürzt)
                 Layout.preferredWidth: Math.min(implicitWidth, Math.max(Metrics.appTabMinWidth, bar.toolTabCap))
                 iconName: info.icon
@@ -235,7 +260,7 @@ Item {
                 objectName: "readerTabsBack"
                 visible: bar.docsOverflow
                 x: 0
-                y: parent.height - Metrics.appTabHeight + (Metrics.appTabHeight - height) / 2
+                y: (parent.height - height) / 2
                 implicitWidth: Metrics.appTabScroll
                 implicitHeight: 28
                 iconName: "chevron_left"
@@ -249,11 +274,13 @@ Item {
                 objectName: "readerTabs"
                 x: bar.docsOverflow ? Metrics.appTabScroll + spacing : 0
                 width: bar.docsOverflow ? bar.docsShown * bar.docPitch - spacing : parent.width
-                height: parent.height + 1
+                height: parent.height
                 orientation: ListView.Horizontal
                 model: Reader.tabs
                 spacing: 2
-                clip: true
+                // Nur beim Blättern abschneiden: sonst schnitte die Liste den Schatten des aktiven Tabs zu einem harten
+                // Rechteck ab (seit 5.0 Beta 10, 3D-Design)
+                clip: bar.docsOverflow
                 // Ziehen gehört den Tabs (umordnen) – die Liste selbst blättert nur mit Mausrad, ‹ › und am Rand beim Ziehen
                 interactive: false
                 boundsBehavior: Flickable.StopAtBounds
@@ -316,14 +343,14 @@ Item {
                         property real settle: 0  // nach dem Loslassen: Versatz zum Platz, gleitet weich auf 0
                         objectName: "readerTab_" + docSlot.index
                         x: dragged ? bar.dragX - docSlot.x : settle
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 1
+                        anchors.verticalCenter: parent.verticalCenter
+                        minWidth: Metrics.dockTabMinWidth
                         width: bar.docsOverflow ? Metrics.appDocTabMinWidth : Math.min(implicitWidth, bar.docTabCap)
                         elideMode: Text.ElideMiddle
                         // Symbol und Farbe der Dateiart (PDF rot, Text blau, Tabelle grün, Präsentation orange)
                         iconName: "document_pdf"
-                        imageSource: FileKinds.image(docSlot.kind || "pdf", 16)
-                        kindColor: docSlot.kind ? FileKinds.color(docSlot.kind) : "transparent"
+                        kind: docSlot.kind || "pdf"
+                        kindColor: FileKinds.color(docSlot.kind || "pdf")
                         // ohne Endung (das Symbol zeigt sie) – der vollständige Pfad steht im Tooltip
                         title: I18n.tr(FileKinds.stem(docSlot.name), I18n.revision)
                         tooltip: I18n.tr(docSlot.tip, I18n.revision)
@@ -379,7 +406,7 @@ Item {
                 objectName: "readerTabsForward"
                 visible: bar.docsOverflow
                 x: docs.x + docs.width + docs.spacing
-                y: parent.height - Metrics.appTabHeight + (Metrics.appTabHeight - height) / 2
+                y: (parent.height - height) / 2
                 implicitWidth: Metrics.appTabScroll
                 implicitHeight: 28
                 iconName: "chevron_right"
@@ -392,18 +419,29 @@ Item {
         PIconButton {
             id: addButton
             objectName: "readerTabAdd"
-            Layout.alignment: Qt.AlignBottom
-            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
+            Layout.alignment: Qt.AlignVCenter
+            Layout.rightMargin: 4
+            implicitWidth: Metrics.dockTabHeight
+            implicitHeight: Metrics.dockTabHeight
             iconName: "add"
             tip: I18n.tr("Datei öffnen" + Shortcuts.hints["app.open"], I18n.revision)
             onClicked: Reader.openDialog()
         }
         Item { Layout.fillWidth: true }
+        // Suchen im geöffneten Dokument (Strg+F) – wie die Lupe oben rechts im Entwurf
+        PIconButton {
+            id: searchButton
+            objectName: "appSearchButton"
+            Layout.alignment: Qt.AlignVCenter
+            visible: App.currentTool === "reader" && App.currentPage === "reader" && Reader.hasDocument
+            iconName: "search"
+            tip: I18n.tr("Suchen" + Shortcuts.hints["app.find"], I18n.revision)
+            onClicked: App.findAction()
+        }
         PIconButton {
             id: helpButton
             objectName: "appHelpButton"
-            Layout.alignment: Qt.AlignBottom
-            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
+            Layout.alignment: Qt.AlignVCenter
             iconName: "question_circle"
             tip: I18n.tr("Hilfe", I18n.revision)
             toggle: true
@@ -414,8 +452,7 @@ Item {
         PIconButton {
             id: settingsButton
             objectName: "appSettingsButton"
-            Layout.alignment: Qt.AlignBottom
-            Layout.bottomMargin: (Metrics.appTabHeight - height) / 2
+            Layout.alignment: Qt.AlignVCenter
             iconName: "settings"
             tip: I18n.tr("Einstellungen" + Shortcuts.hints["app.settings"], I18n.revision)
             toggle: true
@@ -444,7 +481,7 @@ Item {
                 left = Math.max(left, docsArea.x + docs.x)
                 right = Math.min(right, docsArea.x + docs.x + docs.width)
             }
-            return { x: row.x + left + Metrics.radiusCard, width: Math.max(0, right - left - 2 * Metrics.radiusCard) }
+            return { x: row.x + left + 14, width: Math.max(0, right - left - 28) }
         }
         onTargetChanged: {
             // Zwischenzustand ohne Tab (die App setzt Werkzeug und Seite nacheinander, ein neuer Tab entsteht erst
@@ -469,15 +506,32 @@ Item {
         visible: target !== null && goal.width > 0 && bar.activeKey !== "home"  // Start: ohne Linie (wie im Design)
         x: progress < 1 ? fromX + (goal.x - fromX) * progress : goal.x
         width: progress < 1 ? fromWidth + (goal.width - fromWidth) * progress : goal.width
-        y: bar.height - Metrics.appTabHeight
-        height: 2
-        radius: 1
+        // unter der Kachel, leuchtend in der Farbe der Dateiart (Entwurf 7: 5 px unter dem Tab, 3 px hoch)
+        y: row.y + row.height / 2 + Metrics.dockTabHeight / 2 - 1  // an der Unterkante der Kachel, mit Abstand zur Schale
+        height: 3
+        radius: 1.5
         // Dokument: Farbe seiner Dateiart (Tabelle grün …); Start und Werkzeuge: Akzent
         color: {
             if (bar.activeKey.indexOf("doc:") !== 0) return Theme.accent
             var index = Reader.tabs.indexOf(bar.activeKey.substring(4))
             var kind = index >= 0 ? Reader.tabs.get(index).kind : ""
             return kind ? FileKinds.color(kind) : Theme.accent
+        }
+        // Schein: in hellem Design dezent, im Neon-Modus mit der Leuchtstärke
+        Repeater {
+            model: 4
+            Rectangle {
+                required property int index
+                x: -(index + 1) * 1.5
+                y: -(index + 1) * 1.5
+                width: indicator.width + (index + 1) * 3
+                height: indicator.height + (index + 1) * 3
+                radius: height / 2
+                color: "transparent"
+                border.width: 1.5
+                border.color: indicator.color
+                opacity: (Theme.neon ? 0.35 * Theme.glow : 0.08) * (1 - index / 4)
+            }
         }
         NumberAnimation { id: glide; target: indicator; property: "progress"; to: 1; duration: Motion.indicator; easing.type: Motion.decelerate }
     }

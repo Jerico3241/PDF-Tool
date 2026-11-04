@@ -16,6 +16,7 @@ Importe aus Novadesk, Syntax bis Python 3.8.
 import base64
 import json
 import os
+import re
 import select
 import socket
 import tempfile
@@ -497,6 +498,15 @@ class Kernel:
             default.CharFontName = args.get("font") or "Calibri"
             default.CharHeight = float(args.get("size") or 11)
         except Exception:  # noqa: BLE001 - dann eben die Vorgabe von LibreOffice
+            pass
+        try:
+            # Blattnamen wie in Excel (»Tabelle1«), auch wenn LibreOffice ohne deutsche Sprachdateien »Sheet1« vorgibt
+            sheets = model.getSheets()
+            for name in list(sheets.getElementNames()):
+                match = re.fullmatch(r"(?:Sheet|Table|Feuille|Hoja|Foglio)(\d+)", name)
+                if match and not sheets.hasByName("Tabelle" + match.group(1)):
+                    sheets.getByName(name).setName("Tabelle" + match.group(1))
+        except Exception:  # noqa: BLE001
             pass
         model.setModified(False)
         return self._register(model, "", FILTERS[".xlsx"], "")
@@ -1198,6 +1208,69 @@ class Kernel:
         _sheet, block = self.cell_range(doc, args)
         block.merge(bool(args.get("merge", True)))
         return self.changed(doc)
+
+    # Format übertragen (Pinsel) und »Als Tabelle formatieren« -----------------------------------------------------
+    PAINT_PROPERTIES = ("CharFontName", "CharHeight", "CharWeight", "CharPosture", "CharUnderline", "CharStrikeout", "CharColor",
+                        "CellBackColor", "IsCellBackgroundTransparent", "HoriJustify", "VertJustify", "IsTextWrapped",
+                        "NumberFormat", "TableBorder2")
+
+    def cmd_paint_format(self, args):
+        """Format der Zelle ``source`` [Zeile, Spalte] auf ``range`` übertragen (wie der Pinsel in Excel)."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        row, col = (int(v) for v in args["source"])
+        source = sheet.getCellByPosition(col, row)
+        manager = self.undo_context(doc, "Format übertragen")
+        try:
+            for name in self.PAINT_PROPERTIES:
+                try:
+                    block.setPropertyValue(name, source.getPropertyValue(name))
+                except Exception:  # noqa: BLE001 - einzelne Eigenschaft fehlt in alten Versionen: übrige trotzdem übertragen
+                    continue
+        finally:
+            manager.leaveUndoContext()
+        return self.changed(doc)
+
+    TABLE_STYLES = {"blue": (0x4472C4, 0xDCE6F2), "green": (0x70AD47, 0xE2EFDA), "orange": (0xED7D31, 0xFCE4D6), "gray": (0x7F7F7F, 0xEDEDED)}
+
+    def cmd_table_style(self, args):
+        """Als Tabelle formatieren: Kopfzeile farbig und fett, Zeilen gebändert, dünne Linien. Eine einzelne Zelle steht
+        für ihren zusammenhängenden Bereich. Antwort mit dem formatierten Bereich (``range``) für den Filter."""
+        doc = self.doc(args)
+        sheet, block = self.cell_range(doc, args)
+        address = block.getRangeAddress()
+        if address.StartRow == address.EndRow and address.StartColumn == address.EndColumn:
+            cursor = sheet.createCursorByRange(block)
+            cursor.collapseToCurrentRegion()
+            block = cursor
+            address = block.getRangeAddress()
+        head, band = self.TABLE_STYLES.get(args.get("style") or "blue", self.TABLE_STYLES["blue"])
+        line = uno.createUnoStruct("com.sun.star.table.BorderLine2")
+        line.Color, line.OuterLineWidth, line.LineWidth, line.LineStyle = head, 18, 18, 0
+        manager = self.undo_context(doc, "Als Tabelle formatieren")
+        try:
+            border = block.TableBorder2
+            for side in ("Top", "Bottom", "Left", "Right", "Horizontal", "Vertical"):
+                setattr(border, side + "Line", line)
+                setattr(border, "Is" + side + "LineValid", True)
+            border.IsDistanceValid = False
+            block.TableBorder2 = border
+            columns = (address.StartColumn, address.EndColumn)
+            header = sheet.getCellRangeByPosition(columns[0], address.StartRow, columns[1], address.StartRow)
+            header.CellBackColor = head
+            header.CharColor = 0xFFFFFF
+            header.CharWeight = BOLD
+            for row in range(address.StartRow + 1, address.EndRow + 1):
+                part = sheet.getCellRangeByPosition(columns[0], row, columns[1], row)
+                if (row - address.StartRow) % 2 == 0:
+                    part.CellBackColor = band
+                else:
+                    part.IsCellBackgroundTransparent = True
+        finally:
+            manager.leaveUndoContext()
+        result = self.changed(doc)
+        result["range"] = [address.StartRow, address.StartColumn, address.EndRow, address.EndColumn]
+        return result
 
     # Zeilen und Spalten ----------------------------------------------------------------------------------------
     def cmd_insert(self, args):

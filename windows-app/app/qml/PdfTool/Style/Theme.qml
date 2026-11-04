@@ -96,6 +96,33 @@ QtObject {
     // Navigation der Startseite: gewählter Eintrag
     readonly property color navSelected: dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.055)
 
+    // Personalisieren und 3D (seit 5.0 Beta 10, Entwürfe 5, 7 und 8) ---------------------------------
+    // Neon: leuchtende Akzentfarbe auf fast schwarzem Grund; ``glow`` ist die Leuchtstärke (0 ohne Neon)
+    readonly property bool neon: ThemeBackend.neon
+        readonly property color neonSecond: "#7C4DFF"
+    readonly property real glow: !neon ? 0 : ThemeBackend.glow === "soft" ? 0.55 : ThemeBackend.glow === "strong" ? 1.5 : 1.0
+    // Licht von oben: Glanzverlauf erhabener Flächen (Befehlsleiste, aktiver Tab, Seitenleisten)
+    readonly property color glossTop: neon ? "#1F2430" : dark ? "#363636" : "#FFFFFF"
+    readonly property color glossMid: neon ? "#171B24" : dark ? "#2E2E2E" : "#F7F9FC"
+    readonly property color glossBottom: neon ? "#12151D" : dark ? "#282828" : "#EEF2F7"
+    readonly property color glossEdge: neon ? Qt.rgba(1, 1, 1, 0.08) : dark ? Qt.rgba(1, 1, 1, 0.10) : "#FFFFFF"  // helle Oberkante
+    // Tab-Dock: halbdurchsichtige Schale um die Tabs
+    readonly property color dockTop: neon ? "#CC191D27" : dark ? "#CC2E2E2E" : "#B3FFFFFF"
+    readonly property color dockBottom: neon ? "#CC11141B" : dark ? "#CC242424" : "#B3F1F4F9"
+    readonly property color dockStroke: neon ? Qt.rgba(accent.r, accent.g, accent.b, 0.26) : dark ? "#3A3A3A" : "#E3E6EA"
+    // Gestaffelter Schatten (Tiefe): Farbe der Ringe
+    readonly property color liftShadow: neon ? "#000000" : dark ? "#000000" : "#1A1F2E"
+    readonly property real liftStrength: neon ? 1.6 : dark ? 1.3 : 0.7
+    // Gedrückt/eingeschaltet: Fläche liegt tiefer (innerer Schatten oben)
+    readonly property color pressedFill: Qt.rgba(accent.r, accent.g, accent.b, neon ? 0.16 : dark ? 0.20 : 0.14)
+    readonly property color pressedInset: neon ? "#AA000000" : dark ? "#66000000" : "#22000000"
+    readonly property color pressedRim: neon ? accent : "transparent"
+    // Arbeitsfläche als Mulde: innerer Schatten
+    readonly property color wellInset: neon ? "#C0000000" : dark ? "#66000000" : "#14000000"
+    readonly property color wellRim: neon ? Qt.rgba(accent.r, accent.g, accent.b, 0.20) : dark ? "#14FFFFFF" : "#0A000000"
+    // Leuchten einer Farbe (Neon) – in hellem/dunklem Design ohne Neon unsichtbar
+    function glowColor(color, alpha) { return Qt.rgba(color.r, color.g, color.b, Math.min(1, alpha * glow)) }
+
     // Hilfen ---------------------------------------------------------------------------
     // Farbe eines Status (»success«, »warning«/»caution«, »error«/»critical«, »info«, »neutral«)
     function tone(name) {

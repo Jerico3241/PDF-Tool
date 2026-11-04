@@ -51,13 +51,7 @@ Item {
         return parts.join("     ")
     }
 
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        height: 1
-        color: Theme.divider
-    }
+    // 3D-Design: die Statuszeile liegt ohne Trennlinie auf dem Hintergrund (Entwurf 7)
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 16
@@ -110,21 +104,120 @@ Item {
                 visible: statusHover.containsMouse && status.truncated
             }
         }
-        Text {
-            objectName: "textHints"
-            visible: (bar.textDoc !== null || bar.pdfDoc !== null || bar.slidesDoc !== null) && bar.width > 640
-            readonly property string saveKey: (Shortcuts.hints["reader.save"] || "").replace(/[()]/g, "").trim()
-            readonly property string printKey: (Shortcuts.hints["reader.print"] || "").replace(/[()]/g, "").trim()
-            text: bar.slidesDoc !== null
-                ? (saveKey ? saveKey + " " : "") + I18n.tr("Speichern", I18n.revision) + " · F5 " + I18n.tr("Präsentieren", I18n.revision)
-                : (saveKey ? saveKey + " " : "") + I18n.tr("Speichern", I18n.revision) + " · " + (printKey ? printKey + " " : "") + I18n.tr("Drucken", I18n.revision)
-            font: Typography.caption
-            color: Theme.textSecondary
-            Layout.rightMargin: 12
+        // Ansichten wie unten rechts in Word und PowerPoint (seit 5.0 Beta 10, Entwurf 7): Seitenlayout bzw. Normal ist
+        // gewählt, daneben Lesemodus bzw. Präsentieren
+        Row {
+            objectName: "statusViews"
+            visible: (bar.textDoc !== null || bar.slidesDoc !== null) && bar.width > 640
+            spacing: 4
+            Layout.rightMargin: 8
+            PIconButton {
+                objectName: "statusViewLayout"
+                implicitWidth: 30
+                implicitHeight: 24
+                iconName: bar.slidesDoc ? "slide_multiple" : "document_one_page"
+                tip: I18n.tr(bar.slidesDoc ? "Normal" : "Seitenlayout", I18n.revision)
+                toggle: true
+                checked: true
+            }
+            PIconButton {
+                objectName: "statusViewSecond"
+                implicitWidth: 30
+                implicitHeight: 24
+                iconName: bar.slidesDoc ? "presenter" : "book_open"
+                tip: I18n.tr(bar.slidesDoc ? "Präsentieren (F5)" : "Lesemodus", I18n.revision)
+                onClicked: bar.slidesDoc ? bar.slidesDoc.present() : bar.textDoc.requestReading()
+            }
+        }
+        // Zoom: − Regler + und der Wert (100 % in der Mitte, links bis 10 %, rechts bis 500 % – wie in Office)
+        PIconButton {
+            objectName: "statusZoomOut"
+            visible: bar.zoomDoc !== null && bar.width > 640
+            implicitWidth: 24
+            implicitHeight: 24
+            iconName: "zoom_out"
+            tip: I18n.tr("Verkleinern", I18n.revision)
+            onClicked: bar.zoomDoc.setZoom(Math.max(10, Math.round(bar.zoomDoc.zoom / 10) * 10 - 10))
+        }
+        Item {
+            id: zoomSlider
+            objectName: "statusZoomSlider"
+            visible: bar.zoomDoc !== null && bar.width > 640
+            implicitWidth: 120
+            implicitHeight: 20
+            readonly property real zoom: bar.zoomDoc ? bar.zoomDoc.zoom : 100
+            readonly property real position: zoom <= 100 ? 0.5 * (zoom - 10) / 90 : 0.5 + 0.5 * Math.min(1, (zoom - 100) / 400)
+            function zoomAt(pos) {
+                pos = Math.max(0, Math.min(1, pos))
+                var value = pos <= 0.5 ? 10 + 90 * pos / 0.5 : 100 + 400 * (pos - 0.5) / 0.5
+                return Math.abs(value - 100) < 6 ? 100 : Math.round(value)  // rastet bei 100 % ein
+            }
+            Accessible.role: Accessible.Slider
+            Accessible.name: I18n.tr("Zoom", I18n.revision)
+            Rectangle {
+                id: track
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                height: 4
+                radius: 2
+                color: Theme.controlStroke
+                Rectangle {
+                    width: knob.x + knob.width / 2
+                    height: parent.height
+                    radius: 2
+                    color: Theme.accent
+                    Repeater {
+                        model: Theme.glow > 0 ? 3 : 0
+                        Rectangle {
+                            required property int index
+                            x: -(index + 1); y: -(index + 1)
+                            width: parent.width + 2 * (index + 1); height: parent.height + 2 * (index + 1)
+                            radius: height / 2
+                            color: "transparent"
+                            border.width: 1
+                            border.color: Theme.accent
+                            opacity: 0.25 * Theme.glow * (1 - index / 3)
+                        }
+                    }
+                }
+                Rectangle { x: parent.width / 2 - 0.5; y: -3; width: 1; height: 10; color: Theme.textTertiary }  // 100 %
+            }
+            Rectangle {
+                id: knob
+                width: 16
+                height: 16
+                radius: 8
+                anchors.verticalCenter: parent.verticalCenter
+                x: zoomSlider.position * (zoomSlider.width - width)
+                color: Theme.neon ? Theme.surface : "#FFFFFF"
+                border.width: 3
+                border.color: Theme.accent
+                scale: zoomDrag.pressed ? 1.15 : 1
+                Behavior on scale { enabled: Motion.moves; NumberAnimation { duration: Motion.fast } }
+                PShadow { radius: 8; depth: 2 }
+            }
+            MouseArea {
+                id: zoomDrag
+                anchors.fill: parent
+                anchors.margins: -4
+                onPressed: (mouse) => bar.zoomDoc.setZoom(zoomSlider.zoomAt((mouse.x - 4 - 8) / (zoomSlider.width - 16)))
+                onPositionChanged: (mouse) => { if (pressed) bar.zoomDoc.setZoom(zoomSlider.zoomAt((mouse.x - 4 - 8) / (zoomSlider.width - 16))) }
+            }
+        }
+        PIconButton {
+            objectName: "statusZoomIn"
+            visible: bar.zoomDoc !== null && bar.width > 640
+            implicitWidth: 24
+            implicitHeight: 24
+            iconName: "zoom_in"
+            tip: I18n.tr("Vergrößern", I18n.revision)
+            onClicked: bar.zoomDoc.setZoom(Math.min(500, Math.round(bar.zoomDoc.zoom / 10) * 10 + 10))
         }
         Text {
             objectName: "sheetZoomText"
             visible: bar.zoomDoc !== null
+            Layout.preferredWidth: 40
+            horizontalAlignment: Text.AlignRight
             text: I18n.tr(bar.zoomDoc ? Math.round(bar.zoomDoc.zoom) + " %" : "", I18n.revision)
             font: Typography.caption
             color: Theme.textSecondary

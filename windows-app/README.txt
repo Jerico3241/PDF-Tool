@@ -2,7 +2,7 @@ Novadesk für Windows
 Entwickler und Inhaber: Jerico
 =============================
 
-Version 5.0.0-beta.9
+Version 5.0.0-beta.10
 
 Novadesk (bis Version 4.0 „PDF Tool“) ist ein Office für Windows: Texte,
 Tabellen, Präsentationen und PDFs an einem Ort, alles lokal auf diesem PC.
@@ -41,7 +41,7 @@ Bis Version 2.2 hieß die App „Übersichten-Ersteller“, bis Version 4.0
 
 Was Sie herunterladen
 ---------------------
-PDF-Tool-Setup-5.0.0-beta.9.exe
+PDF-Tool-Setup-5.0.0-beta.10.exe
 
 Die Datei enthält die komplette App einschließlich Python und aller Pakete
 (Qt 6 mit PySide6, pandas, openpyxl, xlrd, ReportLab, Pillow, pikepdf mit
@@ -610,7 +610,7 @@ Alternativ wie bisher: das neue Setup von GitHub herunterladen und ausführen.
 Die vorhandene Installation wird ersetzt, es entsteht keine zweite
 Installation. Ihre Daten bleiben erhalten.
 
-Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.9 (Kanal „Beta“): von
+Update von PDF Tool 4.0.0 oder einer früheren Novadesk-Beta auf 5.0.0-beta.10 (Kanal „Beta“): von
 selbst beim Start oder mit einem Klick, ohne Setup-Assistent. Die Ordner
 bleiben dieselben; Startmenü und Desktop zeigen danach „Novadesk“ statt
 „PDF Tool“. Alle Daten und Einstellungen bleiben erhalten. Das Setup ist

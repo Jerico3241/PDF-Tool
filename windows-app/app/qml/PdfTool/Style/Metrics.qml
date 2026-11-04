@@ -1,5 +1,6 @@
 pragma Singleton
 import QtQuick
+import PdfTool.Backend
 
 // Abstände, Radien und Größen – zentral, damit alle Seiten dieselben Maße verwenden.
 QtObject {
@@ -15,12 +16,23 @@ QtObject {
     readonly property int s32: 32
     readonly property int s40: 40
 
-    // Radien
+    // Radien – »Ecken: Eckig« (Personalisieren, seit 5.0 Beta 10) macht alles fast rechtwinklig
+    readonly property bool square: ThemeBackend.corners === "square"
     readonly property int radiusSmall: 2
-    readonly property int radiusControl: 4
-    readonly property int radiusCard: 8
-    readonly property int radiusOverlay: 8
-    readonly property int radiusDialog: 8
+    readonly property int radiusControl: square ? 2 : 4
+    readonly property int radiusCard: square ? 3 : 8
+    readonly property int radiusOverlay: square ? 3 : 8
+    readonly property int radiusDialog: square ? 3 : 8
+    // 3D-Design (Entwürfe 7/8): schwebende Flächen (Tab-Dock, Befehlsleiste, Seitenleisten) und Tabs darin
+    readonly property int radiusFloat: square ? 4 : 14
+    readonly property int radiusPill: square ? 3 : 10
+    // Dichte (Personalisieren): Abstände in Leisten und Listen
+    readonly property int density: ThemeBackend.density === "compact" ? -1 : ThemeBackend.density === "spacious" ? 1 : 0
+    readonly property int commandBarHeight: 56 + 6 * density   // schwebende Befehlsleiste unter den Reitern
+    readonly property int dockBarHeight: 56                    // Zeile mit dem Tab-Dock
+    readonly property int dockHeight: 42
+    readonly property int dockTabHeight: 34
+    readonly property int dockTabMinWidth: 170
 
     // Größen
     readonly property int controlHeight: 32
