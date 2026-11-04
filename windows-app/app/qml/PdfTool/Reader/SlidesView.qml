@@ -1198,9 +1198,9 @@ FocusScope {
     PMenu {
         id: spacingMenu
         objectName: "slidesSpacingMenu"
-        PMenuItem { text: "1,0"; onTriggered: { view.doc.toggle("spacing1"); view.back() } }
-        PMenuItem { text: "1,5"; onTriggered: { view.doc.toggle("spacing15"); view.back() } }
-        PMenuItem { text: "2,0"; onTriggered: { view.doc.toggle("spacing2"); view.back() } }
+        PMenuItem { text: I18n.tr("1,0", I18n.revision); onTriggered: { view.doc.toggle("spacing1"); view.back() } }
+        PMenuItem { text: I18n.tr("1,5", I18n.revision); onTriggered: { view.doc.toggle("spacing15"); view.back() } }
+        PMenuItem { text: I18n.tr("2,0", I18n.revision); onTriggered: { view.doc.toggle("spacing2"); view.back() } }
     }
     PMenu {
         id: arrangeMenu

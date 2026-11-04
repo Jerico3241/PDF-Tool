@@ -179,7 +179,7 @@ Item {
                             anchors.right: parent.right
                             anchors.rightMargin: 14
                             anchors.verticalCenter: parent.verticalCenter
-                            text: card.name
+                            text: I18n.tr(card.name, I18n.revision)
                             elide: Text.ElideMiddle
                             color: "#F2F5FA"
                             font: Typography.bodyStrong

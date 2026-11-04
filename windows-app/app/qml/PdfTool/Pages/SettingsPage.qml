@@ -384,7 +384,7 @@ PPage {
                                     id: hexField
                                     objectName: "neonHexField"
                                     preferredWidth: 120
-                                    placeholderText: "#RRGGBB"
+                                    placeholderText: I18n.tr("#RRGGBB", I18n.revision)
                                     text: ThemeBackend.neonColor
                                     onSubmitted: hexApply.clicked()
                                 }
