@@ -14,6 +14,8 @@ Item {
     property string subtitle: ""
     property bool centered: false
     property int maxContentWidth: Metrics.pageMaxWidth
+    property int sidePadding: Metrics.pagePaddingLeft   // Rand links und rechts (zentriert)
+    property int topPadding: Metrics.pagePaddingTop
     default property alias content: column.data
     property alias flickable: flick
     property alias header: headerSlot.data
@@ -24,6 +26,19 @@ Item {
     readonly property int columns: contentWidth >= Metrics.twoColumnsFrom ? 2 : 1
 
     function scrollToTop() { revealAnim.stop(); flick.contentY = 0 }
+    // Neuer Inhalt (z. B. anderer Bereich der Einstellungen, seit 5.0 Beta 11): gleitet von unten herein
+    function enter() {
+        if (!Motion.intros) return
+        enterAnim.stop()
+        column.opacity = 0
+        enterShift.y = 40
+        enterAnim.start()
+    }
+    ParallelAnimation {
+        id: enterAnim
+        NumberAnimation { target: column; property: "opacity"; to: 1; duration: 360; easing.type: Easing.OutCubic }
+        NumberAnimation { target: enterShift; property: "y"; to: 0; duration: 620; easing.type: Easing.OutBack; easing.overshoot: 1.0 }
+    }
     // Element in den sichtbaren Bereich holen (»Vollständig«: weich gescrollt). Ist es höher als
     // die Ansicht, steht sein Anfang oben.
     function reveal(item) {
@@ -57,7 +72,7 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: page.sideWidth
         contentWidth: width
-        contentHeight: column.implicitHeight + Metrics.pagePaddingTop + Metrics.pagePaddingBottom
+        contentHeight: column.implicitHeight + page.topPadding + Metrics.pagePaddingBottom
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
         clip: true
@@ -66,12 +81,13 @@ Item {
 
         ColumnLayout {
             id: column
+            transform: Translate { id: enterShift; y: 0 }
             x: page.centered
                ? Math.round((flick.width - width) / 2)
                : Metrics.pagePaddingLeft + Math.max(0, (flick.width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight - page.maxContentWidth) / 2)
-            y: Metrics.pagePaddingTop
+            y: page.topPadding
             width: page.centered
-                   ? Math.max(0, 2 * Math.floor(Math.min(page.maxContentWidth, flick.width - 2 * Metrics.pagePaddingLeft) / 2))
+                   ? Math.max(0, 2 * Math.floor(Math.min(page.maxContentWidth, flick.width - 2 * page.sidePadding) / 2))
                    : Math.min(page.maxContentWidth, flick.width - Metrics.pagePaddingLeft - Metrics.pagePaddingRight)
             spacing: 0
 

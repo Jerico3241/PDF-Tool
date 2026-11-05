@@ -46,7 +46,7 @@ T.Popup {
     enter: Transition {
         ParallelAnimation {
             NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.dialog; easing.type: Motion.decelerate }
-            NumberAnimation { property: "scale"; from: Motion.dialogScale; to: 1; duration: Motion.dialog; easing.type: Motion.decelerate }
+            NumberAnimation { property: "scale"; from: Motion.dialogScale; to: 1; duration: Motion.dialog; easing.type: Motion.moves ? Easing.OutBack : Motion.decelerate; easing.overshoot: 1.4 }
         }
     }
     exit: Transition {

@@ -303,17 +303,30 @@ Item {
                 // Mausrad über den Tabs: waagerecht um ganze Tabs (nur wenn nicht alle Platz haben)
                 PWheelScroll { id: docsWheel; objectName: "readerTabsWheel"; flickable: docs; sideways: true; notch: bar.docsOverflow ? bar.docPitch : 0 }
                 // Beim Beenden (alle PDFs werden geschlossen) ohne Übergänge: Die Oberfläche endet gleich danach
+                // Seit 5.0 Beta 11: ein neuer Tab springt aus dem Dock (wächst von halber Größe mit Nachfedern und
+                // fällt von oben an seinen Platz), ein geschlossener schrumpft und sinkt weg
                 add: Transition {
                     enabled: Motion.enabled && !App.closing
-                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.fade; easing.type: Motion.decelerate }
+                    ParallelAnimation {
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Motion.fade; easing.type: Motion.decelerate }
+                        NumberAnimation { property: "scale"; from: Motion.moves ? 0.4 : 1; to: 1; duration: Motion.moves ? 520 : 0; easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+                        NumberAnimation { property: "y"; from: Motion.moves ? -18 : 0; to: 0; duration: Motion.moves ? 520 : 0; easing.type: Easing.OutBounce }
+                    }
                 }
                 remove: Transition {
                     enabled: Motion.enabled && !App.closing
-                    NumberAnimation { property: "opacity"; to: 0; duration: Motion.fast; easing.type: Motion.accelerate }
+                    ParallelAnimation {
+                        NumberAnimation { property: "opacity"; to: 0; duration: Motion.moves ? Motion.normal : Motion.fast; easing.type: Motion.accelerate }
+                        NumberAnimation { property: "scale"; to: Motion.moves ? 0.5 : 1; duration: Motion.moves ? Motion.normal : 0; easing.type: Easing.InBack }
+                        NumberAnimation { property: "y"; to: Motion.moves ? 14 : 0; duration: Motion.moves ? Motion.normal : 0; easing.type: Motion.accelerate }
+                    }
                 }
                 displaced: Transition {
                     enabled: Motion.moves && !App.closing
-                    NumberAnimation { properties: "x"; duration: Motion.expand; easing.type: Motion.decelerate }
+                    NumberAnimation { properties: "x"; duration: Motion.expand; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
+                    // ein unterbrochener Auftritt endet nicht halb groß
+                    NumberAnimation { properties: "scale,opacity"; to: 1; duration: Motion.fast }
+                    NumberAnimation { properties: "y"; to: 0; duration: Motion.fast }
                 }
                 // Umgeordnet (Ziehen, Strg+Umschalt+←/→): der Tab gleitet an seine neue Stelle
                 move: Transition {
@@ -433,7 +446,8 @@ Item {
             id: searchButton
             objectName: "appSearchButton"
             Layout.alignment: Qt.AlignVCenter
-            visible: App.currentTool === "reader" && App.currentPage === "reader" && Reader.hasDocument
+            // Startseite (Entwurf 11): Lupe durchsucht »Zuletzt verwendet«; im Reader: Suche im Dokument
+            visible: App.currentPage === "home" || App.currentTool === "reader" && App.currentPage === "reader" && Reader.hasDocument
             iconName: "search"
             tip: I18n.tr("Suchen" + Shortcuts.hints["app.find"], I18n.revision)
             onClicked: App.findAction()

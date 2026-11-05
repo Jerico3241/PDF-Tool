@@ -14,6 +14,7 @@ PPage {
     // Breites Fenster (seit 5.0 Beta 10, Entwurf 5): Bereiche links untereinander, rechts der gewählte mit seinem Namen
     // als Überschrift; schmal wie bisher oben nebeneinander
     readonly property bool sideNav: width >= 900
+    Connections { target: Settings; function onSectionChanged() { page.enter() } }
     sideWidth: sideNav ? 260 : 0
     readonly property var sectionIcons: ({ general: "settings", personalize: "paint_brush", reader: "document_pdf", assistant: "sparkle",
                                            contracts: "document_table", updates: "arrow_sync", data: "save", info: "info" })

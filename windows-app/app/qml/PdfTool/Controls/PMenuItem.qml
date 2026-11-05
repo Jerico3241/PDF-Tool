@@ -18,6 +18,23 @@ T.MenuItem {
     Accessible.role: Accessible.MenuItem
     Accessible.name: I18n.tr(text, I18n.revision)
 
+    // Menü öffnet sich (seit 5.0 Beta 11): die Einträge gleiten nacheinander von links herein
+    transform: Translate { id: itemShift; x: 0 }
+    Connections {
+        target: control.menu
+        function onAboutToShow() { if (Motion.intros) itemIn.restart() }
+    }
+    SequentialAnimation {
+        id: itemIn
+        PropertyAction { target: itemShift; property: "x"; value: -14 }
+        PropertyAction { target: control; property: "opacity"; value: 0 }
+        PauseAnimation { duration: Math.min(240, Math.round(control.y / Math.max(1, control.implicitHeight) * 22)) }
+        ParallelAnimation {
+            NumberAnimation { target: control; property: "opacity"; to: 1; duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { target: itemShift; property: "x"; to: 0; duration: 320; easing.type: Easing.OutBack }
+        }
+    }
+
     contentItem: Item {
         implicitWidth: entry.implicitWidth + (hintText.visible ? hintText.implicitWidth + 32 : 0)
         implicitHeight: entry.implicitHeight

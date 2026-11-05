@@ -143,7 +143,7 @@ jobs:
   setup:
     name: Setup bauen und prüfen (Inno Setup)
     runs-on: windows-latest
-    timeout-minutes: 40 # normal etwa 7 Minuten
+    timeout-minutes: 60 # seit Novadesk (LibreOffice, Upgrade-, Start- und Smoke-Tests) normal 35–40 Minuten
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

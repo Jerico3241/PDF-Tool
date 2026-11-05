@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import PdfTool.Backend
+import PdfTool.Style
 
 // Leiste eines Menübands (seit 5.0 Beta 9): Reicht die Breite nicht für alle Beschriftungen (kleines Fenster,
 // Anzeige mit 125 % oder 150 %), zeigen die Knöpfe mit Symbol nur noch das Symbol – die Beschriftung steht dann in der
@@ -36,6 +37,14 @@ RowLayout {
     onLabelsChanged: refit()
     onWidthChanged: fit()
     onImplicitWidthChanged: if (!squeezed) fit()
-    onVisibleChanged: if (visible) fit()
+    onVisibleChanged: if (visible) { fit(); if (Motion.intros && App.ready) barIn.restart() }
     Component.onCompleted: fit()
+
+    // Reiter gewechselt (seit 5.0 Beta 11): die Knöpfe gleiten von rechts herein und blenden ein
+    transform: Translate { id: barShift; x: 0 }
+    ParallelAnimation {
+        id: barIn
+        NumberAnimation { target: bar; property: "opacity"; from: 0; to: 1; duration: Motion.normal; easing.type: Easing.OutCubic }
+        NumberAnimation { target: barShift; property: "x"; from: 36; to: 0; duration: Motion.pane; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+    }
 }

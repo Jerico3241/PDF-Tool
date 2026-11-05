@@ -753,7 +753,7 @@ def test_navigation_shows_finished_page_without_rebuild(ui_app) -> None:
             # direkt nach dem Wechsel: dieselbe, fertig angeordnete Seite (kein Laden, kein Neuaufbau)
             assert gleich(platz.property("item"), seiten[key]), key
             assert platz.property("item").width() == platz.parentItem().width(), key
-            pump(0.3)
+            pump(0.6)
             assert platz.isVisible() and platz.property("opacity") > 0.99, key
         assert ohne_leiste() == anzahl, runde  # kein Element neu erzeugt
         if gesamt is not None:

@@ -61,7 +61,7 @@ QtObject {
     readonly property int cardPadding: 16
 
     // Startseite: Werkzeuge und Ablagefläche, darunter »Zuletzt verwendet« – in einer zentrierten Gruppe
-    readonly property int homeMaxWidth: 1080      // Breite der Gruppe (Kopf, Karten, Hinweis) höchstens
+    readonly property int homeMaxWidth: 1240      // Breite der Gruppe (Kopf, Karten, Liste) höchstens (Entwurf 11)
     readonly property int toolCardGap: 16         // Abstand zwischen den Karten – waagerecht und senkrecht
     readonly property int homeSideBySideFrom: 860 // ab dieser Breite stehen Werkzeuge und Ablagefläche nebeneinander
     readonly property int homeToolsInRowFrom: 700 // ab dieser Kartenbreite stehen die Werkzeuge nebeneinander

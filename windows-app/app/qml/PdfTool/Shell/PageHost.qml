@@ -33,7 +33,7 @@ Item {
         slot.wanted = true
         if (slot.status !== Loader.Ready) return          // weiter, sobald die Seite fertig ist
         if (key === shownKey && !outAnim.running) {
-            if (!inAnim.running) { slot.visible = true; slot.opacity = 1; shift.y = 0 }
+            if (!inAnim.running) { slot.visible = true; slot.opacity = 1; shift.y = 0; zoom.xScale = zoom.yScale = 1 }
             return
         }
         var current = slotFor(shownKey)
@@ -59,14 +59,16 @@ Item {
             }
         }
         shownKey = key
-        slot.transform = [shift]
+        slot.transform = []
         slot.visible = true
         // Tastaturfokus nur mitnehmen, wenn er auf der verlassenen Seite lag (sonst bleibt er z. B. in der Tab-Leiste)
         if (hadFocus) slot.forceActiveFocus()
         // Ohne Animation: »Aus« – und die erste Seite beim Start (sie steht fertig im ersten Bild)
-        if (!Motion.enabled || !App.ready) { slot.opacity = 1; shift.y = 0; return }
+        if (!Motion.enabled || !App.ready) { slot.opacity = 1; shift.y = 0; zoom.xScale = zoom.yScale = 1; return }
         slot.opacity = 0
+        if (Motion.moves) slot.transform = [zoom, shift]   // »Reduziert«: nur überblenden, ohne jede Verschiebung
         shift.y = Motion.pageShift
+        zoom.xScale = zoom.yScale = Motion.pageScale
         inAnim.targetSlot = slot
         inAnim.restart()
     }
@@ -96,9 +98,11 @@ Item {
     }
 
     Translate { id: shift; y: 0 }
+    // Seit 5.0 Beta 11: die neue Seite wächst beim Einblenden aus der Tiefe auf 100 % (Mitte oben)
+    Scale { id: zoom; origin.x: host.width / 2; origin.y: host.height * 0.3; xScale: 1; yScale: 1 }
     NumberAnimation {
         id: outAnim
-        property: "opacity"
+        properties: "opacity"
         to: 0
         duration: Motion.pageOut
         easing.type: Motion.accelerate
@@ -107,8 +111,11 @@ Item {
     ParallelAnimation {
         id: inAnim
         property Item targetSlot: null
+        // Am Ende keine Transformation stehen lassen (Rundungsreste der Skalierung, schärferes Bild)
+        onFinished: if (targetSlot) targetSlot.transform = []
         NumberAnimation { target: inAnim.targetSlot; property: "opacity"; from: 0; to: 1; duration: Motion.pageIn; easing.type: Motion.decelerate }
-        NumberAnimation { target: shift; property: "y"; to: 0; duration: Motion.pageIn; easing.type: Motion.decelerate }
+        NumberAnimation { target: shift; property: "y"; to: 0; duration: Motion.pageIn; easing.type: Easing.OutQuart }
+        NumberAnimation { target: zoom; properties: "xScale,yScale"; to: 1; duration: Motion.pageIn; easing.type: Easing.OutQuart }
     }
 
     Repeater {

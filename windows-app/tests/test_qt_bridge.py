@@ -199,7 +199,9 @@ def test_legacy_animation_setting_is_kept_for_older_versions(monkeypatch) -> Non
     assert following.config()["animationen"] is None  # »wie Windows« (Schlüssel fehlt)
 
 
-def test_windows_reduced_motion_means_at_least_reduced_and_applies_live(monkeypatch) -> None:
+def test_windows_reduced_motion_only_adds_a_note_and_applies_live(monkeypatch) -> None:
+    """Seit 5.0 Beta 11 gilt die Einstellung der App (Novadesk ist durchgehend animiert); sind die Animationseffekte
+    in Windows aus, sagt ein Hinweis, wie man weniger Bewegung wählt."""
     monkeypatch.delenv("UE_NO_ANIMATIONS", raising=False)
     import winsys
     from qtapp.theme import ThemeController
@@ -210,7 +212,7 @@ def test_windows_reduced_motion_means_at_least_reduced_and_applies_live(monkeypa
     assert theme.effectiveProfile == "full" and theme.profileNote == ""
     monkeypatch.setattr(winsys, "client_area_animations", lambda: False)
     theme.refresh_system()
-    assert theme.effectiveProfile == "reduced" and "Reduziert" in theme.profileNote
+    assert theme.effectiveProfile == "full" and "Reduziert" in theme.profileNote
     theme.setProfile("off")
     assert theme.effectiveProfile == "off"
 

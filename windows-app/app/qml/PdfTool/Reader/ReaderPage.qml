@@ -81,6 +81,105 @@ FocusScope {
         propertiesOpenedForObjects = false
     }
 
+    // Auftritt der Dokumente (seit 5.0 Beta 11): ein neu geöffnetes Dokument fliegt aus der Tiefe herein (geneigt,
+    // kleiner, von unten), beim Wechsel zwischen Dokumenten schwenkt das nächste von der Seite herein – nach rechts
+    // aus der Richtung des Tabs. »Reduziert« und »Aus«: sofort.
+    property var introSeen: ({})
+    property int introIndex: -1
+    function introArea() {
+        if (sheetShown) return sheetArea
+        if (textShown) return textArea
+        if (slidesShown) return slidesArea
+        return documentArea
+    }
+    function playIntro() {
+        var key = Reader.currentKey
+        if (!key) { introIndex = -1; return }
+        var index = Reader.tabs.indexOf(key)
+        var fresh = !introSeen[key]
+        var seen = Object.assign({}, introSeen)
+        seen[key] = true
+        introSeen = seen
+        var direction = introIndex < 0 || index === introIndex ? 0 : (index > introIndex ? 1 : -1)
+        introIndex = index
+        if (!Motion.intros || !App.ready || App.currentPage !== "reader" && !fresh) return
+        // Erst auftreten, wenn das Dokument geladen ist (sonst ruckelt der Auftritt, während es geöffnet wird)
+        introWait.deep = fresh || direction === 0
+        introWait.direction = direction
+        introWait.tries = 0
+        Qt.callLater(function() {
+            var area = page.introArea()
+            if (area && !page.introReady()) area.opacity = 0
+            introWait.restart()
+        })
+    }
+    function introReady() {
+        var doc = Reader.current
+        if (!doc) return true
+        if (doc.kind === "text" || doc.kind === "praesentation" || doc.kind === "tabelle") return doc.ready === true
+        return doc.pageCount > 0 && !doc.busy
+    }
+    Timer {
+        id: introWait
+        property bool deep: true
+        property int direction: 0
+        property int tries: 0
+        interval: 40
+        repeat: true
+        onTriggered: {
+            tries++
+            if (!page.introReady() && tries < 100) return
+            stop()
+            docIntro.play(page.introArea(), deep, direction)
+        }
+    }
+    Connections {
+        target: Reader
+        function onCurrentKeyChanged() { page.playIntro() }
+    }
+    QtObject {
+        id: docIntro
+        objectName: "readerDocIntro"
+        property Item target: null
+        property bool deep: true
+        readonly property bool running: introAnim.running
+        property list<QtObject> parts: [
+            Rotation { id: introTilt; origin.x: docIntro.target ? docIntro.target.width / 2 : 0; origin.y: docIntro.target ? docIntro.target.height * 0.35 : 0; axis { x: docIntro.deep ? 1 : 0; y: docIntro.deep ? 0 : 1; z: 0 } angle: 0 },
+            Scale { id: introScale; origin.x: docIntro.target ? docIntro.target.width / 2 : 0; origin.y: docIntro.target ? docIntro.target.height * 0.35 : 0; xScale: 1; yScale: 1 },
+            Translate { id: introMove; x: 0; y: 0 }
+        ]
+        function play(item, deep, direction) {
+            if (!item) return
+            introAnim.stop()
+            var areas = [documentArea, sheetArea, textArea, slidesArea]
+            for (var i = 0; i < areas.length; ++i)
+                if (areas[i] !== item) { areas[i].transform = []; areas[i].opacity = 1 }
+            target = item
+            docIntro.deep = deep
+            introTilt.angle = deep ? Motion.introTilt : -direction * Motion.introTilt
+            introScale.xScale = introScale.yScale = deep ? Motion.introScale : 0.94
+            introMove.x = deep ? 0 : direction * 110
+            introMove.y = deep ? Motion.introShift : 0
+            item.opacity = 0
+            item.transform = [introTilt, introScale, introMove]
+            introAnim.duration = deep ? Motion.intro : Math.round(Motion.intro * 0.75)
+            introAnim.start()
+        }
+        function finish() {
+            if (target) { target.transform = []; target.opacity = 1 }
+        }
+    }
+    ParallelAnimation {
+        id: introAnim
+        property int duration: 600
+        onFinished: docIntro.finish()
+        onStopped: if (!running) docIntro.finish()
+        NumberAnimation { target: docIntro.target; property: "opacity"; to: 1; duration: Math.round(introAnim.duration * 0.6); easing.type: Easing.OutCubic }
+        NumberAnimation { target: introTilt; property: "angle"; to: 0; duration: introAnim.duration; easing.type: Easing.OutQuart }
+        NumberAnimation { target: introScale; properties: "xScale,yScale"; to: 1; duration: introAnim.duration; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+        NumberAnimation { target: introMove; properties: "x,y"; to: 0; duration: introAnim.duration; easing.type: Easing.OutQuart }
+    }
+
     ReaderStart {
         anchors.fill: parent
         visible: !Reader.hasDocument

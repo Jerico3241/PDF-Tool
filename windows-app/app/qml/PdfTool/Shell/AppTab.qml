@@ -44,8 +44,8 @@ T.AbstractButton {
     implicitWidth: Math.max(minWidth, fullWidth)
     leftPadding: iconOnly ? 0 : (kind !== "" ? 6 : 10)
     rightPadding: iconOnly ? 0 : (closable ? 4 : 12)
-    // Aktiv: hebt sich 1 px aus dem Dock
-    transform: Translate { y: tab.active && !tab.tile ? -1 : 0; Behavior on y { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Motion.decelerate } } }
+    // Aktiv: hebt sich aus dem Dock (seit 5.0 Beta 11 deutlich, mit Nachfedern); unter der Maus hebt er sich leicht
+    transform: Translate { y: tab.active && !tab.tile ? -2 : (tab.hovered && Motion.moves ? -1.5 : 0); Behavior on y { enabled: Motion.moves; NumberAnimation { duration: Motion.normal; easing.type: Easing.OutBack; easing.overshoot: 2 } } }
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
     Accessible.role: Accessible.PageTab
@@ -92,11 +92,19 @@ T.AbstractButton {
             spacing: 8
             // Dateiart: farbige Kachel (Verlauf, Glanzkante) mit weißem Symbol
             Rectangle {
+                id: kindTile
                 objectName: "tabKindTile"
                 Layout.alignment: Qt.AlignVCenter
                 Layout.preferredWidth: 24
                 Layout.preferredHeight: 24
                 visible: tab.kind !== ""
+                // wird der Tab aktiv, dreht sich die Kachel einmal um die senkrechte Achse (seit 5.0 Beta 11)
+                transform: Rotation { id: tileTurn; origin.x: 12; origin.y: 12; axis { x: 0; y: 1; z: 0 } angle: 0 }
+                Connections {
+                    target: tab
+                    function onActiveChanged() { if (tab.active && Motion.moves && tab.kind !== "") tileSpin.restart() }
+                }
+                NumberAnimation { id: tileSpin; target: tileTurn; property: "angle"; from: 0; to: 360; duration: 700; easing.type: Easing.OutBack }
                 radius: Metrics.square ? 3 : 7
                 gradient: Gradient {
                     orientation: Gradient.Vertical
