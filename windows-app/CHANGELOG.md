@@ -2,6 +2,19 @@
 
 Ausführliche Hinweise je Version: [`release-notes/`](release-notes/).
 
+# Novadesk 5.0.0-beta.11
+
+Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.11.md).
+
+- Startseite nach Entwurf 11 (`Pages/HomePage.qml`): Navigation 250 px mit gleitender Markierung (`navHighlight`),
+  „Mehr“ unten, Kopf 150 px, `RecentTable.startStyle`, Suche `homeRecentSearch` (`App.homeSearchRequested`),
+  Raster als `Canvas`, Statuszeile auf der Startseite ausgeblendet; `Metrics.homeMaxWidth` 1240.
+- Auftritte (`Motion.intros`, in Tests aus per `NOVADESK_OHNE_AUFTRITTE=1`): Startseite (`Entrance`),
+  Dokument öffnen/wechseln (`ReaderPage.qml` `docIntro`), Menüband, Menüeinträge, `PPage.enter()`.
+- Längere, federnde Übergänge (`Style/Motion.qml`), Seitenwechsel mit Skalierung (`PageHost.qml`), Tabs mit
+  add/remove/displaced-Übergängen (`AppTabs.qml`).
+- `ThemeController`: Windows „Animationseffekte aus“ stuft nicht mehr auf „Reduziert“ herab, nur Hinweis.
+
 # Novadesk 5.0.0-beta.10
 
 Beta zum Testen. Details in den [Release Notes](release-notes/5.0.0-beta.10.md).

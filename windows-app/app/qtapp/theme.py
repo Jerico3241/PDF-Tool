@@ -5,7 +5,7 @@ sie als Design-Tokens (``colors``) und entscheidet selbst über Darstellung und 
 
 Animationsprofile: ``full`` (Vollständig), ``reduced`` (Reduziert: kurze Überblendungen und
 Farbwechsel, keine größeren Bewegungen) und ``off`` (Aus: Zustände wechseln sofort). Ist in
-Windows »Animationseffekte« ausgeschaltet, gilt mindestens »Reduziert«.
+Windows »Animationseffekte« ausgeschaltet, zeigt Novadesk seit 5.0 Beta 11 nur einen Hinweis (Profil bleibt).
 """
 
 from __future__ import annotations
